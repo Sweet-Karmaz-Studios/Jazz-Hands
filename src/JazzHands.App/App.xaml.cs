@@ -41,8 +41,23 @@ public partial class App : Application
 
         base.OnStartup(e);
 
-        MainWindow = CreateStartupWindow(e.Args, spike);
-        MainWindow.Show();
+        try
+        {
+            MainWindow = CreateStartupWindow(e.Args, spike);
+            MainWindow.Show();
+        }
+        catch (Exception ex)
+        {
+            // A WinExe that throws during startup dies without a word, which is a miserable way
+            // to find out the build is wrong. Say something before going.
+            Log.ForContext<App>().Fatal(ex, "Jazz Hands could not start");
+            MessageBox.Show(
+                ex.Message,
+                "Jazz Hands could not start",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            Shutdown(1);
+        }
     }
 
     /// <inheritdoc />
@@ -66,7 +81,11 @@ public partial class App : Application
         if (spike)
         {
             throw new InvalidOperationException(
-                "This build has no spike harnesses. Build with -p:JazzSpikes=true to include them.");
+                "This build does not include the spike harnesses, because JazzSpikes was not set "
+                + "when it was built. Rebuild with:"
+                + Environment.NewLine
+                + Environment.NewLine
+                + "    dotnet build src\\JazzHands.App -c Release -p:JazzSpikes=true");
         }
 #endif
         return new MainWindow();
