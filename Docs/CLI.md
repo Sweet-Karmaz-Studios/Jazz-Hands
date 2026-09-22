@@ -49,6 +49,104 @@ Direct3D     Level_11_1, hardware video yes
 With `--json` the same information comes back as a camelCase JSON object, which is what a bug
 report or a CI job should capture.
 
+### `jazz new <project.jazz>`
+
+Creates an empty project with one video track and one audio track, and saves it.
+
+```bash
+jazz new trailer.jazz --fps 60 --size 4k
+```
+
+```
+Created C:\work\trailer.jazz
+  3840x2160 at 60 fps, one video track and one audio track.
+```
+
+| Option | Meaning |
+|---|---|
+| `--fps <rate>` | `30`, `60`, `30000/1001`, or one of the decimal shorthands `23.976`, `29.97`, `59.94`, `119.88`. Any other decimal is refused: see below. |
+| `--size <size>` | `1920x1080`, or one of `720p`, `1080p`, `2k`, `4k`, `8k`. |
+| `--name <name>` | The project name. Defaults to the file name. |
+| `--force` | Overwrite an existing file. |
+
+The `.jazz` extension is added if it is left off.
+
+**Frame rates are exact.** `--fps 29.97` is accepted and stored as 30000/1001, because that is
+what the person meant. `--fps 23.5` is refused with the ratio to type instead, because storing
+2997/100 would drift by a frame every thousand frames against real footage and nobody would find
+out until an export went out of sync.
+
+### `jazz validate <project.jazz>`
+
+Checks a project against the generated schema and then against the semantic rules, and prints one
+line per problem as `path: severity: code: message`. Errors go to stderr, warnings to stdout.
+
+```bash
+jazz validate trailer.jazz
+```
+
+```
+/sequences/0/tracks/0/kind: error: not-a-member: Value should match one of the values specified by the enum
+```
+
+| Option | Meaning |
+|---|---|
+| `--strict` | Treat warnings as failures too. |
+| `--json` | A single object with `loadable`, `errors`, `warnings` and the `issues` array. |
+
+Exit code 0 when the project loads, 1 when it does not, or when `--strict` and anything at all was
+found. This is the only verb that runs schema validation; the others skip it because it costs more
+than the rest of opening a project put together.
+
+### `jazz fmt <project.jazz>`
+
+Rewrites a project into canonical form: declaration order, two space indentation, line feeds,
+defaults left out, clips in start order and tracks in stacking order. Members this build does not
+recognise are kept exactly as they were.
+
+```bash
+jazz fmt trailer.jazz --check
+```
+
+| Option | Meaning |
+|---|---|
+| `--check` | Report whether the file is already canonical and exit 1 if not, without writing. |
+| `--json` | `{"path": ..., "rewritten": true}`. |
+
+### `jazz repair <project.jazz>`
+
+Fixes the problems that have one obvious answer and reports the rest.
+
+```bash
+jazz repair trailer.jazz --dry-run
+```
+
+It removes clips whose media or nested sequence is not in the project, removes transitions whose
+clips are gone, puts a zero speed back to 1/1, moves a clip that starts before the timeline, and
+shortens fades that overrun their clip. It does not touch overlapping clips, because trimming
+either one, moving either one and deleting either one are all defensible and a tool that guesses
+is a tool nobody dares run.
+
+| Option | Meaning |
+|---|---|
+| `--dry-run` | Print what would change and write nothing. |
+| `--json` | The `actions` taken and what is `remaining`. |
+
+Exit code 1 if an error-level problem is still there afterwards.
+
+### `jazz ids new`
+
+Prints fresh ULIDs, for hand-editing a project file.
+
+```bash
+jazz ids new -n 3
+```
+
+| Option | Meaning |
+|---|---|
+| `--count <n>`, `-n <n>` | How many to print. Default 1. |
+| `--json` | `{"ids": [...]}`. |
+
 ### `jazz perf decode <file>`
 
 Decodes a file as fast as the machine allows and reports throughput, managed allocation per

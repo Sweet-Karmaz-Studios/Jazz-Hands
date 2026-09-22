@@ -5,6 +5,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- The tests check a few internal helpers whose contract matters on its own. -->
+    <InternalsVisibleTo Include="JazzHands.Core.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Ulid" />
     <PackageReference Include="JsonSchema.Net" />
   </ItemGroup>

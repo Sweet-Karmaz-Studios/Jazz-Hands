@@ -71,6 +71,17 @@ public static class Validator
         return issues.ToImmutable();
     }
 
+    /// <summary>
+    /// Checks a parsed document's shape, before anything is deserialized.
+    /// </summary>
+    /// <remarks>
+    /// The two layers are separate because they fail at different times and say different things.
+    /// This one catches a string where a number belongs and reports the pointer to it; the
+    /// semantic layer catches two clips on top of each other, which no schema can express.
+    /// </remarks>
+    public static ImmutableArray<ValidationIssue> Schema(System.Text.Json.Nodes.JsonNode? document) =>
+        SchemaValidator.Check(document);
+
     /// <summary>True when nothing found blocks loading.</summary>
     public static bool IsLoadable(IEnumerable<ValidationIssue> issues)
     {

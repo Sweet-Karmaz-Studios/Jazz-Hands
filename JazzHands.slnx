@@ -14,6 +14,11 @@
     <Project Path="src/JazzHands.Media/JazzHands.Media.csproj" />
     <Project Path="src/JazzHands.Render/JazzHands.Render.csproj" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/JazzHands.SchemaGen/JazzHands.SchemaGen.csproj">
+      <Platform Project="x64" />
+    </Project>
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/JazzHands.Audio.Tests/JazzHands.Audio.Tests.csproj">
       <Platform Project="x64" />
