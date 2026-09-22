@@ -9,6 +9,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Shaders are embedded and compiled at runtime, so editing one needs no build step and the
+         compiled cache can key on the source hash. See the hlsl-effects skill. -->
+    <EmbeddedResource Include="Shaders\*.hlsl" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Vortice.Direct3D11" />
     <PackageReference Include="Vortice.DXGI" />
     <PackageReference Include="Vortice.Direct2D1" />

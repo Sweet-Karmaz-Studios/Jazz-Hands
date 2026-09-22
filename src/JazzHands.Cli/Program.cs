@@ -46,7 +46,80 @@ namespace JazzHands.Cli
             root.Options.Add(JsonOption);
             root.Options.Add(VerboseOption);
             root.Subcommands.Add(BuildVersionCommand());
+            root.Subcommands.Add(BuildPerfCommand());
             return root;
+        }
+
+        private static Command BuildPerfCommand()
+        {
+            var perf = new Command("perf", "Measure the engine. Numbers land in Docs/PERF.md.");
+            perf.Subcommands.Add(BuildDecodeBenchmarkCommand());
+            return perf;
+        }
+
+        private static Command BuildDecodeBenchmarkCommand()
+        {
+            var file = new Argument<FileInfo>("file") { Description = "The media file to decode." };
+            var software = new Option<bool>("--software")
+            {
+                Description = "Force the software decoder instead of trying D3D11VA.",
+            };
+            var reuse = new Option<bool>("--reuse")
+            {
+                Description = "Keep one decoder across passes and rewind, the way playback loops do.",
+            };
+            var passes = new Option<int>("--passes")
+            {
+                Description = "Decode the file this many times. More than one checks for leaks.",
+                DefaultValueFactory = _ => 1,
+            };
+
+            var command = new Command("decode", "Decode a file as fast as possible and report throughput.")
+            {
+                file,
+                software,
+                passes,
+                reuse,
+            };
+
+            command.SetAction(parseResult =>
+            {
+                FileInfo target = parseResult.GetValue(file)!;
+                if (!target.Exists)
+                {
+                    Console.Error.WriteLine($"jazz: '{target.FullName}' does not exist.");
+                    return ExitCode.CommandError;
+                }
+
+                if (parseResult.GetValue(VerboseOption))
+                {
+                    LogSetup.ConfigureForCli(LogEventLevel.Debug);
+                }
+
+                try
+                {
+                    DecodeBenchmarkResult result = DecodeBenchmark.Run(
+                        target.FullName,
+                        useHardware: !parseResult.GetValue(software),
+                        passes: Math.Max(1, parseResult.GetValue(passes)),
+                        reuseDecoder: parseResult.GetValue(reuse));
+
+                    Console.Out.WriteLine(parseResult.GetValue(JsonOption) ? result.ToJson() : result.ToText());
+                    return ExitCode.Ok;
+                }
+                catch (JazzHands.Media.Interop.FfmpegException ex)
+                {
+                    Console.Error.WriteLine($"jazz: {ex.Message}");
+                    return ExitCode.MediaError;
+                }
+                catch (InvalidOperationException ex)
+                {
+                    Console.Error.WriteLine($"jazz: {ex.Message}");
+                    return ExitCode.CommandError;
+                }
+            });
+
+            return command;
         }
 
         private static Command BuildVersionCommand()

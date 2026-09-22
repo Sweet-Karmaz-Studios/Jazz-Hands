@@ -135,6 +135,43 @@ public sealed class RenderDevice : IDisposable
         return Device.CreateTexture2D(description);
     }
 
+    /// <summary>
+    /// Enables Direct3D multithread protection. Required before the device is shared with the
+    /// FFmpeg decoder, because the decode thread and the render thread both use it.
+    /// </summary>
+    public void EnableMultithreadProtection()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        using ID3D11Multithread multithread = Device.QueryInterface<ID3D11Multithread>();
+        multithread.SetMultithreadProtected(true);
+        _log.Debug("Direct3D multithread protection enabled for decoder sharing");
+    }
+
+    /// <summary>
+    /// How much video memory this process has committed on the adapter, and what the driver is
+    /// willing to give it. Used by the decoder pool budget and by the leak checks in spike S2.
+    /// </summary>
+    /// <returns>Bytes used and bytes budgeted, or zeroes when the adapter cannot report them.</returns>
+    public (long UsedBytes, long BudgetBytes) QueryVideoMemory()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        try
+        {
+            using IDXGIDevice dxgiDevice = Device.QueryInterface<IDXGIDevice>();
+            using IDXGIAdapter adapter = dxgiDevice.GetAdapter();
+            using IDXGIAdapter3 adapter3 = adapter.QueryInterface<IDXGIAdapter3>();
+
+            QueryVideoMemoryInfo info = adapter3.QueryVideoMemoryInfo(0, MemorySegmentGroup.Local);
+            return ((long)info.CurrentUsage, (long)info.Budget);
+        }
+        catch (SharpGen.Runtime.SharpGenException)
+        {
+            return (0, 0);
+        }
+    }
+
     /// <summary>Creates a CPU-readable staging texture matching an existing one, for readback.</summary>
     public ID3D11Texture2D CreateStagingTexture(ID3D11Texture2D source)
     {
