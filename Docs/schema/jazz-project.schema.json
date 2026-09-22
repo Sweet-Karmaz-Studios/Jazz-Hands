@@ -1,0 +1,166 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jazzhands.local/schema/jazz-project.schema.json",
+  "title": "Jazz Hands project (.jazz)",
+  "description": "Draft schema. Phase 04 makes this the source of truth, generated from the C# model with tests that fail if the two drift.",
+  "type": "object",
+  "required": ["schemaVersion", "id", "name", "settings", "media", "sequences", "activeSequenceId"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "minimum": 1 },
+    "id": { "$ref": "#/$defs/ulid" },
+    "name": { "type": "string" },
+    "created": { "type": "string", "format": "date-time" },
+    "modified": { "type": "string", "format": "date-time" },
+    "settings": { "$ref": "#/$defs/sequenceSettings" },
+    "media": { "type": "array", "items": { "$ref": "#/$defs/mediaItem" } },
+    "sequences": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/sequence" } },
+    "activeSequenceId": { "$ref": "#/$defs/ulid" },
+    "presets": { "type": "array", "items": { "$ref": "#/$defs/exportPreset" } }
+  },
+  "$defs": {
+    "ulid": { "type": "string", "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$" },
+    "flicks": { "type": "integer", "description": "1/705600000 s" },
+    "rational": {
+      "type": "object", "required": ["num", "den"],
+      "properties": { "num": { "type": "integer" }, "den": { "type": "integer", "minimum": 1 } }
+    },
+    "timeRange": {
+      "type": "object", "required": ["start", "duration"],
+      "properties": { "start": { "$ref": "#/$defs/flicks" }, "duration": { "$ref": "#/$defs/flicks" } }
+    },
+    "sequenceSettings": {
+      "type": "object", "required": ["frameRate", "width", "height", "sampleRate", "channelLayout"],
+      "properties": {
+        "frameRate": { "$ref": "#/$defs/rational" },
+        "width": { "type": "integer", "minimum": 16 },
+        "height": { "type": "integer", "minimum": 16 },
+        "sampleRate": { "type": "integer", "enum": [44100, 48000, 96000] },
+        "channelLayout": { "type": "string", "enum": ["stereo", "5.1"] },
+        "colorSpace": { "type": "string", "enum": ["bt709", "bt2020-pq", "bt2020-hlg"], "default": "bt709" }
+      }
+    },
+    "mediaItem": {
+      "type": "object", "required": ["id", "path"],
+      "properties": {
+        "id": { "$ref": "#/$defs/ulid" },
+        "path": { "type": "string", "description": "relative to the .jazz file, forward slashes" },
+        "hash": { "type": "string" },
+        "name": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "color": { "type": "string" },
+        "conform": { "type": "string", "enum": ["fit", "fill", "stretch", "native"], "default": "fit" },
+        "deinterlace": { "type": "boolean" },
+        "vfrConform": { "type": "boolean" },
+        "proxy": { "type": ["string", "null"], "description": "relative path to proxy file, null when none" },
+        "probe": { "type": "object", "description": "cached MediaProbe; regenerated when hash changes" }
+      }
+    },
+    "sequence": {
+      "type": "object", "required": ["id", "name", "tracks"],
+      "properties": {
+        "id": { "$ref": "#/$defs/ulid" },
+        "name": { "type": "string" },
+        "settings": { "$ref": "#/$defs/sequenceSettings" },
+        "tracks": { "type": "array", "items": { "$ref": "#/$defs/track" } },
+        "transitions": { "type": "array", "items": { "$ref": "#/$defs/transition" } },
+        "markers": { "type": "array", "items": { "$ref": "#/$defs/marker" } },
+        "inOut": { "$ref": "#/$defs/timeRange" }
+      }
+    },
+    "track": {
+      "type": "object", "required": ["id", "kind", "order", "clips"],
+      "properties": {
+        "id": { "$ref": "#/$defs/ulid" },
+        "kind": { "type": "string", "enum": ["video", "audio", "subtitle", "adjustment"] },
+        "name": { "type": "string" },
+        "order": { "type": "integer" },
+        "locked": { "type": "boolean" }, "muted": { "type": "boolean" }, "solo": { "type": "boolean" },
+        "height": { "type": "integer" }, "color": { "type": "string" },
+        "volume": { "$ref": "#/$defs/animated" }, "pan": { "$ref": "#/$defs/animated" },
+        "effects": { "type": "array", "items": { "$ref": "#/$defs/effect" } },
+        "clips": { "type": "array", "items": { "$ref": "#/$defs/clip" } }
+      }
+    },
+    "clip": {
+      "type": "object", "required": ["id", "range", "sourceIn"],
+      "properties": {
+        "id": { "$ref": "#/$defs/ulid" },
+        "name": { "type": "string" },
+        "mediaId": { "$ref": "#/$defs/ulid" },
+        "generatorId": { "type": "string" },
+        "sequenceId": { "$ref": "#/$defs/ulid" },
+        "sourceStream": { "type": "integer", "minimum": 0 },
+        "range": { "$ref": "#/$defs/timeRange" },
+        "sourceIn": { "$ref": "#/$defs/flicks" },
+        "speed": { "$ref": "#/$defs/rational" },
+        "reverse": { "type": "boolean" },
+        "enabled": { "type": "boolean", "default": true },
+        "linkGroupId": { "$ref": "#/$defs/ulid" },
+        "transform": { "$ref": "#/$defs/transform" },
+        "opacity": { "$ref": "#/$defs/animated" },
+        "blend": { "type": "string", "default": "normal" },
+        "volume": { "$ref": "#/$defs/animated" }, "pan": { "$ref": "#/$defs/animated" },
+        "fadeIn": { "$ref": "#/$defs/fade" }, "fadeOut": { "$ref": "#/$defs/fade" },
+        "effects": { "type": "array", "items": { "$ref": "#/$defs/effect" } },
+        "markers": { "type": "array", "items": { "$ref": "#/$defs/marker" } },
+        "text": { "type": "object", "description": "title/subtitle payload when generatorId is text.*" }
+      }
+    },
+    "transform": {
+      "type": "object",
+      "properties": {
+        "position": { "$ref": "#/$defs/animated" }, "scale": { "$ref": "#/$defs/animated" },
+        "rotation": { "$ref": "#/$defs/animated" }, "anchor": { "$ref": "#/$defs/animated" },
+        "crop": { "$ref": "#/$defs/animated" }
+      }
+    },
+    "fade": { "type": "object", "properties": { "duration": { "$ref": "#/$defs/flicks" }, "curve": { "type": "string", "enum": ["linear", "smooth", "fast", "slow", "sCurve"] } } },
+    "animated": {
+      "description": "Either a static value or a keyframed value",
+      "oneOf": [
+        { "type": ["number", "boolean", "string", "array", "object"] },
+        { "type": "object", "required": ["keyframes"], "properties": {
+          "keyframes": { "type": "array", "items": { "$ref": "#/$defs/keyframe" } } } }
+      ]
+    },
+    "keyframe": {
+      "type": "object", "required": ["time", "value"],
+      "properties": {
+        "time": { "$ref": "#/$defs/flicks" },
+        "value": {},
+        "interp": { "type": "string", "enum": ["hold", "linear", "bezier", "easeIn", "easeOut", "easeInOut"], "default": "linear" },
+        "inHandle": { "type": "array", "items": { "type": "number" } },
+        "outHandle": { "type": "array", "items": { "type": "number" } }
+      }
+    },
+    "effect": {
+      "type": "object", "required": ["id", "type"],
+      "properties": {
+        "id": { "$ref": "#/$defs/ulid" },
+        "type": { "type": "string", "description": "registered effect type id, e.g. video.blur.gaussian" },
+        "enabled": { "type": "boolean", "default": true },
+        "params": { "type": "object", "additionalProperties": { "$ref": "#/$defs/animated" } },
+        "mask": { "type": "object" }
+      }
+    },
+    "transition": {
+      "type": "object", "required": ["id", "type", "trackId", "duration"],
+      "properties": {
+        "id": { "$ref": "#/$defs/ulid" }, "type": { "type": "string" },
+        "trackId": { "$ref": "#/$defs/ulid" },
+        "leftClipId": { "$ref": "#/$defs/ulid" }, "rightClipId": { "$ref": "#/$defs/ulid" },
+        "duration": { "$ref": "#/$defs/flicks" },
+        "alignment": { "type": "string", "enum": ["centered", "startAtCut", "endAtCut"] },
+        "params": { "type": "object" }
+      }
+    },
+    "marker": {
+      "type": "object", "required": ["id", "time"],
+      "properties": {
+        "id": { "$ref": "#/$defs/ulid" }, "time": { "$ref": "#/$defs/flicks" }, "duration": { "$ref": "#/$defs/flicks" },
+        "name": { "type": "string" }, "color": { "type": "string" }, "note": { "type": "string" }, "isChapter": { "type": "boolean" }
+      }
+    },
+    "exportPreset": { "type": "object", "required": ["id", "name"], "properties": { "id": { "type": "string" }, "name": { "type": "string" } }, "additionalProperties": true }
+  }
+}

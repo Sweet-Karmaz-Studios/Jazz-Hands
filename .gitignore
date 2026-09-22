@@ -1,0 +1,13 @@
+bin/
+obj/
+.vs/
+*.user
+.claude/
+third_party/ffmpeg/
+samples/*
+!samples/README.md
+tests/corpus/*
+!tests/corpus/.gitkeep
+*.jazz.d/
+TestResults/
+BenchmarkDotNet.Artifacts/
