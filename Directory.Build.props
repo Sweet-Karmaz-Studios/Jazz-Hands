@@ -15,7 +15,9 @@
     <AnalysisLevel>latest</AnalysisLevel>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
-    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Globalization stays on: WPF font handling needs real culture data (MS.Internal.FontCache
+         asks for "en"), and titles, subtitles and timecode all run through it. -->
+    <InvariantGlobalization>false</InvariantGlobalization>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CA1848;CA1031</NoWarn>
   </PropertyGroup>

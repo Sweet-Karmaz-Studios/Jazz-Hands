@@ -8,6 +8,21 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
+  <!-- Spike windows are throwaway harnesses under Spikes/. They are compiled in Debug, and in
+       Release only when asked for, so a spike can be measured on an optimised build without
+       shipping in a normal one. See Docs/SPIKES.md. -->
+  <PropertyGroup>
+    <JazzSpikes Condition="'$(JazzSpikes)' == '' and '$(Configuration)' == 'Debug'">true</JazzSpikes>
+    <JazzSpikes Condition="'$(JazzSpikes)' == ''">false</JazzSpikes>
+    <DefineConstants Condition="'$(JazzSpikes)' == 'true'">$(DefineConstants);SPIKES</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(JazzSpikes)' != 'true'">
+    <Compile Remove="Spikes\**\*.cs" />
+    <Page Remove="Spikes\**\*.xaml" />
+    <None Include="Spikes\**\*" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\JazzHands.Control\JazzHands.Control.csproj" />
     <ProjectReference Include="..\JazzHands.Engine\JazzHands.Engine.csproj" />
@@ -18,6 +33,11 @@
     <PackageReference Include="Dirkster.AvalonDock" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="Serilog.Extensions.Hosting" />
+    <!-- The preview bridge needs D3D9Ex to hand a shared D3D11 texture to WPF's compositor. -->
+    <PackageReference Include="Vortice.Direct3D9" />
+    <PackageReference Include="Vortice.Direct3D11" />
+    <PackageReference Include="Vortice.Direct2D1" />
+    <PackageReference Include="Vortice.DXGI" />
   </ItemGroup>
 
 </Project>

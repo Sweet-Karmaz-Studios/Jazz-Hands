@@ -40,12 +40,14 @@ public sealed class RenderDevice : IDisposable
         ID3D11DeviceContext context,
         RenderDeviceKind kind,
         string adapterName,
+        long adapterLuid,
         bool supportsVideo)
     {
         Device = device;
         ImmediateContext = context;
         Kind = kind;
         AdapterName = adapterName;
+        AdapterLuid = adapterLuid;
         SupportsVideo = supportsVideo;
         FeatureLevel = device.FeatureLevel;
     }
@@ -61,6 +63,12 @@ public sealed class RenderDevice : IDisposable
 
     /// <summary>The adapter description, for the version banner and logs.</summary>
     public string AdapterName { get; }
+
+    /// <summary>
+    /// The adapter LUID. The preview bridge matches this against the D3D9 adapter list, because a
+    /// shared surface that crosses adapters is copied through system memory on every frame.
+    /// </summary>
+    public long AdapterLuid { get; }
 
     /// <summary>The feature level the device was created at.</summary>
     public FeatureLevel FeatureLevel { get; }
@@ -206,9 +214,11 @@ public sealed class RenderDevice : IDisposable
                     continue;
                 }
 
-                string name = adapter?.Description1.Description ?? DescribeDevice(created);
+                (string name, long luid) = adapter is not null
+                    ? (adapter.Description1.Description, adapter.Description1.Luid)
+                    : DescribeDevice(created);
                 RenderDeviceKind kind = driverType == DriverType.Warp ? RenderDeviceKind.Warp : RenderDeviceKind.Hardware;
-                device = new RenderDevice(created, context, kind, name, video);
+                device = new RenderDevice(created, context, kind, name, luid, video);
                 return true;
             }
 
@@ -251,17 +261,17 @@ public sealed class RenderDevice : IDisposable
         return null;
     }
 
-    private static string DescribeDevice(ID3D11Device device)
+    private static (string Name, long Luid) DescribeDevice(ID3D11Device device)
     {
         try
         {
             using IDXGIDevice dxgiDevice = device.QueryInterface<IDXGIDevice>();
             using IDXGIAdapter adapter = dxgiDevice.GetAdapter();
-            return adapter.Description.Description;
+            return (adapter.Description.Description, adapter.Description.Luid);
         }
         catch (SharpGen.Runtime.SharpGenException)
         {
-            return "unknown adapter";
+            return ("unknown adapter", 0);
         }
     }
 }
