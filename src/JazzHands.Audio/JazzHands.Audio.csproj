@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Audio mixer graph, DSP effects, loudness and WASAPI output.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\JazzHands.Core\JazzHands.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NAudio" />
+    <PackageReference Include="Serilog" />
+  </ItemGroup>
+
+</Project>

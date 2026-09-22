@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Session, command dispatch, undo, playback clock, caches and the export queue.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\JazzHands.Core\JazzHands.Core.csproj" />
+    <ProjectReference Include="..\JazzHands.Media\JazzHands.Media.csproj" />
+    <ProjectReference Include="..\JazzHands.Render\JazzHands.Render.csproj" />
+    <ProjectReference Include="..\JazzHands.Audio\JazzHands.Audio.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Serilog" />
+    <PackageReference Include="Serilog.Sinks.Console" />
+    <PackageReference Include="Serilog.Sinks.File" />
+    <PackageReference Include="Serilog.Sinks.Debug" />
+    <PackageReference Include="Serilog.Formatting.Compact" />
+  </ItemGroup>
+
+</Project>

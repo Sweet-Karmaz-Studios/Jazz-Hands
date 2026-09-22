@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>JazzHands</AssemblyName>
+    <Description>The Jazz Hands WPF application.</Description>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\JazzHands.Control\JazzHands.Control.csproj" />
+    <ProjectReference Include="..\JazzHands.Engine\JazzHands.Engine.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Dirkster.AvalonDock" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Serilog.Extensions.Hosting" />
+  </ItemGroup>
+
+</Project>

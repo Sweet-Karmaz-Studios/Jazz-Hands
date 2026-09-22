@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Direct3D 11 compositor, effect graph, HLSL effects, text, transitions and scopes.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\JazzHands.Core\JazzHands.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Vortice.Direct3D11" />
+    <PackageReference Include="Vortice.DXGI" />
+    <PackageReference Include="Vortice.Direct2D1" />
+    <PackageReference Include="Vortice.D3DCompiler" />
+    <PackageReference Include="Serilog" />
+  </ItemGroup>
+
+</Project>

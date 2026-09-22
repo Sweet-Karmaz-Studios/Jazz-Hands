@@ -1,0 +1,9 @@
+<Application x:Class="JazzHands.App.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             StartupUri="MainWindow.xaml">
+    <Application.Resources>
+        <!-- Phase 27 replaces this with the dark theme resource dictionaries. -->
+        <ResourceDictionary />
+    </Application.Resources>
+</Application>

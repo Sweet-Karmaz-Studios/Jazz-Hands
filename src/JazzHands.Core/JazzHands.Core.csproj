@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Time model, project model, commands, undo, schema and validation. Depends on the BCL only.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Ulid" />
+    <PackageReference Include="JsonSchema.Net" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>FFmpeg probe, demux, decode, encode, mux, stream copy and smart cut.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\JazzHands.Core\JazzHands.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FFmpeg.AutoGen" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="Serilog" />
+  </ItemGroup>
+
+</Project>

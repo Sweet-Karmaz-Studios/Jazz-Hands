@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>jazz-mcp</AssemblyName>
+    <Description>Model Context Protocol server over stdio.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\JazzHands.Control\JazzHands.Control.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Serilog.Extensions.Hosting" />
+  </ItemGroup>
+
+</Project>

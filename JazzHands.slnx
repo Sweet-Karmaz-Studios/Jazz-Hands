@@ -1,0 +1,40 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/JazzHands.App/JazzHands.App.csproj" />
+    <Project Path="src/JazzHands.Audio/JazzHands.Audio.csproj" />
+    <Project Path="src/JazzHands.Cli/JazzHands.Cli.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="src/JazzHands.Control/JazzHands.Control.csproj" />
+    <Project Path="src/JazzHands.Core/JazzHands.Core.csproj" />
+    <Project Path="src/JazzHands.Engine/JazzHands.Engine.csproj" />
+    <Project Path="src/JazzHands.Mcp/JazzHands.Mcp.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="src/JazzHands.Media/JazzHands.Media.csproj" />
+    <Project Path="src/JazzHands.Render/JazzHands.Render.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/JazzHands.Audio.Tests/JazzHands.Audio.Tests.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="tests/JazzHands.Control.Tests/JazzHands.Control.Tests.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="tests/JazzHands.Core.Tests/JazzHands.Core.Tests.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="tests/JazzHands.Engine.Tests/JazzHands.Engine.Tests.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="tests/JazzHands.Integration.Tests/JazzHands.Integration.Tests.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="tests/JazzHands.Media.Tests/JazzHands.Media.Tests.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="tests/JazzHands.Render.Tests/JazzHands.Render.Tests.csproj">
+      <Platform Project="x64" />
+    </Project>
+  </Folder>
+</Solution>

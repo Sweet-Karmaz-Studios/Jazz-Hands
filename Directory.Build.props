@@ -1,0 +1,64 @@
+<Project>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier Condition="'$(SelfContained)' != 'true' and '$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarningLevel>9999</WarningLevel>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CA1848;CA1031</NoWarn>
+  </PropertyGroup>
+
+  <!-- Deterministic, source-linked builds. -->
+  <PropertyGroup>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+    <DebugType>portable</DebugType>
+    <IncludeSymbols>true</IncludeSymbols>
+    <ProduceReferenceAssembly>true</ProduceReferenceAssembly>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <!-- Identity. -->
+  <PropertyGroup>
+    <Product>Jazz Hands</Product>
+    <Company>Sweet Karmaz Studios</Company>
+    <Authors>Sweet Karmaz Studios</Authors>
+    <Copyright>Copyright (c) Sweet Karmaz Studios</Copyright>
+    <VersionPrefix>0.1.0</VersionPrefix>
+    <RootNamespace>$(MSBuildProjectName)</RootNamespace>
+    <AssemblyName>$(MSBuildProjectName)</AssemblyName>
+    <NeutralLanguage>en-US</NeutralLanguage>
+  </PropertyGroup>
+
+  <!-- Repo-relative paths every project can rely on. -->
+  <PropertyGroup>
+    <JazzRepoRoot>$([MSBuild]::EnsureTrailingSlash('$(MSBuildThisFileDirectory)'))</JazzRepoRoot>
+    <JazzFfmpegDir>$(JazzRepoRoot)third_party\ffmpeg\</JazzFfmpegDir>
+    <JazzCorpusDir>$(JazzRepoRoot)tests\corpus\</JazzCorpusDir>
+  </PropertyGroup>
+
+  <!-- Test projects: xUnit v3 runs as an executable on Microsoft.Testing.Platform. -->
+  <PropertyGroup Condition="$(MSBuildProjectName.EndsWith('.Tests'))">
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <OutputType>Exe</OutputType>
+    <UseAppHost>true</UseAppHost>
+  </PropertyGroup>
+
+  <ItemGroup Condition="$(MSBuildProjectName.EndsWith('.Tests'))">
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>
