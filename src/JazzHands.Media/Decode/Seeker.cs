@@ -31,6 +31,13 @@ public enum SeekMode
 /// </remarks>
 public sealed class Seeker : IDisposable
 {
+    /// <summary>
+    /// How far back the first retry steps when a seek overshoots its target. Eight frames clears
+    /// any sane reorder delay in one go, and the step doubles after that so a pathological file
+    /// still reaches the start of the stream in a handful of attempts.
+    /// </summary>
+    private const int InitialBackoffFrames = 8;
+
     private readonly ILogger _log = Log.ForContext<Seeker>();
     private readonly Demuxer _demuxer;
     private readonly VideoDecoder _decoder;
@@ -119,28 +126,7 @@ public sealed class Seeker : IDisposable
             && targetFrame > _currentFrameIndex
             && targetFrame - _currentFrameIndex <= MaxForwardDecodeFrames;
 
-        if (!canDecodeForward)
-        {
-            SeekAndFlush(target);
-        }
-
-        while (true)
-        {
-            VideoFrame? frame = ReadNext();
-            if (frame is null)
-            {
-                return null;
-            }
-
-            long index = frame.Pts.ToFrames(_frameRate, RoundingMode.Nearest);
-            if (index >= targetFrame)
-            {
-                return frame;
-            }
-
-            frame.Dispose();
-            FramesDiscarded++;
-        }
+        return canDecodeForward ? ScanForwardTo(targetFrame) : SeekBackThenScan(target, targetFrame);
     }
 
     /// <summary>Reads the next frame in order, keeping the seeker's position in step.</summary>
@@ -170,6 +156,84 @@ public sealed class Seeker : IDisposable
         {
             _decoder.Dispose();
             _demuxer.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Seeks to a keyframe at or before <paramref name="target"/> and decodes forward to
+    /// <paramref name="targetFrame"/>, stepping the search backwards if the seek overshoots.
+    /// </summary>
+    /// <remarks>
+    /// A container's seek index is keyed on decode timestamps, but a frame is identified by its
+    /// presentation timestamp, and with B-frames the two differ by the reorder delay. Asking
+    /// libavformat for the keyframe before presentation time t can therefore land on a keyframe
+    /// that presents after t: on a 60 fps HEVC file with a reorder delay of two frames, the
+    /// keyframe shown at frame 240 is indexed at decode timestamp 238, so seeking to frame 238
+    /// lands on it and the first picture out of the decoder is already past the target. Rather
+    /// than guess the delay, which open GOPs and edit lists make unreliable, check where the seek
+    /// actually landed and step back until it is at or before the frame that was asked for.
+    /// </remarks>
+    private VideoFrame? SeekBackThenScan(Flicks target, long targetFrame)
+    {
+        Flicks searchFrom = target;
+        Flicks backoff = Flicks.FromFrames(InitialBackoffFrames, _frameRate);
+
+        while (true)
+        {
+            SeekAndFlush(searchFrom);
+
+            VideoFrame? first = ReadNext();
+            if (first is null)
+            {
+                return null;
+            }
+
+            long index = first.Pts.ToFrames(_frameRate, RoundingMode.Nearest);
+            if (index == targetFrame)
+            {
+                return first;
+            }
+
+            if (index < targetFrame)
+            {
+                first.Dispose();
+                FramesDiscarded++;
+                return ScanForwardTo(targetFrame);
+            }
+
+            // The seek overshot. If there is nothing earlier to try then the stream simply has no
+            // picture at or before the target, and the first one is the closest honest answer.
+            if (searchFrom.IsZero)
+            {
+                return first;
+            }
+
+            first.Dispose();
+            FramesDiscarded++;
+
+            searchFrom = backoff < searchFrom ? searchFrom - backoff : Flicks.Zero;
+            backoff += backoff;
+        }
+    }
+
+    /// <summary>Decodes in order until the frame at <paramref name="targetFrame"/> comes out.</summary>
+    private VideoFrame? ScanForwardTo(long targetFrame)
+    {
+        while (true)
+        {
+            VideoFrame? frame = ReadNext();
+            if (frame is null)
+            {
+                return null;
+            }
+
+            if (frame.Pts.ToFrames(_frameRate, RoundingMode.Nearest) >= targetFrame)
+            {
+                return frame;
+            }
+
+            frame.Dispose();
+            FramesDiscarded++;
         }
     }
 
