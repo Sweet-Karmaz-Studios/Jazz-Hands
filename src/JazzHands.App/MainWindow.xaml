@@ -10,6 +10,8 @@
         xmlns:audiovm="clr-namespace:JazzHands.App.ViewModels.Audio"
         xmlns:playback="clr-namespace:JazzHands.App.Views.Playback"
         xmlns:playbackvm="clr-namespace:JazzHands.App.ViewModels.Playback"
+        xmlns:timeline="clr-namespace:JazzHands.App.Views.Timeline"
+        xmlns:timelinevm="clr-namespace:JazzHands.App.ViewModels.Timeline"
         xmlns:shell="clr-namespace:JazzHands.App.Shell"
         xmlns:vm="clr-namespace:JazzHands.App.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -33,6 +35,9 @@
         </DataTemplate>
         <DataTemplate DataType="{x:Type playbackvm:PreviewPanelViewModel}">
             <playback:PreviewPanelView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type timelinevm:TimelineViewModel}">
+            <timeline:TimelineView />
         </DataTemplate>
     </Window.Resources>
 
@@ -75,14 +80,19 @@
         <dock:DockingManager Grid.Row="1"
                              x:Name="Dock"
                              Background="{DynamicResource Brush.Background.Base}"
-                             AnchorablesSource="{Binding Panels, Mode=OneWay}">
+                             AnchorablesSource="{Binding Panels, Mode=OneWay}"
+                             DocumentsSource="{Binding Timelines.Documents, Mode=OneWay}"
+                             ActiveContent="{Binding Timelines.Active, Mode=TwoWay}">
             <dock:DockingManager.LayoutUpdateStrategy>
                 <shell:PanelPlacement />
             </dock:DockingManager.LayoutUpdateStrategy>
             <dock:DockingManager.LayoutItemContainerStyle>
-                <Style TargetType="{x:Type controls:LayoutAnchorableItem}">
+                <!-- On the common base, so panels and timeline documents both take their title and id
+                     from their viewmodel. -->
+                <Style TargetType="{x:Type controls:LayoutItem}">
                     <Setter Property="Title" Value="{Binding Model.Title, Mode=OneWay}" />
                     <Setter Property="ContentId" Value="{Binding Model.ContentId, Mode=OneWay}" />
+                    <Setter Property="CanClose" Value="{Binding Model.CanClose, Mode=OneWay}" />
                 </Style>
             </dock:DockingManager.LayoutItemContainerStyle>
 
@@ -91,8 +101,9 @@
                     <layout:LayoutAnchorablePane Name="ToolsPane" DockWidth="380" />
                     <layout:LayoutPanel Orientation="Vertical">
                         <layout:LayoutAnchorablePane Name="ProgramPane" DockHeight="*" />
-                        <!-- The timeline arrives here in Phase 11. -->
-                        <layout:LayoutDocumentPane DockHeight="160" />
+                        <!-- One timeline tab per sequence. A pixel height, not a star: a star-sized
+                             document pane takes the whole column from the preview. -->
+                        <layout:LayoutDocumentPane DockHeight="300" />
                     </layout:LayoutPanel>
                 </layout:LayoutPanel>
             </layout:LayoutRoot>

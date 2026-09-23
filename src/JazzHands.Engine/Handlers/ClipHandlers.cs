@@ -127,6 +127,23 @@ public sealed class AddClipHandler : ICommandHandler<AddClipCommand>
             && string.Equals(candidate.Name, name, StringComparison.OrdinalIgnoreCase)
             && !EditOps.Overlaps(candidate, audio));
 
+        // No track by that name yet: an empty audio track still called by its default name (the
+        // A1 every project starts with) takes the stream and the stream's name, so the first
+        // capture's game, microphone and Discord land on A1, A2 and A3 rather than past an empty A1.
+        if (target is null && stream.Title is { Length: > 0 })
+        {
+            Track? unused = sequence.Tracks
+                .Where(candidate => candidate.Kind == TrackKind.Audio && !candidate.Locked && candidate.Clips.IsEmpty && IsDefaultAudioName(candidate.Name))
+                .OrderBy(candidate => candidate.Order)
+                .FirstOrDefault();
+
+            if (unused is not null)
+            {
+                target = unused with { Name = name };
+                project = project.ReplaceTrack(target);
+            }
+        }
+
         if (target is null)
         {
             target = new Track(Id.New(), TrackKind.Audio, name, sequence.NextTrackOrder());
@@ -138,6 +155,10 @@ public sealed class AddClipHandler : ICommandHandler<AddClipCommand>
         context.Changed(target.Id);
         return project.ReplaceTrack(target.AddClip(audio));
     }
+
+    /// <summary>True for A1, A2 and so on: a name nobody chose.</summary>
+    private static bool IsDefaultAudioName(string name) =>
+        name.Length > 1 && (name[0] == 'A' || name[0] == 'a') && name.AsSpan(1).IndexOfAnyExceptInRange('0', '9') < 0;
 
     /// <summary>The first stream of the kind the track carries, or 0 when the media was never probed.</summary>
     private static int DefaultStream(MediaItem? media, TrackKind kind)

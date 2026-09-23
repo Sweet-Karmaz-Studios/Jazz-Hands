@@ -1,4 +1,5 @@
 using JazzHands.Core.Commands;
+using JazzHands.Core.Time;
 using JazzHands.Engine.Playback;
 using JazzHands.Render;
 
@@ -36,6 +37,12 @@ public interface IPreviewEngine
 
     /// <summary>What playback is doing now.</summary>
     PlaybackStateInfo Describe();
+
+    /// <summary>
+    /// Where the playhead is, cheaply: what the timeline reads every frame to draw it, where a
+    /// full <see cref="Describe"/> would build a record sixty times a second.
+    /// </summary>
+    Flicks Position { get; }
 }
 
 /// <summary>The playback engine, presented to the preview panel.</summary>
@@ -67,6 +74,9 @@ public sealed class EnginePreview(PlaybackEngine engine, RenderDevice device) : 
 
     /// <inheritdoc />
     public PlaybackStateInfo Describe() => engine.Describe();
+
+    /// <inheritdoc />
+    public Flicks Position => engine.Position;
 }
 
 /// <summary>Opens and closes the full screen preview.</summary>

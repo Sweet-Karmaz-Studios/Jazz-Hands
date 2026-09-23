@@ -7,6 +7,7 @@ using JazzHands.App.Shell;
 using JazzHands.App.ViewModels.Audio;
 using JazzHands.App.ViewModels.Media;
 using JazzHands.App.ViewModels.Playback;
+using JazzHands.App.ViewModels.Timeline;
 using JazzHands.Engine.Commands;
 using Path = System.IO.Path;
 
@@ -32,7 +33,8 @@ public sealed partial class MainViewModel : ObservableObject
         MediaPanelViewModel media,
         IUiDispatcher ui,
         MetersPanelViewModel? meters = null,
-        PreviewPanelViewModel? preview = null)
+        PreviewPanelViewModel? preview = null,
+        TimelineDocuments? timelines = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(media);
@@ -42,6 +44,7 @@ public sealed partial class MainViewModel : ObservableObject
         Media = media;
         Meters = meters;
         Preview = preview;
+        Timelines = timelines;
         Panels = [media];
 
         if (meters is not null)
@@ -66,6 +69,9 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>The program monitor, when the window has a playback engine. The window sends it keys.</summary>
     public PreviewPanelViewModel? Preview { get; }
+
+    /// <summary>The timeline tabs, one per sequence, when the window has them.</summary>
+    public TimelineDocuments? Timelines { get; }
 
     /// <summary>Every dockable panel, in the order they were registered.</summary>
     public ObservableCollection<ToolViewModel> Panels { get; }

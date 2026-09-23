@@ -3,10 +3,12 @@ using JazzHands.App.ViewModels;
 using JazzHands.App.ViewModels.Audio;
 using JazzHands.App.ViewModels.Media;
 using JazzHands.App.ViewModels.Playback;
+using JazzHands.App.ViewModels.Timeline;
 using JazzHands.Core.Model;
 using JazzHands.Engine;
 using JazzHands.Engine.Commands;
 using JazzHands.Engine.Playback;
+using JazzHands.Engine.Selection;
 using JazzHands.Render;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -31,7 +33,13 @@ public static class AppServices
 
         services.AddJazzHandsEngine();
 
-        services.AddSingleton(provider => new Session(project, provider, path, recovery: path.Length > 0));
+        // The selection prunes itself after every command, so a deleted clip never stays selected.
+        services.AddSingleton(provider =>
+        {
+            var session = new Session(project, provider, path, recovery: path.Length > 0);
+            provider.GetRequiredService<SelectionService>().Attach(session);
+            return session;
+        });
         services.AddSingleton<ISession>(provider => new EngineSession(provider.GetRequiredService<Session>()));
 
         services.AddSingleton<IUiDispatcher, WpfDispatcher>();
@@ -83,6 +91,12 @@ public static class AppServices
             provider.GetRequiredService<IPreviewEngine>(),
             provider.GetRequiredService<IUiDispatcher>(),
             provider.GetRequiredService<IFullScreenPreview>()));
+
+        services.AddSingleton(provider => new TimelineDocuments(
+            provider.GetRequiredService<ISession>(),
+            provider.GetRequiredService<SelectionService>(),
+            provider.GetRequiredService<IUiDispatcher>(),
+            provider.GetRequiredService<IPreviewEngine>()));
 
         services.AddSingleton<MediaPanelViewModel>();
         services.AddSingleton<MetersPanelViewModel>(provider => new MetersPanelViewModel(

@@ -1,0 +1,906 @@
+using System.Diagnostics;
+using System.Globalization;
+using System.Windows;
+using System.Windows.Input;
+using System.Windows.Media;
+using JazzHands.App.Services;
+using JazzHands.App.ViewModels.Timeline;
+using JazzHands.Core.Model;
+using JazzHands.Core.Time;
+
+namespace JazzHands.App.Controls.Timeline;
+
+/// <summary>
+/// Draws a <see cref="TimelineViewModel"/> and hands it the mouse.
+/// </summary>
+/// <remarks>
+/// No element per clip: each layer is one <see cref="DrawingVisual"/> redrawn only when the view
+/// model says that layer changed, so five hundred clips are one pass and a moving playhead is a
+/// line. The layers, bottom up: lanes, clips, markers, ruler, selection, ghost, playhead.
+///
+/// Everything that says where a thing is comes from <see cref="TimelineGeometry"/>; everything
+/// the mouse does goes to the view model, which decides what it means. This only draws.
+///
+/// <see cref="LastClipsRender"/> and <see cref="ClipsRenders"/> are what the performance test
+/// reads: how long drawing the clips took, and how many times it happened.
+/// </remarks>
+public sealed class TimelineControl : FrameworkElement
+{
+    private const double ClipInset = 2.0;
+    private const double LabelPadding = 4.0;
+    private const double ClipFontSize = 11.0;
+
+    private readonly VisualCollection _visuals;
+    private readonly DrawingVisual _lanes = new();
+    private readonly DrawingVisual _clips = new();
+    private readonly DrawingVisual _markers = new();
+    private readonly DrawingVisual _ruler = new();
+    private readonly DrawingVisual _selection = new();
+    private readonly DrawingVisual _ghost = new();
+    private readonly DrawingVisual _playhead = new();
+
+    private readonly Dictionary<string, SolidColorBrush> _trackBrushes = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, FormattedText> _labels = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, FormattedText> _rulerLabels = new(StringComparer.Ordinal);
+
+    private TimelineViewModel? _model;
+    private TimelineLayers _dirty = TimelineLayers.All;
+    private bool _renderingHooked;
+    private Flicks _drawnPlayhead = Flicks.MinValue;
+    private Palette? _palette;
+    private Typeface? _typeface;
+    private double _pixelsPerDip = 1.0;
+
+    /// <summary>Creates the control.</summary>
+    public TimelineControl()
+    {
+        _visuals = new VisualCollection(this) { _lanes, _clips, _markers, _ruler, _selection, _ghost, _playhead };
+
+        ClipToBounds = true;
+        Focusable = true;
+        AllowDrop = true;
+        SnapsToDevicePixels = true;
+        UseLayoutRounding = true;
+
+        DataContextChanged += (_, _) => Attach(DataContext as TimelineViewModel);
+        Loaded += (_, _) => HookRendering(true);
+        Unloaded += (_, _) => HookRendering(false);
+    }
+
+    /// <summary>How long the clips layer took to draw last time, for the performance test.</summary>
+    public TimeSpan LastClipsRender { get; private set; }
+
+    /// <summary>How many times the clips layer has been drawn.</summary>
+    public int ClipsRenders { get; private set; }
+
+    /// <summary>How many times the playhead layer has been drawn.</summary>
+    public int PlayheadRenders { get; private set; }
+
+    /// <inheritdoc />
+    protected override int VisualChildrenCount => _visuals.Count;
+
+    /// <inheritdoc />
+    protected override Visual GetVisualChild(int index) => _visuals[index];
+
+    /// <summary>
+    /// Draws whatever is dirty now, rather than on the next frame. The rendering loop calls this;
+    /// tests call it to draw without one.
+    /// </summary>
+    public void DrawDirty()
+    {
+        if (_model is null || ActualWidth <= 0 || ActualHeight <= 0)
+        {
+            return;
+        }
+
+        _palette ??= new Palette(this);
+        _typeface ??= new Typeface(TryFindResource("Font.Ui") as FontFamily ?? new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+        _pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+
+        Flicks playhead = _model.Playhead;
+        _model.Follow(playhead);
+
+        if (playhead != _drawnPlayhead)
+        {
+            _dirty |= TimelineLayers.Playhead;
+        }
+
+        TimelineLayers dirty = _dirty;
+        _dirty = TimelineLayers.None;
+
+        if (dirty.HasFlag(TimelineLayers.Lanes))
+        {
+            DrawLanes();
+        }
+
+        if (dirty.HasFlag(TimelineLayers.Clips))
+        {
+            long started = Stopwatch.GetTimestamp();
+            DrawClips();
+            LastClipsRender = Stopwatch.GetElapsedTime(started);
+            ClipsRenders++;
+        }
+
+        if (dirty.HasFlag(TimelineLayers.Markers))
+        {
+            DrawMarkers();
+        }
+
+        if (dirty.HasFlag(TimelineLayers.Ruler))
+        {
+            DrawRuler();
+        }
+
+        if (dirty.HasFlag(TimelineLayers.Selection))
+        {
+            DrawSelection();
+        }
+
+        if (dirty.HasFlag(TimelineLayers.Ghost))
+        {
+            DrawGhost();
+        }
+
+        if (dirty.HasFlag(TimelineLayers.Playhead))
+        {
+            DrawPlayhead(playhead);
+            _drawnPlayhead = playhead;
+            PlayheadRenders++;
+        }
+    }
+
+    /// <inheritdoc />
+    protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
+    {
+        base.OnRenderSizeChanged(sizeInfo);
+        _model?.SetViewport(sizeInfo.NewSize.Width, sizeInfo.NewSize.Height);
+        _dirty = TimelineLayers.All;
+        DrawDirty();
+    }
+
+    /// <inheritdoc />
+    protected override void OnRender(DrawingContext drawingContext)
+    {
+        ArgumentNullException.ThrowIfNull(drawingContext);
+
+        // The element itself draws only a transparent fill, so the whole area takes the mouse.
+        drawingContext.DrawRectangle(Brushes.Transparent, null, new Rect(RenderSize));
+    }
+
+    /// <inheritdoc />
+    protected override void OnMouseDown(MouseButtonEventArgs e)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        base.OnMouseDown(e);
+
+        if (_model is null || e.ChangedButton != MouseButton.Left)
+        {
+            return;
+        }
+
+        Focus();
+        CaptureMouse();
+        _model.PointerDown(e.GetPosition(this), Keyboard.Modifiers);
+        e.Handled = true;
+    }
+
+    /// <inheritdoc />
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        base.OnMouseMove(e);
+        _model?.PointerMove(e.GetPosition(this));
+    }
+
+    /// <inheritdoc />
+    protected override void OnMouseUp(MouseButtonEventArgs e)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        base.OnMouseUp(e);
+
+        if (_model is null || e.ChangedButton != MouseButton.Left)
+        {
+            return;
+        }
+
+        _model.PointerUp(e.GetPosition(this));
+        ReleaseMouseCapture();
+        e.Handled = true;
+    }
+
+    /// <inheritdoc />
+    protected override void OnLostMouseCapture(MouseEventArgs e)
+    {
+        base.OnLostMouseCapture(e);
+
+        if (Mouse.LeftButton != MouseButtonState.Pressed)
+        {
+            return;
+        }
+
+        _model?.PointerCancel();
+    }
+
+    /// <inheritdoc />
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        base.OnKeyDown(e);
+
+        if (e.Key == Key.Escape && _model is not null)
+        {
+            _model.PointerCancel();
+            ReleaseMouseCapture();
+            e.Handled = true;
+        }
+    }
+
+    /// <inheritdoc />
+    protected override void OnMouseWheel(MouseWheelEventArgs e)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        base.OnMouseWheel(e);
+
+        if (_model is null)
+        {
+            return;
+        }
+
+        _model.Wheel(e.Delta, e.GetPosition(this), Keyboard.Modifiers);
+        e.Handled = true;
+    }
+
+    /// <inheritdoc />
+    protected override void OnDragOver(DragEventArgs e)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        base.OnDragOver(e);
+
+        IReadOnlyList<string> ids = MediaDragData.Ids(e.Data);
+        bool accepted = _model is not null && ids.Count > 0 && _model.DragOver(ids, e.GetPosition(this));
+
+        e.Effects = accepted ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    /// <inheritdoc />
+    protected override void OnDragLeave(DragEventArgs e)
+    {
+        base.OnDragLeave(e);
+        _model?.DragLeave();
+    }
+
+    /// <inheritdoc />
+    protected override async void OnDrop(DragEventArgs e)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        base.OnDrop(e);
+
+        IReadOnlyList<string> ids = MediaDragData.Ids(e.Data);
+        if (_model is null || ids.Count == 0)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        await _model.DropAsync(ids, e.GetPosition(this)).ConfigureAwait(true);
+    }
+
+    private static Pen Frozen(Pen pen)
+    {
+        pen.Freeze();
+        return pen;
+    }
+
+    private static Brush Frozen(Brush brush)
+    {
+        brush.Freeze();
+        return brush;
+    }
+
+    private static Brush Faded(Brush brush, double opacity)
+    {
+        Brush copy = brush.CloneCurrentValue();
+        copy.Opacity = opacity;
+        return Frozen(copy);
+    }
+
+    private static Color ParseColor(string text)
+    {
+        try
+        {
+            return ColorConverter.ConvertFromString(text) is Color color ? color : Colors.SteelBlue;
+        }
+        catch (FormatException)
+        {
+            return Colors.SteelBlue;
+        }
+    }
+
+    private void Attach(TimelineViewModel? model)
+    {
+        if (_model is not null)
+        {
+            _model.Invalidated -= OnInvalidated;
+            _model.PropertyChanged -= OnModelPropertyChanged;
+        }
+
+        _model = model;
+
+        if (_model is not null)
+        {
+            _model.Invalidated += OnInvalidated;
+            _model.PropertyChanged += OnModelPropertyChanged;
+
+            if (ActualWidth > 0 && ActualHeight > 0)
+            {
+                _model.SetViewport(ActualWidth, ActualHeight);
+            }
+        }
+
+        _dirty = TimelineLayers.All;
+        DrawDirty();
+    }
+
+    private void OnModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(TimelineViewModel.Cursor) && _model is not null)
+        {
+            Cursor = _model.Cursor switch
+            {
+                TimelineCursor.TrimStart or TimelineCursor.TrimEnd => Cursors.SizeWE,
+                TimelineCursor.Scrub => Cursors.IBeam,
+                TimelineCursor.Move => Cursors.SizeAll,
+                _ => Cursors.Arrow,
+            };
+        }
+    }
+
+    private void OnInvalidated(object? sender, TimelineLayers layers)
+    {
+        _dirty |= layers;
+
+        // Without a rendering loop (a test, a control not yet loaded) draw straight away.
+        if (!_renderingHooked)
+        {
+            DrawDirty();
+        }
+    }
+
+    private void HookRendering(bool hook)
+    {
+        if (hook == _renderingHooked)
+        {
+            return;
+        }
+
+        _renderingHooked = hook;
+
+        if (hook)
+        {
+            CompositionTarget.Rendering += OnRendering;
+        }
+        else
+        {
+            CompositionTarget.Rendering -= OnRendering;
+        }
+    }
+
+    private void OnRendering(object? sender, EventArgs e) => DrawDirty();
+
+    private SolidColorBrush TrackBrush(string color)
+    {
+        if (!_trackBrushes.TryGetValue(color, out SolidColorBrush? brush))
+        {
+            brush = new SolidColorBrush(ParseColor(color));
+            brush.Freeze();
+            _trackBrushes[color] = brush;
+        }
+
+        return brush;
+    }
+
+    private FormattedText Label(string text, Dictionary<string, FormattedText> cache, Brush brush, double size)
+    {
+        if (!cache.TryGetValue(text, out FormattedText? formatted))
+        {
+            // Laying text out is the expensive part of drawing it, so each distinct string is
+            // laid out once. The cap keeps a long session's churn of renamed clips bounded.
+            if (cache.Count > 4096)
+            {
+                cache.Clear();
+            }
+
+            formatted = new FormattedText(
+                text,
+                CultureInfo.CurrentUICulture,
+                FlowDirection.LeftToRight,
+                _typeface!,
+                size,
+                brush,
+                _pixelsPerDip)
+            {
+                MaxLineCount = 1,
+                Trimming = TextTrimming.None,
+            };
+
+            cache[text] = formatted;
+        }
+
+        return formatted;
+    }
+
+    private void DrawLanes()
+    {
+        TimelineViewModel model = _model!;
+        Palette palette = _palette!;
+        TimelineGeometry geometry = model.Geometry;
+        double width = ActualWidth;
+        double height = ActualHeight;
+
+        using DrawingContext dc = _lanes.RenderOpen();
+        dc.DrawRectangle(palette.Background, null, new Rect(0, 0, width, height));
+
+        dc.PushClip(new RectangleGeometry(new Rect(0, TimelineGeometry.TracksTop, width, Math.Max(0, height - TimelineGeometry.TracksTop))));
+
+        for (int index = 0; index < geometry.Rows.Length; index++)
+        {
+            TrackRow row = geometry.Rows[index];
+            double top = geometry.TopOf(row);
+
+            if (top > height || top + row.Height < TimelineGeometry.TracksTop)
+            {
+                continue;
+            }
+
+            dc.DrawRectangle(index % 2 == 0 ? palette.Lane : palette.LaneAlt, null, new Rect(0, top, width, row.Height));
+            dc.DrawLine(palette.RowLine, new Point(0, top + row.Height - 0.5), new Point(width, top + row.Height - 0.5));
+        }
+
+        if (model.Content.Sequence.InOut is { } range)
+        {
+            double left = Math.Max(0, geometry.XOf(range.Start));
+            double right = Math.Min(width, geometry.XOf(range.End));
+
+            if (right > left)
+            {
+                dc.DrawRectangle(palette.InOut, null, new Rect(left, TimelineGeometry.TracksTop, right - left, height));
+            }
+        }
+
+        dc.Pop();
+    }
+
+    private void DrawClips()
+    {
+        TimelineViewModel model = _model!;
+        Palette palette = _palette!;
+        TimelineGeometry geometry = model.Geometry;
+        double width = ActualWidth;
+        double height = ActualHeight;
+        (Flicks visibleStart, Flicks visibleEnd) = geometry.Visible(width);
+
+        using DrawingContext dc = _clips.RenderOpen();
+        dc.PushClip(new RectangleGeometry(new Rect(0, TimelineGeometry.TracksTop, width, Math.Max(0, height - TimelineGeometry.TracksTop))));
+
+        foreach (TrackView track in model.Content.Tracks)
+        {
+            if (geometry.Row(track.Id) is not { } row)
+            {
+                continue;
+            }
+
+            double top = geometry.TopOf(row);
+            if (top > height || top + row.Height < TimelineGeometry.TracksTop)
+            {
+                continue;
+            }
+
+            SolidColorBrush fill = TrackBrush(track.Track.Color);
+            double clipTop = top + ClipInset;
+            double clipHeight = Math.Max(1.0, row.Height - (ClipInset * 2));
+
+            foreach (ClipView clip in Visible(track, visibleStart, visibleEnd))
+            {
+                double left = geometry.XOf(clip.Start);
+                double right = geometry.XOf(clip.End);
+
+                // Past the edges the body is clipped; drawing it wider than the control only
+                // costs the rasterizer.
+                double drawnLeft = Math.Max(left, -4.0);
+                double drawnRight = Math.Min(right, width + 4.0);
+                var body = new Rect(drawnLeft, clipTop, Math.Max(1.0, drawnRight - drawnLeft - 1.0), clipHeight);
+
+                Brush bodyBrush = clip.MediaMissing ? palette.Missing : clip.Clip.Enabled ? fill : palette.Disabled;
+                dc.DrawRoundedRectangle(bodyBrush, palette.ClipEdge, body, 3.0, 3.0);
+
+                if (clip.Clip.LinkGroupId is not null)
+                {
+                    dc.DrawRectangle(palette.LinkMark, null, new Rect(body.Left + 1, body.Bottom - 3, Math.Min(10.0, body.Width - 2), 2));
+                }
+
+                if (body.Width > 16 && clipHeight > ClipFontSize + 2)
+                {
+                    FormattedText label = Label(clip.Label, _labels, palette.ClipText, ClipFontSize);
+                    double textLeft = Math.Max(body.Left, 0) + LabelPadding;
+                    double room = body.Right - LabelPadding - textLeft;
+
+                    if (room > 4)
+                    {
+                        bool fits = label.Width <= room;
+                        if (!fits)
+                        {
+                            dc.PushClip(new RectangleGeometry(new Rect(textLeft, body.Top, room, body.Height)));
+                        }
+
+                        dc.DrawText(label, new Point(textLeft, body.Top + 2));
+
+                        if (!fits)
+                        {
+                            dc.Pop();
+                        }
+                    }
+                }
+            }
+        }
+
+        dc.Pop();
+    }
+
+    private static IEnumerable<ClipView> Visible(TrackView track, Flicks start, Flicks end)
+    {
+        // Clips on a track are in time order and do not overlap, so the first visible one is
+        // found by bisection and the rest follow until one starts past the right edge.
+        System.Collections.Immutable.ImmutableArray<ClipView> clips = track.Clips;
+        int low = 0;
+        int high = clips.Length;
+
+        while (low < high)
+        {
+            int middle = (low + high) / 2;
+            if (clips[middle].End <= start)
+            {
+                low = middle + 1;
+            }
+            else
+            {
+                high = middle;
+            }
+        }
+
+        for (int index = low; index < clips.Length && clips[index].Start < end; index++)
+        {
+            yield return clips[index];
+        }
+    }
+
+    private void DrawMarkers()
+    {
+        TimelineViewModel model = _model!;
+        Palette palette = _palette!;
+        TimelineGeometry geometry = model.Geometry;
+        double width = ActualWidth;
+
+        using DrawingContext dc = _markers.RenderOpen();
+        dc.DrawRectangle(palette.MarkerLane, null, new Rect(0, TimelineGeometry.RulerHeight, width, TimelineGeometry.MarkerLaneHeight));
+
+        foreach (Marker marker in model.Content.Sequence.Markers)
+        {
+            double x = geometry.XOf(marker.Time);
+            if (x < -200 || x > width + 4)
+            {
+                continue;
+            }
+
+            SolidColorBrush brush = TrackBrush(marker.Color);
+            bool selected = model.Selected.Contains(marker.Id);
+            double top = TimelineGeometry.RulerHeight + 2;
+            double bottom = TimelineGeometry.TracksTop - 2;
+
+            if (marker.Duration > Flicks.Zero)
+            {
+                double right = geometry.XOf(marker.Time + marker.Duration);
+                dc.DrawRectangle(Faded(brush, 0.35), null, new Rect(x, top, Math.Max(1, right - x), bottom - top));
+            }
+
+            var flag = new StreamGeometry();
+            using (StreamGeometryContext context = flag.Open())
+            {
+                context.BeginFigure(new Point(x, top), true, true);
+                context.LineTo(new Point(x + 8, top), false, false);
+                context.LineTo(new Point(x + 8, bottom - 4), false, false);
+                context.LineTo(new Point(x, bottom), false, false);
+            }
+
+            flag.Freeze();
+            dc.DrawGeometry(brush, selected ? palette.SelectionPen : null, flag);
+            dc.DrawLine(palette.MarkerLine(brush), new Point(x + 0.5, TimelineGeometry.TracksTop), new Point(x + 0.5, ActualHeight));
+
+            if (marker.Name.Length > 0)
+            {
+                dc.DrawText(Label(marker.Name, _rulerLabels, palette.TextSecondary, 10.0), new Point(x + 11, top));
+            }
+        }
+    }
+
+    private void DrawRuler()
+    {
+        TimelineViewModel model = _model!;
+        Palette palette = _palette!;
+        TimelineGeometry geometry = model.Geometry;
+        double width = ActualWidth;
+        Rational fps = geometry.FrameRate;
+
+        using DrawingContext dc = _ruler.RenderOpen();
+        dc.DrawRectangle(palette.Ruler, null, new Rect(0, 0, width, TimelineGeometry.RulerHeight));
+
+        if (model.Content.Sequence.InOut is { } range)
+        {
+            double left = Math.Max(0, geometry.XOf(range.Start));
+            double right = Math.Min(width, geometry.XOf(range.End));
+            if (right > left)
+            {
+                dc.DrawRectangle(palette.InOutRuler, null, new Rect(left, TimelineGeometry.RulerHeight - 5, right - left, 5));
+            }
+        }
+
+        (Flicks major, int minors) = RulerSpacing.For(geometry.PixelsPerSecond, fps);
+        Flicks minor = major / minors;
+        (Flicks start, Flicks end) = geometry.Visible(width);
+        long first = start.Value / minor.Value;
+        long last = (end.Value / minor.Value) + 1;
+
+        for (long tick = first; tick <= last; tick++)
+        {
+            Flicks time = minor * tick;
+            double x = Math.Round(geometry.XOf(time)) + 0.5;
+            bool isMajor = tick % minors == 0;
+            double length = isMajor ? 12.0 : 5.0;
+
+            dc.DrawLine(palette.Tick, new Point(x, TimelineGeometry.RulerHeight - length), new Point(x, TimelineGeometry.RulerHeight));
+
+            if (isMajor)
+            {
+                string text = Core.Time.Timecode.Format(time, fps);
+                dc.DrawText(Label(text, _rulerLabels, palette.TextSecondary, 10.0), new Point(x + 3, 2));
+            }
+        }
+
+        dc.DrawLine(palette.RowLine, new Point(0, TimelineGeometry.RulerHeight - 0.5), new Point(width, TimelineGeometry.RulerHeight - 0.5));
+    }
+
+    private void DrawSelection()
+    {
+        TimelineViewModel model = _model!;
+        Palette palette = _palette!;
+        TimelineGeometry geometry = model.Geometry;
+        double width = ActualWidth;
+        double height = ActualHeight;
+
+        using DrawingContext dc = _selection.RenderOpen();
+        dc.PushClip(new RectangleGeometry(new Rect(0, TimelineGeometry.TracksTop, width, Math.Max(0, height - TimelineGeometry.TracksTop))));
+
+        foreach (string id in model.Selected)
+        {
+            if (model.Content.Clip(id) is not { } clip || geometry.Row(clip.TrackId) is not { } row)
+            {
+                continue;
+            }
+
+            double left = Math.Max(geometry.XOf(clip.Start), -4.0);
+            double right = Math.Min(geometry.XOf(clip.End), width + 4.0);
+            if (right < 0 || left > width)
+            {
+                continue;
+            }
+
+            double top = geometry.TopOf(row) + ClipInset;
+            dc.DrawRoundedRectangle(null, palette.SelectionPen, new Rect(left + 1, top + 1, Math.Max(1, right - left - 3), Math.Max(1, row.Height - (ClipInset * 2) - 2)), 3, 3);
+        }
+
+        dc.Pop();
+
+        if (model.Box is { } box)
+        {
+            dc.DrawRectangle(palette.Box, palette.BoxPen, box);
+        }
+    }
+
+    private void DrawGhost()
+    {
+        TimelineViewModel model = _model!;
+        Palette palette = _palette!;
+        TimelineGeometry geometry = model.Geometry;
+
+        using DrawingContext dc = _ghost.RenderOpen();
+        if (model.Ghost is not { } ghost)
+        {
+            return;
+        }
+
+        Brush fill = ghost.Refused is null ? palette.Ghost : palette.Refused;
+
+        foreach (GhostClip clip in ghost.Clips)
+        {
+            if (geometry.Row(clip.TrackId) is not { } row)
+            {
+                continue;
+            }
+
+            double left = geometry.XOf(clip.Start);
+            double right = geometry.XOf(clip.End);
+            double top = geometry.TopOf(row) + ClipInset;
+            dc.DrawRoundedRectangle(fill, palette.GhostPen, new Rect(left, top, Math.Max(1, right - left), Math.Max(1, row.Height - (ClipInset * 2))), 3, 3);
+        }
+    }
+
+    private void DrawPlayhead(Flicks playhead)
+    {
+        TimelineViewModel model = _model!;
+        Palette palette = _palette!;
+        double x = Math.Round(model.Geometry.XOf(playhead)) + 0.5;
+
+        using DrawingContext dc = _playhead.RenderOpen();
+        if (x < -8 || x > ActualWidth + 8)
+        {
+            return;
+        }
+
+        dc.DrawLine(palette.PlayheadPen, new Point(x, 0), new Point(x, ActualHeight));
+
+        var head = new StreamGeometry();
+        using (StreamGeometryContext context = head.Open())
+        {
+            context.BeginFigure(new Point(x - 6, 0), true, true);
+            context.LineTo(new Point(x + 6, 0), false, false);
+            context.LineTo(new Point(x + 6, 8), false, false);
+            context.LineTo(new Point(x, 14), false, false);
+            context.LineTo(new Point(x - 6, 8), false, false);
+        }
+
+        head.Freeze();
+        dc.DrawGeometry(palette.Playhead, null, head);
+    }
+
+    /// <summary>Every brush and pen the timeline draws with, from the theme, frozen once.</summary>
+    private sealed class Palette
+    {
+        private readonly Dictionary<Brush, Pen> _markerLines = [];
+
+        public Palette(FrameworkElement owner)
+        {
+            Brush Find(string key, Color fallback) =>
+                owner.TryFindResource(key) as Brush ?? Frozen(new SolidColorBrush(fallback));
+
+            Background = Find("Brush.Background.Base", Color.FromRgb(0x1B, 0x1B, 0x1B));
+            Lane = Find("Brush.Timeline.Lane", Color.FromRgb(0x1F, 0x1F, 0x1F));
+            LaneAlt = Find("Brush.Timeline.LaneAlt", Color.FromRgb(0x23, 0x23, 0x23));
+            Ruler = Find("Brush.Timeline.Ruler", Color.FromRgb(0x26, 0x26, 0x26));
+            MarkerLane = Find("Brush.Background.Panel", Color.FromRgb(0x22, 0x22, 0x22));
+            InOut = Find("Brush.Timeline.InOut", Color.FromArgb(0x26, 0x4C, 0x9A, 0xFF));
+            InOutRuler = Faded(Find("Brush.Accent", Color.FromRgb(0x4C, 0x9A, 0xFF)), 0.8);
+            Playhead = Find("Brush.Timeline.Playhead", Color.FromRgb(0xE0, 0x5C, 0x5C));
+            Box = Find("Brush.Timeline.Box", Color.FromArgb(0x33, 0x4C, 0x9A, 0xFF));
+            Ghost = Find("Brush.Timeline.Ghost", Color.FromArgb(0x66, 0x4C, 0x9A, 0xFF));
+            Refused = Find("Brush.Timeline.Refused", Color.FromArgb(0x66, 0xE0, 0x5C, 0x5C));
+            ClipText = Find("Brush.Timeline.ClipText", Color.FromRgb(0xF2, 0xF2, 0xF2));
+            TextSecondary = Find("Brush.Text.Secondary", Color.FromRgb(0x9A, 0x9A, 0x9A));
+            Missing = Faded(Find("Brush.Error", Color.FromRgb(0xE0, 0x5C, 0x5C)), 0.55);
+            Disabled = Find("Brush.Border.Strong", Color.FromRgb(0x4C, 0x4C, 0x4C));
+            LinkMark = Faded(Find("Brush.Text.Primary", Color.FromRgb(0xE6, 0xE6, 0xE6)), 0.7);
+
+            ClipEdge = Frozen(new Pen(Frozen(new SolidColorBrush(Color.FromArgb(0x70, 0, 0, 0))), 1.0));
+            RowLine = Frozen(new Pen(Find("Brush.Border", Color.FromRgb(0x3A, 0x3A, 0x3A)), 1.0));
+            Tick = Frozen(new Pen(Find("Brush.Timeline.Tick", Color.FromRgb(0x5A, 0x5A, 0x5A)), 1.0));
+            SelectionPen = Frozen(new Pen(Find("Brush.Timeline.Selection", Color.FromRgb(0xF2, 0xF2, 0xF2)), 2.0));
+            BoxPen = Frozen(new Pen(Find("Brush.Accent", Color.FromRgb(0x4C, 0x9A, 0xFF)), 1.0));
+            GhostPen = Frozen(new Pen(Find("Brush.Text.Primary", Color.FromRgb(0xE6, 0xE6, 0xE6)), 1.0) { DashStyle = DashStyles.Dash });
+            PlayheadPen = Frozen(new Pen(Playhead, 1.0));
+        }
+
+        public Brush Background { get; }
+
+        public Brush Lane { get; }
+
+        public Brush LaneAlt { get; }
+
+        public Brush Ruler { get; }
+
+        public Brush MarkerLane { get; }
+
+        public Brush InOut { get; }
+
+        public Brush InOutRuler { get; }
+
+        public Brush Playhead { get; }
+
+        public Brush Box { get; }
+
+        public Brush Ghost { get; }
+
+        public Brush Refused { get; }
+
+        public Brush ClipText { get; }
+
+        public Brush TextSecondary { get; }
+
+        public Brush Missing { get; }
+
+        public Brush Disabled { get; }
+
+        public Brush LinkMark { get; }
+
+        public Pen ClipEdge { get; }
+
+        public Pen RowLine { get; }
+
+        public Pen Tick { get; }
+
+        public Pen SelectionPen { get; }
+
+        public Pen BoxPen { get; }
+
+        public Pen GhostPen { get; }
+
+        public Pen PlayheadPen { get; }
+
+        public Pen MarkerLine(Brush brush)
+        {
+            if (!_markerLines.TryGetValue(brush, out Pen? pen))
+            {
+                pen = Frozen(new Pen(Faded(brush, 0.4), 1.0));
+                _markerLines[brush] = pen;
+            }
+
+            return pen;
+        }
+    }
+}
+
+/// <summary>How far apart the ruler's ticks are at a zoom.</summary>
+public static class RulerSpacing
+{
+    /// <summary>The narrowest the gap between labelled ticks may get, in pixels.</summary>
+    public const double MinimumMajorPixels = 90.0;
+
+    /// <summary>
+    /// The major tick interval and how many minor ticks divide it: the shortest round interval
+    /// (a frame, a few frames, seconds, minutes) whose labels do not collide.
+    /// </summary>
+    public static (Flicks Major, int Minors) For(double pixelsPerSecond, Rational fps)
+    {
+        Flicks frame = Flicks.FromFrames(1, fps);
+        long framesPerSecond = Math.Max(1, (long)Math.Round(fps.ToDouble()));
+
+        (Flicks Interval, int Minors)[] candidates =
+        [
+            (frame, 1),
+            (frame * 2, 2),
+            (frame * 5, 5),
+            (frame * 10, 10),
+            (Flicks.FromFrames(framesPerSecond / 2 is > 0 and var half ? half : 1, fps), 5),
+            (Flicks.OneSecond, 5),
+            (Flicks.OneSecond * 2, 4),
+            (Flicks.OneSecond * 5, 5),
+            (Flicks.OneSecond * 10, 10),
+            (Flicks.OneSecond * 15, 3),
+            (Flicks.OneSecond * 30, 6),
+            (Flicks.OneSecond * 60, 6),
+            (Flicks.OneSecond * 120, 4),
+            (Flicks.OneSecond * 300, 5),
+            (Flicks.OneSecond * 600, 10),
+            (Flicks.OneSecond * 1800, 6),
+            (Flicks.OneSecond * 3600, 6),
+        ];
+
+        foreach ((Flicks interval, int minors) in candidates)
+        {
+            if (interval.ToSeconds() * pixelsPerSecond >= MinimumMajorPixels)
+            {
+                return (interval, minors);
+            }
+        }
+
+        return (Flicks.OneSecond * 7200, 4);
+    }
+}

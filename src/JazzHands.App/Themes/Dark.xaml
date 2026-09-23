@@ -47,6 +47,22 @@
     <SolidColorBrush x:Key="Brush.Label.Purple" Color="#FF9A6FC4" />
     <SolidColorBrush x:Key="Brush.Label.Grey" Color="#FF808080" />
 
+    <!--
+        The timeline. Lanes alternate by a shade so tracks read apart without lines; clips take
+        their track's own colour, so nothing here colours a clip body.
+    -->
+    <SolidColorBrush x:Key="Brush.Timeline.Lane" Color="#FF1F1F1F" />
+    <SolidColorBrush x:Key="Brush.Timeline.LaneAlt" Color="#FF232323" />
+    <SolidColorBrush x:Key="Brush.Timeline.Ruler" Color="#FF262626" />
+    <SolidColorBrush x:Key="Brush.Timeline.Tick" Color="#FF5A5A5A" />
+    <SolidColorBrush x:Key="Brush.Timeline.InOut" Color="#264C9AFF" />
+    <SolidColorBrush x:Key="Brush.Timeline.Playhead" Color="#FFE05C5C" />
+    <SolidColorBrush x:Key="Brush.Timeline.Selection" Color="#FFF2F2F2" />
+    <SolidColorBrush x:Key="Brush.Timeline.Box" Color="#334C9AFF" />
+    <SolidColorBrush x:Key="Brush.Timeline.Ghost" Color="#664C9AFF" />
+    <SolidColorBrush x:Key="Brush.Timeline.Refused" Color="#66E05C5C" />
+    <SolidColorBrush x:Key="Brush.Timeline.ClipText" Color="#FFF2F2F2" />
+
     <!-- Typography. Three sizes and two families is the whole vocabulary. -->
     <FontFamily x:Key="Font.Ui">Segoe UI Variable Text, Segoe UI</FontFamily>
     <FontFamily x:Key="Font.Mono">Cascadia Mono, Consolas</FontFamily>

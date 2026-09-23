@@ -29,4 +29,7 @@ public abstract partial class ToolViewModel(string contentId, string title) : Ob
 
     /// <summary>The stable id this panel is known by in a saved layout.</summary>
     public string ContentId { get; } = contentId;
+
+    /// <summary>Whether the tab offers to close. Panels do; Phase 27's layout service brings them back.</summary>
+    public virtual bool CanClose => true;
 }
