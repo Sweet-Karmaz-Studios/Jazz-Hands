@@ -34,10 +34,11 @@ namespace JazzHands.Engine.Playback;
 /// five minutes of 4K60. At other rates skipping is the point and nothing is counted.
 ///
 /// Decoding happens on this thread too, because the decoders, the frame cache and the device
-/// context are thread affine and a second thread would mean a second copy of each. The frame
-/// server decodes a few frames past whatever it was asked for, and after each present the time
-/// left before the next frame is due is spent decoding further ahead, so the frame that is due
-/// is almost always already there.
+/// context are thread affine and a second thread would mean a second copy of each. After each
+/// present, the time left before the next frame is due is spent decoding ahead on every layer,
+/// one frame at a time with each decode finished on the GPU before the next is issued, so the
+/// frame that is due is already there and its present never queues behind a burst of decodes.
+/// Parked, the same fills the frames after the playhead, and play waits for it.
 ///
 /// Each frame goes through <see cref="FrameServer"/>: the render graph is built from the
 /// sequence, every visible layer's picture fetched on its own decoder lane, and the stack
@@ -99,6 +100,12 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
     private long _rendered;
     private long _frameOnScreen;
     private int _effectiveQuality = (int)PreviewQuality.Full;
+
+    // The render pools' counters as of the last frame, written by the composition thread and
+    // read by anyone; a reader may see one frame's counts mixed with the next's, which is fine
+    // for diagnostics. Order: targets created, rented, outstanding, frame textures created, layers
+    // cached, layers drawn.
+    private readonly long[] _renderStats = new long[6];
 
     /// <summary>Creates the engine and starts its composition thread. Plays nothing until asked.</summary>
     /// <param name="transport">The audio side and the master clock. Not owned.</param>
@@ -166,6 +173,21 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
 
     /// <summary>What Auto quality last resolved to, or the quality asked for.</summary>
     public PreviewQuality EffectiveQuality => (PreviewQuality)Volatile.Read(ref _effectiveQuality);
+
+    /// <summary>
+    /// True once the frames after the parked playhead are decoded, so pressing play starts from
+    /// the cache. Scripts and benchmarks wait for it the way a person looks at the first frame.
+    /// </summary>
+    public bool IsPrerolled => Interlocked.Read(ref _prerolledGeneration) == Interlocked.Read(ref _seekGeneration);
+
+    /// <summary>What the render pools have done: flat creation counts while playing mean no allocation.</summary>
+    public RenderStatsInfo RenderStats => new(
+        Volatile.Read(ref _renderStats[0]),
+        Volatile.Read(ref _renderStats[1]),
+        (int)Volatile.Read(ref _renderStats[2]),
+        Volatile.Read(ref _renderStats[3]),
+        (int)Volatile.Read(ref _renderStats[4]),
+        Volatile.Read(ref _renderStats[5]));
 
     /// <inheritdoc />
     public bool Loop
@@ -499,7 +521,8 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
             sequence?.InOut?.End,
             PresentedFrames,
             DroppedFrames,
-            _transport.CanStretch);
+            _transport.CanStretch,
+            RenderStats);
     }
 
     /// <summary>Waits until the engine has presented a frame after this call, for tests and scripts.</summary>
@@ -694,9 +717,15 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
         // play starts from the cache rather than from opening a decoder. Once per position, and
         // abandoned the moment anything else is asked for, so it never slows a scrub.
         bool settled = Volatile.Read(ref _scrubUntilTicks) < now || _playWaiting;
-        if ((_prerolled != key || Interlocked.Read(ref _prerolledGeneration) != generation) && settled
-            && DecodeAhead(frames, snapshot, sequence, frame, 1.0, frameLength))
+        if ((_prerolled != key || Interlocked.Read(ref _prerolledGeneration) != generation) && settled)
         {
+            if (!DecodeAhead(frames, snapshot, sequence, frame, 1.0, frameLength))
+            {
+                // Out of time with frames still to decode, which several layers each starting
+                // part way through a group of pictures easily are: carry on straight away.
+                return 1;
+            }
+
             _prerolled = key;
             Interlocked.Exchange(ref _prerolledGeneration, generation);
             _prerollSignal.Set();
@@ -819,9 +848,22 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
         frames.Motion = new Motion(playing, rate);
         frames.Render(snapshot.Project, sequence, time, options, _programView!, width, height, OutputSettings.Preview, snapshot.Path);
 
+        RecordStats(frames);
         Interlocked.Increment(ref _rendered);
         Interlocked.Exchange(ref _frameOnScreen, frame);
         _lastFrame = new PreviewFrame(_program!, width, height, settings.Width, settings.Height, frame, time, playhead, quality);
+    }
+
+    /// <summary>Copies the render pools' counters where other threads can read them.</summary>
+    private void RecordStats(FrameServer frames)
+    {
+        Compositor compositor = frames.Compositor;
+        Volatile.Write(ref _renderStats[0], compositor.Pool.Created);
+        Volatile.Write(ref _renderStats[1], compositor.Pool.Rented);
+        Volatile.Write(ref _renderStats[2], compositor.Pool.Outstanding);
+        Volatile.Write(ref _renderStats[3], frames.Sources.Cache.Textures.Created);
+        Volatile.Write(ref _renderStats[4], compositor.Cache.Count);
+        Volatile.Write(ref _renderStats[5], compositor.LayersDrawn);
     }
 
     /// <summary>
@@ -836,10 +878,15 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
             return true;
         }
 
-        // Leave a few milliseconds of the frame interval unspent, so a slow decode here does not
-        // make the next frame late.
+        // Stop a little before the next frame is due by the clock, not a frame interval from now:
+        // this runs after the render and present, and counting from here would spend the next
+        // frame's time too. When already late, a couple of milliseconds still go on decoding, or
+        // falling behind would stop the one thing that catches up.
         double interval = frameLength.Value * 1000.0 / Flicks.PerSecond / rate;
-        long deadline = Stopwatch.GetTimestamp() + (long)(Math.Max(0.0, interval - 3.0) * TicksPerMillisecond);
+        Flicks boundary = Flicks.FromFrames(frame + 1, snapshot.Project.SettingsFor(sequence).FrameRate);
+        double untilDue = (boundary - _transport.Playhead).Value * 1000.0 / Flicks.PerSecond / rate;
+        double budget = Math.Clamp(untilDue - 1.5, 2.0, interval);
+        long deadline = Stopwatch.GetTimestamp() + (long)(budget * TicksPerMillisecond);
         int step = Math.Max(1, (int)Math.Round(rate));
 
         return frames.DecodeAhead(snapshot.Project, sequence, frame, step, _options.DecodeAhead, deadline, _interrupted, snapshot.Path);

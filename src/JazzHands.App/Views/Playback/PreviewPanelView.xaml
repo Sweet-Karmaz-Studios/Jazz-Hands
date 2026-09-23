@@ -75,7 +75,8 @@
                                Margin="8,0,0,0"
                                VerticalAlignment="Center"
                                FontSize="{DynamicResource Text.Caption}"
-                               Foreground="{DynamicResource Brush.Text.Secondary}" />
+                               Foreground="{DynamicResource Brush.Text.Secondary}"
+                               ToolTip="{Binding RenderStats, Mode=OneWay}" />
                     <TextBlock Text="{Binding RateText, Mode=OneWay}"
                                Margin="8,0,0,0"
                                VerticalAlignment="Center"

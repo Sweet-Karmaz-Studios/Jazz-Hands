@@ -149,6 +149,11 @@ public sealed class SourceFrameServer : IDisposable
     /// <param name="direction">Which way the playhead is moving, which decides what is decoded ahead.</param>
     /// <param name="mode">Exact for the frame at the time, nearest for the keyframe before it.</param>
     /// <param name="lane">Which layer asks, so two layers of one file keep separate decoders.</param>
+    /// <param name="readAhead">
+    /// Decode a few frames past this one while the decoder is warm. Off when the caller paces its
+    /// own decoding ahead, because a burst of decodes is a burst of GPU work the next present
+    /// waits behind.
+    /// </param>
     /// <returns>
     /// The frame, owned by the cache, or null when the clip has no media or the time is past the
     /// end of it.
@@ -160,7 +165,8 @@ public sealed class SourceFrameServer : IDisposable
         string projectPath = "",
         PlayDirection direction = PlayDirection.Still,
         SeekMode mode = SeekMode.Exact,
-        int lane = 0)
+        int lane = 0,
+        bool readAhead = true)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(clip);
@@ -200,7 +206,7 @@ public sealed class SourceFrameServer : IDisposable
         int bitDepth = BitDepthOf(item, clip.SourceStreamIndex);
         FrameTexture? served = DecodeTo(lease, item, key, sourceTime, rate, bitDepth, mode);
 
-        if (served is not null && direction != PlayDirection.Still)
+        if (served is not null && readAhead && direction != PlayDirection.Still)
         {
             ReadAhead(lease, item, clip.SourceStreamIndex, rate, direction, bitDepth);
         }

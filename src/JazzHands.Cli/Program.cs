@@ -85,6 +85,11 @@ namespace JazzHands.Cli
                 Description = "The size of the preview surface each frame is drawn into.",
                 DefaultValueFactory = _ => "2560x1440",
             };
+            var layers = new Option<int>("--layers")
+            {
+                Description = "Video tracks to stack, each scaled and turned into its own quadrant, on its own decoder.",
+                DefaultValueFactory = _ => 1,
+            };
 
             var command = new Command(
                 "playback",
@@ -95,6 +100,7 @@ namespace JazzHands.Cli
                 software,
                 audible,
                 panel,
+                layers,
             };
 
             command.SetAction(parseResult =>
@@ -123,6 +129,7 @@ namespace JazzHands.Cli
                         audible: parseResult.GetValue(audible),
                         size.Width,
                         size.Height,
+                        Math.Clamp(parseResult.GetValue(layers), 1, 16),
                         Console.Error);
 
                     Console.Out.WriteLine(parseResult.GetValue(JsonOption)

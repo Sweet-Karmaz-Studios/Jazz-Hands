@@ -17,6 +17,7 @@ namespace JazzHands.Core.Commands;
 /// <param name="PresentedFrames">Frames put on screen since the editor started.</param>
 /// <param name="DroppedFrames">Frames that were due at normal speed and never shown.</param>
 /// <param name="StretchedAudio">True when rates other than 1 keep their pitch; false when they play silent.</param>
+/// <param name="Render">What the render pools have done, to show that steady playback allocates nothing.</param>
 public sealed record PlaybackStateInfo(
     string State,
     string? SequenceId,
@@ -31,4 +32,5 @@ public sealed record PlaybackStateInfo(
     Flicks? Out,
     long PresentedFrames,
     long DroppedFrames,
-    bool StretchedAudio);
+    bool StretchedAudio,
+    RenderStatsInfo? Render = null);

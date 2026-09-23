@@ -98,6 +98,9 @@ public sealed partial class PreviewPanelViewModel : ToolViewModel
     private string _inOut = string.Empty;
 
     [ObservableProperty]
+    private string _renderStats = string.Empty;
+
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(FullScreenGlyph))]
     private bool _isFullScreen;
 
@@ -226,6 +229,7 @@ public sealed partial class PreviewPanelViewModel : ToolViewModel
             Loop = state.Loop;
             Quality = state.Quality;
             DroppedFrames = _engine.DroppedFrames;
+            RenderStats = DescribeRender(state.Render);
 
             if (sequence is not null)
             {
@@ -252,6 +256,18 @@ public sealed partial class PreviewPanelViewModel : ToolViewModel
         rate.Den == 1
             ? rate.Num.ToString(System.Globalization.CultureInfo.InvariantCulture)
             : ((double)rate.Num / rate.Den).ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// The render pools in a line, for the tooltip on the format readout. Created counts that stay
+    /// put while playing are the sign nothing is being allocated per frame.
+    /// </summary>
+    public static string DescribeRender(RenderStatsInfo? stats) =>
+        stats is null
+            ? string.Empty
+            : string.Create(
+                System.Globalization.CultureInfo.InvariantCulture,
+                $"Render targets: {stats.TargetsCreated} created, {stats.TargetsOutstanding} in use, {stats.TargetsRented:N0} rented. "
+                + $"Frame textures: {stats.FrameTexturesCreated} created. Layers cached: {stats.LayersCached}.");
 
     partial void OnQualityChanged(PreviewQuality value)
     {

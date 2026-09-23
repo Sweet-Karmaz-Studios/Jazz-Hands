@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Numerics;
 using JazzHands.Audio.Output;
 using JazzHands.Core.Commands;
 using JazzHands.Core.Model;
@@ -19,7 +20,8 @@ namespace JazzHands.Cli;
 /// <param name="FrameRate">Its frame rate, as a ratio.</param>
 /// <param name="Adapter">The GPU it played on.</param>
 /// <param name="Device">The sound card whose clock it played to, or "silent".</param>
-/// <param name="Clips">How many clips the sequence had.</param>
+/// <param name="Layers">How many video tracks played at once, each its own decoder lane.</param>
+/// <param name="Clips">How many clips the sequence had, over all its layers.</param>
 /// <param name="Seconds">How long it played, by the wall clock.</param>
 /// <param name="FramesDue">Frames the clock passed through while playing at normal speed.</param>
 /// <param name="Presented">Frames handed to the preview target.</param>
@@ -29,6 +31,8 @@ namespace JazzHands.Cli;
 /// <param name="LateP99Milliseconds">The same at the 99th percentile.</param>
 /// <param name="PresentP99Milliseconds">99th percentile of the blit and GPU wait the target did per frame.</param>
 /// <param name="Underruns">Times the sound card ran dry.</param>
+/// <param name="TargetsCreated">Render targets the compositor created in steady play, from two seconds in. Zero is the bar.</param>
+/// <param name="FrameTexturesCreated">Frame textures created in steady play, from two seconds in.</param>
 /// <param name="Notices">What the session noticed: decoder fallbacks, files it could not read.</param>
 public sealed record PlaybackBenchmarkResult(
     string File,
@@ -36,6 +40,7 @@ public sealed record PlaybackBenchmarkResult(
     string FrameRate,
     string Adapter,
     string Device,
+    int Layers,
     int Clips,
     double Seconds,
     long FramesDue,
@@ -46,6 +51,8 @@ public sealed record PlaybackBenchmarkResult(
     double LateP99Milliseconds,
     double PresentP99Milliseconds,
     long Underruns,
+    long TargetsCreated,
+    long FrameTexturesCreated,
     string[] Notices);
 
 /// <summary>
@@ -55,6 +62,9 @@ public sealed record PlaybackBenchmarkResult(
 /// The sequence is one file laid end to end enough times to fill the run, so a five minute run of
 /// a five second file crosses sixty edits, each one a jump back to the start of the source. The
 /// clock is the sound card's, as in the editor, at zero monitor volume unless asked otherwise.
+/// With <c>--layers</c> the same is stacked on several video tracks, each transformed into a
+/// quadrant, which is the compositor's load: a decode per layer, the source, transform and
+/// composite passes for each, and one output pass.
 ///
 /// Each frame is presented to a target that does what the preview panel's presenter does: a
 /// filtered blit of the program texture into a panel-sized surface and a wait for the GPU to
@@ -70,6 +80,7 @@ public static class PlaybackBenchmark
     /// <param name="audible">Hear it.</param>
     /// <param name="panelWidth">The width of the surface the target presents into.</param>
     /// <param name="panelHeight">Its height.</param>
+    /// <param name="layers">How many video tracks to stack, each transformed into its own quadrant.</param>
     /// <param name="progress">Where to report as it goes.</param>
     public static PlaybackBenchmarkResult Run(
         string path,
@@ -78,6 +89,7 @@ public static class PlaybackBenchmark
         bool audible = false,
         int panelWidth = 2560,
         int panelHeight = 1440,
+        int layers = 1,
         TextWriter? progress = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -86,7 +98,7 @@ public static class PlaybackBenchmark
         MediaStream video = item.Info?.VideoStreams.FirstOrDefault()
             ?? throw new InvalidOperationException($"'{path}' has no picture to play.");
 
-        (Project project, int clips) = Build(item, video, duration);
+        (Project project, int clips) = Build(item, video, duration, Math.Max(1, layers));
         ProjectSettings settings = project.Settings;
 
         using RenderDevice device = RenderDevice.Create();
@@ -99,13 +111,19 @@ public static class PlaybackBenchmark
         transport.Load(project);
 
         var notices = new DiagnosticsLog();
-        using var engine = new PlaybackEngine(transport, device, new PlaybackOptions { HardwareDecode = hardware }, notices);
+        // The target before the engine, so it is disposed after: the engine's thread can still be
+        // presenting when the run ends, and a present into a released query waits forever.
         using var target = new PanelTarget(device, panelWidth, panelHeight);
+        using var engine = new PlaybackEngine(transport, device, new PlaybackOptions { HardwareDecode = hardware }, notices);
 
         engine.AddTarget(target);
         engine.Load(project);
         engine.Quality = PreviewQuality.Full;
         engine.WaitForPresent(TimeSpan.FromSeconds(30));
+
+        // Press play the way a person does, after the first frame is up and the ones after it are
+        // decoded, not the instant the file opens.
+        SpinWait.SpinUntil(() => engine.IsPrerolled, TimeSpan.FromSeconds(30));
 
         engine.Play();
         if (!transport.WaitUntilRolling(TimeSpan.FromSeconds(30)))
@@ -116,6 +134,7 @@ public static class PlaybackBenchmark
         target.StartCounting();
         long presentedAtStart = engine.PresentedFrames;
         long droppedAtStart = engine.DroppedFrames;
+        RenderStatsInfo? statsAtStart = null;
         Flicks startedAt = transport.Position;
         var watch = Stopwatch.StartNew();
         TimeSpan nextReport = TimeSpan.FromSeconds(30);
@@ -123,6 +142,13 @@ public static class PlaybackBenchmark
         while (watch.Elapsed < duration && transport.State == TransportState.Playing)
         {
             Thread.Sleep(100);
+
+            // Allocation is counted from two seconds in, once the frame cache has filled to its
+            // budget: what matters is that steady playback allocates nothing.
+            if (statsAtStart is null && watch.Elapsed >= TimeSpan.FromSeconds(2))
+            {
+                statsAtStart = engine.RenderStats;
+            }
 
             if (progress is not null && watch.Elapsed >= nextReport)
             {
@@ -135,6 +161,8 @@ public static class PlaybackBenchmark
 
         Flicks endedAt = transport.Position;
         double seconds = watch.Elapsed.TotalSeconds;
+        RenderStatsInfo statsAtEnd = engine.RenderStats;
+        statsAtStart ??= statsAtEnd;
         engine.Pause();
 
         long due = endedAt.ToFrames(settings.FrameRate, RoundingMode.Floor) - startedAt.ToFrames(settings.FrameRate, RoundingMode.Floor);
@@ -146,6 +174,7 @@ public static class PlaybackBenchmark
             settings.FrameRate.ToString(),
             device.AdapterName,
             output.DeviceName,
+            Math.Max(1, layers),
             clips,
             seconds,
             due,
@@ -156,6 +185,8 @@ public static class PlaybackBenchmark
             target.LatePercentile(0.99),
             target.PresentPercentile(0.99),
             transport.Underruns,
+            statsAtEnd.TargetsCreated - statsAtStart.TargetsCreated,
+            statsAtEnd.FrameTexturesCreated - statsAtStart.FrameTexturesCreated,
             [.. notices.All.Select(notice => $"{notice.Code}: {notice.Message}")]);
     }
 
@@ -169,41 +200,82 @@ public static class PlaybackBenchmark
         return string.Create(
             CultureInfo.InvariantCulture,
             $"""
-            {result.File}: {result.Size} at {result.FrameRate} fps, {result.Clips} clips, on {result.Adapter}, clock from {result.Device}
+            {result.File}: {result.Size} at {result.FrameRate} fps, {result.Layers} layer(s), {result.Clips} clips, on {result.Adapter}, clock from {result.Device}
               {result.Seconds:F1} s, {result.FramesDue} frames due, {result.Presented} presented
               dropped         {result.Dropped} ({result.DroppedPercent:F3}%)
               late            p50 {result.LateP50Milliseconds:F1} ms, p99 {result.LateP99Milliseconds:F1} ms after the frame was due
               present         p99 {result.PresentP99Milliseconds:F2} ms for the blit and GPU wait
               underruns       {result.Underruns}
+              allocated       {result.TargetsCreated} render targets, {result.FrameTexturesCreated} frame textures in steady play
               notices         {notices}
             {(result.DroppedPercent < 0.1 ? "Inside the bar of 0.1%." : "Over the bar of 0.1%.")}
             """);
     }
 
-    /// <summary>The file end to end until the run is covered, with one to spare.</summary>
-    private static (Project Project, int Clips) Build(MediaItem item, MediaStream video, TimeSpan duration)
+    /// <summary>
+    /// The file end to end until the run is covered, with one to spare, on each of the layers.
+    /// </summary>
+    /// <remarks>
+    /// With more than one layer, each is scaled to half and rotated a little into its own quadrant,
+    /// so every layer goes through the transform pass and all of them are visible. Each starts a
+    /// different distance into the file, because the frame cache is keyed by source time: layers
+    /// showing the same frame would share one decode and the run would measure a quarter of the
+    /// work it claims to.
+    /// </remarks>
+    private static (Project Project, int Clips) Build(MediaItem item, MediaStream video, TimeSpan duration, int layers)
     {
         Rational rate = video.FrameRate ?? Rational.Fps30;
-        Flicks length = Flicks.FromFrames(item.Duration.ToFrames(rate, RoundingMode.Floor), rate);
-        int clips = (int)Math.Ceiling(Flicks.FromSeconds(duration.TotalSeconds).Value / (double)length.Value) + 1;
-
-        var laid = new List<Clip>(clips);
-        for (int index = 0; index < clips; index++)
-        {
-            laid.Add(new Clip(
-                Id.New(),
-                new TimeRange(length * index, length),
-                Flicks.Zero,
-                MediaId: item.Id,
-                SourceStreamIndex: video.Index,
-                Name: $"{item.Name} {index}"));
-        }
+        long fileFrames = item.Duration.ToFrames(rate, RoundingMode.Floor);
+        Flicks length = Flicks.FromFrames(fileFrames, rate);
+        Flicks run = Flicks.FromSeconds(duration.TotalSeconds);
 
         var settings = new ProjectSettings(rate, video.Width, video.Height);
         Project project = Project.CreateNew("perf playback", settings) with { Media = EquatableArray.Create(item) };
 
-        var track = new Track(Id.New(), TrackKind.Video, "V1", 0, new EquatableArray<Clip>(laid));
-        return (project with { Sequences = EquatableArray.Create(project.Sequences[0] with { Tracks = [track] }) }, clips);
+        var tracks = new List<Track>(layers);
+        int total = 0;
+
+        for (int layer = 0; layer < layers; layer++)
+        {
+            Flicks offset = Flicks.FromFrames(fileFrames * layer / layers, rate);
+            Transform? transform = layers == 1 ? null : Quadrant(layer, video.Width, video.Height);
+            var laid = new List<Clip>();
+            Flicks at = Flicks.Zero;
+
+            while (at <= run + length)
+            {
+                // The first clip on a layer starts part way into the file; the rest are whole.
+                Flicks sourceIn = laid.Count == 0 ? offset : Flicks.Zero;
+                laid.Add(new Clip(
+                    Id.New(),
+                    new TimeRange(at, length - sourceIn),
+                    sourceIn,
+                    MediaId: item.Id,
+                    SourceStreamIndex: video.Index,
+                    Transform: transform,
+                    Name: $"{item.Name} {layer + 1}.{laid.Count}"));
+                at += length - sourceIn;
+            }
+
+            tracks.Add(new Track(Id.New(), TrackKind.Video, $"V{layer + 1}", layer, new EquatableArray<Clip>(laid)));
+            total += laid.Count;
+        }
+
+        return (project with { Sequences = EquatableArray.Create(project.Sequences[0] with { Tracks = [.. tracks] }) }, total);
+    }
+
+    /// <summary>Half size, turned a few degrees, in one quadrant of the frame.</summary>
+    private static Transform Quadrant(int layer, int width, int height)
+    {
+        float x = (layer % 2 == 0 ? -0.25f : 0.25f) * width;
+        float y = ((layer / 2) % 2 == 0 ? -0.25f : 0.25f) * height;
+
+        return Transform.Identity with
+        {
+            Position = AnimatedValue.Constant(new ParamValue.Float2(new Vector2(x, y))),
+            Scale = AnimatedValue.Constant(new ParamValue.Float2(new Vector2(0.5f, 0.5f))),
+            Rotation = AnimatedValue.Constant(layer % 2 == 0 ? 3.0f : -3.0f),
+        };
     }
 
     /// <summary>Does what the preview panel's presenter does, minus handing the surface to WPF.</summary>

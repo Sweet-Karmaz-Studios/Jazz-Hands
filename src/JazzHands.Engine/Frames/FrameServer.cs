@@ -56,6 +56,8 @@ public sealed class FrameServer : IFrameProvider, IDisposable
     private readonly Dictionary<(string Hash, int Stream), KeyframeIndex?> _keyframes = [];
     private readonly Dictionary<string, string> _failed = new(StringComparer.Ordinal);
     private string _projectPath = string.Empty;
+    private ID3D11Query? _decodeFence;
+    private bool _decodePending;
     private bool _disposed;
 
     /// <summary>Creates a frame server on a device, with its own decoders, cache and compositor.</summary>
@@ -142,6 +144,13 @@ public sealed class FrameServer : IFrameProvider, IDisposable
     /// Decodes the frames every visible media layer will need after <paramref name="frame"/>,
     /// until a deadline, so the next renders find them in the cache.
     /// </summary>
+    /// <remarks>
+    /// One frame at a time, and the next decode is issued only once the last one has finished on
+    /// the GPU. A decode is cheap to submit and slow to run, especially on a GPU idling at low
+    /// clocks through 1x playback, and the next present waits behind every piece of GPU work
+    /// submitted before it: queueing five 4K decodes at once made that present 30 ms late. Paced,
+    /// a present waits behind one decode at most.
+    /// </remarks>
     /// <param name="project">The project.</param>
     /// <param name="sequence">The sequence playing.</param>
     /// <param name="frame">The sequence frame on screen now.</param>
@@ -150,7 +159,7 @@ public sealed class FrameServer : IFrameProvider, IDisposable
     /// <param name="deadline">A <see cref="Stopwatch"/> timestamp to stop by.</param>
     /// <param name="interrupted">Returns true when something more urgent came in; decoding stops.</param>
     /// <param name="projectPath">Where the project lives.</param>
-    /// <returns>False when interrupted before finishing.</returns>
+    /// <returns>True when every frame asked for is in the cache; false when the deadline or a request came first.</returns>
     public bool DecodeAhead(
         Project project,
         Sequence sequence,
@@ -167,8 +176,13 @@ public sealed class FrameServer : IFrameProvider, IDisposable
 
         Rational fps = project.SettingsFor(sequence).FrameRate;
 
-        for (int ahead = 1; ahead <= frames && Stopwatch.GetTimestamp() < deadline; ahead++)
+        for (int ahead = 1; ahead <= frames; ahead++)
         {
+            if (Stopwatch.GetTimestamp() >= deadline)
+            {
+                return false;
+            }
+
             if (interrupted())
             {
                 return false;
@@ -183,23 +197,64 @@ public sealed class FrameServer : IFrameProvider, IDisposable
                 if (track.Kind != TrackKind.Video || track.Muted
                     || TimelineQueries.ClipAt(track, time) is not { Enabled: true, Reverse: false, MediaId: { } mediaId } clip
                     || project.MediaItem(mediaId) is not { } item
-                    || _failed.ContainsKey(item.Id))
+                    || _failed.ContainsKey(item.Id)
+                    || _sources.GetCachedFrame(project, clip, time) is not null)
                 {
                     continue;
                 }
 
+                if (!AwaitLastDecode(deadline, interrupted))
+                {
+                    return false;
+                }
+
                 try
                 {
-                    _sources.GetSourceFrame(project, clip, time, projectPath, PlayDirection.Forward, SeekMode.Exact, track.Order);
+                    _sources.GetSourceFrame(project, clip, time, projectPath, PlayDirection.Forward, SeekMode.Exact, track.Order, readAhead: false);
                 }
                 catch (Exception exception) when (exception is not OutOfMemoryException)
                 {
                     // The render of that frame meets the same error and reports it properly.
                     _log.Debug(exception, "Decoding ahead failed at {Time}", time);
                 }
+
+                _decodeFence ??= Device.Device.CreateQuery(new QueryDescription { QueryType = QueryType.Event });
+                Device.ImmediateContext.End(_decodeFence);
+                _decodePending = true;
             }
         }
 
+        return true;
+    }
+
+    /// <summary>Waits for the last decode issued ahead to finish on the GPU; false when the deadline or a request came first.</summary>
+    private bool AwaitLastDecode(long deadline, Func<bool> interrupted)
+    {
+        if (_decodeFence is null || !_decodePending)
+        {
+            return true;
+        }
+
+        // GetData without the do-not-flush flag flushes, which is what gets the decode running.
+        ID3D11DeviceContext context = Device.ImmediateContext;
+        var spin = default(SpinWait);
+
+        while (context.GetData(_decodeFence, IntPtr.Zero, 0, AsyncGetDataFlags.None).Code != 0)
+        {
+            if (Stopwatch.GetTimestamp() >= deadline)
+            {
+                return false;
+            }
+
+            if (interrupted())
+            {
+                return false;
+            }
+
+            spin.SpinOnce();
+        }
+
+        _decodePending = false;
         return true;
     }
 
@@ -270,6 +325,7 @@ public sealed class FrameServer : IFrameProvider, IDisposable
         }
 
         _disposed = true;
+        _decodeFence?.Dispose();
         Compositor.Dispose();
         _sources.Dispose();
     }
@@ -303,7 +359,10 @@ public sealed class FrameServer : IFrameProvider, IDisposable
             return _sources.GetSourceFrame(project, clip, time, _projectPath, PlayDirection.Still, SeekMode.Exact, lane);
         }
 
-        return _sources.GetSourceFrame(project, clip, time, _projectPath, direction, mode, lane);
+        // Playing forwards at up to twice normal speed, the engine decodes ahead at its own pace
+        // (see DecodeAhead), so a miss here decodes just the frame and not a burst after it.
+        bool paced = direction == PlayDirection.Forward && mode == SeekMode.Exact && Math.Abs(motion.Rate) <= 2.0;
+        return _sources.GetSourceFrame(project, clip, time, _projectPath, direction, mode, lane, readAhead: !paced);
     }
 
     /// <summary>A source's keyframe index, from the cache database or built by a scan.</summary>
