@@ -211,7 +211,7 @@
         <Border Grid.Column="3"
                 Grid.Row="0"
                 Grid.RowSpan="2"
-                Width="260"
+                Width="300"
                 Background="{DynamicResource Brush.Background.Panel}"
                 BorderBrush="{DynamicResource Brush.Border}"
                 BorderThickness="1,0,0,0"
@@ -263,6 +263,7 @@
                          Background="{DynamicResource Brush.Background.Base}"
                          BorderThickness="0"
                          HorizontalContentAlignment="Stretch"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                          AutomationProperties.Name="Kept stretches">
                     <ListBox.ItemTemplate>
                         <DataTemplate DataType="{x:Type vm:TrimSegmentViewModel}">

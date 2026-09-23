@@ -18,7 +18,7 @@
         <BooleanToVisibilityConverter x:Key="Visible" />
     </Window.Resources>
 
-    <Grid Margin="16">
+    <Grid Margin="16" TextElement.Foreground="{DynamicResource Brush.Text.Primary}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -53,26 +53,30 @@
                 AutomationProperties.Name="Browse for the output file" />
 
         <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,12,0,0" Text="Preset" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" />
-        <ComboBox Grid.Row="1"
-                  Grid.Column="1"
-                  Grid.ColumnSpan="2"
-                  Margin="0,12,0,0"
-                  ItemsSource="{Binding Presets, Mode=OneWay}"
-                  SelectedItem="{Binding Preset, Mode=TwoWay}"
-                  AutomationProperties.Name="Preset">
-            <ComboBox.ItemTemplate>
-                <DataTemplate>
-                    <StackPanel>
+        <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,12,0,0">
+            <ComboBox Style="{StaticResource ComboBox.Compact}"
+                      HorizontalAlignment="Left"
+                      Width="200"
+                      ItemsSource="{Binding Presets, Mode=OneWay}"
+                      SelectedItem="{Binding Preset, Mode=TwoWay}"
+                      AutomationProperties.Name="Preset">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate>
                         <TextBlock Text="{Binding Name, Mode=OneWay}" />
-                        <TextBlock Text="{Binding Description, Mode=OneWay}" FontSize="{DynamicResource Text.Caption}" Foreground="{DynamicResource Brush.Text.Secondary}" />
-                    </StackPanel>
-                </DataTemplate>
-            </ComboBox.ItemTemplate>
-        </ComboBox>
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+            <TextBlock Margin="0,6,0,0"
+                       Text="{Binding Preset.Description, Mode=OneWay}"
+                       TextWrapping="Wrap"
+                       FontSize="{DynamicResource Text.Caption}"
+                       Foreground="{DynamicResource Brush.Text.Secondary}" />
+        </StackPanel>
 
         <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,12,0,0" Text="Mode" VerticalAlignment="Top" Foreground="{DynamicResource Brush.Text.Secondary}" />
         <StackPanel Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,12,0,0">
-            <ComboBox ItemsSource="{Binding Modes, Mode=OneWay}"
+            <ComboBox Style="{StaticResource ComboBox.Compact}"
+                      ItemsSource="{Binding Modes, Mode=OneWay}"
                       SelectedItem="{Binding Mode, Mode=TwoWay}"
                       HorizontalAlignment="Left"
                       Width="160"
