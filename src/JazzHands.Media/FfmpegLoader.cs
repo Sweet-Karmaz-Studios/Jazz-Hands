@@ -80,6 +80,9 @@ public static class FfmpegLoader
             _binaryDirectory = directory;
             _versionInfo = version;
 
+            // Before anything else touches FFmpeg, so no message it writes reaches stderr.
+            Interop.FfmpegLog.Install(directory);
+
             Log.ForContext("SourceContext", "ffmpeg").Information(
                 "FFmpeg {Version} loaded from {Directory} (avcodec {Avcodec}, avformat {Avformat}, avutil {Avutil})",
                 version,
