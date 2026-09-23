@@ -46,13 +46,15 @@ public readonly record struct OutputSettings(
 /// blended, bottom first, into a half float stack.
 /// </summary>
 /// <remarks>
-/// Each layer costs three passes. The source pass turns the decoded frame into premultiplied
-/// linear light at its own size; the transform pass draws that as a quad into a frame-sized
-/// layer target, cropped, scaled, rotated and fitted by one matrix; the composite pass blends the
-/// layer onto the stack below with its opacity, blend mode and matte, writing a new stack because
-/// a pass cannot read the target it writes. An adjustment layer runs its effects over the stack
-/// instead and composites the result back over it. <see cref="Output"/> then encodes the stack
-/// for the preview or a file.
+/// The source pass turns each layer's decoded frame into premultiplied linear light at its own
+/// size. A Normal layer with no masks is then drawn as a quad, cropped, scaled, rotated and
+/// fitted by one matrix, straight onto the stack through premultiplied over blending, touching
+/// only the pixels it covers. Any other layer is drawn into a frame-sized layer target first and
+/// the composite pass blends it onto the stack with its opacity, blend mode and matte, writing a
+/// new stack because a pass cannot read the target it writes; so is a layer the cache keeps. An
+/// opaque untransformed frame-sized layer over nothing is the stack, with no drawing at all. An
+/// adjustment layer runs its effects over the stack and composites the result back over it.
+/// <see cref="Output"/> then encodes the stack for the preview or a file.
 ///
 /// Everything intermediate comes from <see cref="Pool"/> and goes back to it within the frame, so
 /// after the first frame at a size nothing is created. Transformed layers can be kept in
@@ -67,6 +69,7 @@ public sealed class Compositor : IDisposable
     private readonly RenderDevice _device;
     private readonly bool _ownsPool;
     private readonly ID3D11SamplerState[] _samplers;
+    private readonly ID3D11BlendState _over;
     private readonly ID3D11ShaderResourceView?[] _views = new ID3D11ShaderResourceView?[4];
     private readonly ID3D11ShaderResourceView?[] _planeViews = new ID3D11ShaderResourceView?[4];
     private readonly Dictionary<Type, ID3D11Buffer> _constants = [];
@@ -98,6 +101,9 @@ public sealed class Compositor : IDisposable
             Sampler(Filter.MinMagMipPoint, TextureAddressMode.Clamp),
             Sampler(Filter.MinMagMipLinear, TextureAddressMode.Wrap),
         ];
+
+        // Premultiplied over, colour and alpha alike: the Normal composite, done by the output merger.
+        _over = device.Device.CreateBlendState(new BlendDescription(Blend.One, Blend.InverseSourceAlpha, Blend.One, Blend.InverseSourceAlpha));
     }
 
     /// <summary>Where every intermediate target comes from.</summary>
@@ -182,6 +188,8 @@ public sealed class Compositor : IDisposable
             sampler.Dispose();
         }
 
+        _over.Dispose();
+
         if (_ownsPool)
         {
             Pool.Dispose();
@@ -219,6 +227,22 @@ public sealed class Compositor : IDisposable
     private RenderTarget Place(RenderGraph graph, LayerNode layer, RenderTarget? stack)
     {
         LayerKey? key = LayerKeyFor(graph, layer);
+
+        // Normal with no masks and nothing to keep between frames: the quad goes straight onto
+        // the stack through premultiplied over. Only the pixels under it are touched, where a
+        // placed target and the composite pass would each clear, read or write the whole frame;
+        // four quarter-frame layers at 4K cost a fifth as much. The one exception is an opaque
+        // untransformed layer over nothing, which below becomes the stack without any drawing.
+        bool fillsFrame = stack is null && layer.Opacity >= 1.0f && IsInPlace(graph, layer);
+        if (key is null && layer.Masks.IsDefaultOrEmpty && layer.Blend == BlendMode.Normal && !fillsFrame)
+        {
+            stack ??= Empty(graph);
+            RenderTarget source = Linear(layer);
+            DrawQuad(graph, layer, source, stack.View, Math.Clamp(layer.Opacity, 0.0f, 1.0f), _over);
+            Pool.Return(source);
+            return stack;
+        }
+
         RenderTarget? placed = null;
         bool cached = key is { } lookup && Cache.TryGet(lookup, out placed);
         placed ??= Transform(graph, layer);
@@ -313,19 +337,32 @@ public sealed class Compositor : IDisposable
 
         // A frame-sized source with nothing moved or cropped maps every texel onto itself, and
         // either filter sampled at texel centres gives the texel back: the pass would be a copy.
-        if (layer.Transform.IsIdentity
-            && layer.Crop == LayerNode.NoCrop
-            && source.Width == graph.Width
-            && source.Height == graph.Height
-            && layer.SourceWidth == graph.Width
-            && layer.SourceHeight == graph.Height)
+        if (IsInPlace(graph, layer) && source.Width == graph.Width && source.Height == graph.Height)
         {
             return source;
         }
 
         RenderTarget placed = Pool.Rent(graph.Width, graph.Height);
         Clear(placed, Vector4.Zero);
+        DrawQuad(graph, layer, source, placed.View, 1.0f, blend: null);
 
+        Pool.Return(source);
+        return placed;
+    }
+
+    /// <summary>True when a layer's picture is the frame's size and nothing moves or crops it.</summary>
+    private static bool IsInPlace(RenderGraph graph, LayerNode layer) =>
+        layer.Transform.IsIdentity
+        && layer.Crop == LayerNode.NoCrop
+        && layer.SourceWidth == graph.Width
+        && layer.SourceHeight == graph.Height;
+
+    /// <summary>
+    /// Draws a layer's linear source through its matrix onto a frame-sized target: replacing what
+    /// is there, or blended over it when <paramref name="blend"/> is given.
+    /// </summary>
+    private void DrawQuad(RenderGraph graph, LayerNode layer, RenderTarget source, ID3D11RenderTargetView target, float opacity, ID3D11BlendState? blend)
+    {
         Matrix3x2 m = layer.Transform;
         var constants = new TransformConstants
         {
@@ -336,13 +373,11 @@ public sealed class Compositor : IDisposable
             Crop = layer.Crop,
             TextureSize = new Vector2(source.Width, source.Height),
             Bicubic = graph.Bicubic && source.Width > 1 && source.Height > 1 ? 1u : 0u,
+            Opacity = opacity,
         };
 
         _views[0] = source.Resource;
-        Draw(_shaders!.TransformVertex, _shaders.TransformPixel, placed.View, placed.Width, placed.Height, in constants, 1, PrimitiveTopology.TriangleStrip, 4);
-
-        Pool.Return(source);
-        return placed;
+        Draw(_shaders!.TransformVertex, _shaders.TransformPixel, target, graph.Width, graph.Height, in constants, 1, PrimitiveTopology.TriangleStrip, 4, blend);
     }
 
     /// <summary>A layer's picture as premultiplied linear light at its own size.</summary>
@@ -531,7 +566,20 @@ public sealed class Compositor : IDisposable
             return;
         }
 
-        Shaders fresh = new(_device);
+        Shaders fresh;
+        try
+        {
+            fresh = new Shaders(_device);
+        }
+        catch (RenderDeviceException exception) when (_shaders is not null)
+        {
+            // A hot reloaded shader that does not compile keeps the last good set until the next
+            // edit, rather than failing every frame until somebody fixes the typo.
+            _log.Error(exception, "A shader did not compile; keeping the last good set");
+            _shaderGeneration = generation;
+            return;
+        }
+
         _shaders?.Dispose();
         _shaders = fresh;
         _shaderGeneration = generation;
@@ -550,7 +598,8 @@ public sealed class Compositor : IDisposable
         in T constants,
         int views,
         PrimitiveTopology topology,
-        int vertices)
+        int vertices,
+        ID3D11BlendState? blend = null)
         where T : unmanaged
     {
         ID3D11DeviceContext context = _device.ImmediateContext;
@@ -583,6 +632,11 @@ public sealed class Compositor : IDisposable
         context.PSSetShaderResources(0, _views!);
         context.PSSetSamplers(0, _samplers);
         context.OMSetRenderTargets(target);
+        if (blend is not null)
+        {
+            context.OMSetBlendState(blend);
+        }
+
         context.RSSetViewport(new Viewport(0, 0, width, height, 0.0f, 1.0f));
         context.Draw((uint)vertices, 0);
         context.ClearState();
@@ -708,7 +762,7 @@ public sealed class Compositor : IDisposable
         public Vector4 Crop;
         public Vector2 TextureSize;
         public uint Bicubic;
-        public float Padding;
+        public float Opacity;
     }
 
     [StructLayout(LayoutKind.Sequential)]

@@ -2,6 +2,10 @@
 // source rectangle carried through a 2x3 matrix from source pixels to target pixels. Scale,
 // rotation, anchor, position, the media's fit and the preview quality are all folded into that
 // one matrix on the CPU. Outside the quad the target stays transparent.
+//
+// A Normal layer with no masks is drawn straight onto the stack with premultiplied over blending
+// (one, one minus source alpha), which is the Normal composite done by the output merger: only
+// the pixels under the quad are touched, and no frame-sized target is cleared or read twice.
 
 #include "Common.hlsli"
 
@@ -14,7 +18,7 @@ cbuffer TransformConstants : register(b0)
     float4 Crop;            // left, top, right, bottom of the source kept, as texture coordinates
     float2 TextureSize;     // the texture actually sampled, which bicubic filtering needs
     uint Bicubic;
-    float Padding;
+    float Opacity;          // 1 into a target of its own; the layer's opacity when drawn straight onto the stack
 };
 
 Texture2D<float4> Source : register(t0);
@@ -41,7 +45,9 @@ QuadVertex VsMain(uint vertexId : SV_VertexID)
 
 float4 PsMain(QuadVertex input) : SV_TARGET
 {
-    return Bicubic != 0
+    float4 placed = Bicubic != 0
         ? SampleBicubic(Source, input.Uv, TextureSize)
         : Source.SampleLevel(LinearClamp, input.Uv, 0);
+
+    return placed * Opacity;
 }

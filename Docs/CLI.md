@@ -422,6 +422,42 @@ Mic (audio, order 3)
   00:00:00:00 00:00:05:00 capture [linked, stream 2, gain -6 dB, fade in 0.5 s]
 ```
 
+### Picture
+
+Every clip with a picture can be moved, scaled, turned, faded, blended, cropped and masked. Each
+verb changes only what it is given, so `set-transform --rotation 5` leaves the position alone.
+
+```bash
+jazz clip set-transform trailer.jazz <clip-id> --x 960 --y -540 --scale 0.5 --rotation 3
+jazz clip set-opacity trailer.jazz <clip-id> --opacity 0.8
+jazz clip set-blend trailer.jazz <clip-id> screen
+jazz clip set-crop trailer.jazz <clip-id> --left 10 --right 10
+jazz mask add trailer.jazz <clip-id> --shape ellipse --x 480 --y 270 --width 960 --height 540 --feather 40
+jazz mask add trailer.jazz <clip-id> --shape bezier --path "M 100 100 C 400 0 800 0 1100 100 L 600 900 Z"
+jazz mask set trailer.jazz <mask-id> --invert true
+```
+
+| Verb | Does |
+|---|---|
+| `clip set-transform <clip> [--x] [--y] [--scale] [--scale-x] [--scale-y] [--rotation] [--anchor-x] [--anchor-y]` | Position in sequence pixels from the frame centre, scale where 1 is the fitted size, rotation in degrees clockwise about the anchor, which is in picture pixels from the picture's centre. |
+| `clip set-opacity <clip> --opacity x` | 0 invisible to 1 opaque. |
+| `clip set-blend <clip> <mode>` | `normal`, `add`, `multiply`, `screen`, `overlay`, `darken`, `lighten`, `difference`, `soft-light`, `hard-light`. Blending happens in linear light. |
+| `clip set-crop <clip> [--left] [--top] [--right] [--bottom]` | Percent of each side cut away. Left and right together, or top and bottom, must leave something. |
+| `mask add <clip> --shape s ...` | `rectangle` and `ellipse` take `--x --y --width --height` in source pixels; `polygon` and `bezier` take `--path`, SVG path data (M, L, H, V, C, Q, Z). `--feather` softens the edge by that many pixels, `--mode` is `add`, `subtract` or `intersect` with the masks before it, `--invert true` keeps the outside. |
+| `mask set <mask> ...` | The same options, plus `--enabled on\|off`. |
+| `mask remove <mask>` | Removes it. |
+
+Errors: `not-a-picture` for an audio clip, `value-out-of-range`, `crop-out-of-range`,
+`invalid-mask` (a shape with no area, or a path that does not parse or close), `mask-not-found`,
+`duplicate-id`. All of it is undoable.
+
+`timeline describe` shows what is set:
+
+```
+V2 (video, order 1)
+  00:00:00:00 00:00:05:00 overlay [at 960,-540 scale 0.5 rotated 3 deg, opacity 80%, blend screen, ellipse mask add]
+```
+
 ### Playback
 
 The `playback` verbs drive the playhead of a running editor. A headless `jazz` process has no
@@ -446,7 +482,7 @@ jazz playback clear-in-out trailer.jazz
 | `playback set-quality <q>` | `full`, `half`, `quarter` or `auto` (Half while scrubbing or shuttling, Full 150 ms after). |
 | `playback set-in`, `set-out [--at t]` | The frame at the out point is inside the range. Default is the playhead. |
 | `playback clear-in-out` | Removes both. |
-| `playback state` | Where the playhead is, the rate, the quality asked for and in effect, loop, in and out, frames presented and dropped. |
+| `playback state` | Where the playhead is, the rate, the quality asked for and in effect, loop, in and out, frames presented and dropped, and under `render` the render pools' counts: targets created, rented and in use, frame textures created, layers cached. Created counts that stay flat while playing mean nothing is allocated per frame. |
 
 In the editor the same commands are on the keys: Space, J K L (holding K steps with J and L),
 Left and Right (Shift for ten frames), Up and Down for edits, Home and End, I and O (Shift to go
