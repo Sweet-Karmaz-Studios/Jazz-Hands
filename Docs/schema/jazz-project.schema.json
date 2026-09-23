@@ -886,6 +886,17 @@
         "height"
       ]
     },
+    "quickTrim": {
+      "type": "object",
+      "properties": {
+        "mediaId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "mediaId"
+      ]
+    },
     "rational": {
       "type": "object",
       "description": "An exact ratio. Frame rates are written this way so that 30000/1001 stays exact.",
@@ -938,6 +949,16 @@
           "anyOf": [
             {
               "$ref": "#/$defs/timeRange"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "quickTrim": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/quickTrim"
             },
             {
               "type": "null"

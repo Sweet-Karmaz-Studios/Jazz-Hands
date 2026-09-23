@@ -126,7 +126,7 @@ public sealed unsafe class VideoEncoder : IDisposable
             {
                 Configure(context.Handle, name, settings, format, globalHeader);
 
-                AVDictionary* options = Options(name, settings);
+                AVDictionary* options = ToDictionary(EncoderOptions(name, settings));
                 int result;
                 try
                 {
@@ -252,12 +252,33 @@ public sealed unsafe class VideoEncoder : IDisposable
         }
     }
 
-    private static void Set(AVDictionary** options, string key, string value) =>
-        ffmpeg.av_dict_set(options, key, value, 0);
+    private static void Set(List<KeyValuePair<string, string>> options, string key, string value) =>
+        options.Add(new(key, value));
 
-    private static AVDictionary* Options(string name, VideoEncoderSettings settings)
+    private static AVDictionary* ToDictionary(IReadOnlyList<KeyValuePair<string, string>> options)
     {
-        AVDictionary* options = null;
+        AVDictionary* dictionary = null;
+        foreach ((string key, string value) in options)
+        {
+            ffmpeg.av_dict_set(&dictionary, key, value, 0);
+        }
+
+        return dictionary;
+    }
+
+    /// <summary>
+    /// The encoder's private options for these settings, by FFmpeg option name.
+    /// </summary>
+    /// <remarks>
+    /// Public so the ffmpeg.exe fallback passes exactly what the in-process encoder would have
+    /// been given. If the two ever differed, bisecting an encoder problem with it would compare
+    /// two different encodes.
+    /// </remarks>
+    public static IReadOnlyList<KeyValuePair<string, string>> EncoderOptions(string name, VideoEncoderSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(settings);
+        var options = new List<KeyValuePair<string, string>>();
 
 
         string quality = settings.Quality.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -267,7 +288,7 @@ public sealed unsafe class VideoEncoder : IDisposable
             // The export-pipeline skill's settings: p5 with the HQ tune, adaptive quantization
             // both ways, a 32 frame lookahead and B-frames used as references where the codec
             // allows it.
-            Set(&options, "preset", settings.Speed switch
+            Set(options, "preset", settings.Speed switch
             {
                 EncoderSpeed.Fast => "p3",
                 EncoderSpeed.Slow => "p6",
@@ -276,26 +297,26 @@ public sealed unsafe class VideoEncoder : IDisposable
 
             if (settings.Lossless)
             {
-                Set(&options, "tune", "lossless");
+                Set(options, "tune", "lossless");
                 return options;
             }
 
-            Set(&options, "tune", "hq");
-            Set(&options, "spatial-aq", "1");
-            Set(&options, "temporal-aq", "1");
-            Set(&options, "rc-lookahead", "32");
-            Set(&options, "b_ref_mode", "middle");
+            Set(options, "tune", "hq");
+            Set(options, "spatial-aq", "1");
+            Set(options, "temporal-aq", "1");
+            Set(options, "rc-lookahead", "32");
+            Set(options, "b_ref_mode", "middle");
 
             if (settings.Bitrate > 0)
             {
-                Set(&options, "rc", "vbr");
-                Set(&options, "multipass", "fullres");
+                Set(options, "rc", "vbr");
+                Set(options, "multipass", "fullres");
             }
             else
             {
-                Set(&options, "rc", "vbr");
-                Set(&options, "cq", quality);
-                Set(&options, "b", "0");
+                Set(options, "rc", "vbr");
+                Set(options, "cq", quality);
+                Set(options, "b", "0");
             }
 
             return options;
@@ -303,7 +324,7 @@ public sealed unsafe class VideoEncoder : IDisposable
 
         if (name.StartsWith("libx264", StringComparison.Ordinal))
         {
-            Set(&options, "preset", settings.Speed switch
+            Set(options, "preset", settings.Speed switch
             {
                 EncoderSpeed.Fast => "veryfast",
                 EncoderSpeed.Slow => "slow",
@@ -312,11 +333,11 @@ public sealed unsafe class VideoEncoder : IDisposable
 
             if (settings.Lossless)
             {
-                Set(&options, "qp", "0");
+                Set(options, "qp", "0");
             }
             else if (settings.Bitrate <= 0)
             {
-                Set(&options, "crf", quality);
+                Set(options, "crf", quality);
             }
 
             return options;
@@ -324,7 +345,7 @@ public sealed unsafe class VideoEncoder : IDisposable
 
         if (name.StartsWith("libx265", StringComparison.Ordinal))
         {
-            Set(&options, "preset", settings.Speed switch
+            Set(options, "preset", settings.Speed switch
             {
                 EncoderSpeed.Fast => "veryfast",
                 EncoderSpeed.Slow => "slow",
@@ -333,16 +354,16 @@ public sealed unsafe class VideoEncoder : IDisposable
 
             if (settings.Lossless)
             {
-                Set(&options, "x265-params", "lossless=1:log-level=error");
+                Set(options, "x265-params", "lossless=1:log-level=error");
             }
             else
             {
                 if (settings.Bitrate <= 0)
                 {
-                    Set(&options, "crf", quality);
+                    Set(options, "crf", quality);
                 }
 
-                Set(&options, "x265-params", "log-level=error");
+                Set(options, "x265-params", "log-level=error");
             }
 
             return options;
@@ -384,6 +405,9 @@ public sealed unsafe class EncoderFrame : IDisposable
     public bool IsNv12 { get; }
 
     internal AVFrame* Handle => _frame.Handle;
+
+    /// <summary>An NV12 frame with its own buffers, for writing somewhere other than an in-process encoder.</summary>
+    public static EncoderFrame CreateNv12(int width, int height) => new(width, height, AVPixelFormat.AV_PIX_FMT_NV12);
 
     /// <summary>Makes sure the buffers are this frame's alone before they are written.</summary>
     public void MakeWritable() =>

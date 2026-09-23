@@ -165,6 +165,50 @@ public sealed class Compositor : IDisposable
         FullScreen(_shaders!.OutputPixel, target, width, height, in constants, 1);
     }
 
+    /// <summary>
+    /// Encodes a stack as BT.709 limited range Y'CbCr for an encoder: luma into an R8 target at
+    /// <paramref name="width"/> by <paramref name="height"/>, chroma into an R8G8 target at half
+    /// each way, which together are the two planes of an NV12 frame.
+    /// </summary>
+    /// <remarks>
+    /// The colour is exactly what <see cref="Output"/> would have written as R'G'B', dither
+    /// included, then put through the BT.709 matrix, so an export matches the preview. Chroma is
+    /// the mean of the two by two block each sample covers. Width and height must be even.
+    /// </remarks>
+    public void OutputYuv(
+        RenderTarget stack,
+        ID3D11RenderTargetView luma,
+        ID3D11RenderTargetView chroma,
+        int width,
+        int height,
+        OutputSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(stack);
+        ArgumentNullException.ThrowIfNull(luma);
+        ArgumentNullException.ThrowIfNull(chroma);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if ((width & 1) != 0 || (height & 1) != 0)
+        {
+            throw new ArgumentException($"A 4:2:0 frame needs an even size, not {width}x{height}.");
+        }
+
+        EnsureShaders();
+
+        var constants = new YuvConstants
+        {
+            Background = settings.Background ?? new Vector4(0.0f, 0.0f, 0.0f, 1.0f),
+            Encoding = (uint)settings.Encoding,
+            DitherLevels = (uint)Math.Max(0, settings.DitherLevels),
+            LumaWidth = (uint)width,
+            LumaHeight = (uint)height,
+        };
+
+        _views[0] = stack.Resource;
+        FullScreen(_shaders!.YuvLuma, luma, width, height, in constants, 1);
+        _views[0] = stack.Resource;
+        FullScreen(_shaders.YuvChroma, chroma, width / 2, height / 2, in constants, 1);
+    }
+
     /// <inheritdoc />
     public void Dispose()
     {
@@ -690,6 +734,8 @@ public sealed class Compositor : IDisposable
             MatteBlur = ShaderLibrary.PixelShader(device, "Matte.hlsl", "PsBlur");
             MatteCombine = ShaderLibrary.PixelShader(device, "Matte.hlsl", "PsCombine");
             OutputPixel = ShaderLibrary.PixelShader(device, "Output.hlsl", "PsMain");
+            YuvLuma = ShaderLibrary.PixelShader(device, "OutputYuv.hlsl", "PsLuma");
+            YuvChroma = ShaderLibrary.PixelShader(device, "OutputYuv.hlsl", "PsChroma");
         }
 
         public ID3D11VertexShader FullScreenVertex { get; }
@@ -708,8 +754,14 @@ public sealed class Compositor : IDisposable
 
         public ID3D11PixelShader OutputPixel { get; }
 
+        public ID3D11PixelShader YuvLuma { get; }
+
+        public ID3D11PixelShader YuvChroma { get; }
+
         public void Dispose()
         {
+            YuvChroma.Dispose();
+            YuvLuma.Dispose();
             OutputPixel.Dispose();
             MatteCombine.Dispose();
             MatteBlur.Dispose();
@@ -794,5 +846,15 @@ public sealed class Compositor : IDisposable
         public uint DitherLevels;
         public uint KeepAlpha;
         public float Padding;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct YuvConstants
+    {
+        public Vector4 Background;
+        public uint Encoding;
+        public uint DitherLevels;
+        public uint LumaWidth;
+        public uint LumaHeight;
     }
 }

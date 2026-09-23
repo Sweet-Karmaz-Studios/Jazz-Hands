@@ -179,6 +179,15 @@ public static class Validator
     {
         string sequencePath = $"/sequences/{sequenceIndex}";
 
+        if (sequence.QuickTrim is { } trim && !mediaIds.Contains(trim.MediaId))
+        {
+            issues.Add(new ValidationIssue(
+                Severity.Warning,
+                "missing-trim-media",
+                $"{sequencePath}/quickTrim/mediaId",
+                $"'{sequence.Name}' is a Quick Trim of media '{trim.MediaId}', which is not in the project. It opens as an ordinary sequence; 'jazz repair' drops the Quick Trim mark."));
+        }
+
         var trackIds = new HashSet<string>(StringComparer.Ordinal);
         var clipIds = new HashSet<string>(StringComparer.Ordinal);
 

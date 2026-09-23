@@ -585,6 +585,19 @@ public sealed record MediaItem(
 }
 
 /// <summary>
+/// Marks a sequence as a Quick Trim of one file.
+/// </summary>
+/// <remarks>
+/// A Quick Trim lays the file out where it sits in the source: V1 carries the picture and one
+/// audio track per stream carries each sound, every clip at the timeline time equal to its source
+/// time. The clips are the stretches to keep and the gaps are what was cut away, so the file
+/// stays readable on the timeline and a cut is only ever a gap. Export plays the kept stretches
+/// back to back rather than the gaps as black.
+/// </remarks>
+/// <param name="MediaId">The file being trimmed.</param>
+public sealed record QuickTrim(string MediaId) : IEquatable<QuickTrim>;
+
+/// <summary>
 /// A timeline: tracks of clips with a shared frame grid.
 /// </summary>
 /// <param name="Id">The sequence identifier.</param>
@@ -593,13 +606,15 @@ public sealed record MediaItem(
 /// <param name="Markers">Sequence markers and chapters.</param>
 /// <param name="Settings">Overrides for the project settings, when this sequence differs.</param>
 /// <param name="InOut">The in and out points, when a range is set.</param>
+/// <param name="QuickTrim">Set when this sequence is a Quick Trim of one file: its clips are the kept stretches.</param>
 public sealed record Sequence(
     string Id,
     string Name,
     EquatableArray<Track> Tracks = default,
     EquatableArray<Marker> Markers = default,
     ProjectSettings? Settings = null,
-    TimeRange? InOut = null) : IEquatable<Sequence>
+    TimeRange? InOut = null,
+    QuickTrim? QuickTrim = null) : IEquatable<Sequence>
 {
     /// <summary>The first position after the last clip on any track.</summary>
     public Flicks Duration

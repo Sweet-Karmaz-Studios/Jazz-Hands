@@ -283,6 +283,11 @@ public static class CommandValues
             return new EquatableArray<string>(Split(text));
         }
 
+        if (type == typeof(EquatableArray<TimeRange>))
+        {
+            return new EquatableArray<TimeRange>([.. Split(text).Select(pair => ParseRange(pair, frameRate, name))]);
+        }
+
         throw new CommandException("unsupported-type", $"A command cannot take a {type.Name}.");
     }
 
@@ -309,10 +314,33 @@ public static class CommandValues
         bool flag => flag ? "true" : "false",
         string[] items => string.Join(",", items),
         EquatableArray<string> items => string.Join(",", items),
+        EquatableArray<TimeRange> ranges => string.Join(",", ranges.Select(range => $"{Format(range.Start, frameRate)}-{Format(range.End, frameRate)}")),
         Enum member => ToKebabCase(member.ToString()),
         IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
         _ => value.ToString() ?? string.Empty,
     };
+
+    /// <summary>
+    /// Reads one <c>start-end</c> pair. Neither half of any time form Jazz Hands reads contains a
+    /// hyphen, so the first one is the separator.
+    /// </summary>
+    private static TimeRange ParseRange(string pair, Rational frameRate, string name)
+    {
+        int dash = pair.IndexOf('-', StringComparison.Ordinal);
+        if (dash <= 0 || dash == pair.Length - 1)
+        {
+            throw new CommandException(
+                "invalid-range",
+                $"'{pair}' is not a range for '{name}'. Write start-end, for example 00:10-00:25.");
+        }
+
+        var start = (Flicks)Parse(typeof(Flicks), pair[..dash].Trim(), frameRate, name)!;
+        var end = (Flicks)Parse(typeof(Flicks), pair[(dash + 1)..].Trim(), frameRate, name)!;
+
+        return end > start
+            ? TimeRange.FromBounds(start, end)
+            : throw new CommandException("invalid-range", $"'{pair}' ends before it starts.");
+    }
 
     /// <summary>Turns a PascalCase property name into the kebab-case an option uses.</summary>
     public static string ToKebabCase(string name)

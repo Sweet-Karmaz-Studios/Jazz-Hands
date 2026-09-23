@@ -113,6 +113,15 @@ public static class ProjectRepair
                 actions));
         }
 
+        if (sequence.QuickTrim is { } trim && !mediaIds.Contains(trim.MediaId))
+        {
+            actions.Add(new RepairAction(
+                "missing-trim-media",
+                $"{path}/quickTrim",
+                $"'{sequence.Name}' was a Quick Trim of media that is gone; it is now an ordinary sequence."));
+            sequence = sequence with { QuickTrim = null };
+        }
+
         return sequence with { Tracks = new EquatableArray<Track>(tracks.ToImmutable()) };
     }
 

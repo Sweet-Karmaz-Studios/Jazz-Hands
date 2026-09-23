@@ -28,6 +28,9 @@ public static class EngineServices
         // What the editor is pointing at. One per host, like the session it belongs to; the
         // selection commands find it here, which is what lets a script select and then act.
         services.TryAddSingleton<Selection.SelectionService>();
+
+        // Keyframe indexes for planning exports, shared so a file is scanned once per process.
+        services.TryAddSingleton(provider => new Export.KeyframeLookup(provider.GetService<Media.Import.CacheManager>()));
         services.TryAddSingleton(provider =>
             new Media.Import.MediaImporter(provider.GetService<Media.Import.CacheManager>()));
 
