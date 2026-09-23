@@ -119,8 +119,9 @@ public sealed class Compositor : IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         EnsureShaders();
 
-        RenderTarget stack = Pool.Rent(graph.Width, graph.Height);
-        Clear(stack, Vector4.Zero);
+        // No stack until something needs one underneath it: the bottom layer of most frames is
+        // opaque and untransformed, and then it simply is the stack.
+        RenderTarget? stack = null;
 
         foreach (LayerNode layer in graph.Layers)
         {
@@ -129,11 +130,11 @@ public sealed class Compositor : IDisposable
                 continue;
             }
 
-            stack = layer.IsAdjustment ? Adjust(graph, layer, stack) : Place(graph, layer, stack);
+            stack = layer.IsAdjustment ? Adjust(graph, layer, stack ?? Empty(graph)) : Place(graph, layer, stack);
             LayersDrawn++;
         }
 
-        return stack;
+        return stack ?? Empty(graph);
     }
 
     /// <summary>
@@ -203,14 +204,47 @@ public sealed class Compositor : IDisposable
             : 65535.0f / ((1 << layout.BitDepth) - 1);
     }
 
-    /// <summary>Draws a picture layer onto the stack and returns the new stack.</summary>
-    private RenderTarget Place(RenderGraph graph, LayerNode layer, RenderTarget stack)
+    /// <summary>A transparent frame-sized stack.</summary>
+    private RenderTarget Empty(RenderGraph graph)
+    {
+        RenderTarget stack = Pool.Rent(graph.Width, graph.Height);
+        Clear(stack, Vector4.Zero);
+        return stack;
+    }
+
+    /// <summary>
+    /// Draws a picture layer onto the stack and returns the new stack. A null stack is
+    /// transparent black.
+    /// </summary>
+    private RenderTarget Place(RenderGraph graph, LayerNode layer, RenderTarget? stack)
     {
         LayerKey? key = LayerKeyFor(graph, layer);
         RenderTarget? placed = null;
         bool cached = key is { } lookup && Cache.TryGet(lookup, out placed);
         placed ??= Transform(graph, layer);
 
+        // Normal at full opacity over nothing is the layer itself, so there is nothing to blend.
+        // A layer the cache keeps is copied rather than handed over, because the stack is
+        // returned to the pool at the end of the frame and the cache still holds it.
+        if (stack is null && layer.Masks.IsDefaultOrEmpty && layer.Blend == BlendMode.Normal && layer.Opacity >= 1.0f)
+        {
+            if (cached || key is not null)
+            {
+                RenderTarget copy = Pool.Rent(graph.Width, graph.Height);
+                _device.ImmediateContext.CopyResource(copy.Texture, placed.Texture);
+
+                if (!cached)
+                {
+                    Cache.Put(key!.Value, placed);
+                }
+
+                return copy;
+            }
+
+            return placed;
+        }
+
+        stack ??= Empty(graph);
         RenderTarget? matte = layer.Masks.IsDefaultOrEmpty ? null : Matte(graph, layer);
         RenderTarget result = Composite(stack, placed, matte, layer.Opacity, layer.Blend);
 
@@ -276,6 +310,19 @@ public sealed class Compositor : IDisposable
     private RenderTarget Transform(RenderGraph graph, LayerNode layer)
     {
         RenderTarget source = Linear(layer);
+
+        // A frame-sized source with nothing moved or cropped maps every texel onto itself, and
+        // either filter sampled at texel centres gives the texel back: the pass would be a copy.
+        if (layer.Transform.IsIdentity
+            && layer.Crop == LayerNode.NoCrop
+            && source.Width == graph.Width
+            && source.Height == graph.Height
+            && layer.SourceWidth == graph.Width
+            && layer.SourceHeight == graph.Height)
+        {
+            return source;
+        }
+
         RenderTarget placed = Pool.Rent(graph.Width, graph.Height);
         Clear(placed, Vector4.Zero);
 
@@ -326,16 +373,17 @@ public sealed class Compositor : IDisposable
         PixelLayout layout = frame.Layout;
 
         Matrix4x4 matrix = color.Matrix;
+        SampleRange range = color.RangeFor(layout.BitDepth);
         var constants = new SourceConstants
         {
             MatrixRow0 = new Vector3(matrix.M11, matrix.M12, matrix.M13),
             SampleScale = SampleScaleFor(layout),
             MatrixRow1 = new Vector3(matrix.M21, matrix.M22, matrix.M23),
-            LumaOffset = color.LumaOffset,
+            LumaOffset = range.LumaOffset,
             MatrixRow2 = new Vector3(matrix.M31, matrix.M32, matrix.M33),
-            ChromaOffset = 0.5f,
-            LumaRange = color.LumaRange,
-            ChromaRange = color.ChromaRange,
+            ChromaOffset = range.ChromaOffset,
+            LumaRange = range.LumaRange,
+            ChromaRange = range.ChromaRange,
             Transfer = (uint)color.Transfer,
             Layout = layout.IsRgb
                 ? (layout.PlaneCount == 1 ? 2u : 3u)
@@ -346,7 +394,7 @@ public sealed class Compositor : IDisposable
         {
             for (int plane = 0; plane < frame.PlaneCount; plane++)
             {
-                _planeViews[plane] = _device.Device.CreateShaderResourceView(frame.Plane(plane));
+                _planeViews[plane] = frame.CreateView(_device.Device, plane);
             }
 
             for (int plane = 0; plane < 4; plane++)

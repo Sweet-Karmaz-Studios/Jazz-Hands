@@ -164,7 +164,7 @@ public sealed class YuvToLinearPass : IDisposable
             MatrixRow1 = new Vector3(matrix.M21, matrix.M22, matrix.M23),
             LumaOffset = colorSpace.LumaOffset,
             MatrixRow2 = new Vector3(matrix.M31, matrix.M32, matrix.M33),
-            ChromaOffset = 0.5f,
+            ChromaOffset = colorSpace.ChromaOffset,
             LumaRange = colorSpace.LumaRange,
             ChromaRange = colorSpace.ChromaRange,
             TransferFunction = (uint)colorSpace.Transfer,

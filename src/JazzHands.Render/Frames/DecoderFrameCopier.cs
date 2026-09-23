@@ -1,5 +1,6 @@
 using Vortice.Direct3D11;
 using Vortice.DXGI;
+using Vortice.Mathematics;
 using Serilog;
 
 namespace JazzHands.Render.Frames;
@@ -45,52 +46,36 @@ public sealed class DecoderFrameCopier(RenderDevice device)
         source.AddRef();
 
         Texture2DDescription description = source.Description;
-        ID3D11DeviceContext context = device.ImmediateContext;
+        ID3D11Texture2D destination = target.Plane(0);
+        Format expected = destination.Description.Format;
 
-        // A semi-planar decoder surface is one texture holding both planes, and D3D copies it as
-        // one subresource. The target's planes are separate textures, so the copy is per plane
-        // through a view of the source's plane rectangle.
-        if (target.PlaneCount == 2 && description.Format is Format.NV12 or Format.P010 or Format.P016)
+        // Direct3D 11 copies a video surface only into a texture of its own format, and a copy
+        // that breaks the rule does nothing and says nothing. Better to fail loudly here than to
+        // show a black frame.
+        if (description.Format != expected)
         {
-            CopySemiPlanar(context, source, arraySlice, description, target);
+            throw new InvalidOperationException(
+                $"The decoder wrote {description.Format} and the frame texture is {expected}. "
+                + "A hardware frame's layout comes from the stream's bit depth; check what import recorded.");
         }
-        else
-        {
-            context.CopySubresourceRegion(
-                target.Plane(0),
-                0,
-                0,
-                0,
-                0,
-                source,
-                (uint)CalculateSubresource(0, arraySlice, description.MipLevels));
-        }
+
+        // The box is the picture, not the surface: a decoder pads its surfaces to whole
+        // macroblocks, so 1080 lines arrive in a 1088 line surface, and copying the whole
+        // subresource into a 1080 line texture would be invalid. For a video format the box is in
+        // luma texels and the chroma plane comes with it.
+        var box = new Box(0, 0, 0, target.Width, target.Height, 1);
+
+        device.ImmediateContext.CopySubresourceRegion(
+            destination,
+            0,
+            0,
+            0,
+            0,
+            source,
+            (uint)CalculateSubresource(0, arraySlice, description.MipLevels),
+            box);
 
         Copied++;
-    }
-
-    /// <summary>
-    /// Copies the luma and chroma halves of an NV12 or P010 surface into two textures.
-    /// </summary>
-    /// <remarks>
-    /// Direct3D exposes the two planes of a video surface as separate subresource planes on the
-    /// same texture, so the copy names a plane slice rather than a rectangle. Getting this wrong
-    /// reads chroma as the bottom of luma, which looks like a green band across the lower third.
-    /// </remarks>
-    private static void CopySemiPlanar(
-        ID3D11DeviceContext context,
-        ID3D11Texture2D source,
-        int arraySlice,
-        Texture2DDescription description,
-        FrameTexture target)
-    {
-        for (int plane = 0; plane < 2; plane++)
-        {
-            uint subresource = (uint)CalculateSubresource(0, arraySlice, description.MipLevels)
-                + ((uint)plane * description.ArraySize * description.MipLevels);
-
-            context.CopySubresourceRegion(target.Plane(plane), 0, 0, 0, 0, source, subresource);
-        }
     }
 
     private static int CalculateSubresource(int mipSlice, int arraySlice, uint mipLevels) =>

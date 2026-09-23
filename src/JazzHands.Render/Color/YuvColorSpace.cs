@@ -40,14 +40,39 @@ public sealed record YuvColorSpace(Matrix4x4 Matrix, bool IsFullRange, TransferF
     /// </summary>
     public static YuvColorSpace Rgb(TransferFunction transfer) => new(Matrix4x4.Identity, true, transfer, 8);
 
-    /// <summary>The luma offset to subtract: 16/255 for limited range, zero for full.</summary>
-    public float LumaOffset => IsFullRange ? 0.0f : 16.0f / 255.0f;
+    /// <summary>The luma offset to subtract, as a fraction of full scale: 16/255 for 8-bit limited range, zero for full.</summary>
+    public float LumaOffset => RangeFor(BitDepth).LumaOffset;
 
-    /// <summary>The luma scale after offsetting: 255/219 for limited range, one for full.</summary>
-    public float LumaRange => IsFullRange ? 1.0f : 255.0f / 219.0f;
+    /// <summary>The luma scale after offsetting: 255/219 for 8-bit limited range, one for full.</summary>
+    public float LumaRange => RangeFor(BitDepth).LumaRange;
 
-    /// <summary>The chroma scale after offsetting: 255/224 for limited range, one for full.</summary>
-    public float ChromaRange => IsFullRange ? 1.0f : 255.0f / 224.0f;
+    /// <summary>The chroma offset to subtract: 128/255 at 8 bits, which is not quite a half.</summary>
+    public float ChromaOffset => RangeFor(BitDepth).ChromaOffset;
+
+    /// <summary>The chroma scale after offsetting: 255/224 for 8-bit limited range, one for full.</summary>
+    public float ChromaRange => RangeFor(BitDepth).ChromaRange;
+
+    /// <summary>
+    /// The offsets and scales that turn normalised samples of a bit depth into Y in 0 to 1 and
+    /// chroma in -0.5 to 0.5.
+    /// </summary>
+    /// <remarks>
+    /// A UNORM sample is its code value over 2^n - 1, and every constant here is exact in those
+    /// units. The shortcuts are each worth a code value: chroma 128 at 8 bits is 0.50196, not a
+    /// half, and 10-bit black is 64/1023, not 16/255. Both lift R and B off neutral grey.
+    /// </remarks>
+    /// <param name="bitDepth">Bits per sample of the decoded frame, which is what the texture holds.</param>
+    public SampleRange RangeFor(int bitDepth)
+    {
+        int bits = Math.Clamp(bitDepth, 8, 16);
+        float scale = 1 << (bits - 8);
+        float max = (1 << bits) - 1;
+        float chromaOffset = 128.0f * scale / max;
+
+        return IsFullRange
+            ? new SampleRange(0.0f, 1.0f, chromaOffset, 1.0f)
+            : new SampleRange(16.0f * scale / max, max / (219.0f * scale), chromaOffset, max / (224.0f * scale));
+    }
 
     /// <summary>
     /// Corrects for MSB-aligned 10-bit samples. P010 stores ten bits in the top of a sixteen bit
@@ -115,3 +140,10 @@ public sealed record YuvColorSpace(Matrix4x4 Matrix, bool IsFullRange, TransferF
             0.0f, 0.0f, 0.0f, 1.0f);
     }
 }
+
+/// <summary>What turns normalised YUV samples into Y in 0 to 1 and chroma about zero.</summary>
+/// <param name="LumaOffset">Subtracted from luma.</param>
+/// <param name="LumaRange">Multiplies luma after the offset.</param>
+/// <param name="ChromaOffset">Subtracted from each chroma sample.</param>
+/// <param name="ChromaRange">Multiplies chroma after the offset.</param>
+public readonly record struct SampleRange(float LumaOffset, float LumaRange, float ChromaOffset, float ChromaRange);

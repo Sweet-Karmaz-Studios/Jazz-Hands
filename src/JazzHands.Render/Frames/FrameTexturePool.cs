@@ -1,4 +1,5 @@
 using Vortice.Direct3D11;
+using Vortice.DXGI;
 using Serilog;
 
 namespace JazzHands.Render.Frames;
@@ -67,6 +68,14 @@ public sealed class FrameTexturePool : IDisposable
             return new FrameTexture(spare.Pop(), layout, width, height, this);
         }
 
+        // A copy target for a hardware layout is one texture in the decoder's format, because that
+        // is the only thing Direct3D 11 will copy a video surface into.
+        if (usage == FrameTextureUsage.Copy && layout.PackedFormat is { } packed)
+        {
+            Created++;
+            return new FrameTexture([Create(packed, width, height, usage)], layout, width, height, this);
+        }
+
         var planes = new ID3D11Texture2D[layout.PlaneCount];
 
         try
@@ -74,7 +83,7 @@ public sealed class FrameTexturePool : IDisposable
             for (int index = 0; index < planes.Length; index++)
             {
                 PixelPlane plane = layout.Planes[index];
-                planes[index] = Create(plane, plane.WidthFor(width), plane.HeightFor(height), usage);
+                planes[index] = Create(plane.Format, plane.WidthFor(width), plane.HeightFor(height), usage);
             }
         }
         catch
@@ -161,7 +170,7 @@ public sealed class FrameTexturePool : IDisposable
             ? FrameTextureUsage.Upload
             : FrameTextureUsage.Copy;
 
-    private ID3D11Texture2D Create(PixelPlane plane, int width, int height, FrameTextureUsage usage)
+    private ID3D11Texture2D Create(Format format, int width, int height, FrameTextureUsage usage)
     {
         var description = new Texture2DDescription
         {
@@ -169,7 +178,7 @@ public sealed class FrameTexturePool : IDisposable
             Height = (uint)height,
             MipLevels = 1,
             ArraySize = 1,
-            Format = plane.Format,
+            Format = format,
             SampleDescription = new Vortice.DXGI.SampleDescription(1, 0),
             BindFlags = BindFlags.ShaderResource,
             CPUAccessFlags = usage == FrameTextureUsage.Upload ? CpuAccessFlags.Write : CpuAccessFlags.None,

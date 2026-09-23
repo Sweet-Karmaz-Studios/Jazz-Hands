@@ -38,8 +38,8 @@ public sealed record PixelPlane(Format Format, int WidthShift, int HeightShift, 
 ///
 /// Two families arrive. A hardware decoder produces semi-planar NV12 or P010, where chroma is one
 /// plane of interleaved pairs. A software decoder produces planar YUV, where U and V are separate
-/// planes. Both become a set of textures and a layout saying what they are, and
-/// <c>YuvToLinearPass</c> reads either.
+/// planes. Both become textures and a layout saying what they are, and the compositor's source
+/// pass reads either.
 /// </remarks>
 public sealed record PixelLayout(string Name, ImmutableArray<PixelPlane> Planes, int BitDepth)
 {
@@ -50,7 +50,10 @@ public sealed record PixelLayout(string Name, ImmutableArray<PixelPlane> Planes,
             new PixelPlane(Format.R8_UNorm, 0, 0, 1),
             new PixelPlane(Format.R8G8_UNorm, 1, 1, 2),
         ],
-        8);
+        8)
+    {
+        PackedFormat = Format.NV12,
+    };
 
     /// <summary>10-bit semi-planar 4:2:0, what a 10-bit hardware decoder produces.</summary>
     public static readonly PixelLayout P010 = new(
@@ -59,7 +62,10 @@ public sealed record PixelLayout(string Name, ImmutableArray<PixelPlane> Planes,
             new PixelPlane(Format.R16_UNorm, 0, 0, 1),
             new PixelPlane(Format.R16G16_UNorm, 1, 1, 2),
         ],
-        10);
+        10)
+    {
+        PackedFormat = Format.P010,
+    };
 
     /// <summary>8-bit planar 4:2:0, the software decoder's usual output.</summary>
     public static readonly PixelLayout Yuv420P = Planar("yuv420p", Format.R8_UNorm, 1, 1, 8);
@@ -107,6 +113,18 @@ public sealed record PixelLayout(string Name, ImmutableArray<PixelPlane> Planes,
     [
         Nv12, P010, Yuv420P, Yuv420P10, Yuv420P12, Yuv422P, Yuv422P10, Yuv444P, Yuv444P10, Rgba, Rgba64, Gbrapf32,
     ];
+
+    /// <summary>
+    /// The one texture format that holds every plane, for the layouts a hardware decoder writes, or
+    /// null when the planes can only be separate textures.
+    /// </summary>
+    /// <remarks>
+    /// Direct3D 11 copies a video surface only into a texture of the same format: an NV12 plane
+    /// cannot be copied into an R8 texture, and the call fails without a word. A copy target for
+    /// these layouts is therefore one texture in the decoder's own format, and its planes are read
+    /// through views in the plane formats above.
+    /// </remarks>
+    public Format? PackedFormat { get; init; }
 
     /// <summary>How many textures a frame in this layout needs.</summary>
     public int PlaneCount => Planes.Length;

@@ -1,4 +1,5 @@
 using JazzHands.Core.Time;
+using Vortice.Direct3D;
 using Vortice.Direct3D11;
 
 namespace JazzHands.Render.Frames;
@@ -11,20 +12,21 @@ namespace JazzHands.Render.Frames;
 /// decoder allocated a fixed number of, so keeping eight of them stalls the decoder that produced
 /// them. Anything that outlives the decode, which means everything in a cache, lives here instead.
 ///
-/// One texture per plane rather than one array texture, because the two paths that fill them
-/// disagree about arrays: a hardware copy comes from one slice of the decoder's array, and a
-/// software upload writes a mapped resource. Separate textures also let the compositor bind a
-/// plane without a view that selects a slice.
+/// A software upload is one texture per plane, because each plane is mapped and written on its
+/// own. A hardware copy is one texture in the decoder's own format holding every plane, because
+/// Direct3D 11 copies a video surface only into its own format (see
+/// <see cref="PixelLayout.PackedFormat"/>). Either way, read a plane through
+/// <see cref="CreateView"/>, which knows which it is.
 /// </remarks>
 public sealed class FrameTexture : IDisposable
 {
-    private readonly ID3D11Texture2D[] _planes;
+    private readonly ID3D11Texture2D[] _textures;
     private readonly FrameTexturePool? _pool;
     private bool _disposed;
 
-    internal FrameTexture(ID3D11Texture2D[] planes, PixelLayout layout, int width, int height, FrameTexturePool? pool)
+    internal FrameTexture(ID3D11Texture2D[] textures, PixelLayout layout, int width, int height, FrameTexturePool? pool)
     {
-        _planes = planes;
+        _textures = textures;
         _pool = pool;
         Layout = layout;
         Width = width;
@@ -54,16 +56,37 @@ public sealed class FrameTexture : IDisposable
     public bool IsValid => !_disposed;
 
     /// <summary>How many planes there are.</summary>
-    public int PlaneCount => _planes.Length;
+    public int PlaneCount => Layout.PlaneCount;
 
-    /// <summary>One plane's texture, for binding or copying into.</summary>
+    /// <summary>True when every plane lives in one texture in the layout's packed format.</summary>
+    public bool IsPacked => _textures.Length == 1 && Layout.PlaneCount > 1;
+
+    /// <summary>
+    /// The texture holding one plane, for copying into. In a packed frame every plane is the same
+    /// texture; bind a plane through <see cref="CreateView"/> rather than a default view of this.
+    /// </summary>
     public ID3D11Texture2D Plane(int index)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentOutOfRangeException.ThrowIfNegative(index);
-        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(index, _planes.Length);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(index, PlaneCount);
 
-        return _planes[index];
+        return _textures[Math.Min(index, _textures.Length - 1)];
+    }
+
+    /// <summary>A view that samples one plane in its plane format. The caller disposes it.</summary>
+    public ID3D11ShaderResourceView CreateView(ID3D11Device device, int plane)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+
+        var description = new ShaderResourceViewDescription
+        {
+            Format = Layout.Planes[plane].Format,
+            ViewDimension = ShaderResourceViewDimension.Texture2D,
+            Texture2D = new Texture2DShaderResourceView { MostDetailedMip = 0, MipLevels = 1 },
+        };
+
+        return device.CreateShaderResourceView(Plane(plane), description);
     }
 
     /// <summary>Returns the textures to the pool they came from, or releases them.</summary>
@@ -78,16 +101,13 @@ public sealed class FrameTexture : IDisposable
 
         if (_pool is not null)
         {
-            _pool.Return(this, _planes);
+            _pool.Return(this, _textures);
             return;
         }
 
-        foreach (ID3D11Texture2D plane in _planes)
+        foreach (ID3D11Texture2D texture in _textures)
         {
-            plane.Dispose();
+            texture.Dispose();
         }
     }
-
-    /// <summary>The planes, for the pool that owns them.</summary>
-    internal ID3D11Texture2D[] Planes => _planes;
 }
