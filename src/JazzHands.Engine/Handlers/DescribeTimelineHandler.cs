@@ -149,7 +149,7 @@ public sealed class DescribeTimelineHandler : IQueryHandler<DescribeTimelineQuer
                 clip.LinkGroupId is null ? null : "linked",
                 clip.GroupId is null ? null : "grouped",
             }.Where(note => note is not null).Select(note => note!),
-            .. (audio ? AudioNotes(clip) : []),
+            .. (audio ? AudioNotes(clip) : PictureNotes(clip)),
         ];
 
         if (notes.Length > 0)
@@ -248,6 +248,49 @@ public sealed class DescribeTimelineHandler : IQueryHandler<DescribeTimelineQuer
     /// What is set on an audio clip, in the words a mixer would use, so a reader can tell the
     /// mic lane is at -6 with a half second fade without opening the project file.
     /// </summary>
+    private static IEnumerable<string> PictureNotes(Clip clip)
+    {
+        if (clip.Transform is { } transform)
+        {
+            yield return transform is { Position: StaticValue { Value: ParamValue.Float2 position }, Scale: StaticValue { Value: ParamValue.Float2 scale }, Rotation: StaticValue { Value: ParamValue.Float rotation } }
+                ? string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"at {position.Value.X:0.#},{position.Value.Y:0.#} scale {Scale(scale.Value)} rotated {rotation.Value:0.#} deg")
+                : "transform animated";
+        }
+
+        if (clip.Opacity is not null)
+        {
+            yield return clip.Opacity is StaticValue { Value: ParamValue.Float opacity }
+                ? string.Create(CultureInfo.InvariantCulture, $"opacity {opacity.Value * 100:0.#}%")
+                : "opacity animated";
+        }
+
+        if (clip.BlendMode != BlendMode.Normal)
+        {
+            yield return $"blend {System.Text.Json.JsonNamingPolicy.KebabCaseLower.ConvertName(clip.BlendMode.ToString())}";
+        }
+
+        if (clip.Crop is { } crop)
+        {
+            yield return crop is { Left: StaticValue { Value: ParamValue.Float left }, Top: StaticValue { Value: ParamValue.Float top }, Right: StaticValue { Value: ParamValue.Float right }, Bottom: StaticValue { Value: ParamValue.Float bottom } }
+                ? string.Create(CultureInfo.InvariantCulture, $"crop l{left.Value:0.#} t{top.Value:0.#} r{right.Value:0.#} b{bottom.Value:0.#}%")
+                : "crop animated";
+        }
+
+        foreach (Mask mask in clip.Masks)
+        {
+            yield return string.Create(
+                CultureInfo.InvariantCulture,
+                $"{mask.Shape.ToString().ToLowerInvariant()} mask {mask.Mode.ToString().ToLowerInvariant()}{(mask.Invert ? " inverted" : string.Empty)}{(mask.Enabled ? string.Empty : " off")}");
+        }
+
+        static string Scale(System.Numerics.Vector2 scale) =>
+            scale.X == scale.Y
+                ? string.Create(CultureInfo.InvariantCulture, $"{scale.X:0.###}")
+                : string.Create(CultureInfo.InvariantCulture, $"{scale.X:0.###}x{scale.Y:0.###}");
+    }
+
     private static IEnumerable<string> AudioNotes(Clip clip)
     {
         if (clip.IsMedia)

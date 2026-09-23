@@ -1,0 +1,358 @@
+using System.Numerics;
+using JazzHands.Core.Animation;
+using JazzHands.Core.Commands;
+using JazzHands.Core.Model;
+using JazzHands.Engine.Commands;
+
+namespace JazzHands.Engine.Handlers;
+
+/// <summary>What the picture handlers share: finding a clip with a picture and storing a change to it.</summary>
+internal static class PictureHelp
+{
+    /// <summary>A clip on a video or adjustment track, on a track that is not locked.</summary>
+    internal static ClipLocation PictureClip(Project project, string clipId)
+    {
+        ClipLocation found = HandlerHelp.Clip(project, clipId);
+
+        if (found.Track.Kind is not (TrackKind.Video or TrackKind.Adjustment))
+        {
+            throw new CommandException(
+                "not-a-picture",
+                $"Clip '{clipId}' is on {found.Track.Kind.ToString().ToLowerInvariant()} track '{found.Track.Name}', and only clips on video and adjustment tracks have a picture.");
+        }
+
+        HandlerHelp.RequireUnlocked(found.Track);
+        return found;
+    }
+
+    /// <summary>Stores a changed clip, or hands the project back when nothing changed.</summary>
+    internal static Project Replace(Project project, ClipLocation found, Clip changed, HandlerContext context)
+    {
+        if (changed == found.Clip)
+        {
+            return project;
+        }
+
+        context.Changed(found.Clip.Id);
+        return project.ReplaceTrack(found.Track.ReplaceClip(changed));
+    }
+
+    /// <summary>A value from 0 to 1, or a coded refusal.</summary>
+    internal static float Unit(double value, string what)
+    {
+        if (double.IsNaN(value) || value < 0 || value > 1)
+        {
+            throw new CommandException("value-out-of-range", $"{what} runs from 0 to 1; {value} is outside that.");
+        }
+
+        return (float)value;
+    }
+
+    /// <summary>A finite number, or a coded refusal.</summary>
+    internal static float Finite(double value, string what) =>
+        double.IsFinite(value)
+            ? (float)value
+            : throw new CommandException("value-out-of-range", $"{what} has to be a number.");
+
+    /// <summary>The static value of a parameter now, whatever it is animated to at the clip's start.</summary>
+    internal static ParamValue Current(AnimatedValue value) => AnimationEvaluator.Evaluate(value, Core.Time.Flicks.Zero);
+
+    /// <summary>Where a mask is, and the clip it is on.</summary>
+    internal static (ClipLocation Clip, int Index) FindMask(Project project, string maskId)
+    {
+        foreach (Sequence sequence in project.Sequences)
+        {
+            foreach (Track track in sequence.Tracks)
+            {
+                foreach (Clip clip in track.Clips)
+                {
+                    int index = clip.Masks.IndexOf(mask => string.Equals(mask.Id, maskId, StringComparison.Ordinal));
+                    if (index >= 0)
+                    {
+                        HandlerHelp.RequireUnlocked(track);
+                        return (new ClipLocation(sequence, track, clip), index);
+                    }
+                }
+            }
+        }
+
+        throw new CommandException("mask-not-found", $"No mask with id '{maskId}'.", "/sequences");
+    }
+
+    /// <summary>Refuses a mask whose shape has nothing to draw.</summary>
+    internal static void RequireDrawable(Mask mask)
+    {
+        if (mask.Shape is MaskShape.Rectangle or MaskShape.Ellipse)
+        {
+            if (mask.Bounds is null || Current(mask.Bounds) is not ParamValue.Float4 { Value: { Z: > 0, W: > 0 } })
+            {
+                throw new CommandException(
+                    "invalid-mask",
+                    $"A {mask.Shape.ToString().ToLowerInvariant()} mask needs a width and a height above zero: --width and --height.");
+            }
+
+            return;
+        }
+
+        string path = mask.PathData is null ? string.Empty : Current(mask.PathData) is ParamValue.Path value ? value.Value : string.Empty;
+
+        try
+        {
+            // A closed outline needs two edges to enclose anything; one curve already bows away
+            // from the straight line that closes it.
+            if (MaskPath.Parse(path).Sum(figure => figure.Segments.Sum(segment => segment.IsCurve ? 2 : 1)) < 2)
+            {
+                throw new FormatException("A mask outline needs at least three points.");
+            }
+        }
+        catch (FormatException error)
+        {
+            throw new CommandException("invalid-mask", $"The mask path cannot be read: {error.Message}");
+        }
+    }
+}
+
+/// <summary>Moves, scales and rotates a clip's picture.</summary>
+public sealed class SetClipTransformHandler : ICommandHandler<SetClipTransformCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, SetClipTransformCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        ClipLocation found = PictureHelp.PictureClip(project, command.ClipId);
+        Transform current = found.Clip.Transform ?? Transform.Identity;
+
+        Vector2 position = PictureHelp.Current(current.Position) is ParamValue.Float2 p ? p.Value : Vector2.Zero;
+        Vector2 scale = PictureHelp.Current(current.Scale) is ParamValue.Float2 s ? s.Value : Vector2.One;
+        float rotation = PictureHelp.Current(current.Rotation) is ParamValue.Float r ? r.Value : 0.0f;
+        Vector2 anchor = PictureHelp.Current(current.Anchor) is ParamValue.Float2 a ? a.Value : Vector2.Zero;
+
+        position = new Vector2(
+            command.X is { } x ? PictureHelp.Finite(x, "x") : position.X,
+            command.Y is { } y ? PictureHelp.Finite(y, "y") : position.Y);
+
+        if (command.Scale is { } both)
+        {
+            scale = new Vector2(Scale(both));
+        }
+
+        scale = new Vector2(
+            command.ScaleX is { } scaleX ? Scale(scaleX) : scale.X,
+            command.ScaleY is { } scaleY ? Scale(scaleY) : scale.Y);
+
+        rotation = command.Rotation is { } degrees ? PictureHelp.Finite(degrees, "The rotation") : rotation;
+        anchor = new Vector2(
+            command.AnchorX is { } anchorX ? PictureHelp.Finite(anchorX, "anchor-x") : anchor.X,
+            command.AnchorY is { } anchorY ? PictureHelp.Finite(anchorY, "anchor-y") : anchor.Y);
+
+        var transform = new Transform(
+            AnimatedValue.Constant(new ParamValue.Float2(position)),
+            AnimatedValue.Constant(new ParamValue.Float2(scale)),
+            AnimatedValue.Constant(rotation),
+            AnimatedValue.Constant(new ParamValue.Float2(anchor)));
+
+        // No transform at all is stored as none, which keeps the file as it was before anyone
+        // touched the clip.
+        return PictureHelp.Replace(project, found, found.Clip with { Transform = transform == Transform.Identity ? null : transform }, context);
+    }
+
+    private static float Scale(double value)
+    {
+        float scale = PictureHelp.Finite(value, "The scale");
+        return scale != 0.0f
+            ? scale
+            : throw new CommandException("value-out-of-range", "A scale of zero leaves nothing to see; a negative scale flips the picture.");
+    }
+}
+
+/// <summary>Sets how opaque a clip's picture is.</summary>
+public sealed class SetClipOpacityHandler : ICommandHandler<SetClipOpacityCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, SetClipOpacityCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        ClipLocation found = PictureHelp.PictureClip(project, command.ClipId);
+        float opacity = PictureHelp.Unit(command.Opacity, "Opacity");
+
+        return PictureHelp.Replace(project, found, found.Clip with { Opacity = opacity == 1.0f ? null : AnimatedValue.Constant(opacity) }, context);
+    }
+}
+
+/// <summary>Sets how a clip's picture blends with what is underneath.</summary>
+public sealed class SetClipBlendHandler : ICommandHandler<SetClipBlendCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, SetClipBlendCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        if (!Enum.IsDefined(command.Mode))
+        {
+            throw new CommandException("invalid-value", $"{(int)command.Mode} is not a blend mode.");
+        }
+
+        ClipLocation found = PictureHelp.PictureClip(project, command.ClipId);
+        return PictureHelp.Replace(project, found, found.Clip with { BlendMode = command.Mode }, context);
+    }
+}
+
+/// <summary>Cuts away the edges of a clip's picture.</summary>
+public sealed class SetClipCropHandler : ICommandHandler<SetClipCropCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, SetClipCropCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        ClipLocation found = PictureHelp.PictureClip(project, command.ClipId);
+        Crop current = found.Clip.Crop ?? Crop.None;
+
+        float left = Side(command.Left, current.Left);
+        float top = Side(command.Top, current.Top);
+        float right = Side(command.Right, current.Right);
+        float bottom = Side(command.Bottom, current.Bottom);
+
+        if (left + right >= 100.0f || top + bottom >= 100.0f)
+        {
+            throw new CommandException(
+                "crop-out-of-range",
+                $"That crop leaves nothing: left and right add up to {left + right}%, top and bottom to {top + bottom}%. Each pair has to stay under 100%.");
+        }
+
+        var crop = new Crop(
+            AnimatedValue.Constant(left),
+            AnimatedValue.Constant(top),
+            AnimatedValue.Constant(right),
+            AnimatedValue.Constant(bottom));
+
+        return PictureHelp.Replace(project, found, found.Clip with { Crop = crop == Crop.None ? null : crop }, context);
+    }
+
+    private static float Side(double? given, AnimatedValue current)
+    {
+        if (given is not { } value)
+        {
+            return PictureHelp.Current(current) is ParamValue.Float existing ? existing.Value : 0.0f;
+        }
+
+        return double.IsNaN(value) || value < 0 || value > 100
+            ? throw new CommandException("crop-out-of-range", $"A crop is a percentage from 0 to 100; {value} is outside that.")
+            : (float)value;
+    }
+}
+
+/// <summary>Adds a mask to a clip.</summary>
+public sealed class AddMaskHandler : ICommandHandler<AddMaskCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, AddMaskCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        ClipLocation found = PictureHelp.PictureClip(project, command.ClipId);
+        string id = HandlerHelp.IdOr(command.MaskId);
+        HandlerHelp.RequireUnused(project, id);
+
+        if (project.Sequences.Any(sequence => sequence.Tracks.Any(track => track.Clips.Any(clip => clip.Masks.Any(mask => mask.Id == id)))))
+        {
+            throw new CommandException("duplicate-id", $"'{id}' is already a mask in this project.");
+        }
+
+        var mask = new Mask(
+            id,
+            command.Shape,
+            Bounds(command.X, command.Y, command.Width, command.Height, null),
+            command.Path is null ? null : AnimatedValue.Constant(new ParamValue.Path(command.Path)),
+            command.Feather == 0 ? null : AnimatedValue.Constant(Feather(command.Feather)),
+            command.Opacity == 1 ? null : AnimatedValue.Constant(PictureHelp.Unit(command.Opacity, "Mask opacity")),
+            command.Mode,
+            command.Invert);
+
+        PictureHelp.RequireDrawable(mask);
+        context.Changed(id);
+
+        return PictureHelp.Replace(project, found, found.Clip with { Masks = found.Clip.Masks.Add(mask) }, context);
+    }
+
+    /// <summary>Bounds from whichever of the four numbers were given, over what was there.</summary>
+    internal static AnimatedValue? Bounds(double? x, double? y, double? width, double? height, AnimatedValue? current)
+    {
+        if (x is null && y is null && width is null && height is null)
+        {
+            return current;
+        }
+
+        Vector4 existing = current is not null && PictureHelp.Current(current) is ParamValue.Float4 value ? value.Value : Vector4.Zero;
+        return AnimatedValue.Constant(new ParamValue.Float4(new Vector4(
+            x is { } left ? PictureHelp.Finite(left, "x") : existing.X,
+            y is { } top ? PictureHelp.Finite(top, "y") : existing.Y,
+            width is { } w ? PictureHelp.Finite(w, "The width") : existing.Z,
+            height is { } h ? PictureHelp.Finite(h, "The height") : existing.W)));
+    }
+
+    /// <summary>A feather, which cannot be negative.</summary>
+    internal static float Feather(double value) =>
+        value >= 0 && double.IsFinite(value)
+            ? (float)value
+            : throw new CommandException("value-out-of-range", $"A feather is a distance in pixels, 0 or more; {value} is not.");
+}
+
+/// <summary>Takes a mask off its clip.</summary>
+public sealed class RemoveMaskHandler : ICommandHandler<RemoveMaskCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, RemoveMaskCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        (ClipLocation found, int index) = PictureHelp.FindMask(project, command.MaskId);
+        context.Changed(command.MaskId);
+
+        return PictureHelp.Replace(project, found, found.Clip with { Masks = found.Clip.Masks.RemoveAt(index) }, context);
+    }
+}
+
+/// <summary>Changes a mask.</summary>
+public sealed class SetMaskHandler : ICommandHandler<SetMaskCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, SetMaskCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        (ClipLocation found, int index) = PictureHelp.FindMask(project, command.MaskId);
+        Mask current = found.Clip.Masks[index];
+
+        Mask changed = current with
+        {
+            Shape = command.Shape ?? current.Shape,
+            Bounds = AddMaskHandler.Bounds(command.X, command.Y, command.Width, command.Height, current.Bounds),
+            PathData = command.Path is null ? current.PathData : AnimatedValue.Constant(new ParamValue.Path(command.Path)),
+            Feather = command.Feather is { } feather ? (feather == 0 ? null : AnimatedValue.Constant(AddMaskHandler.Feather(feather))) : current.Feather,
+            Opacity = command.Opacity is { } opacity ? (opacity == 1 ? null : AnimatedValue.Constant(PictureHelp.Unit(opacity, "Mask opacity"))) : current.Opacity,
+            Mode = command.Mode ?? current.Mode,
+            Invert = command.Invert ?? current.Invert,
+            Enabled = command.Enabled ?? current.Enabled,
+        };
+
+        if (changed == current)
+        {
+            return project;
+        }
+
+        PictureHelp.RequireDrawable(changed);
+        context.Changed(command.MaskId);
+
+        return PictureHelp.Replace(project, found, found.Clip with { Masks = found.Clip.Masks.SetItem(index, changed) }, context);
+    }
+}
