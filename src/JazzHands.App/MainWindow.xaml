@@ -13,6 +13,8 @@
         xmlns:timeline="clr-namespace:JazzHands.App.Views.Timeline"
         xmlns:timelinevm="clr-namespace:JazzHands.App.ViewModels.Timeline"
         xmlns:shell="clr-namespace:JazzHands.App.Shell"
+        xmlns:export="clr-namespace:JazzHands.App.Views.Export"
+        xmlns:exportvm="clr-namespace:JazzHands.App.ViewModels.Export"
         xmlns:vm="clr-namespace:JazzHands.App.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -39,6 +41,9 @@
         <DataTemplate DataType="{x:Type timelinevm:TimelineViewModel}">
             <timeline:TimelineView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type exportvm:ExportQueuePanelViewModel}">
+            <export:ExportQueuePanelView />
+        </DataTemplate>
     </Window.Resources>
 
     <Grid>
@@ -52,6 +57,9 @@
               Foreground="{DynamicResource Brush.Text.Primary}">
             <MenuItem Header="_File">
                 <MenuItem Header="_Import media..." Command="{Binding Media.ImportCommand, Mode=OneWay}" />
+                <MenuItem Header="Quick _Trim a recording..." Command="{Binding QuickTrimFileCommand, Mode=OneWay}" />
+                <Separator />
+                <MenuItem Header="_Export..." Command="{Binding ExportCommand, Mode=OneWay}" />
                 <Separator />
                 <MenuItem Header="E_xit" Command="{Binding ExitCommand, Mode=OneWay}" />
             </MenuItem>

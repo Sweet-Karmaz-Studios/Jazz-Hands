@@ -1,12 +1,14 @@
 using JazzHands.App.Services;
 using JazzHands.App.ViewModels;
 using JazzHands.App.ViewModels.Audio;
+using JazzHands.App.ViewModels.Export;
 using JazzHands.App.ViewModels.Media;
 using JazzHands.App.ViewModels.Playback;
 using JazzHands.App.ViewModels.Timeline;
 using JazzHands.Core.Model;
 using JazzHands.Engine;
 using JazzHands.Engine.Commands;
+using JazzHands.Engine.Export;
 using JazzHands.Engine.Playback;
 using JazzHands.Engine.Selection;
 using JazzHands.Render;
@@ -45,9 +47,25 @@ public static class AppServices
         services.AddSingleton<IUiDispatcher, WpfDispatcher>();
         services.AddSingleton<IFileDialogService, FileDialogService>();
         services.AddSingleton<IDialogService>(provider =>
-            new DialogService(provider.GetRequiredService<ImportViewModel>));
+            new DialogService(provider.GetRequiredService<ImportViewModel>, provider.GetRequiredService<ExportDialogViewModel>));
 
         services.AddTransient<ImportViewModel>();
+        services.AddTransient<ExportDialogViewModel>();
+
+        // The export queue: jobs from the dialog, the CLI with --attach and MCP alike, kept in
+        // %LOCALAPPDATA%JazzHandsqueue.db so they outlive the window. It renders on a device of
+        // its own, so an export never queues work in front of a preview present.
+        services.AddSingleton(_ =>
+        {
+            var queue = new ExportQueue();
+            queue.Start();
+            return queue;
+        });
+        services.AddSingleton<IExportService>(provider => provider.GetRequiredService<ExportQueue>());
+        services.AddSingleton(provider => new ExportQueuePanelViewModel(
+            provider.GetRequiredService<ISession>(),
+            provider.GetRequiredService<IExportService>(),
+            provider.GetRequiredService<IUiDispatcher>()));
 
         // The transport follows the session: every command rebuilds the mix it plays. It opens
         // the default sound card, or a silent clock on a machine with none, and plays nothing
@@ -96,7 +114,8 @@ public static class AppServices
             provider.GetRequiredService<ISession>(),
             provider.GetRequiredService<SelectionService>(),
             provider.GetRequiredService<IUiDispatcher>(),
-            provider.GetRequiredService<IPreviewEngine>()));
+            provider.GetRequiredService<IPreviewEngine>(),
+            provider.GetRequiredService<IDialogService>()));
 
         // The keymap: embedded defaults under %APPDATA%\JazzHands\keymap.json if there is one.
         services.AddSingleton(provider =>

@@ -81,7 +81,7 @@ public sealed record KeymapContext(Project Project, Flicks Playhead, IReadOnlyLi
 /// <c>%APPDATA%\JazzHands</c> with the same shape overrides them a key at a time. Every binding
 /// names a command from the registry, so a key does nothing the CLI cannot, and the arguments
 /// are the command's JSON arguments with a few values filled in at the moment of the press:
-/// <c>$playhead</c>, <c>$selection</c>, <c>$clipsAtPlayhead</c> and <c>$allClips</c>. A command
+/// <c>$playhead</c>, <c>$in</c>, <c>$out</c>, <c>$selection</c>, <c>$clipsAtPlayhead</c> and <c>$allClips</c>. A command
 /// that takes one clip given several runs once for each, as one undo step.
 /// </remarks>
 public sealed class Keymap
@@ -175,6 +175,16 @@ public sealed class Keymap
                 {
                     case "$playhead":
                         args[name] = JsonSerializer.SerializeToNode(context.Playhead, JazzJson.Options);
+                        continue;
+
+                    case "$in" or "$out":
+                        if (context.Project.ActiveSequence?.InOut is not { } marked)
+                        {
+                            nothing = "Mark an in point and an out point first, with I and O.";
+                            return null;
+                        }
+
+                        args[name] = JsonSerializer.SerializeToNode(word == "$in" ? marked.Start : marked.End, JazzJson.Options);
                         continue;
 
                     case "$selection" or "$clipsAtPlayhead" or "$allClips":

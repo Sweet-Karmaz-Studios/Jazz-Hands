@@ -22,11 +22,12 @@ public sealed partial class TimelineDocuments : ObservableObject
     private readonly SelectionService _selection;
     private readonly IUiDispatcher _ui;
     private readonly IPreviewEngine? _preview;
+    private readonly IDialogService? _dialogs;
     private TimelineViewModel? _active;
     private bool _syncQueued;
 
     /// <summary>Creates the tabs for the project as it is.</summary>
-    public TimelineDocuments(ISession session, SelectionService selection, IUiDispatcher ui, IPreviewEngine? preview = null)
+    public TimelineDocuments(ISession session, SelectionService selection, IUiDispatcher ui, IPreviewEngine? preview = null, IDialogService? dialogs = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(selection);
@@ -36,6 +37,7 @@ public sealed partial class TimelineDocuments : ObservableObject
         _selection = selection;
         _ui = ui;
         _preview = preview;
+        _dialogs = dialogs;
 
         _session.ProjectChanged += (_, _) => QueueSync();
         Sync();
@@ -106,7 +108,7 @@ public sealed partial class TimelineDocuments : ObservableObject
 
             if (at < 0)
             {
-                Documents.Insert(index, new TimelineViewModel(_session, id, _selection, _ui, _preview));
+                Documents.Insert(index, new TimelineViewModel(_session, id, _selection, _ui, _preview, _dialogs));
             }
             else if (at != index)
             {

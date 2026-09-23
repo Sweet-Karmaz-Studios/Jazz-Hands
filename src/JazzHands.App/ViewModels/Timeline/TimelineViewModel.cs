@@ -66,6 +66,7 @@ public sealed partial class TimelineViewModel : DocumentViewModel
     private readonly SelectionService _selection;
     private readonly IUiDispatcher _ui;
     private readonly IPreviewEngine? _preview;
+    private readonly IDialogService? _dialogs;
     private bool _refreshQueued;
     private bool _selectionQueued;
     private Flicks _playhead;
@@ -80,7 +81,8 @@ public sealed partial class TimelineViewModel : DocumentViewModel
         string sequenceId,
         SelectionService selection,
         IUiDispatcher ui,
-        IPreviewEngine? preview = null)
+        IPreviewEngine? preview = null,
+        IDialogService? dialogs = null)
         : base($"timeline:{sequenceId}", "Timeline")
     {
         ArgumentNullException.ThrowIfNull(session);
@@ -92,6 +94,7 @@ public sealed partial class TimelineViewModel : DocumentViewModel
         _selection = selection;
         _ui = ui;
         _preview = preview;
+        _dialogs = dialogs;
         SequenceId = sequenceId;
 
         _session.ProjectChanged += (_, _) => QueueRefresh();
@@ -120,6 +123,12 @@ public sealed partial class TimelineViewModel : DocumentViewModel
 
     /// <summary>The track headers, in display order, kept by id from one snapshot to the next.</summary>
     public System.Collections.ObjectModel.ObservableCollection<TrackHeaderViewModel> Headers { get; } = [];
+
+    /// <summary>The Quick Trim panel, when this sequence is a Quick Trim; null otherwise.</summary>
+    public QuickTrimViewModel? QuickTrim { get; private set; }
+
+    /// <summary>True when the Quick Trim panel shows.</summary>
+    public bool IsQuickTrim => QuickTrim is not null;
 
     /// <summary>True while playback runs, which is when the view follows the playhead.</summary>
     public bool IsPlaying { get; private set; }
@@ -323,6 +332,7 @@ public sealed partial class TimelineViewModel : DocumentViewModel
         Geometry = Geometry with { VerticalOffset = Math.Clamp(Geometry.VerticalOffset, 0.0, VerticalMaximum) };
 
         UpdateHeaders();
+        UpdateQuickTrim(project);
 
         OnPropertyChanged(nameof(Content));
         OnPropertyChanged(nameof(ScrollMaximum));
@@ -348,6 +358,27 @@ public sealed partial class TimelineViewModel : DocumentViewModel
         Selected = selected;
         OnPropertyChanged(nameof(Selected));
         Invalidate(TimelineLayers.Selection | TimelineLayers.Markers);
+    }
+
+    private void UpdateQuickTrim(Project project)
+    {
+        bool wasQuickTrim = QuickTrim is not null;
+
+        if (Content.Sequence.QuickTrim is null)
+        {
+            QuickTrim = null;
+        }
+        else
+        {
+            QuickTrim ??= new QuickTrimViewModel(this, _dialogs);
+            QuickTrim.Update(project, Content.Sequence);
+        }
+
+        if (wasQuickTrim != QuickTrim is not null)
+        {
+            OnPropertyChanged(nameof(QuickTrim));
+            OnPropertyChanged(nameof(IsQuickTrim));
+        }
     }
 
     private bool IsMarker(string id) =>

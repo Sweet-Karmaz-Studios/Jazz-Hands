@@ -35,7 +35,7 @@ public sealed class AddMediaHandler : ICommandHandler<AddMediaCommand>
         MediaImporter importer = MediaServices.Importer(context);
 
         ImmutableArray<ImportSource> sources = MediaImporter.Expand(
-            command.Paths.Select(path => ProjectPaths.Resolve(context.ProjectPath, path)),
+            command.Paths.Select(path => HandlerHelp.Resolve(context, path)),
             command.Recursive);
 
         if (sources.IsEmpty)
@@ -75,7 +75,7 @@ public sealed class AddMediaHandler : ICommandHandler<AddMediaCommand>
 
                 MediaItem item = imported.Item with
                 {
-                    RelativePath = ProjectPaths.Store(context.ProjectPath, imported.Item.RelativePath),
+                    RelativePath = HandlerHelp.Store(context, imported.Item.RelativePath),
                 };
 
                 updated = updated.WithMedia(item);
@@ -229,7 +229,7 @@ public sealed class RelinkMediaHandler : ICommandHandler<RelinkMediaCommand>
         ArgumentNullException.ThrowIfNull(context);
 
         MediaItem item = MediaServices.Require(project, command.MediaId);
-        string full = ProjectPaths.Resolve(context.ProjectPath, command.Path);
+        string full = HandlerHelp.Resolve(context, command.Path);
 
         if (!File.Exists(full))
         {
@@ -266,7 +266,7 @@ public sealed class RelinkMediaHandler : ICommandHandler<RelinkMediaCommand>
 
         return project.WithMedia(item with
         {
-            RelativePath = ProjectPaths.Store(context.ProjectPath, full),
+            RelativePath = HandlerHelp.Store(context, full),
             Hash = imported.Item.Hash,
             Info = imported.Item.Info,
             Duration = command.Force ? imported.Item.Duration : item.Duration,
@@ -301,7 +301,7 @@ public sealed class ReprobeMediaHandler : ICommandHandler<ReprobeMediaCommand>
 
         foreach (MediaItem item in items)
         {
-            string full = ProjectPaths.Resolve(context.ProjectPath, item.RelativePath);
+            string full = HandlerHelp.Resolve(context, item.RelativePath);
 
             if (!File.Exists(full))
             {

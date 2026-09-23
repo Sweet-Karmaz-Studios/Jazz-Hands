@@ -104,7 +104,7 @@ public sealed unsafe class Prober
             codecName,
             codecLongName,
             profile,
-            FromStreamTime(stream->duration, stream->time_base),
+            StreamDuration(stream, tags),
             FromStreamTime(stream->start_time, stream->time_base),
             timeBase,
             parameters->bit_rate,
@@ -508,6 +508,55 @@ public sealed unsafe class Prober
     private static Flicks FromContainerTime(long value) => value == ffmpeg.AV_NOPTS_VALUE
         ? Flicks.Zero
         : Flicks.FromTimebase(value, 1, ffmpeg.AV_TIME_BASE);
+
+    /// <summary>
+    /// How long a stream runs: its own duration, or for Matroska, which leaves that unset, the
+    /// <c>DURATION</c> tag its muxer writes per stream.
+    /// </summary>
+    /// <remarks>
+    /// Without it every stream of an MKV reported zero, and anything that needed the picture's
+    /// length rather than the container's (which is the longest stream's, usually the sound's)
+    /// had nothing to go on.
+    /// </remarks>
+    private static Flicks StreamDuration(AVStream* stream, IReadOnlyDictionary<string, string> tags)
+    {
+        Flicks own = FromStreamTime(stream->duration, stream->time_base);
+        return own > Flicks.Zero || tags.GetValueOrDefault("DURATION") is not { } tag
+            ? own
+            : ParseMatroskaDuration(tag) ?? Flicks.Zero;
+    }
+
+    /// <summary>Reads a Matroska <c>DURATION</c> tag, <c>HH:MM:SS.nnnnnnnnn</c>, exactly.</summary>
+    internal static Flicks? ParseMatroskaDuration(string text)
+    {
+        string[] parts = text.Trim().Split(':');
+        if (parts.Length != 3
+            || !long.TryParse(parts[0], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out long hours)
+            || !long.TryParse(parts[1], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out long minutes))
+        {
+            return null;
+        }
+
+        string[] seconds = parts[2].Split('.');
+        if (seconds.Length is < 1 or > 2
+            || !long.TryParse(seconds[0], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out long whole))
+        {
+            return null;
+        }
+
+        long nanoseconds = 0;
+        if (seconds.Length == 2)
+        {
+            string digits = seconds[1].Length > 9 ? seconds[1][..9] : seconds[1].PadRight(9, '0');
+            if (!long.TryParse(digits, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out nanoseconds))
+            {
+                return null;
+            }
+        }
+
+        long totalSeconds = (((hours * 60) + minutes) * 60) + whole;
+        return new Flicks(totalSeconds * Flicks.PerSecond) + Flicks.FromTimebase(nanoseconds, 1, 1_000_000_000);
+    }
 
     private static Flicks FromStreamTime(long value, AVRational timeBase) =>
         value == ffmpeg.AV_NOPTS_VALUE || timeBase.den <= 0

@@ -122,13 +122,13 @@ public sealed class SetTrimSegmentsHandler : ICommandHandler<SetTrimSegmentsComm
         ArgumentNullException.ThrowIfNull(context);
 
         (Sequence sequence, MediaItem media) = TrimHelp.Require(project, command.SequenceId);
-        ImmutableArray<TimeRange> segments = QuickTrimOps.Normalize(command.Keep, media.Duration, TrimHelp.Rate(project, sequence));
+        ImmutableArray<TimeRange> segments = QuickTrimOps.Normalize(command.Keep, QuickTrimOps.Length(media), TrimHelp.Rate(project, sequence));
 
         if (segments.IsEmpty && !command.Keep.IsEmpty)
         {
             throw new CommandException(
                 "outside-media",
-                $"None of those stretches is inside '{media.Name}', which runs {Timecode.FormatClock(media.Duration)}.");
+                $"None of those stretches is inside '{media.Name}', which runs {Timecode.FormatClock(QuickTrimOps.Length(media))}.");
         }
 
         return TrimHelp.Apply(project, sequence, media, segments, context);
@@ -148,15 +148,15 @@ public sealed class AddTrimSegmentHandler : ICommandHandler<AddTrimSegmentComman
         (Sequence sequence, MediaItem media) = TrimHelp.Require(project, command.SequenceId);
         TimeRange range = TrimHelp.Range(command.In, command.Out);
 
-        if (range.Start >= media.Duration)
+        if (range.Start >= QuickTrimOps.Length(media))
         {
             throw new CommandException(
                 "outside-media",
-                $"'{media.Name}' runs {Timecode.FormatClock(media.Duration)}; there is nothing at {Timecode.FormatClock(range.Start)} to keep.");
+                $"'{media.Name}' runs {Timecode.FormatClock(QuickTrimOps.Length(media))}; there is nothing at {Timecode.FormatClock(range.Start)} to keep.");
         }
 
         ImmutableArray<TimeRange> segments = QuickTrimOps.Keep(
-            QuickTrimOps.Segments(sequence), range, media.Duration, TrimHelp.Rate(project, sequence));
+            QuickTrimOps.Segments(sequence), range, QuickTrimOps.Length(media), TrimHelp.Rate(project, sequence));
 
         return TrimHelp.Apply(project, sequence, media, segments, context);
     }
@@ -174,7 +174,7 @@ public sealed class RemoveTrimRangeHandler : ICommandHandler<RemoveTrimRangeComm
 
         (Sequence sequence, MediaItem media) = TrimHelp.Require(project, command.SequenceId);
         ImmutableArray<TimeRange> segments = QuickTrimOps.Cut(
-            QuickTrimOps.Segments(sequence), TrimHelp.Range(command.In, command.Out), media.Duration, TrimHelp.Rate(project, sequence));
+            QuickTrimOps.Segments(sequence), TrimHelp.Range(command.In, command.Out), QuickTrimOps.Length(media), TrimHelp.Rate(project, sequence));
 
         return TrimHelp.Apply(project, sequence, media, segments, context);
     }

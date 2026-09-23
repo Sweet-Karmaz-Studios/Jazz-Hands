@@ -181,8 +181,11 @@ public sealed class CacheManager : IDisposable
             foreach (string table in new[] { "probe", "thumbs", "waveform", "keyframes" })
             {
                 using SqliteCommand command = _connection.CreateCommand();
-                command.CommandText = $"DELETE FROM {table} WHERE hash = $hash";
+                // A probe is kept under the hash and the version of the prober that made it
+                // (hash#probe2). Hashes are hex, so the prefix needs no escaping.
+                command.CommandText = $"DELETE FROM {table} WHERE hash = $hash OR hash LIKE $versioned";
                 command.Parameters.AddWithValue("$hash", hash);
+                command.Parameters.AddWithValue("$versioned", hash + "#%");
                 command.ExecuteNonQuery();
             }
         }

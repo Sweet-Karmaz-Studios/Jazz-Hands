@@ -166,7 +166,7 @@ public static class QuickTrimOps
             Settings: settings,
             QuickTrim: new QuickTrim(media.Id));
 
-        return Layout(sequence, media, Normalize([new TimeRange(Flicks.Zero, media.Duration)], media.Duration, rate), newId);
+        return Layout(sequence, media, Normalize([new TimeRange(Flicks.Zero, Length(media))], Length(media), rate), newId);
     }
 
     /// <summary>
@@ -239,6 +239,20 @@ public static class QuickTrimOps
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// How long there is to trim: the picture's length, not the container's.
+    /// </summary>
+    /// <remarks>
+    /// A recording's sound often runs a packet or two past its last picture, and the container
+    /// reports the longer of them. Rounded to the frame grid, that extra 21 ms of an OBS file is
+    /// a frame that does not exist.
+    /// </remarks>
+    public static Flicks Length(MediaItem media)
+    {
+        ArgumentNullException.ThrowIfNull(media);
+        return VideoStream(media) is { Duration.Value: > 0 } video ? video.Duration : media.Duration;
     }
 
     /// <summary>The track the picture is on: the lowest video track.</summary>

@@ -1,0 +1,153 @@
+<Window x:Class="JazzHands.App.Views.Export.ExportWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:JazzHands.App.ViewModels.Export"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        d:DataContext="{d:DesignInstance vm:ExportDialogViewModel}"
+        Title="{Binding Heading, Mode=OneWay}"
+        Height="560"
+        Width="640"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Background="{DynamicResource Brush.Background.Panel}"
+        Foreground="{DynamicResource Brush.Text.Primary}">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="Visible" />
+    </Window.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="100" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+        <TextBlock Grid.Row="0" Grid.Column="0" Text="File" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" />
+        <TextBox Grid.Row="0"
+                 Grid.Column="1"
+                 Text="{Binding OutputPath, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                 Background="{DynamicResource Brush.Background.Input}"
+                 Foreground="{DynamicResource Brush.Text.Primary}"
+                 CaretBrush="{DynamicResource Brush.Text.Primary}"
+                 BorderBrush="{DynamicResource Brush.Border}"
+                 Padding="4,2"
+                 AutomationProperties.Name="Output file" />
+        <Button Grid.Row="0"
+                Grid.Column="2"
+                Margin="8,0,0,0"
+                Style="{StaticResource Button.Text}"
+                Content="Browse..."
+                Command="{Binding BrowseCommand, Mode=OneWay}"
+                AutomationProperties.Name="Browse for the output file" />
+
+        <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,12,0,0" Text="Preset" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" />
+        <ComboBox Grid.Row="1"
+                  Grid.Column="1"
+                  Grid.ColumnSpan="2"
+                  Margin="0,12,0,0"
+                  ItemsSource="{Binding Presets, Mode=OneWay}"
+                  SelectedItem="{Binding Preset, Mode=TwoWay}"
+                  AutomationProperties.Name="Preset">
+            <ComboBox.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel>
+                        <TextBlock Text="{Binding Name, Mode=OneWay}" />
+                        <TextBlock Text="{Binding Description, Mode=OneWay}" FontSize="{DynamicResource Text.Caption}" Foreground="{DynamicResource Brush.Text.Secondary}" />
+                    </StackPanel>
+                </DataTemplate>
+            </ComboBox.ItemTemplate>
+        </ComboBox>
+
+        <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,12,0,0" Text="Mode" VerticalAlignment="Top" Foreground="{DynamicResource Brush.Text.Secondary}" />
+        <StackPanel Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,12,0,0">
+            <ComboBox ItemsSource="{Binding Modes, Mode=OneWay}"
+                      SelectedItem="{Binding Mode, Mode=TwoWay}"
+                      HorizontalAlignment="Left"
+                      Width="160"
+                      AutomationProperties.Name="Mode" />
+            <TextBlock Margin="0,6,0,0"
+                       Text="{Binding ModeExplanation, Mode=OneWay}"
+                       TextWrapping="Wrap"
+                       FontSize="{DynamicResource Text.Caption}"
+                       Foreground="{DynamicResource Brush.Text.Secondary}" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,12,0,0">
+            <CheckBox Content="Move cuts to the nearest keyframe when copying"
+                      IsChecked="{Binding SnapToKeyframes, Mode=TwoWay}"
+                      Foreground="{DynamicResource Brush.Text.Primary}"
+                      AutomationProperties.Name="Snap to keyframes" />
+            <CheckBox Margin="0,4,0,0"
+                      Content="Only between the in and out points"
+                      IsChecked="{Binding UseInOut, Mode=TwoWay}"
+                      Foreground="{DynamicResource Brush.Text.Primary}"
+                      AutomationProperties.Name="Use in and out" />
+            <CheckBox Margin="0,4,0,0"
+                      Content="Encode through ffmpeg.exe (for checking an encoder problem)"
+                      IsChecked="{Binding UseExternalFfmpeg, Mode=TwoWay}"
+                      Foreground="{DynamicResource Brush.Text.Primary}"
+                      AutomationProperties.Name="Use external ffmpeg" />
+        </StackPanel>
+
+        <TextBlock Grid.Row="4"
+                   Grid.Column="0"
+                   Grid.ColumnSpan="3"
+                   Margin="0,16,0,0"
+                   Text="{Binding Summary, Mode=OneWay}"
+                   FontWeight="SemiBold"
+                   TextWrapping="Wrap" />
+
+        <!-- The planner's reasons, in its own words, or why nothing can be planned. -->
+        <Border Grid.Row="5"
+                Grid.Column="0"
+                Grid.ColumnSpan="3"
+                Margin="0,8,0,0"
+                Padding="8"
+                Background="{DynamicResource Brush.Background.Base}">
+            <StackPanel>
+                <TextBlock Text="Working it out..."
+                           Foreground="{DynamicResource Brush.Text.Secondary}"
+                           Visibility="{Binding IsPlanning, Converter={StaticResource Visible}, Mode=OneWay}" />
+                <TextBlock Text="{Binding Error, Mode=OneWay}"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource Brush.Warning}" />
+                <ItemsControl ItemsSource="{Binding Reasons, Mode=OneWay}" Focusable="False">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Mode=OneWay}"
+                                       Margin="0,0,0,4"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource Brush.Text.Secondary}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
+
+        <StackPanel Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,12,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Style="{StaticResource Button.Text}"
+                    Content="Cancel"
+                    IsCancel="True"
+                    Command="{Binding CancelCommand, Mode=OneWay}"
+                    AutomationProperties.Name="Cancel" />
+            <Button Style="{StaticResource Button.Text}"
+                    Margin="8,0,0,0"
+                    Content="Add to queue"
+                    IsDefault="True"
+                    Command="{Binding ExportCommand, Mode=OneWay}"
+                    AutomationProperties.Name="Add to the export queue" />
+        </StackPanel>
+    </Grid>
+</Window>

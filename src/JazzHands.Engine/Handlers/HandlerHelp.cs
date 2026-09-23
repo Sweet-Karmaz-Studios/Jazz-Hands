@@ -1,6 +1,8 @@
 using JazzHands.Core.Commands;
 using JazzHands.Core.Model;
+using JazzHands.Core.Serialization;
 using JazzHands.Core.Time;
+using JazzHands.Engine.Commands;
 
 namespace JazzHands.Engine.Handlers;
 
@@ -60,6 +62,20 @@ internal static class HandlerHelp
                 $"Track '{track.Name}' is locked. Unlock it with 'jazz track set-lock {track.Id} false'.");
         }
     }
+
+    /// <summary>
+    /// A path someone typed, as a full path: against the project's folder, or the working folder
+    /// for a project that has never been saved.
+    /// </summary>
+    internal static string Resolve(HandlerContext context, string path) =>
+        context.ProjectPath.Length == 0 ? Path.GetFullPath(path) : ProjectPaths.Resolve(context.ProjectPath, path);
+
+    /// <summary>
+    /// A media path as the project keeps it: relative to the project file, or absolute for a
+    /// project that has never been saved, which saving then makes relative.
+    /// </summary>
+    internal static string Store(HandlerContext context, string path) =>
+        context.ProjectPath.Length == 0 ? Path.GetFullPath(path) : ProjectPaths.Store(context.ProjectPath, path);
 
     /// <summary>An identifier the caller supplied, checked, or a fresh one.</summary>
     internal static string IdOr(string? given) => given is { Length: > 0 } ? CommandValues.ParseId(given) : Id.New();

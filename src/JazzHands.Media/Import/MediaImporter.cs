@@ -219,10 +219,20 @@ public sealed class MediaImporter(CacheManager? cache = null, Prober? prober = n
         return new ImportedMedia(item, first, Warnings(item, info), fromCache);
     }
 
+    /// <summary>
+    /// What a probe is cached under: the content hash and the version of what the probe says.
+    /// </summary>
+    /// <remarks>
+    /// Bumped whenever the prober learns something new about files it has already seen, so a
+    /// probe cached before is taken again rather than trusted. Version 2 reads Matroska's per
+    /// stream DURATION tag.
+    /// </remarks>
+    internal static string ProbeKey(string hash) => $"{hash}#probe2";
+
     /// <summary>Probes a file, using the cache when it has seen this content before.</summary>
     private (MediaInfo Info, bool FromCache) ProbeWithCache(string path, string hash)
     {
-        if (Cache?.GetProbe(hash) is { } cached)
+        if (Cache?.GetProbe(ProbeKey(hash)) is { } cached)
         {
             try
             {
@@ -243,7 +253,7 @@ public sealed class MediaImporter(CacheManager? cache = null, Prober? prober = n
         MediaProbe probe = _prober.Probe(path);
         MediaInfo info = Describe(probe);
 
-        Cache?.PutProbe(hash, JsonSerializer.Serialize(info, JazzJson.Options));
+        Cache?.PutProbe(ProbeKey(hash), JsonSerializer.Serialize(info, JazzJson.Options));
 
         return (info, false);
     }

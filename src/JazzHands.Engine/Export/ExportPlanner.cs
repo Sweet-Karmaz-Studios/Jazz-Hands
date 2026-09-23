@@ -114,7 +114,7 @@ public static class ExportPlanner
                 {
                     throw new CommandException(
                         "cut-not-on-keyframe",
-                        $"{where} A stream copy can only cut on keyframes. Pass --snap-to-keyframes to move the cuts there, or export with --mode encode to cut exactly.");
+                        $"{where} A stream copy can only cut on keyframes. Let the cuts move there (--snap-to-keyframes; jazz trim does unless --exact), or export with --mode encode to cut exactly.");
                 }
 
                 reasons.Add($"{where} Encoding so every cut lands exactly where it was put; ask for a copy with snapping to keep the source untouched.");
@@ -508,8 +508,8 @@ public static class ExportPlanner
         // The probe and the packet scan disagree about where a file ends by a rounding or two, so
         // anything within half a frame of the earlier of them is the end. No keyframe follows it,
         // so the copier takes every packet there is whatever the stretch says.
-        Flicks end = Flicks.Max(index.Duration, copy.Media.Duration);
-        Flicks endish = Flicks.Min(index.Duration, copy.Media.Duration) - (Flicks.FromFrames(1, rate) / 2);
+        Flicks end = Flicks.Min(index.Duration, copy.Media.Duration);
+        Flicks endish = end - (Flicks.FromFrames(1, rate) / 2);
         var result = new List<TimeRange>();
 
         foreach (TimeRange stretch in copy.Source)
