@@ -56,6 +56,9 @@ public partial class PreviewPanelView : UserControl
         Stage.MouseUp += OnStageMouseUp;
     }
 
+    /// <summary>The presenter while the view is loaded, for tests.</summary>
+    internal PreviewPresenter? Presenter => _presenter;
+
     /// <summary>The magnification a zoom setting means, in screen pixels per sequence pixel. Zero fits.</summary>
     internal static double Magnification(PreviewZoom zoom) => zoom switch
     {

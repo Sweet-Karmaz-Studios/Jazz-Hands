@@ -24,6 +24,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="JazzHands.App.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\JazzHands.Control\JazzHands.Control.csproj" />
     <ProjectReference Include="..\JazzHands.Engine\JazzHands.Engine.csproj" />
   </ItemGroup>

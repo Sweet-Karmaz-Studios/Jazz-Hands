@@ -244,6 +244,38 @@ No gaps.
 An underrun is the device running dry, which is a gap somebody hears. A starved block is one mixed
 before its source was decoded. Exit code 1 when there was an underrun.
 
+### `jazz perf playback <file>`
+
+Lays one file end to end until the run is covered and plays it through the playback engine, with
+the sound card's clock at zero monitor volume. Each frame is drawn into a panel-sized surface and
+waited for, as the preview panel's presenter does; only WPF taking the surface is left out. Counts
+the frames that were due and never shown.
+
+```bash
+jazz perf playback tests\corpus\hevc10_2160p60_5s.mp4 --minutes 5
+```
+
+```
+hevc10_2160p60_5s.mp4: 3840x2160 at 60 fps, 61 clips, on NVIDIA GeForce RTX 4090, clock from Speakers (USB DAC)
+  300.0 s, 17998 frames due, 17991 presented
+  dropped         7 (0.039%)
+  late            p50 0.6 ms, p99 4.5 ms after the frame was due
+  present         p99 7.51 ms for the blit and GPU wait
+  underruns       0
+  notices         none
+Inside the bar of 0.1%.
+```
+
+| Option | Meaning |
+|---|---|
+| `--minutes <m>` | How long to play. 5 by default. |
+| `--software` | Decode on the CPU, as CI does. |
+| `--panel <WxH>` | The surface each frame is drawn into. 2560x1440 by default. |
+| `--audible` | Play at full volume. |
+
+"Late" is how far into its frame interval each frame went up. Exit code 1 when more than 0.1% of
+the frames due were dropped.
+
 ## Generated verbs
 
 From Phase 05, every command and query in `CommandRegistry` is a `jazz` verb. Nothing in the CLI
@@ -389,6 +421,36 @@ jazz track set-volume trailer.jazz <track-id> --db -3
 Mic (audio, order 3)
   00:00:00:00 00:00:05:00 capture [linked, stream 2, gain -6 dB, fade in 0.5 s]
 ```
+
+### Playback
+
+The `playback` verbs drive the playhead of a running editor. A headless `jazz` process has no
+transport, so they refuse with `no-playback` until `--attach` arrives in Phase 25; they are here
+because every command is on every surface. The in and out points are the exception: they are
+sequence data, so they work headless given a time, and are undoable like any other edit.
+
+```bash
+jazz playback set-in trailer.jazz --at 00:00:04:00
+jazz playback set-out trailer.jazz --at 00:00:12:00
+jazz playback clear-in-out trailer.jazz
+```
+
+| Verb | Does |
+|---|---|
+| `playback play`, `pause`, `toggle`, `stop` | Stop goes back to where playback last started. Play on the last frame starts from the top. |
+| `playback seek <time>` | Moves the playhead; two seeks within 250 ms while stopped are a scrub. |
+| `playback step [--frames n]` | Pauses and moves by whole frames; negative steps back. |
+| `playback shuttle --rate r` | -32 to 32. Forward rates from 0.25 to 2 keep their pitch; others are silent. Past 2 the picture shows keyframes. |
+| `playback loop [on\|off]` | Loops over the in and out points, or the whole sequence. Leave the value out to flip it. |
+| `playback go-to <target>` | `start`, `end` (the last frame), `next-edit`, `prev-edit`, `next-marker`, `prev-marker`, `in`, `out`. Fails with `no-target` when there is nowhere to go. |
+| `playback set-quality <q>` | `full`, `half`, `quarter` or `auto` (Half while scrubbing or shuttling, Full 150 ms after). |
+| `playback set-in`, `set-out [--at t]` | The frame at the out point is inside the range. Default is the playhead. |
+| `playback clear-in-out` | Removes both. |
+| `playback state` | Where the playhead is, the rate, the quality asked for and in effect, loop, in and out, frames presented and dropped. |
+
+In the editor the same commands are on the keys: Space, J K L (holding K steps with J and L),
+Left and Right (Shift for ten frames), Up and Down for edits, Home and End, I and O (Shift to go
+to them), Ctrl+Shift+X to clear, Ctrl+L to loop, F11 for full screen on the other monitor.
 
 ## Coming in later phases
 
