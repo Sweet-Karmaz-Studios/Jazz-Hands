@@ -114,8 +114,10 @@ public static class ExportPresets
             return (Even(width), Even(height));
         }
 
+        // To the nearest even number, not down to one: 1920x1080 at 480 lines is 854 wide, as
+        // everyone writes it, where rounding down gives 852.
         double scale = (double)preset.MaxHeight / height;
-        return (Even((int)Math.Round(width * scale)), Even(preset.MaxHeight));
+        return (Math.Max(2, (int)Math.Round(width * scale / 2.0, MidpointRounding.AwayFromZero) * 2), Even(preset.MaxHeight));
     }
 
     private static int Even(int value) => Math.Max(2, value & ~1);

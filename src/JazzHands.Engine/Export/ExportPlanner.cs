@@ -504,20 +504,26 @@ public static class ExportPlanner
     private static ImmutableArray<TimeRange> Snap(CopySource copy, KeyframeIndex index, List<KeyframeSnap> snaps)
     {
         Rational rate = copy.Video.FrameRate ?? Rational.Fps30;
+
+        // The probe and the packet scan disagree about where a file ends by a rounding or two, so
+        // anything within half a frame of the earlier of them is the end. No keyframe follows it,
+        // so the copier takes every packet there is whatever the stretch says.
         Flicks end = Flicks.Max(index.Duration, copy.Media.Duration);
+        Flicks endish = Flicks.Min(index.Duration, copy.Media.Duration) - (Flicks.FromFrames(1, rate) / 2);
         var result = new List<TimeRange>();
 
         foreach (TimeRange stretch in copy.Source)
         {
+            bool toTheEnd = stretch.End >= endish;
             Flicks start = Nearest(index, stretch.Start, preferLater: false, fileEnd: null);
-            Flicks stop = stretch.End >= end ? end : Nearest(index, stretch.End, preferLater: true, fileEnd: end);
+            Flicks stop = toTheEnd ? stretch.End : Nearest(index, stretch.End, preferLater: true, fileEnd: end);
 
             if (start != stretch.Start)
             {
                 snaps.Add(new KeyframeSnap("start", stretch.Start, start, start.ToFrames(rate, RoundingMode.Nearest)));
             }
 
-            if (stop != stretch.End && stretch.End < end)
+            if (stop != stretch.End && !toTheEnd)
             {
                 snaps.Add(new KeyframeSnap("end", stretch.End, stop, stop.ToFrames(rate, RoundingMode.Nearest)));
             }
