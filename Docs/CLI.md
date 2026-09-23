@@ -488,6 +488,60 @@ In the editor the same commands are on the keys: Space, J K L (holding K steps w
 Left and Right (Shift for ten frames), Up and Down for edits, Home and End, I and O (Shift to go
 to them), Ctrl+Shift+X to clear, Ctrl+L to loop, F11 for full screen on the other monitor.
 
+### Selection
+
+The selection is what the editor is pointing at: clips and markers of the active sequence. It is
+shared by the timeline, the inspector and every remote client, so a script can select and then
+act the way a person clicks and then presses a key. It is not part of the project, is never
+saved and is not undone. Headless it lasts as long as the process, which makes it useful in a
+`jazz apply` script now and with `--attach` from Phase 25.
+
+```bash
+jazz selection set trailer.jazz <clip-id>,<clip-id>
+jazz selection set trailer.jazz <marker-id> --mode add
+jazz selection get trailer.jazz
+jazz clip nudge trailer.jazz <clip-id>,<clip-id> --frames -2
+```
+
+| Verb | Does |
+|---|---|
+| `selection set <ids> [--mode m]` | `replace` (the default), `add`, `remove` or `toggle`. Selecting an id that is not a clip or marker of the active sequence is refused with `not-found`; removing one is not. |
+| `selection clear` | Selects nothing. |
+| `selection get` | `{"ids": [...], "sequenceId": "..."}`, in the order things were selected; `ids` is left out when nothing is. |
+| `clip nudge <ids> [--frames n]` | Moves the clips n frames later (negative earlier), keeping their tracks and their spacing. All or nothing: `before-start`, `would-overlap` or a locked track refuses the lot. |
+
+Ids are taken literally. It is the timeline that widens a click to a clip's linked sound; a
+script that wants both names both.
+
+### Keys
+
+The editor's editing keys are bindings to these same commands, kept in a keymap. The defaults:
+
+| Keys | Sends |
+|---|---|
+| Delete, Shift+Delete | `clip.remove` for each selected clip, as one undo step; Shift closes the gap |
+| Ctrl+Z, Ctrl+Y (or Ctrl+Shift+Z) | `undo`, `redo` |
+| Ctrl+D | `clip.duplicate` for each selected clip |
+| `,` `.` (Shift for ten) | `clip.nudge` the selection by a frame |
+| I, O | `playback.set-in`, `playback.set-out` at the playhead |
+| Ctrl+K | `clip.split` at the playhead: the selected clips under it, or every clip under it when none is selected there |
+| Ctrl+A | `selection.set` to every clip |
+
+A `keymap.json` in `%APPDATA%\JazzHands` changes them a key at a time. Each binding names a
+command and its arguments as JSON-RPC would send them, with `$selection`, `$playhead`,
+`$clipsAtPlayhead` and `$allClips` filled in when the key is pressed; a binding with an empty
+command frees the key. Bindings that do not parse or name a command that does not exist are
+skipped and logged.
+
+```json
+{
+  "bindings": [
+    { "keys": "X", "command": "clip.remove", "args": { "clipId": "$selection", "ripple": true } },
+    { "keys": "Delete", "command": "" }
+  ]
+}
+```
+
 ## Coming in later phases
 
 | Phase | Adds |
