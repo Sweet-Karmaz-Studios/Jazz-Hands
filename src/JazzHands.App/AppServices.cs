@@ -98,6 +98,23 @@ public static class AppServices
             provider.GetRequiredService<IUiDispatcher>(),
             provider.GetRequiredService<IPreviewEngine>()));
 
+        // The keymap: embedded defaults under %APPDATA%\JazzHands\keymap.json if there is one.
+        services.AddSingleton(provider =>
+        {
+            Input.Keymap keymap = Input.Keymap.Load(null, out IReadOnlyList<string> problems);
+            foreach (string problem in problems)
+            {
+                Serilog.Log.Warning("Keymap: {Problem}", problem);
+            }
+
+            IPreviewEngine preview = provider.GetRequiredService<IPreviewEngine>();
+            return new Input.KeymapService(
+                provider.GetRequiredService<ISession>(),
+                provider.GetRequiredService<SelectionService>(),
+                () => preview.Position,
+                keymap);
+        });
+
         services.AddSingleton<MediaPanelViewModel>();
         services.AddSingleton<MetersPanelViewModel>(provider => new MetersPanelViewModel(
             provider.GetRequiredService<IMeterFeed>(),

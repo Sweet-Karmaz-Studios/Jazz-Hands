@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using JazzHands.App.Input;
 using JazzHands.App.Services;
 using JazzHands.App.Shell;
 using JazzHands.App.ViewModels.Audio;
@@ -34,7 +35,8 @@ public sealed partial class MainViewModel : ObservableObject
         IUiDispatcher ui,
         MetersPanelViewModel? meters = null,
         PreviewPanelViewModel? preview = null,
-        TimelineDocuments? timelines = null)
+        TimelineDocuments? timelines = null,
+        KeymapService? keys = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(media);
@@ -45,6 +47,10 @@ public sealed partial class MainViewModel : ObservableObject
         Meters = meters;
         Preview = preview;
         Timelines = timelines;
+        Keys = keys;
+
+        // A key that did nothing says why where the person is looking: the timeline in front.
+        keys?.Message += (_, message) => ui.Post(() => Timelines?.ActiveTimeline?.Status = message);
         Panels = [media];
 
         if (meters is not null)
@@ -72,6 +78,9 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>The timeline tabs, one per sequence, when the window has them.</summary>
     public TimelineDocuments? Timelines { get; }
+
+    /// <summary>The key bindings, which the window offers every key to before the preview.</summary>
+    public KeymapService? Keys { get; }
 
     /// <summary>Every dockable panel, in the order they were registered.</summary>
     public ObservableCollection<ToolViewModel> Panels { get; }

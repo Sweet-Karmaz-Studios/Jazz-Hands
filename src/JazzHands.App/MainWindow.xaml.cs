@@ -36,8 +36,17 @@ public partial class MainWindow : Window
         ArgumentNullException.ThrowIfNull(e);
 
         Key key = e.Key == Key.System ? e.SystemKey : e.Key;
+        bool swallowed = Swallowed(e.OriginalSource as DependencyObject, key);
 
-        if (_model.Preview is { } preview && !Swallowed(e.OriginalSource as DependencyObject, key)
+        // The keymap first (editing: Delete, Ctrl+Z, Ctrl+K and the rest), then the preview's
+        // transport keys, which are not in the keymap because JKL needs key-up as well.
+        if (_model.Keys is { } keys && !swallowed && keys.TryHandle(key, Keyboard.Modifiers, e.IsRepeat))
+        {
+            e.Handled = true;
+            return;
+        }
+
+        if (_model.Preview is { } preview && !swallowed
             && preview.KeyDown(key, Keyboard.Modifiers, e.IsRepeat))
         {
             e.Handled = true;

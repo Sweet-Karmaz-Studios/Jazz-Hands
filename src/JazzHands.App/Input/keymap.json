@@ -1,0 +1,19 @@
+{
+  "comment": "Default key bindings. Each names a jazz command and its arguments as JSON-RPC would send them. $selection is the selected clips (a command that takes one clip runs once per clip, as one undo step), $playhead the playhead, $clipsAtPlayhead the selected clips under the playhead or, with none selected there, every clip under it. Put a keymap.json with the same shape in %APPDATA%/JazzHands to change a key; a binding there with an empty command frees the key.",
+  "bindings": [
+    { "keys": "Delete", "command": "clip.remove", "args": { "clipId": "$selection" } },
+    { "keys": "Shift+Delete", "command": "clip.remove", "args": { "clipId": "$selection", "ripple": true } },
+    { "keys": "Ctrl+Z", "command": "undo", "repeat": true },
+    { "keys": "Ctrl+Y", "command": "redo", "repeat": true },
+    { "keys": "Ctrl+Shift+Z", "command": "redo", "repeat": true },
+    { "keys": "Ctrl+D", "command": "clip.duplicate", "args": { "clipId": "$selection" } },
+    { "keys": ",", "command": "clip.nudge", "args": { "clipIds": "$selection", "frames": -1 }, "repeat": true },
+    { "keys": ".", "command": "clip.nudge", "args": { "clipIds": "$selection", "frames": 1 }, "repeat": true },
+    { "keys": "Shift+,", "command": "clip.nudge", "args": { "clipIds": "$selection", "frames": -10 }, "repeat": true },
+    { "keys": "Shift+.", "command": "clip.nudge", "args": { "clipIds": "$selection", "frames": 10 }, "repeat": true },
+    { "keys": "I", "command": "playback.set-in" },
+    { "keys": "O", "command": "playback.set-out" },
+    { "keys": "Ctrl+K", "command": "clip.split", "args": { "clipId": "$clipsAtPlayhead", "at": "$playhead" } },
+    { "keys": "Ctrl+A", "command": "selection.set", "args": { "ids": "$allClips" } }
+  ]
+}

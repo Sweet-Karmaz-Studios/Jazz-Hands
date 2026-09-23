@@ -28,6 +28,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The default key bindings. A keymap.json in %APPDATA%\JazzHands overrides them key by key. -->
+    <EmbeddedResource Include="Input\keymap.json" LogicalName="JazzHands.App.Input.keymap.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\JazzHands.Control\JazzHands.Control.csproj" />
     <ProjectReference Include="..\JazzHands.Engine\JazzHands.Engine.csproj" />
   </ItemGroup>
