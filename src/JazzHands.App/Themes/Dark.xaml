@@ -28,6 +28,12 @@
     <SolidColorBrush x:Key="Brush.Error" Color="#FFE05C5C" />
     <SolidColorBrush x:Key="Brush.Success" Color="#FF5CC85C" />
 
+    <!-- The preview: the picture sits on true black, and its guides are translucent so they read
+         over any footage without hiding it. -->
+    <SolidColorBrush x:Key="Brush.Preview.Background" Color="#FF000000" />
+    <SolidColorBrush x:Key="Brush.Preview.Guide" Color="#B0FFFFFF" />
+    <SolidColorBrush x:Key="Brush.Preview.TitleSafe" Color="#B0E0A33C" />
+
     <!--
         The bin's colour labels. The names are what media.set takes on the command line, so the
         palette here and CommandValues.ParseColor have to agree.

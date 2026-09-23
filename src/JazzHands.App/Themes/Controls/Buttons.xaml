@@ -1,0 +1,161 @@
+<!--
+    Icon and toggle buttons for the transport bar and the panel toolbars. A default WPF button is
+    a grey gradient with a blue glow, which on a dark surface reads as a mistake; these are flat,
+    show hover and pressed states, keep a visible focus ring for the keyboard, and take the accent
+    colour when a toggle is on.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Style x:Key="FocusVisual.Ring">
+        <Setter Property="Control.Template">
+            <Setter.Value>
+                <ControlTemplate>
+                    <Rectangle Margin="-1" Stroke="{DynamicResource Brush.Accent}" StrokeThickness="1" RadiusX="3" RadiusY="3" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- A glyph from Segoe Fluent Icons on a flat square. The name for screen readers comes from
+         AutomationProperties.Name, which every use sets. -->
+    <Style x:Key="Button.Icon" TargetType="ButtonBase">
+        <Setter Property="FontFamily" Value="{DynamicResource Font.Icon}" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Width" Value="28" />
+        <Setter Property="Height" Value="28" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusVisual.Ring}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ButtonBase">
+                    <!-- A TextBlock rather than a ContentPresenter: the implicit TextBlock style in
+                         Dark.xaml sets the UI font on any TextBlock a presenter makes, which turns
+                         every icon glyph into a missing character box. -->
+                    <Border x:Name="Chrome" Background="{TemplateBinding Background}" CornerRadius="3">
+                        <TextBlock HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Margin="{TemplateBinding Padding}"
+                                   Text="{Binding Content, RelativeSource={RelativeSource TemplatedParent}, Mode=OneWay}"
+                                   FontFamily="{TemplateBinding FontFamily}"
+                                   FontSize="{TemplateBinding FontSize}"
+                                   Foreground="{TemplateBinding Foreground}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Brush.Background.Hover}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Brush.Background.Selected}" />
+                        </Trigger>
+                        <Trigger Property="ToggleButton.IsChecked" Value="True">
+                            <Setter Property="Foreground" Value="{DynamicResource Brush.Accent}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Disabled}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- The same, with a short word instead of a glyph, for things no icon says clearly. -->
+    <Style x:Key="Button.Text" TargetType="ButtonBase" BasedOn="{StaticResource Button.Icon}">
+        <Setter Property="FontFamily" Value="{DynamicResource Font.Ui}" />
+        <Setter Property="FontSize" Value="{DynamicResource Text.Caption}" />
+        <Setter Property="Width" Value="Auto" />
+        <Setter Property="MinWidth" Value="28" />
+        <Setter Property="Padding" Value="6,0" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
+    </Style>
+
+    <!-- A compact dark combo box: the default one is white. -->
+    <Style x:Key="ComboBox.Compact" TargetType="ComboBox">
+        <Setter Property="FontFamily" Value="{DynamicResource Font.Ui}" />
+        <Setter Property="FontSize" Value="{DynamicResource Text.Caption}" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+        <Setter Property="Height" Value="24" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusVisual.Ring}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBox">
+                    <Grid>
+                        <ToggleButton x:Name="Toggle"
+                                      Focusable="False"
+                                      IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                      ClickMode="Press">
+                            <ToggleButton.Template>
+                                <ControlTemplate TargetType="ToggleButton">
+                                    <Border x:Name="Chrome"
+                                            Background="{DynamicResource Brush.Background.Input}"
+                                            BorderBrush="{DynamicResource Brush.Border}"
+                                            BorderThickness="1"
+                                            CornerRadius="3">
+                                        <Path HorizontalAlignment="Right"
+                                              VerticalAlignment="Center"
+                                              Margin="0,0,7,0"
+                                              Data="M 0 0 L 4 4 L 8 0"
+                                              Stroke="{DynamicResource Brush.Text.Secondary}"
+                                              StrokeThickness="1.2" />
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource Brush.Border.Strong}" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </ToggleButton.Template>
+                        </ToggleButton>
+                        <ContentPresenter Margin="8,0,22,0"
+                                          VerticalAlignment="Center"
+                                          IsHitTestVisible="False"
+                                          Content="{TemplateBinding SelectionBoxItem}"
+                                          ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" />
+                        <Popup x:Name="PART_Popup"
+                               Placement="Bottom"
+                               AllowsTransparency="True"
+                               Focusable="False"
+                               IsOpen="{TemplateBinding IsDropDownOpen}"
+                               PopupAnimation="None">
+                            <Border MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                    Background="{DynamicResource Brush.Background.Raised}"
+                                    BorderBrush="{DynamicResource Brush.Border.Strong}"
+                                    BorderThickness="1">
+                                <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained" />
+                            </Border>
+                        </Popup>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="ItemContainerStyle">
+            <Setter.Value>
+                <Style TargetType="ComboBoxItem">
+                    <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+                    <Setter Property="Padding" Value="8,4" />
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ComboBoxItem">
+                                <Border x:Name="Row" Background="Transparent" Padding="{TemplateBinding Padding}">
+                                    <ContentPresenter />
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsHighlighted" Value="True">
+                                        <Setter TargetName="Row" Property="Background" Value="{DynamicResource Brush.Background.Hover}" />
+                                    </Trigger>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter TargetName="Row" Property="Background" Value="{DynamicResource Brush.Background.Selected}" />
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+</ResourceDictionary>

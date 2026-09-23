@@ -42,7 +42,7 @@ namespace JazzHands.Engine.Playback;
 /// Until the compositor arrives in Phase 10 this shows one layer: the topmost enabled clip on a
 /// visible video track, fitted to the frame the way its media asks.
 /// </remarks>
-public sealed class PlaybackEngine : IPlaybackController, IDisposable
+public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
 {
     private static readonly double TicksPerMillisecond = Stopwatch.Frequency / 1000.0;
 
@@ -76,6 +76,10 @@ public sealed class PlaybackEngine : IPlaybackController, IDisposable
 
     // The composition thread's own state.
     private RenderKey _lastKey;
+    private RenderKey _prerolled;
+    private long _prerolledGeneration = -1;
+    private volatile bool _playWaiting;
+    private readonly ManualResetEventSlim _prerollSignal = new(false);
     private long _lastPlayingFrame = -1;
     private long _lastPlayingGeneration = -1;
     private long _lastEventTicks;
@@ -251,10 +255,14 @@ public sealed class PlaybackEngine : IPlaybackController, IDisposable
     /// <inheritdoc />
     public void Play()
     {
+        bool starting;
+
         lock (_controlGate)
         {
             Sequence? sequence = _snapshot.Project.ActiveSequence;
-            if (sequence is not null && _transport.State != TransportState.Playing)
+            starting = _transport.State != TransportState.Playing;
+
+            if (sequence is not null && starting)
             {
                 // Playing from the end, or from outside a loop, starts from the beginning of the
                 // range, which is what pressing play on a finished sequence means.
@@ -268,7 +276,15 @@ public sealed class PlaybackEngine : IPlaybackController, IDisposable
                     Interlocked.Increment(ref _seekGeneration);
                 }
             }
+        }
 
+        if (starting)
+        {
+            WaitForPreroll();
+        }
+
+        lock (_controlGate)
+        {
             if (_transport.Rate != 1.0)
             {
                 _transport.Rate = 1.0;
@@ -278,6 +294,44 @@ public sealed class PlaybackEngine : IPlaybackController, IDisposable
         }
 
         _wake.Set();
+    }
+
+    /// <summary>
+    /// Waits, briefly, until the frames after the playhead are decoded on the playhead decoder.
+    /// </summary>
+    /// <remarks>
+    /// The audio side already waits for its first second to be decoded before a play starts; this
+    /// is the same courtesy for the picture. Normally the composition thread did it while the
+    /// playhead sat still and this returns at once. After a seek straight into play it costs the
+    /// time to open a decoder and decode a handful of frames, which is better spent before the
+    /// clock starts than as a stutter after. Never more than 300 ms.
+    /// </remarks>
+    private void WaitForPreroll()
+    {
+        long generation = Interlocked.Read(ref _seekGeneration);
+        if (Interlocked.Read(ref _prerolledGeneration) == generation)
+        {
+            return;
+        }
+
+        _playWaiting = true;
+        _wake.Set();
+
+        long deadline = Stopwatch.GetTimestamp() + Ticks(TimeSpan.FromMilliseconds(300));
+        while (Interlocked.Read(ref _prerolledGeneration) != generation)
+        {
+            long left = deadline - Stopwatch.GetTimestamp();
+            if (left <= 0)
+            {
+                _log.Debug("Starting playback before the preroll finished");
+                break;
+            }
+
+            _prerollSignal.Wait(TimeSpan.FromMilliseconds(left / TicksPerMillisecond));
+            _prerollSignal.Reset();
+        }
+
+        _playWaiting = false;
     }
 
     /// <inheritdoc />
@@ -458,6 +512,7 @@ public sealed class PlaybackEngine : IPlaybackController, IDisposable
         _wake.Set();
         _thread.Join();
         _wake.Dispose();
+        _prerollSignal.Dispose();
     }
 
     /// <summary>The sequence frame the playhead is in, as the composition thread will render it.</summary>
@@ -571,6 +626,16 @@ public sealed class PlaybackEngine : IPlaybackController, IDisposable
         {
             _device.EnableMultithreadProtection();
 
+            // The multimedia class scheduler gives a registered thread priority over ordinary
+            // work when the machine is busy, which is when a presentation loop most needs it.
+            // The audio thread does the same as "Pro Audio".
+            uint taskIndex = 0;
+            IntPtr mmcss = AvSetMmThreadCharacteristics("Playback", ref taskIndex);
+            if (mmcss == IntPtr.Zero)
+            {
+                _log.Debug("The composition thread could not join the multimedia class scheduler");
+            }
+
             if (_options.HardwareDecode && _device.SupportsVideo)
             {
                 hardware = HardwareDeviceContext.CreateShared(_device.Device.NativePointer, _device.ImmediateContext.NativePointer);
@@ -640,6 +705,10 @@ public sealed class PlaybackEngine : IPlaybackController, IDisposable
         Rational fps = settings.FrameRate;
         Flicks frameLength = settings.FrameDuration;
 
+        // The generation is read before the playhead, so a seek that lands between the two makes
+        // this turn look older than it is rather than newer: a preroll is then repeated, never
+        // skipped.
+        long generation = Interlocked.Read(ref _seekGeneration);
         TransportState state = _transport.State;
         bool playing = state == TransportState.Playing;
         double rate = playing ? _transport.Rate : 0.0;
@@ -656,7 +725,6 @@ public sealed class PlaybackEngine : IPlaybackController, IDisposable
         PreviewQuality effective = Resolve(now, playing, rate);
         Volatile.Write(ref _effectiveQuality, (int)effective);
 
-        long generation = Interlocked.Read(ref _seekGeneration);
         var key = new RenderKey(snapshot.Version, frame, effective);
         bool refresh = _refresh;
         _refresh = false;
@@ -679,6 +747,18 @@ public sealed class PlaybackEngine : IPlaybackController, IDisposable
         {
             DecodeAhead(server, snapshot, sequence, fps, frame, rate, frameLength);
             return MillisecondsToNextFrame(time, frame, fps, rate);
+        }
+
+        // Stopped on a frame: have the next few ready on the playhead decoder, so that pressing
+        // play starts from the cache rather than from opening a decoder. Once per position, and
+        // abandoned the moment anything else is asked for, so it never slows a scrub.
+        bool settled = Volatile.Read(ref _scrubUntilTicks) < now || _playWaiting;
+        if ((_prerolled != key || Interlocked.Read(ref _prerolledGeneration) != generation) && settled
+            && DecodeAhead(server, snapshot, sequence, fps, frame, 1.0, frameLength))
+        {
+            _prerolled = key;
+            Interlocked.Exchange(ref _prerolledGeneration, generation);
+            _prerollSignal.Set();
         }
 
         // Paused: sleep until woken, or until a scrub settles and Auto wants to go back to Full.
@@ -756,6 +836,7 @@ public sealed class PlaybackEngine : IPlaybackController, IDisposable
         {
             long missed = frame - _lastPlayingFrame - 1;
             Interlocked.Add(ref _dropped, missed);
+            _log.Debug("Dropped {Missed} frame(s) before frame {Frame}", missed, frame);
         }
 
         _lastPlayingFrame = frame;
@@ -912,7 +993,8 @@ public sealed class PlaybackEngine : IPlaybackController, IDisposable
     /// Spends the time before the next frame is due decoding the ones after it, so the one that
     /// is due is already in the cache when its turn comes.
     /// </summary>
-    private void DecodeAhead(
+    /// <returns>False when it gave way to a request before finishing.</returns>
+    private bool DecodeAhead(
         SourceFrameServer server,
         ProjectSnapshot snapshot,
         Sequence sequence,
@@ -923,7 +1005,7 @@ public sealed class PlaybackEngine : IPlaybackController, IDisposable
     {
         if (rate <= 0 || rate > 2.0 || _options.DecodeAhead <= 0)
         {
-            return;
+            return true;
         }
 
         // Leave a couple of milliseconds of the frame interval unspent, so a slow decode here
@@ -938,7 +1020,7 @@ public sealed class PlaybackEngine : IPlaybackController, IDisposable
             {
                 // Somebody asked for something; that comes first. Put the signal back.
                 _wake.Set();
-                return;
+                return false;
             }
 
             // A reversed clip is primed a group at a time when it is rendered; decoding ahead of
@@ -959,9 +1041,11 @@ public sealed class PlaybackEngine : IPlaybackController, IDisposable
             {
                 // The render of that frame will meet the same error and report it properly.
                 _log.Debug(exception, "Decoding ahead failed at {Time}", time);
-                return;
+                return true;
             }
         }
+
+        return true;
     }
 
     private int MillisecondsToNextFrame(Flicks time, long frame, Rational fps, double rate)
@@ -1065,4 +1149,7 @@ public sealed class PlaybackEngine : IPlaybackController, IDisposable
 
     /// <summary>What decides whether the frame on screen is still the right one.</summary>
     private readonly record struct RenderKey(long Version, long Frame, PreviewQuality Quality);
+
+    [System.Runtime.InteropServices.LibraryImport("avrt.dll", EntryPoint = "AvSetMmThreadCharacteristicsW", StringMarshalling = System.Runtime.InteropServices.StringMarshalling.Utf16)]
+    private static partial IntPtr AvSetMmThreadCharacteristics(string taskName, ref uint taskIndex);
 }

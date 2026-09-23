@@ -90,6 +90,28 @@ public sealed partial class SwapChainPreview : HwndHost
         }
     }
 
+    /// <summary>
+    /// Draws into the back buffer and presents it, holding the same lock a resize takes, so a
+    /// resize on the UI thread can never swap the buffer out from under a draw on the render
+    /// thread. Returns false before the window exists.
+    /// </summary>
+    /// <param name="draw">Draws into the back buffer, given its width and height in pixels.</param>
+    public bool DrawAndPresent(Action<ID3D11Texture2D, int, int> draw)
+    {
+        ArgumentNullException.ThrowIfNull(draw);
+
+        lock (_gate)
+        {
+            if (_swapChain is null || _backBuffer is null)
+            {
+                return false;
+            }
+
+            draw(_backBuffer, _pixelWidth, _pixelHeight);
+            return Present();
+        }
+    }
+
     /// <summary>Resizes the swap chain buffers. Call when the host size changes.</summary>
     public void Resize(int pixelWidth, int pixelHeight)
     {

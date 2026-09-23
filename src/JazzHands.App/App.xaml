@@ -7,6 +7,7 @@
                 <!-- Phase 27 adds the rest of Themes/Controls on top of these tokens. -->
                 <ResourceDictionary Source="Themes/Dark.xaml" />
                 <ResourceDictionary Source="Themes/Controls/Lists.xaml" />
+                <ResourceDictionary Source="Themes/Controls/Buttons.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>

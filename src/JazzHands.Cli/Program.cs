@@ -1,6 +1,7 @@
 using System.CommandLine;
 using JazzHands.Audio.Output;
 using JazzHands.Cli;
+using JazzHands.Core.Commands;
 using JazzHands.Engine.Logging;
 using Serilog.Events;
 
@@ -59,7 +60,90 @@ namespace JazzHands.Cli
             perf.Subcommands.Add(BuildDecodeBenchmarkCommand());
             perf.Subcommands.Add(BuildScrubBenchmarkCommand());
             perf.Subcommands.Add(BuildAudioBenchmarkCommand());
+            perf.Subcommands.Add(BuildPlaybackBenchmarkCommand());
             return perf;
+        }
+
+        private static Command BuildPlaybackBenchmarkCommand()
+        {
+            var file = new Argument<FileInfo>("file") { Description = "A media file with a picture; it is laid end to end to fill the run." };
+            var minutes = new Option<double>("--minutes")
+            {
+                Description = "How long to play.",
+                DefaultValueFactory = _ => 5,
+            };
+            var software = new Option<bool>("--software")
+            {
+                Description = "Decode on the CPU, as CI and a machine without a video decoder do.",
+            };
+            var audible = new Option<bool>("--audible")
+            {
+                Description = "Play at full volume. Silent by default: the clock is the sound card's either way.",
+            };
+            var panel = new Option<string>("--panel")
+            {
+                Description = "The size of the preview surface each frame is drawn into.",
+                DefaultValueFactory = _ => "2560x1440",
+            };
+
+            var command = new Command(
+                "playback",
+                "Play a long sequence through the playback engine and count dropped frames.")
+            {
+                file,
+                minutes,
+                software,
+                audible,
+                panel,
+            };
+
+            command.SetAction(parseResult =>
+            {
+                FileInfo target = parseResult.GetValue(file)!;
+                if (!target.Exists)
+                {
+                    Console.Error.WriteLine($"jazz: '{target.FullName}' does not exist.");
+                    return ExitCode.CommandError;
+                }
+
+                if (!CommandValues.TryParseSize(parseResult.GetValue(panel), out FrameSize size, out string? sizeError))
+                {
+                    Console.Error.WriteLine($"jazz: {sizeError}");
+                    return ExitCode.CommandError;
+                }
+
+                LogSetup.ConfigureForCli(parseResult.GetValue(VerboseOption) ? LogEventLevel.Debug : LogEventLevel.Warning);
+
+                try
+                {
+                    PlaybackBenchmarkResult result = PlaybackBenchmark.Run(
+                        target.FullName,
+                        TimeSpan.FromMinutes(Math.Max(0.05, parseResult.GetValue(minutes))),
+                        hardware: !parseResult.GetValue(software),
+                        audible: parseResult.GetValue(audible),
+                        size.Width,
+                        size.Height,
+                        Console.Error);
+
+                    Console.Out.WriteLine(parseResult.GetValue(JsonOption)
+                        ? System.Text.Json.JsonSerializer.Serialize(result, JazzHands.Core.Serialization.JazzJson.Options)
+                        : PlaybackBenchmark.Describe(result));
+
+                    return result.DroppedPercent < 0.1 ? ExitCode.Ok : ExitCode.CommandError;
+                }
+                catch (JazzHands.Media.Interop.FfmpegException ex)
+                {
+                    Console.Error.WriteLine($"jazz: {ex.Message}");
+                    return ExitCode.MediaError;
+                }
+                catch (InvalidOperationException ex)
+                {
+                    Console.Error.WriteLine($"jazz: {ex.Message}");
+                    return ExitCode.CommandError;
+                }
+            });
+
+            return command;
         }
 
         private static Command BuildAudioBenchmarkCommand()

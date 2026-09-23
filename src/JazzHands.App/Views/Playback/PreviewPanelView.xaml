@@ -1,0 +1,172 @@
+<UserControl x:Class="JazzHands.App.Views.Playback.PreviewPanelView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:JazzHands.App.ViewModels.Playback"
+             xmlns:preview="clr-namespace:JazzHands.App.Controls.Preview"
+             xmlns:local="clr-namespace:JazzHands.App.Views.Playback"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:PreviewPanelViewModel}"
+             d:DesignWidth="800"
+             d:DesignHeight="480"
+             Background="{DynamicResource Brush.Background.Panel}">
+
+    <UserControl.Resources>
+        <local:ZoomNameConverter x:Key="ZoomName" />
+        <local:QualityNameConverter x:Key="QualityName" />
+        <BooleanToVisibilityConverter x:Key="Visible" />
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- The picture. The image fills the stage exactly and its back buffer is the stage's size
+             in device pixels, so WPF never scales it; fitting and zoom happen on the GPU. -->
+        <Grid x:Name="Stage"
+              Grid.Row="0"
+              Background="{DynamicResource Brush.Preview.Background}"
+              ClipToBounds="True"
+              Focusable="True"
+              FocusVisualStyle="{x:Null}">
+            <Image x:Name="Picture"
+                   Stretch="Fill"
+                   RenderOptions.BitmapScalingMode="NearestNeighbor"
+                   SnapsToDevicePixels="True" />
+            <preview:PreviewOverlay x:Name="Overlay"
+                                    ShowSafeAreas="{Binding ShowSafeAreas, Mode=OneWay}"
+                                    ShowGrid="{Binding ShowGrid, Mode=OneWay}"
+                                    GuideBrush="{DynamicResource Brush.Preview.Guide}"
+                                    TitleBrush="{DynamicResource Brush.Preview.TitleSafe}" />
+            <TextBlock x:Name="NoDevice"
+                       Visibility="Collapsed"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       Foreground="{DynamicResource Brush.Text.Secondary}"
+                       Text="No Direct3D 11 device, so there is no picture. Playback and sound still work." />
+        </Grid>
+
+        <!-- The transport bar. The timecode block and the view settings keep their size; the
+             transport sits centred in what is left, so a narrow panel squeezes the middle rather
+             than hiding the quality and zoom. -->
+        <Border Grid.Row="1"
+                Background="{DynamicResource Brush.Background.Raised}"
+                BorderBrush="{DynamicResource Brush.Border}"
+                BorderThickness="0,1,0,0"
+                Padding="8,4">
+            <DockPanel LastChildFill="True">
+                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Timecode, Mode=OneWay}"
+                               FontFamily="{DynamicResource Font.Mono}"
+                               FontSize="{DynamicResource Text.Heading}"
+                               Foreground="{DynamicResource Brush.Accent}"
+                               ToolTip="Playhead" />
+                    <TextBlock Text="{Binding Duration, Mode=OneWay}"
+                               Margin="8,0,0,0"
+                               VerticalAlignment="Center"
+                               FontFamily="{DynamicResource Font.Mono}"
+                               FontSize="{DynamicResource Text.Caption}"
+                               Foreground="{DynamicResource Brush.Text.Secondary}"
+                               ToolTip="Sequence length" />
+                    <TextBlock Text="{Binding Format, Mode=OneWay}"
+                               Margin="8,0,0,0"
+                               VerticalAlignment="Center"
+                               FontSize="{DynamicResource Text.Caption}"
+                               Foreground="{DynamicResource Brush.Text.Secondary}" />
+                    <TextBlock Text="{Binding RateText, Mode=OneWay}"
+                               Margin="8,0,0,0"
+                               VerticalAlignment="Center"
+                               FontFamily="{DynamicResource Font.Mono}"
+                               Foreground="{DynamicResource Brush.Warning}"
+                               ToolTip="Shuttle rate" />
+                    <TextBlock Margin="8,0,0,0"
+                               VerticalAlignment="Center"
+                               FontSize="{DynamicResource Text.Caption}"
+                               Foreground="{DynamicResource Brush.Warning}"
+                               Visibility="{Binding HasDroppedFrames, Mode=OneWay, Converter={StaticResource Visible}}"
+                               ToolTip="Frames that were due at normal speed and never shown">
+                        <Run Text="{Binding DroppedFrames, Mode=OneWay}" /><Run Text=" dropped" />
+                    </TextBlock>
+                </StackPanel>
+
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding InOut, Mode=OneWay}"
+                               Margin="0,0,8,0"
+                               VerticalAlignment="Center"
+                               FontSize="{DynamicResource Text.Caption}"
+                               Foreground="{DynamicResource Brush.Text.Secondary}" />
+                    <ComboBox Style="{StaticResource ComboBox.Compact}"
+                              Width="80"
+                              ItemsSource="{Binding Qualities, Mode=OneWay}"
+                              SelectedItem="{Binding Quality, Mode=TwoWay}"
+                              ToolTip="Preview resolution. Auto is Full when still and Half while scrubbing."
+                              AutomationProperties.Name="Preview resolution">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Converter={StaticResource QualityName}, Mode=OneWay}" FontSize="{DynamicResource Text.Caption}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <ComboBox Style="{StaticResource ComboBox.Compact}"
+                              Width="64"
+                              Margin="4,0,0,0"
+                              ItemsSource="{Binding Zooms, Mode=OneWay}"
+                              SelectedItem="{Binding Zoom, Mode=TwoWay}"
+                              ToolTip="Zoom. Drag with the middle button to pan."
+                              AutomationProperties.Name="Zoom">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Converter={StaticResource ZoomName}, Mode=OneWay}" FontSize="{DynamicResource Text.Caption}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <ToggleButton Style="{StaticResource Button.Text}" Content="Safe"
+                                  Margin="4,0,0,0"
+                                  IsChecked="{Binding ShowSafeAreas, Mode=TwoWay}"
+                                  ToolTip="Show the action and title safe areas" AutomationProperties.Name="Safe areas" />
+                    <ToggleButton Style="{StaticResource Button.Text}" Content="Grid"
+                                  IsChecked="{Binding ShowGrid, Mode=TwoWay}"
+                                  ToolTip="Show a rule of thirds grid" AutomationProperties.Name="Grid" />
+                    <Button Style="{StaticResource Button.Icon}" Content="{Binding FullScreenGlyph, Mode=OneWay}"
+                            Command="{Binding ToggleFullScreenCommand, Mode=OneWay}"
+                            ToolTip="Full screen on the other monitor (F11)" AutomationProperties.Name="Full screen" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" ClipToBounds="True">
+                    <Button Style="{StaticResource Button.Icon}" Content="&#xE892;"
+                            Command="{Binding GoToStartCommand, Mode=OneWay}"
+                            ToolTip="Go to start (Home)" AutomationProperties.Name="Go to start" />
+                    <Button Style="{StaticResource Button.Icon}" Content="&#xE76B;"
+                            Command="{Binding StepBackCommand, Mode=OneWay}"
+                            ToolTip="Back one frame (Left)" AutomationProperties.Name="Back one frame" />
+                    <Button Style="{StaticResource Button.Icon}" Content="{Binding PlayGlyph, Mode=OneWay}"
+                            Width="36" FontSize="18"
+                            Command="{Binding TogglePlayCommand, Mode=OneWay}"
+                            ToolTip="{Binding PlayLabel, Mode=OneWay}" AutomationProperties.Name="{Binding PlayLabel, Mode=OneWay}" />
+                    <Button Style="{StaticResource Button.Icon}" Content="&#xE76C;"
+                            Command="{Binding StepForwardCommand, Mode=OneWay}"
+                            ToolTip="Forward one frame (Right)" AutomationProperties.Name="Forward one frame" />
+                    <Button Style="{StaticResource Button.Icon}" Content="&#xE893;"
+                            Command="{Binding GoToEndCommand, Mode=OneWay}"
+                            ToolTip="Go to end (End)" AutomationProperties.Name="Go to end" />
+                    <Button Style="{StaticResource Button.Icon}" Content="&#xE71A;"
+                            Command="{Binding StopCommand, Mode=OneWay}"
+                            ToolTip="Stop and go back to where playback started" AutomationProperties.Name="Stop" />
+                    <ToggleButton Style="{StaticResource Button.Icon}" Content="&#xE8EE;"
+                                  IsChecked="{Binding Loop, Mode=TwoWay}"
+                                  ToolTip="Loop over in and out (Ctrl+L)" AutomationProperties.Name="Loop" />
+                    <Button Style="{StaticResource Button.Text}" Content="In"
+                            Margin="8,0,0,0"
+                            Command="{Binding SetInCommand, Mode=OneWay}"
+                            ToolTip="Mark in (I); go to in (Shift+I)" AutomationProperties.Name="Mark in" />
+                    <Button Style="{StaticResource Button.Text}" Content="Out"
+                            Command="{Binding SetOutCommand, Mode=OneWay}"
+                            ToolTip="Mark out (O); go to out (Shift+O)" AutomationProperties.Name="Mark out" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>

@@ -8,6 +8,9 @@
         xmlns:mediavm="clr-namespace:JazzHands.App.ViewModels.Media"
         xmlns:audio="clr-namespace:JazzHands.App.Views.Audio"
         xmlns:audiovm="clr-namespace:JazzHands.App.ViewModels.Audio"
+        xmlns:playback="clr-namespace:JazzHands.App.Views.Playback"
+        xmlns:playbackvm="clr-namespace:JazzHands.App.ViewModels.Playback"
+        xmlns:shell="clr-namespace:JazzHands.App.Shell"
         xmlns:vm="clr-namespace:JazzHands.App.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -28,6 +31,9 @@
         <DataTemplate DataType="{x:Type audiovm:MetersPanelViewModel}">
             <audio:MetersPanelView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type playbackvm:PreviewPanelViewModel}">
+            <playback:PreviewPanelView />
+        </DataTemplate>
     </Window.Resources>
 
     <Grid>
@@ -44,6 +50,21 @@
                 <Separator />
                 <MenuItem Header="E_xit" Command="{Binding ExitCommand, Mode=OneWay}" />
             </MenuItem>
+            <MenuItem Header="_Playback">
+                <MenuItem Header="_Play or pause" InputGestureText="Space" Command="{Binding Preview.TogglePlayCommand, Mode=OneWay}" />
+                <MenuItem Header="_Stop" Command="{Binding Preview.StopCommand, Mode=OneWay}" />
+                <MenuItem Header="Back one _frame" InputGestureText="Left" Command="{Binding Preview.StepBackCommand, Mode=OneWay}" />
+                <MenuItem Header="Forward one f_rame" InputGestureText="Right" Command="{Binding Preview.StepForwardCommand, Mode=OneWay}" />
+                <MenuItem Header="Go to st_art" InputGestureText="Home" Command="{Binding Preview.GoToStartCommand, Mode=OneWay}" />
+                <MenuItem Header="Go to _end" InputGestureText="End" Command="{Binding Preview.GoToEndCommand, Mode=OneWay}" />
+                <Separator />
+                <MenuItem Header="Mark _in" InputGestureText="I" Command="{Binding Preview.SetInCommand, Mode=OneWay}" />
+                <MenuItem Header="Mark _out" InputGestureText="O" Command="{Binding Preview.SetOutCommand, Mode=OneWay}" />
+                <MenuItem Header="_Clear in and out" InputGestureText="Ctrl+Shift+X" Command="{Binding Preview.ClearInOutCommand, Mode=OneWay}" />
+                <MenuItem Header="_Loop" InputGestureText="Ctrl+L" IsCheckable="True" IsChecked="{Binding Preview.Loop, Mode=TwoWay}" />
+                <Separator />
+                <MenuItem Header="F_ull screen" InputGestureText="F11" Command="{Binding Preview.ToggleFullScreenCommand, Mode=OneWay}" />
+            </MenuItem>
         </Menu>
 
         <!--
@@ -55,6 +76,9 @@
                              x:Name="Dock"
                              Background="{DynamicResource Brush.Background.Base}"
                              AnchorablesSource="{Binding Panels, Mode=OneWay}">
+            <dock:DockingManager.LayoutUpdateStrategy>
+                <shell:PanelPlacement />
+            </dock:DockingManager.LayoutUpdateStrategy>
             <dock:DockingManager.LayoutItemContainerStyle>
                 <Style TargetType="{x:Type controls:LayoutAnchorableItem}">
                     <Setter Property="Title" Value="{Binding Model.Title, Mode=OneWay}" />
@@ -64,8 +88,12 @@
 
             <layout:LayoutRoot>
                 <layout:LayoutPanel Orientation="Horizontal">
-                    <layout:LayoutAnchorablePane DockWidth="420" />
-                    <layout:LayoutDocumentPane />
+                    <layout:LayoutAnchorablePane Name="ToolsPane" DockWidth="380" />
+                    <layout:LayoutPanel Orientation="Vertical">
+                        <layout:LayoutAnchorablePane Name="ProgramPane" DockHeight="*" />
+                        <!-- The timeline arrives here in Phase 11. -->
+                        <layout:LayoutDocumentPane DockHeight="160" />
+                    </layout:LayoutPanel>
                 </layout:LayoutPanel>
             </layout:LayoutRoot>
         </dock:DockingManager>
