@@ -117,6 +117,22 @@ public sealed unsafe class Muxer : IDisposable
         return Register(stream, timeBase);
     }
 
+    /// <summary>Adds a stream for a video encoder's packets.</summary>
+    /// <returns>The output stream index.</returns>
+    public int AddStream(VideoEncoder encoder, IReadOnlyDictionary<string, string>? metadata = null)
+    {
+        ArgumentNullException.ThrowIfNull(encoder);
+        return AddEncodedStream(encoder.Handle, metadata);
+    }
+
+    /// <summary>Adds a stream for an audio encoder's packets.</summary>
+    /// <returns>The output stream index.</returns>
+    public int AddStream(AudioEncoder encoder, IReadOnlyDictionary<string, string>? metadata = null)
+    {
+        ArgumentNullException.ThrowIfNull(encoder);
+        return AddEncodedStream(encoder.Handle, metadata);
+    }
+
     /// <summary>Adds a stream fed by an encoder, taking its parameters from the open codec context.</summary>
     /// <returns>The output stream index.</returns>
     internal int AddEncodedStream(AVCodecContext* encoder, IReadOnlyDictionary<string, string>? metadata = null)
