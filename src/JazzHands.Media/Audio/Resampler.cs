@@ -124,11 +124,38 @@ public sealed unsafe class Resampler : IDisposable
     /// assumed one in one out would drop the first few milliseconds of every clip.
     /// </remarks>
     /// <returns>The converted samples, which the caller disposes, or null when none came out yet.</returns>
-    internal AudioFrame? Convert(AVFrame* source, Core.Time.Flicks pts)
+    internal AudioFrame? Convert(AVFrame* source, Core.Time.Flicks pts, int skip = 0)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        int available = (int)ffmpeg.swr_get_out_samples(_context, source is null ? 0 : source->nb_samples);
+        int inputSamples = source is null ? 0 : source->nb_samples - skip;
+        ArgumentOutOfRangeException.ThrowIfNegative(inputSamples, nameof(skip));
+
+        // The input starts `skip` samples into the frame: every plane moves on by that many
+        // samples when the format is planar, and the one interleaved plane by that many frames.
+        byte** input = null;
+        if (source is not null)
+        {
+            AVSampleFormat format = (AVSampleFormat)source->format;
+            bool planar = ffmpeg.av_sample_fmt_is_planar(format) != 0;
+            int planes = planar ? source->ch_layout.nb_channels : 1;
+            int step = ffmpeg.av_get_bytes_per_sample(format) * (planar ? 1 : source->ch_layout.nb_channels);
+            byte** moved = stackalloc byte*[planes];
+
+            for (int plane = 0; plane < planes; plane++)
+            {
+                moved[plane] = source->extended_data[plane] + ((long)skip * step);
+            }
+
+            input = moved;
+        }
+
+        return ConvertFrom(input, inputSamples, pts);
+    }
+
+    private AudioFrame? ConvertFrom(byte** input, int inputSamples, Core.Time.Flicks pts)
+    {
+        int available = (int)ffmpeg.swr_get_out_samples(_context, inputSamples);
         if (available <= 0)
         {
             return null;
@@ -150,8 +177,8 @@ public sealed unsafe class Resampler : IDisposable
                 _context,
                 raw->extended_data,
                 available,
-                source is null ? null : source->extended_data,
-                source is null ? 0 : source->nb_samples);
+                input,
+                inputSamples);
 
             Av.Check(written, "swr_convert");
 
@@ -180,6 +207,22 @@ public sealed unsafe class Resampler : IDisposable
     /// milliseconds short, which on a cut is an audible click.
     /// </remarks>
     public AudioFrame? Drain(Core.Time.Flicks pts) => Convert(null, pts);
+
+    /// <summary>
+    /// Forgets the samples in flight, for a seek.
+    /// </summary>
+    /// <remarks>
+    /// The filter holds the tail of wherever the stream used to be. Without a reset those
+    /// samples come out at the head of the new position, which is a click of the old audio at
+    /// the start of every seek.
+    /// </remarks>
+    public void Reset()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        ffmpeg.swr_close(_context);
+        Av.Check(ffmpeg.swr_init(_context), "swr_init");
+    }
 
     /// <inheritdoc />
     public void Dispose()

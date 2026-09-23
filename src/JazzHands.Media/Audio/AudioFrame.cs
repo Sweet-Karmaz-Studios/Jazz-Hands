@@ -34,7 +34,7 @@ public sealed unsafe class AudioFrame : IDisposable
     }
 
     /// <summary>Where this block starts on the source timeline.</summary>
-    public Flicks Pts { get; }
+    public Flicks Pts { get; internal set; }
 
     /// <summary>Samples a second.</summary>
     public int SampleRate { get; }

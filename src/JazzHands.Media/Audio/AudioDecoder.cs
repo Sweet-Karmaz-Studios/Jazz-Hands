@@ -28,6 +28,8 @@ public sealed unsafe class AudioDecoder : IDisposable
     private bool _flushed;
     private bool _drained;
     private bool _disposed;
+    private long _nextSample;
+    private bool _counting;
 
     /// <summary>Opens a decoder for one audio stream of an already-open file.</summary>
     /// <param name="demuxer">The demuxer to pull packets from. Not owned.</param>
@@ -190,8 +192,10 @@ public sealed unsafe class AudioDecoder : IDisposable
 
         _demuxer.SeekToKeyframeBefore(_streamIndex, target);
         ffmpeg.avcodec_flush_buffers(_codec.Handle);
+        _resampler?.Reset();
         _flushed = false;
         _drained = false;
+        _counting = false;
     }
 
     /// <inheritdoc />
@@ -223,17 +227,113 @@ public sealed unsafe class AudioDecoder : IDisposable
 
         if (_resampler is null)
         {
-            return new AudioFrame(frame, _pool, pts, SampleRate);
+            return new AudioFrame(frame, _pool, Continuous(pts, raw->nb_samples), SampleRate);
         }
 
+        // A converted block's position is counted rather than read off the frame that went in.
+        // The filter holds samples back, so what comes out of one input frame starts earlier
+        // than that frame did, and the drain has no input frame at all. The count starts from
+        // the first frame after an open or a seek, the one moment the two agree.
+        int skip = 0;
+        if (!_counting)
+        {
+            // Start converting on an input sample that lands exactly on an output sample. A
+            // seek lands on a packet boundary, and 1024 samples at 48 kHz is 940.8 at 44.1 kHz:
+            // starting there would put every converted sample a fraction of a sample away from
+            // where the same stream decoded from the top puts it. Dropping up to one grid step of
+            // input (160 samples for 48 to 44.1) makes the two identical.
+            long first = pts.ToSamples(SourceSampleRate, RoundingMode.Nearest);
+            long step = SourceSampleRate / GreatestCommonDivisor(SourceSampleRate, SampleRate);
+            long aligned = CeilingToMultiple(first, step);
+            skip = (int)(aligned - first);
+
+            if (skip >= raw->nb_samples)
+            {
+                _pool.Return(frame);
+                return ReadFrame();
+            }
+
+            _nextSample = aligned * SampleRate / SourceSampleRate;
+            _counting = true;
+        }
+
+        AudioFrame? converted;
         try
         {
-            return _resampler.Convert(raw, pts) ?? ReadFrame();
+            converted = Stamp(_resampler.Convert(raw, pts, skip));
         }
         finally
         {
             _pool.Return(frame);
         }
+
+        return converted ?? ReadFrame();
+    }
+
+    /// <summary>
+    /// Where an unconverted frame starts, counted on from the frame before it unless its own
+    /// timestamp says there is a real gap.
+    /// </summary>
+    /// <remarks>
+    /// A container's timestamps are only as fine as its time base. Matroska counts milliseconds,
+    /// so a 1024 sample AAC frame, which lasts 21.33 ms, is stamped up to half a millisecond
+    /// (24 samples at 48 kHz) away from where it really starts. Taking those stamps literally
+    /// inserts and drops a few samples every frame, which is inaudible as a click and ruinous as
+    /// a phase: a tone measured across a second of it cancels itself out. So consecutive frames
+    /// are placed end to end, and a stamp is believed only when it is further out than the time
+    /// base can explain.
+    /// </remarks>
+    private Flicks Continuous(Flicks pts, int frames)
+    {
+        if (Flicks.OneSecond.Value % SampleRate != 0)
+        {
+            // A rate the flick grid cannot place exactly, which no real file uses. Leave it be.
+            return pts;
+        }
+
+        long stamped = pts.ToSamples(SampleRate, RoundingMode.Nearest);
+        long resolution = (((long)SampleRate * _timeBase.Num) + _timeBase.Den - 1) / _timeBase.Den;
+
+        long start = _counting && Math.Abs(stamped - _nextSample) <= resolution + 1 ? _nextSample : stamped;
+        _nextSample = start + frames;
+        _counting = true;
+
+        return Flicks.FromSamples(start, SampleRate);
+    }
+
+    private static long GreatestCommonDivisor(long a, long b)
+    {
+        while (b != 0)
+        {
+            (a, b) = (b, a % b);
+        }
+
+        return a;
+    }
+
+    /// <summary>The smallest multiple of a step at or above a value, for negative values too.</summary>
+    private static long CeilingToMultiple(long value, long step)
+    {
+        long remainder = value % step;
+        if (remainder == 0)
+        {
+            return value;
+        }
+
+        return remainder > 0 ? value + (step - remainder) : value - remainder;
+    }
+
+    /// <summary>Gives a converted block the position the running count says it starts at.</summary>
+    private AudioFrame? Stamp(AudioFrame? converted)
+    {
+        if (converted is null)
+        {
+            return null;
+        }
+
+        converted.Pts = Flicks.FromSamples(_nextSample, SampleRate);
+        _nextSample += converted.Frames;
+        return converted;
     }
 
     /// <summary>
@@ -251,6 +351,6 @@ public sealed unsafe class AudioDecoder : IDisposable
         }
 
         _drained = true;
-        return _resampler.Drain(Flicks.Zero);
+        return Stamp(_resampler.Drain(Flicks.Zero));
     }
 }
