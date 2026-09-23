@@ -4,6 +4,7 @@ using JazzHands.Core.Model;
 using JazzHands.Core.Time;
 using JazzHands.Engine.Audio;
 using JazzHands.Engine.Commands;
+using JazzHands.Media.Filters;
 using Serilog;
 
 namespace JazzHands.Engine.Playback;
@@ -41,8 +42,10 @@ public enum TransportState
 /// Everyone else posts requests and reads <see cref="Position"/>, which is the clock: the
 /// position being heard, not the position being mixed a buffer ahead of it.
 ///
-/// Rates other than 1 move the clock at that rate with the audio silent. Pitch-kept shuttle
-/// audio is Phase 09's; this is the clock it will run on.
+/// Rates other than 1 move the clock at that rate. Forward rates from a quarter to twice normal
+/// speed are heard at their own pitch: the decode thread stretches the mix through rubberband (or
+/// atempo, on a build without it) into a <see cref="StretchRing"/> that the audio thread reads
+/// instead of mixing. Anything else, backwards included, is silent.
 /// </remarks>
 public sealed class Transport : IAudioRenderCallback, IDisposable
 {
@@ -93,6 +96,20 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
     private readonly int _grainLength;
     private readonly int _grainFade;
 
+    // Shuttle audio. The decode thread stretches the mix into a ring and publishes it under the
+    // request it belongs to; the audio thread reads whichever ring its applied request armed.
+    private const int StretchBlockFrames = 512;
+    private readonly AudioGraph _stretchGraph;
+    private readonly AudioBuffer _stretchBlock;
+    private readonly float[][] _stretchIn;
+    private readonly float[][] _stretchOut;
+    private AudioTempoFilter? _stretcher;
+    private StretchRing? _feeding;
+    private long _stretchSource;
+    private StretchRing? _stretchRing;
+    private long _stretchArmed;
+    private StretchRing? _activeRing;
+
     /// <summary>Creates a transport and starts its output, silent until something plays.</summary>
     /// <param name="output">Where the sound goes. Owned by the transport from here on.</param>
     /// <param name="cache">The block cache, which may be shared with export.</param>
@@ -104,6 +121,10 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
         _cache = cache ?? new AudioBlockCache();
         _server = new AudioSampleServer(_cache, output.SampleRate, AudioReadMode.Realtime);
         _graph = new AudioGraph(_server, output.SampleRate, output.Channels);
+        _stretchGraph = new AudioGraph(_server, output.SampleRate, output.Channels);
+        _stretchBlock = new AudioBuffer(output.Channels, StretchBlockFrames);
+        _stretchIn = [.. Enumerable.Range(0, output.Channels).Select(_ => new float[StretchBlockFrames])];
+        _stretchOut = [.. Enumerable.Range(0, output.Channels).Select(_ => new float[StretchBlockFrames * 8])];
         Clock = new PlaybackClock(output);
 
         // Forty milliseconds of sound around each scrub position, faded in and out over five so a
@@ -163,7 +184,7 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
         }
     }
 
-    /// <summary>The playback rate. 1 is normal speed; anything else is silent for now.</summary>
+    /// <summary>The playback rate. 1 is normal speed; see the remarks on the class for what is heard at others.</summary>
     public double Rate
     {
         get => Volatile.Read(ref _requestRate);
@@ -195,10 +216,13 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
     public bool ScrubAudio { get; set; } = true;
 
     /// <summary>
-    /// True when rates other than 1 keep their pitch. False until the stretcher arrives: shuttling
-    /// is silent.
+    /// True: forward rates from a quarter to twice normal speed keep their pitch. Faster, slower
+    /// or backwards is silent.
     /// </summary>
-    public bool CanStretch => false;
+    public bool CanStretch => true;
+
+    /// <summary>Which filter keeps the pitch: rubberband where the FFmpeg build has it, atempo otherwise.</summary>
+    public static string StretchEngine => AudioTempoFilter.HasRubberband ? "rubberband" : "atempo";
 
     /// <summary>Scrub grains played, for tests and diagnostics.</summary>
     public long GrainsPlayed => Volatile.Read(ref _grainTaken);
@@ -239,6 +263,7 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
         // Names first, so every media id in the new mix already resolves when the mix arrives.
         _server.Update(project, projectPath);
         _graph.Publish(snapshot);
+        _stretchGraph.Publish(snapshot);
         _wake.Set();
     }
 
@@ -394,8 +419,17 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
             bool consistent = sequence == Volatile.Read(ref _requestSequence);
             bool armed = !playing || Volatile.Read(ref _armedSequence) >= sequence;
 
+            // A stretched rate also waits for its first stretched audio, so it starts with sound.
+            bool stretch = playing && IsStretchable(rate);
+            StretchRing? ring = stretch ? Volatile.Read(ref _stretchRing) : null;
+            if (stretch && (Volatile.Read(ref _stretchArmed) < sequence || ring?.Sequence != sequence))
+            {
+                armed = false;
+            }
+
             if (consistent && armed)
             {
+                _activeRing = ring;
                 // A grain moves the graph somewhere else, so the next play starts it afresh even
                 // when it resumes exactly where it paused.
                 if (sample != _renderSample || _graphDirty)
@@ -442,8 +476,30 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
                 }
             }
         }
+        else if (_activeRing is { } ring)
+        {
+            // Stretched on the decode thread; the clock moves at the rate, the sound keeps its pitch.
+            int got = ring.Read(output, 0, frames);
+            if (got < frames)
+            {
+                output.Clear(got, frames - got);
+            }
+
+            float monitor = Volatile.Read(ref _monitorGain);
+            for (int channel = 0; channel < output.Channels; channel++)
+            {
+                Span<float> plane = output.Plane(channel, 0, got);
+                for (int index = 0; index < got; index++)
+                {
+                    plane[index] *= monitor;
+                }
+            }
+
+            _renderSample = Math.Max(0, _renderSample + (long)Math.Round(frames * _rate));
+        }
         else
         {
+            // Backwards, faster than twice normal speed, or slower than a quarter: silent.
             output.Clear(0, frames);
             _renderSample = Math.Max(0, _renderSample + (long)Math.Round(frames * _rate));
         }
@@ -565,6 +621,9 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
 
                 long sequence;
                 long from;
+                bool playing;
+                double rate;
+                long sample;
 
                 lock (_post)
                 {
@@ -572,6 +631,9 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
                     from = Volatile.Read(ref _appliedSequence) == sequence
                         ? Volatile.Read(ref _renderPosition)
                         : _requestSample;
+                    playing = _requestPlaying;
+                    rate = _requestRate;
+                    sample = _requestSample;
                 }
 
                 demands.Clear();
@@ -605,6 +667,8 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
                     Volatile.Write(ref _armedSequence, sequence);
                 }
 
+                FeedStretch(sequence, playing, rate, sample);
+
                 reportedUnderruns = Report(_output.Underruns, reportedUnderruns, "The audio device ran dry {Count} time(s); raise the buffer or look for a stall");
                 reportedStarved = Report(_graph.StarvedBlocks, reportedStarved, "{Count} audio block(s) played before their source was decoded");
             }
@@ -615,7 +679,81 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
         }
         finally
         {
+            _stretcher?.Dispose();
             _server.Dispose();
+        }
+    }
+
+    /// <summary>True for the rates that play with sound at their own speed and their own pitch.</summary>
+    internal static bool IsStretchable(double rate) =>
+        rate != 1.0 && rate >= AudioTempoFilter.MinTempo && rate <= AudioTempoFilter.MaxTempo;
+
+    /// <summary>
+    /// Keeps the stretched audio for a shuttle queued ahead of the audio thread. Decode thread.
+    /// </summary>
+    /// <remarks>
+    /// A new request at a stretchable rate gets a fresh filter and a fresh ring, filled with a
+    /// sixth of a second before it is armed; after that the ring is topped up to half a second
+    /// on every pass. The input is the mix from where the request starts, pulled through a second
+    /// graph so the audio thread's own graph is never touched from here.
+    /// </remarks>
+    private void FeedStretch(long sequence, bool playing, double rate, long sample)
+    {
+        if (!playing || !IsStretchable(rate))
+        {
+            if (_stretcher is not null)
+            {
+                _stretcher.Dispose();
+                _stretcher = null;
+                _feeding = null;
+            }
+
+            return;
+        }
+
+        int sampleRate = _output.SampleRate;
+
+        if (_feeding?.Sequence != sequence)
+        {
+            _stretcher?.Dispose();
+            _stretcher = new AudioTempoFilter(sampleRate, _output.Channels, rate);
+            _stretchGraph.Reset();
+            _stretchSource = sample;
+
+            var ring = new StretchRing(sequence, _output.Channels, sampleRate);
+            _feeding = ring;
+            Fill(ring, sampleRate / 6);
+
+            Volatile.Write(ref _stretchRing, ring);
+            Volatile.Write(ref _stretchArmed, sequence);
+            return;
+        }
+
+        Fill(_feeding, sampleRate / 2);
+    }
+
+    /// <summary>Stretches mix into a ring until it holds at least a number of samples.</summary>
+    private void Fill(StretchRing ring, int target)
+    {
+        // Bounded, so a filter that swallows input without giving any back cannot hold the
+        // decode thread here.
+        for (int pass = 0; pass < 256 && ring.Available < target && ring.Space > 0; pass++)
+        {
+            _stretchGraph.Pull(_stretchSource, _stretchBlock, 0, StretchBlockFrames);
+            _stretchSource += StretchBlockFrames;
+
+            for (int channel = 0; channel < _output.Channels; channel++)
+            {
+                _stretchBlock.Plane(channel, 0, StretchBlockFrames).CopyTo(_stretchIn[channel]);
+            }
+
+            _stretcher!.Send(_stretchIn, 0, StretchBlockFrames);
+
+            int got;
+            while (ring.Space > 0 && (got = _stretcher.Receive(_stretchOut, 0, Math.Min(ring.Space, _stretchOut[0].Length))) > 0)
+            {
+                ring.Write(_stretchOut, got);
+            }
         }
     }
 
