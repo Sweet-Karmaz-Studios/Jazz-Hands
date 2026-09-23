@@ -1,9 +1,11 @@
 using JazzHands.App.Services;
 using JazzHands.App.ViewModels;
+using JazzHands.App.ViewModels.Audio;
 using JazzHands.App.ViewModels.Media;
 using JazzHands.Core.Model;
 using JazzHands.Engine;
 using JazzHands.Engine.Commands;
+using JazzHands.Engine.Playback;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace JazzHands.App;
@@ -37,7 +39,22 @@ public static class AppServices
 
         services.AddTransient<ImportViewModel>();
 
+        // The transport follows the session: every command rebuilds the mix it plays. It opens
+        // the default sound card, or a silent clock on a machine with none, and plays nothing
+        // until something asks it to. Its format is the project's at startup.
+        services.AddSingleton(provider =>
+        {
+            ProjectSettings settings = project.ActiveSequence is { } sequence ? project.SettingsFor(sequence) : project.Settings;
+            Transport transport = Transport.ForDefaultDevice(settings.SampleRate, settings.ChannelCount);
+            transport.Attach(provider.GetRequiredService<Session>());
+            return transport;
+        });
+        services.AddSingleton<IMeterFeed>(provider => new TransportMeterFeed(provider.GetRequiredService<Transport>()));
+
         services.AddSingleton<MediaPanelViewModel>();
+        services.AddSingleton<MetersPanelViewModel>(provider => new MetersPanelViewModel(
+            provider.GetRequiredService<IMeterFeed>(),
+            provider.GetRequiredService<IUiDispatcher>()));
         services.AddSingleton<MainViewModel>();
 
         return services;

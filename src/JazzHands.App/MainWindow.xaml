@@ -6,6 +6,8 @@
         xmlns:controls="clr-namespace:AvalonDock.Controls;assembly=AvalonDock"
         xmlns:media="clr-namespace:JazzHands.App.Views.Media"
         xmlns:mediavm="clr-namespace:JazzHands.App.ViewModels.Media"
+        xmlns:audio="clr-namespace:JazzHands.App.Views.Audio"
+        xmlns:audiovm="clr-namespace:JazzHands.App.ViewModels.Audio"
         xmlns:vm="clr-namespace:JazzHands.App.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -22,6 +24,9 @@
              Phase 27 is a template here and a registration in AppServices. -->
         <DataTemplate DataType="{x:Type mediavm:MediaPanelViewModel}">
             <media:MediaPanelView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type audiovm:MetersPanelViewModel}">
+            <audio:MetersPanelView />
         </DataTemplate>
     </Window.Resources>
 

@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using JazzHands.App.Services;
 using JazzHands.App.Shell;
+using JazzHands.App.ViewModels.Audio;
 using JazzHands.App.ViewModels.Media;
 using JazzHands.Engine.Commands;
 using Path = System.IO.Path;
@@ -25,7 +26,7 @@ public sealed partial class MainViewModel : ObservableObject
     private string _title = "Jazz Hands";
 
     /// <summary>Creates the window's viewmodel.</summary>
-    public MainViewModel(ISession session, MediaPanelViewModel media, IUiDispatcher ui)
+    public MainViewModel(ISession session, MediaPanelViewModel media, IUiDispatcher ui, MetersPanelViewModel? meters = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(media);
@@ -33,7 +34,8 @@ public sealed partial class MainViewModel : ObservableObject
 
         _session = session;
         Media = media;
-        Panels = [media];
+        Meters = meters;
+        Panels = meters is null ? [media] : [media, meters];
 
         _session.ProjectChanged += (_, _) => ui.Post(UpdateTitle);
         UpdateTitle();
@@ -41,6 +43,9 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>The media panel, which the menu needs by name.</summary>
     public MediaPanelViewModel Media { get; }
+
+    /// <summary>The master meters, when the window has a transport to meter.</summary>
+    public MetersPanelViewModel? Meters { get; }
 
     /// <summary>Every dockable panel, in the order they were registered.</summary>
     public ObservableCollection<ToolViewModel> Panels { get; }

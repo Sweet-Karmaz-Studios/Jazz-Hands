@@ -1,4 +1,5 @@
 using System.CommandLine;
+using JazzHands.Audio.Output;
 using JazzHands.Cli;
 using JazzHands.Engine.Logging;
 using Serilog.Events;
@@ -57,7 +58,89 @@ namespace JazzHands.Cli
             var perf = new Command("perf", "Measure the engine. Numbers land in Docs/PERF.md.");
             perf.Subcommands.Add(BuildDecodeBenchmarkCommand());
             perf.Subcommands.Add(BuildScrubBenchmarkCommand());
+            perf.Subcommands.Add(BuildAudioBenchmarkCommand());
             return perf;
+        }
+
+        private static Command BuildAudioBenchmarkCommand()
+        {
+            var file = new Argument<FileInfo>("file") { Description = "A media file with audio; each stream becomes a track." };
+            var clips = new Option<int>("--clips")
+            {
+                Description = "How many clips to cut across the tracks.",
+                DefaultValueFactory = _ => 30,
+            };
+            var minutes = new Option<double>("--minutes")
+            {
+                Description = "How long to play.",
+                DefaultValueFactory = _ => 10,
+            };
+            var device = new Option<string?>("--device")
+            {
+                Description = "A playback device id. The default device when left out.",
+            };
+            var audible = new Option<bool>("--audible")
+            {
+                Description = "Play at full volume. Silent by default: the mix and the device do the same work.",
+            };
+
+            var command = new Command(
+                "audio",
+                "Play a many-clip project through the sound card and count the gaps.")
+            {
+                file,
+                clips,
+                minutes,
+                device,
+                audible,
+            };
+
+            command.SetAction(parseResult =>
+            {
+                FileInfo target = parseResult.GetValue(file)!;
+                if (!target.Exists)
+                {
+                    Console.Error.WriteLine($"jazz: '{target.FullName}' does not exist.");
+                    return ExitCode.CommandError;
+                }
+
+                if (!WasapiOutput.HasDevice())
+                {
+                    Console.Error.WriteLine("jazz: there is no playback device to measure.");
+                    return ExitCode.CommandError;
+                }
+
+                LogSetup.ConfigureForCli(parseResult.GetValue(VerboseOption) ? LogEventLevel.Debug : LogEventLevel.Warning);
+
+                try
+                {
+                    AudioBenchmarkResult result = AudioBenchmark.Run(
+                        target.FullName,
+                        Math.Max(1, parseResult.GetValue(clips)),
+                        TimeSpan.FromMinutes(Math.Max(0.05, parseResult.GetValue(minutes))),
+                        parseResult.GetValue(device),
+                        parseResult.GetValue(audible),
+                        Console.Error);
+
+                    Console.Out.WriteLine(parseResult.GetValue(JsonOption)
+                        ? System.Text.Json.JsonSerializer.Serialize(result, JazzHands.Core.Serialization.JazzJson.Options)
+                        : AudioBenchmark.Describe(result));
+
+                    return result.Underruns == 0 ? ExitCode.Ok : ExitCode.CommandError;
+                }
+                catch (JazzHands.Media.Interop.FfmpegException ex)
+                {
+                    Console.Error.WriteLine($"jazz: {ex.Message}");
+                    return ExitCode.MediaError;
+                }
+                catch (InvalidOperationException ex)
+                {
+                    Console.Error.WriteLine($"jazz: {ex.Message}");
+                    return ExitCode.CommandError;
+                }
+            });
+
+            return command;
         }
 
         private static Command BuildDecodeBenchmarkCommand()

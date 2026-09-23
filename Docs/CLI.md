@@ -215,6 +215,35 @@ The four combinations answer different questions and their numbers are not compa
 exact is the worst case and is dominated by the decode from the enclosing keyframe; drag is what a
 person does; nearest is what a shuttle does. `Docs/PERF.md` records all of them for the corpus.
 
+### `jazz perf audio <file>`
+
+Builds a project from one file (a track per audio stream, cut into clips with different in
+points, gains and fades, the tracks offset so their cuts never line up) and plays it through the
+sound card, seeking back to the start each time it reaches the end. Reports gaps.
+
+```bash
+jazz perf audio tests\corpus\obs_3audio_5s.mkv --clips 30 --minutes 10
+```
+
+```
+obs_3audio_5s.mkv: 30 clips on 3 tracks, played to Speakers (USB DAC)
+  600.0 s, 28799266 frames, 14 loop(s)
+  underruns       0
+  starved blocks  0
+  clock drift     -26.6 ms against the wall clock
+No gaps.
+```
+
+| Option | Meaning |
+|---|---|
+| `--clips <n>` | How many clips to cut. 30 by default. |
+| `--minutes <m>` | How long to play. 10 by default. |
+| `--device <id>` | A playback device id; the Windows default when left out. |
+| `--audible` | Play at full volume. It runs silent by default: the mix and the device do the same work, and nobody has to listen to test tones. |
+
+An underrun is the device running dry, which is a gap somebody hears. A starved block is one mixed
+before its source was decoded. Exit code 1 when there was an underrun.
+
 ## Generated verbs
 
 From Phase 05, every command and query in `CommandRegistry` is a `jazz` verb. Nothing in the CLI
