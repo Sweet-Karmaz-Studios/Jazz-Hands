@@ -40,8 +40,8 @@ public sealed class TimelineControl : FrameworkElement
     private readonly DrawingVisual _playhead = new();
 
     private readonly Dictionary<string, SolidColorBrush> _trackBrushes = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, FormattedText> _labels = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, FormattedText> _rulerLabels = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, TextDrawing> _labels = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, TextDrawing> _rulerLabels = new(StringComparer.Ordinal);
 
     private TimelineViewModel? _model;
     private TimelineLayers _dirty = TimelineLayers.All;
@@ -50,6 +50,7 @@ public sealed class TimelineControl : FrameworkElement
     private Palette? _palette;
     private Typeface? _typeface;
     private double _pixelsPerDip = 1.0;
+    private ITimelineImagery _imagery = NoImagery.Instance;
 
     /// <summary>Creates the control.</summary>
     public TimelineControl()
@@ -65,6 +66,23 @@ public sealed class TimelineControl : FrameworkElement
         DataContextChanged += (_, _) => Attach(DataContext as TimelineViewModel);
         Loaded += (_, _) => HookRendering(true);
         Unloaded += (_, _) => HookRendering(false);
+    }
+
+    /// <summary>
+    /// Where thumbnails and waveforms come from. <see cref="NoImagery"/> until Phase 14's caches
+    /// are there, which draws placeholders.
+    /// </summary>
+    public ITimelineImagery Imagery
+    {
+        get => _imagery;
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            _imagery.Changed -= OnImageryChanged;
+            _imagery = value;
+            _imagery.Changed += OnImageryChanged;
+            OnInvalidated(this, TimelineLayers.Clips);
+        }
     }
 
     /// <summary>How long the clips layer took to draw last time, for the performance test.</summary>
@@ -388,6 +406,8 @@ public sealed class TimelineControl : FrameworkElement
 
     private void OnRendering(object? sender, EventArgs e) => DrawDirty();
 
+    private void OnImageryChanged(object? sender, EventArgs e) => Dispatcher.BeginInvoke(() => OnInvalidated(this, TimelineLayers.Clips));
+
     private SolidColorBrush TrackBrush(string color)
     {
         if (!_trackBrushes.TryGetValue(color, out SolidColorBrush? brush))
@@ -400,18 +420,98 @@ public sealed class TimelineControl : FrameworkElement
         return brush;
     }
 
-    private FormattedText Label(string text, Dictionary<string, FormattedText> cache, Brush brush, double size)
+    /// <summary>
+    /// Thumbnails on a picture clip and the waveform on a sound clip, from <see cref="Imagery"/>
+    /// when it has them; otherwise a placeholder, and it is asked again on the next draw.
+    /// </summary>
+    private void DrawImagery(DrawingContext dc, ClipView clip, Rect body, Flicks visibleStart, Flicks visibleEnd, double pixelsPerSecond)
     {
-        if (!cache.TryGetValue(text, out FormattedText? formatted))
+        if (!clip.Clip.IsMedia || clip.MediaMissing || body.Width < 4 || body.Height < 12)
         {
-            // Laying text out is the expensive part of drawing it, so each distinct string is
-            // laid out once. The cap keeps a long session's churn of renamed clips bounded.
+            return;
+        }
+
+        Flicks from = Flicks.Max(clip.Start, visibleStart);
+        Flicks to = Flicks.Min(clip.End, visibleEnd);
+        Palette palette = _palette!;
+
+        if (clip.Kind == TrackKind.Audio)
+        {
+            double middle = body.Top + (body.Height / 2);
+
+            if (Imagery.TryGetWaveform(clip, from, to, (int)body.Width, out WaveformPeaks peaks) && peaks.Maximum.Length > 1)
+            {
+                var wave = new StreamGeometry();
+                using (StreamGeometryContext context = wave.Open())
+                {
+                    double half = (body.Height / 2) - 2;
+                    double step = body.Width / peaks.Maximum.Length;
+
+                    context.BeginFigure(new Point(body.Left, middle - (peaks.Maximum[0] * half)), true, true);
+                    for (int column = 1; column < peaks.Maximum.Length; column++)
+                    {
+                        context.LineTo(new Point(body.Left + (column * step), middle - (peaks.Maximum[column] * half)), false, false);
+                    }
+
+                    for (int column = peaks.Minimum.Length - 1; column >= 0; column--)
+                    {
+                        context.LineTo(new Point(body.Left + (column * step), middle - (peaks.Minimum[column] * half)), false, false);
+                    }
+                }
+
+                wave.Freeze();
+                dc.DrawGeometry(palette.Waveform, null, wave);
+            }
+            else
+            {
+                dc.DrawLine(palette.WaveformPlaceholder, new Point(body.Left + 2, middle), new Point(body.Right - 2, middle));
+            }
+
+            return;
+        }
+
+        if (Imagery.TryGetThumbnails(clip, from, to, pixelsPerSecond, out IReadOnlyList<ThumbnailTile> tiles) && tiles.Count > 0)
+        {
+            double top = body.Top + ClipFontSize + 6;
+            double height = body.Bottom - top - 2;
+            if (height < 8)
+            {
+                return;
+            }
+
+            double width = height * 16.0 / 9.0;
+            dc.PushClip(new RectangleGeometry(body));
+
+            foreach (ThumbnailTile tile in tiles)
+            {
+                Flicks at = clip.Start + ((tile.SourceTime - clip.Clip.SourceIn) * clip.Clip.EffectiveSpeed.Den / clip.Clip.EffectiveSpeed.Num);
+                double x = _model!.Geometry.XOf(at);
+                dc.DrawImage(tile.Image, new Rect(x, top, width, height));
+            }
+
+            dc.Pop();
+        }
+    }
+
+    /// <summary>A clip name, laid out once.</summary>
+    private TextDrawing ClipLabel(string text, Brush brush) => Text(text, _labels, brush, ClipFontSize);
+
+    /// <summary>
+    /// Text laid out once and recorded at the origin, frozen. Laying a line out is the expensive
+    /// part of drawing it, and <see cref="DrawingContext.DrawText"/> does it on every call; five
+    /// hundred clip names a frame that way cost 15 ms, and drawn from here about one. The cap keeps
+    /// a long session's churn of renamed clips bounded.
+    /// </summary>
+    private TextDrawing Text(string text, Dictionary<string, TextDrawing> cache, Brush brush, double size)
+    {
+        if (!cache.TryGetValue(text, out TextDrawing? label))
+        {
             if (cache.Count > 4096)
             {
                 cache.Clear();
             }
 
-            formatted = new FormattedText(
+            var formatted = new FormattedText(
                 text,
                 CultureInfo.CurrentUICulture,
                 FlowDirection.LeftToRight,
@@ -421,13 +521,28 @@ public sealed class TimelineControl : FrameworkElement
                 _pixelsPerDip)
             {
                 MaxLineCount = 1,
-                Trimming = TextTrimming.None,
             };
 
-            cache[text] = formatted;
+            var drawing = new DrawingGroup();
+            using (DrawingContext context = drawing.Open())
+            {
+                context.DrawText(formatted, new Point(0, 0));
+            }
+
+            drawing.Freeze();
+            label = new TextDrawing(drawing, formatted.WidthIncludingTrailingWhitespace);
+            cache[text] = label;
         }
 
-        return formatted;
+        return label;
+    }
+
+    /// <summary>Draws recorded text with its top left corner at a point.</summary>
+    private static void DrawTextAt(DrawingContext dc, TextDrawing text, double x, double y)
+    {
+        dc.PushTransform(new TranslateTransform(x, y));
+        dc.DrawDrawing(text.Drawing);
+        dc.Pop();
     }
 
     private void DrawLanes()
@@ -514,6 +629,8 @@ public sealed class TimelineControl : FrameworkElement
                 Brush bodyBrush = clip.MediaMissing ? palette.Missing : clip.Clip.Enabled ? fill : palette.Disabled;
                 dc.DrawRoundedRectangle(bodyBrush, palette.ClipEdge, body, 3.0, 3.0);
 
+                DrawImagery(dc, clip, body, visibleStart, visibleEnd, geometry.PixelsPerSecond);
+
                 if (clip.Clip.LinkGroupId is not null)
                 {
                     dc.DrawRectangle(palette.LinkMark, null, new Rect(body.Left + 1, body.Bottom - 3, Math.Min(10.0, body.Width - 2), 2));
@@ -521,7 +638,7 @@ public sealed class TimelineControl : FrameworkElement
 
                 if (body.Width > 16 && clipHeight > ClipFontSize + 2)
                 {
-                    FormattedText label = Label(clip.Label, _labels, palette.ClipText, ClipFontSize);
+                    TextDrawing label = ClipLabel(clip.Label, palette.ClipText);
                     double textLeft = Math.Max(body.Left, 0) + LabelPadding;
                     double room = body.Right - LabelPadding - textLeft;
 
@@ -533,7 +650,7 @@ public sealed class TimelineControl : FrameworkElement
                             dc.PushClip(new RectangleGeometry(new Rect(textLeft, body.Top, room, body.Height)));
                         }
 
-                        dc.DrawText(label, new Point(textLeft, body.Top + 2));
+                        DrawTextAt(dc, label, textLeft, body.Top + 2);
 
                         if (!fits)
                         {
@@ -618,7 +735,7 @@ public sealed class TimelineControl : FrameworkElement
 
             if (marker.Name.Length > 0)
             {
-                dc.DrawText(Label(marker.Name, _rulerLabels, palette.TextSecondary, 10.0), new Point(x + 11, top));
+                DrawTextAt(dc, Text(marker.Name, _rulerLabels, palette.TextSecondary, 10.0), x + 11, top);
             }
         }
     }
@@ -662,7 +779,7 @@ public sealed class TimelineControl : FrameworkElement
             if (isMajor)
             {
                 string text = Core.Time.Timecode.Format(time, fps);
-                dc.DrawText(Label(text, _rulerLabels, palette.TextSecondary, 10.0), new Point(x + 3, 2));
+                DrawTextAt(dc, Text(text, _rulerLabels, palette.TextSecondary, 10.0), x + 3, 2);
             }
         }
 
@@ -788,6 +905,8 @@ public sealed class TimelineControl : FrameworkElement
             Missing = Faded(Find("Brush.Error", Color.FromRgb(0xE0, 0x5C, 0x5C)), 0.55);
             Disabled = Find("Brush.Border.Strong", Color.FromRgb(0x4C, 0x4C, 0x4C));
             LinkMark = Faded(Find("Brush.Text.Primary", Color.FromRgb(0xE6, 0xE6, 0xE6)), 0.7);
+            Waveform = Faded(Find("Brush.Text.Primary", Color.FromRgb(0xE6, 0xE6, 0xE6)), 0.45);
+            WaveformPlaceholder = Frozen(new Pen(Faded(Find("Brush.Text.Primary", Color.FromRgb(0xE6, 0xE6, 0xE6)), 0.25), 1.0));
 
             ClipEdge = Frozen(new Pen(Frozen(new SolidColorBrush(Color.FromArgb(0x70, 0, 0, 0))), 1.0));
             RowLine = Frozen(new Pen(Find("Brush.Border", Color.FromRgb(0x3A, 0x3A, 0x3A)), 1.0));
@@ -829,6 +948,10 @@ public sealed class TimelineControl : FrameworkElement
         public Brush Disabled { get; }
 
         public Brush LinkMark { get; }
+
+        public Brush Waveform { get; }
+
+        public Pen WaveformPlaceholder { get; }
 
         public Pen ClipEdge { get; }
 
@@ -904,3 +1027,8 @@ public static class RulerSpacing
         return (Flicks.OneSecond * 7200, 4);
     }
 }
+
+/// <summary>Text recorded once, and how wide it is.</summary>
+/// <param name="Drawing">The glyphs, at the origin, frozen.</param>
+/// <param name="Width">The advance width.</param>
+internal sealed record TextDrawing(Drawing Drawing, double Width);
