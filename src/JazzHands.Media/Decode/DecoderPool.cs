@@ -155,12 +155,18 @@ public sealed class DecoderPool : IDisposable
     /// <param name="streamIndex">The video stream, or -1 for the file's best one.</param>
     /// <param name="role">What the decoder is for.</param>
     /// <param name="projectRate">The timeline frame rate a variable source is conformed to.</param>
+    /// <param name="lane">
+    /// Which of several users of the same stream and role this is. Two layers playing one file at
+    /// different times each need their own decoder, or one decoder is dragged back and forth
+    /// between them every frame. The compositor passes the track's stacking order.
+    /// </param>
     public DecoderLease Rent(
         MediaItem item,
         string path,
         int streamIndex = -1,
         DecoderRole role = DecoderRole.Seek,
-        Rational? projectRate = null)
+        Rational? projectRate = null,
+        int lane = 0)
     {
         ArgumentNullException.ThrowIfNull(item);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -170,7 +176,7 @@ public sealed class DecoderPool : IDisposable
         // Resolved before the key is built, not after the decoder is open. Keying on -1 and
         // storing under the real index means every borrow misses and opens another decoder, which
         // is the one thing this class exists to stop.
-        var key = new Key(item.Hash, ResolveStream(item, path, streamIndex), role);
+        var key = new Key(item.Hash, ResolveStream(item, path, streamIndex), role, lane);
 
         if (_entries.TryGetValue(key, out Entry? existing))
         {
@@ -438,7 +444,7 @@ public sealed class DecoderPool : IDisposable
             + "give each decode thread its own.");
     }
 
-    private readonly record struct Key(string Hash, int StreamIndex, DecoderRole Role);
+    private readonly record struct Key(string Hash, int StreamIndex, DecoderRole Role, int Lane);
 
     /// <summary>One open decoder and everything that belongs to it.</summary>
     internal sealed class Entry(

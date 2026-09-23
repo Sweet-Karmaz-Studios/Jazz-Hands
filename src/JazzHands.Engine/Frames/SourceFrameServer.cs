@@ -147,6 +147,8 @@ public sealed class SourceFrameServer : IDisposable
     /// <param name="timelineTime">Where on the timeline.</param>
     /// <param name="projectPath">Where the project lives, for resolving a relative media path.</param>
     /// <param name="direction">Which way the playhead is moving, which decides what is decoded ahead.</param>
+    /// <param name="mode">Exact for the frame at the time, nearest for the keyframe before it.</param>
+    /// <param name="lane">Which layer asks, so two layers of one file keep separate decoders.</param>
     /// <returns>
     /// The frame, owned by the cache, or null when the clip has no media or the time is past the
     /// end of it.
@@ -157,7 +159,8 @@ public sealed class SourceFrameServer : IDisposable
         Flicks timelineTime,
         string projectPath = "",
         PlayDirection direction = PlayDirection.Still,
-        SeekMode mode = SeekMode.Exact)
+        SeekMode mode = SeekMode.Exact,
+        int lane = 0)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(clip);
@@ -168,7 +171,7 @@ public sealed class SourceFrameServer : IDisposable
             return null;
         }
 
-        MediaItem? item = project.Media.FirstOrDefault(media => media.Id == mediaId);
+        MediaItem? item = project.MediaItem(mediaId);
         if (item is null || item.Hash.Length == 0)
         {
             return null;
@@ -191,7 +194,8 @@ public sealed class SourceFrameServer : IDisposable
             path,
             clip.SourceStreamIndex,
             role,
-            project.Settings.FrameRate);
+            project.Settings.FrameRate,
+            lane);
 
         int bitDepth = BitDepthOf(item, clip.SourceStreamIndex);
         FrameTexture? served = DecodeTo(lease, item, key, sourceTime, rate, bitDepth, mode);
@@ -235,7 +239,8 @@ public sealed class SourceFrameServer : IDisposable
         Clip clip,
         Flicks timelineTime,
         KeyframeIndex index,
-        string projectPath = "")
+        string projectPath = "",
+        int lane = 0)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(clip);
@@ -243,7 +248,7 @@ public sealed class SourceFrameServer : IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         if (clip.MediaId is not { } mediaId ||
-            project.Media.FirstOrDefault(media => media.Id == mediaId) is not { } item ||
+            project.MediaItem(mediaId) is not { } item ||
             item.Hash.Length == 0)
         {
             return 0;
@@ -259,7 +264,8 @@ public sealed class SourceFrameServer : IDisposable
             path,
             clip.SourceStreamIndex,
             DecoderRole.Playhead,
-            project.Settings.FrameRate);
+            project.Settings.FrameRate,
+            lane);
 
         int bitDepth = BitDepthOf(item, clip.SourceStreamIndex);
         lease.Frames.Flush(gop.Start);

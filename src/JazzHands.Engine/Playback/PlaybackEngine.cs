@@ -12,7 +12,7 @@ using JazzHands.Media.Import;
 using JazzHands.Render;
 using JazzHands.Render.Color;
 using JazzHands.Render.Frames;
-using JazzHands.Render.Passes;
+using JazzHands.Render.Compositing;
 using Serilog;
 using Vortice.Direct3D11;
 
@@ -39,8 +39,9 @@ namespace JazzHands.Engine.Playback;
 /// left before the next frame is due is spent decoding further ahead, so the frame that is due
 /// is almost always already there.
 ///
-/// Until the compositor arrives in Phase 10 this shows one layer: the topmost enabled clip on a
-/// visible video track, fitted to the frame the way its media asks.
+/// Each frame goes through <see cref="FrameServer"/>: the render graph is built from the
+/// sequence, every visible layer's picture fetched on its own decoder lane, and the stack
+/// composited and encoded into the program texture at the working resolution.
 /// </remarks>
 public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
 {
@@ -56,8 +57,10 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
     private readonly AutoResetEvent _wake = new(false);
     private readonly Lock _targetsGate = new();
     private readonly Lock _controlGate = new();
-    private readonly Dictionary<(string Hash, int Stream), KeyframeIndex?> _keyframes = [];
-    private readonly Dictionary<string, string> _failedMedia = new(StringComparer.Ordinal);
+    private readonly Func<bool> _interrupted;
+    private readonly RenderOptions[] _playingOptions = new RenderOptions[5];
+    private readonly RenderOptions[] _parkedOptions = new RenderOptions[5];
+    private long _lastVersion = -1;
 
     private IPreviewTarget[] _targets = [];
     private volatile bool _disposing;
@@ -118,6 +121,14 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
         _options = options ?? new PlaybackOptions();
         _notices = notices;
         _cacheManager = cacheManager;
+        _interrupted = Interrupted;
+
+        // Made once, so rendering a frame builds no options.
+        foreach (int divisor in new[] { 1, 2, 4 })
+        {
+            _playingOptions[divisor] = RenderOptions.ForDivisor(divisor);
+            _parkedOptions[divisor] = RenderOptions.ForDivisor(divisor) with { CacheLayers = true };
+        }
 
         _thread = new Thread(CompositionLoop)
         {
@@ -529,77 +540,6 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
         return (Flicks.Zero, sequence.Duration);
     }
 
-    /// <summary>The topmost enabled clip on a visible video track at a time, which is what one layer shows.</summary>
-    internal static Clip? TopClip(Sequence sequence, Flicks time)
-    {
-        Clip? top = null;
-        int order = int.MinValue;
-
-        foreach (Track track in sequence.Tracks)
-        {
-            // A muted video track is a hidden one.
-            if (track.Kind != TrackKind.Video || track.Muted || track.Order < order)
-            {
-                continue;
-            }
-
-            if (Core.Queries.TimelineQueries.ClipAt(track, time) is { Enabled: true } clip)
-            {
-                top = clip;
-                order = track.Order;
-            }
-        }
-
-        return top;
-    }
-
-    /// <summary>Where a source picture goes in the frame, by its media's conform policy.</summary>
-    internal static QuadRect Placement(
-        ConformPolicy policy,
-        int pictureWidth,
-        int pictureHeight,
-        int sequenceWidth,
-        int sequenceHeight,
-        int targetWidth,
-        int targetHeight)
-    {
-        switch (policy)
-        {
-            case ConformPolicy.Stretch:
-                return QuadRect.Full;
-
-            case ConformPolicy.Native:
-                // One source pixel to one sequence pixel, whatever the working resolution is.
-                return QuadRect.Zoom(pictureWidth, pictureHeight, targetWidth, targetHeight, (double)targetWidth / sequenceWidth);
-
-            case ConformPolicy.Fill:
-                double cover = Math.Max((double)targetWidth / pictureWidth, (double)targetHeight / pictureHeight);
-                return QuadRect.Zoom(pictureWidth, pictureHeight, targetWidth, targetHeight, cover);
-
-            default:
-                return QuadRect.Fit(pictureWidth, pictureHeight, targetWidth, targetHeight);
-        }
-    }
-
-    /// <summary>The colour signalling of a clip's picture, from what import recorded.</summary>
-    /// <remarks>
-    /// The probe records whether a stream is HDR but not its matrix, so the rest is the convention
-    /// every player falls back on: BT.2020 with PQ for HDR, BT.601 for standard definition and
-    /// BT.709 for everything else, limited range throughout.
-    /// </remarks>
-    internal static YuvColorSpace ColorSpaceFor(MediaItem item, int streamIndex, PixelLayout layout)
-    {
-        MediaStream? stream = item.Info?.Streams.FirstOrDefault(candidate => candidate.Index == streamIndex);
-
-        if (stream?.IsHdr == true)
-        {
-            return YuvColorSpace.From("bt2020nc", "smpte2084", isFullRange: false, layout.BitDepth);
-        }
-
-        string matrix = stream is { Height: > 0 and <= 576 } ? "bt601" : "bt709";
-        return YuvColorSpace.From(matrix, "bt709", isFullRange: false, layout.BitDepth);
-    }
-
     private static long Ticks(TimeSpan span) => (long)(span.TotalMilliseconds * TicksPerMillisecond);
 
     private void OnProjectChanged(object? sender, ProjectChangedEventArgs e)
@@ -618,8 +558,7 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
     private void CompositionLoop()
     {
         HardwareDeviceContext? hardware = null;
-        SourceFrameServer? server = null;
-        PreviewPass? pass = null;
+        FrameServer? frames = null;
         TimerResolution? resolution = null;
 
         try
@@ -641,12 +580,7 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
                 hardware = HardwareDeviceContext.CreateShared(_device.Device.NativePointer, _device.ImmediateContext.NativePointer);
             }
 
-            server = new SourceFrameServer(
-                new DecoderPool(hardware),
-                new FrameCache(new FrameTexturePool(_device), _options.FrameCacheBytes),
-                _device,
-                _notices);
-            pass = new PreviewPass(_device);
+            frames = new FrameServer(_device, hardware, _options.FrameCacheBytes, _notices, _cacheManager);
 
             while (!_disposing)
             {
@@ -663,7 +597,7 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
                     resolution = null;
                 }
 
-                int wait = Tick(server, pass);
+                int wait = Tick(frames);
                 if (wait > 0)
                 {
                     _wake.WaitOne(wait);
@@ -678,8 +612,7 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
         {
             resolution?.Dispose();
             ReleaseProgram();
-            pass?.Dispose();
-            server?.Dispose();
+            frames?.Dispose();
             hardware?.Dispose();
         }
     }
@@ -689,7 +622,7 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
     /// one already shown, decode ahead, and say how long to sleep.
     /// </summary>
     /// <returns>Milliseconds until something is next due.</returns>
-    private int Tick(SourceFrameServer server, PreviewPass pass)
+    private int Tick(FrameServer frames)
     {
         ProjectSnapshot snapshot = _snapshot;
         Project project = snapshot.Project;
@@ -699,6 +632,14 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
         if (sequence is null)
         {
             return 50;
+        }
+
+        if (snapshot.Version != _lastVersion)
+        {
+            // An edit may have relinked or replaced a file that failed, so everything gets
+            // another chance.
+            frames.Retry();
+            _lastVersion = snapshot.Version;
         }
 
         ProjectSettings settings = project.SettingsFor(sequence);
@@ -732,7 +673,7 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
         if (key != _lastKey || _lastFrame is null)
         {
             CountDrops(frame, playing, rate, generation);
-            Render(server, pass, snapshot, sequence, settings, frame, time, effective, playing, rate);
+            Render(frames, snapshot, sequence, settings, frame, time, effective, playing, rate);
             _lastKey = key;
             Present();
         }
@@ -745,7 +686,7 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
 
         if (playing)
         {
-            DecodeAhead(server, snapshot, sequence, fps, frame, rate, frameLength);
+            DecodeAhead(frames, snapshot, sequence, frame, rate, frameLength);
             return MillisecondsToNextFrame(time, frame, fps, rate);
         }
 
@@ -754,7 +695,7 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
         // abandoned the moment anything else is asked for, so it never slows a scrub.
         bool settled = Volatile.Read(ref _scrubUntilTicks) < now || _playWaiting;
         if ((_prerolled != key || Interlocked.Read(ref _prerolledGeneration) != generation) && settled
-            && DecodeAhead(server, snapshot, sequence, fps, frame, 1.0, frameLength))
+            && DecodeAhead(frames, snapshot, sequence, frame, 1.0, frameLength))
         {
             _prerolled = key;
             Interlocked.Exchange(ref _prerolledGeneration, generation);
@@ -843,9 +784,12 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
         _lastPlayingGeneration = generation;
     }
 
+    /// <summary>
+    /// Renders the frame through the compositor into the program texture at the working
+    /// resolution, and records what is now on screen.
+    /// </summary>
     private void Render(
-        SourceFrameServer server,
-        PreviewPass pass,
+        FrameServer frames,
         ProjectSnapshot snapshot,
         Sequence sequence,
         ProjectSettings settings,
@@ -862,190 +806,55 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
             _ => 1,
         };
 
-        int width = Math.Max(1, (settings.Width + divisor - 1) / divisor);
-        int height = Math.Max(1, (settings.Height + divisor - 1) / divisor);
+        (int width, int height) = RenderGraphBuilder.OutputSize(settings, 1.0f / divisor);
         EnsureProgram(width, height);
 
-        pass.Clear(_programView!);
-
         Flicks time = Flicks.FromFrames(frame, settings.FrameRate);
-        Project project = snapshot.Project;
 
-        if (TopClip(sequence, time) is { } clip && clip.MediaId is { } mediaId && project.MediaItem(mediaId) is { } item
-            && !_failedMedia.ContainsKey(item.Id))
-        {
-            try
-            {
-                FrameTexture? source = Fetch(server, snapshot, clip, item, time, playing, rate);
+        // Placed layers are kept between frames only while the playhead is parked: scrubbing back
+        // over a still region then redraws nothing, and playing never fills the cache with
+        // frames that will not come round again.
+        RenderOptions options = playing ? _playingOptions[divisor] : _parkedOptions[divisor];
 
-                if (source is not null)
-                {
-                    QuadRect placement = Placement(
-                        item.Conform,
-                        source.Width,
-                        source.Height,
-                        settings.Width,
-                        settings.Height,
-                        width,
-                        height);
-
-                    pass.DrawFrame(source, ColorSpaceFor(item, clip.SourceStreamIndex, source.Layout), _programView!, width, height, placement);
-                }
-            }
-            catch (Exception exception) when (exception is not OutOfMemoryException)
-            {
-                // One broken file must not take the preview down with it. It is reported once and
-                // left black until the project changes, rather than retried at sixty a second.
-                _failedMedia[item.Id] = exception.Message;
-                _log.Error(exception, "Could not show {Media} in the preview", item.Name);
-                _notices?.Report(
-                    item.Id,
-                    item.Name,
-                    DiagnosticCodes.DecodeFailed,
-                    $"The preview could not show this file: {exception.Message}",
-                    DiagnosticLevel.Error);
-            }
-        }
+        frames.Motion = new Motion(playing, rate);
+        frames.Render(snapshot.Project, sequence, time, options, _programView!, width, height, OutputSettings.Preview, snapshot.Path);
 
         Interlocked.Increment(ref _rendered);
         Interlocked.Exchange(ref _frameOnScreen, frame);
         _lastFrame = new PreviewFrame(_program!, width, height, settings.Width, settings.Height, frame, time, playhead, quality);
     }
 
-    /// <summary>Gets a clip's picture the way the current rate needs it.</summary>
-    private FrameTexture? Fetch(
-        SourceFrameServer server,
-        ProjectSnapshot snapshot,
-        Clip clip,
-        MediaItem item,
-        Flicks time,
-        bool playing,
-        double rate)
-    {
-        // Past twice normal speed a shuttle shows keyframes: every frame would mean decoding
-        // sixty times faster than real time, and nobody can see the difference at 8x.
-        SeekMode mode = playing && Math.Abs(rate) > 2.0 ? SeekMode.Nearest : SeekMode.Exact;
-        PlayDirection direction = !playing ? PlayDirection.Still : (rate > 0) != clip.Reverse ? PlayDirection.Forward : PlayDirection.Reverse;
-
-        if (direction == PlayDirection.Reverse && mode == SeekMode.Exact)
-        {
-            // Backwards through the source: decode the group the frame is in forwards and keep
-            // all of it, which is the only way there is. The next frames are then cache hits.
-            FrameTexture? cached = server.GetCachedFrame(snapshot.Project, clip, time);
-            if (cached is not null)
-            {
-                return cached;
-            }
-
-            if (KeyframesFor(item, clip.SourceStreamIndex, snapshot.Path) is { } index)
-            {
-                server.PrimeGop(snapshot.Project, clip, time, index, snapshot.Path);
-            }
-
-            return server.GetSourceFrame(snapshot.Project, clip, time, snapshot.Path, PlayDirection.Still);
-        }
-
-        return server.GetSourceFrame(snapshot.Project, clip, time, snapshot.Path, direction, mode);
-    }
-
-    /// <summary>A source's keyframe index, from the cache database or built by a scan.</summary>
-    private KeyframeIndex? KeyframesFor(MediaItem item, int streamIndex, string projectPath)
-    {
-        var key = (item.Hash, streamIndex);
-        if (_keyframes.TryGetValue(key, out KeyframeIndex? known))
-        {
-            return known;
-        }
-
-        KeyframeIndex? index = null;
-        try
-        {
-            index = _cacheManager is null ? null : KeyframeIndex.Load(_cacheManager, item.Hash, streamIndex);
-
-            if (index is null)
-            {
-                string path = projectPath.Length == 0 ? item.RelativePath : ProjectPaths.Resolve(projectPath, item.RelativePath);
-                long started = Stopwatch.GetTimestamp();
-                index = KeyframeIndex.Build(path, streamIndex);
-                _log.Information(
-                    "Indexed {Count} keyframes of {Media} for reverse play in {Ms:F0} ms",
-                    index.Count,
-                    item.Name,
-                    Stopwatch.GetElapsedTime(started).TotalMilliseconds);
-
-                if (_cacheManager is not null)
-                {
-                    index.Save(_cacheManager, item.Hash, streamIndex);
-                }
-            }
-        }
-        catch (Exception exception) when (exception is IOException or InvalidOperationException or Media.Interop.FfmpegException)
-        {
-            // Reverse play then seeks for every frame, which is slow but still right.
-            _log.Warning(exception, "Could not index the keyframes of {Media}; reverse play will seek for every frame", item.Name);
-        }
-
-        _keyframes[key] = index;
-        return index;
-    }
-
     /// <summary>
-    /// Spends the time before the next frame is due decoding the ones after it, so the one that
-    /// is due is already in the cache when its turn comes.
+    /// Spends the time before the next frame is due decoding the ones after it, on every visible
+    /// layer, so the frames that are due are already in the cache when their turn comes.
     /// </summary>
     /// <returns>False when it gave way to a request before finishing.</returns>
-    private bool DecodeAhead(
-        SourceFrameServer server,
-        ProjectSnapshot snapshot,
-        Sequence sequence,
-        Rational fps,
-        long frame,
-        double rate,
-        Flicks frameLength)
+    private bool DecodeAhead(FrameServer frames, ProjectSnapshot snapshot, Sequence sequence, long frame, double rate, Flicks frameLength)
     {
         if (rate <= 0 || rate > 2.0 || _options.DecodeAhead <= 0)
         {
             return true;
         }
 
-        // Leave a couple of milliseconds of the frame interval unspent, so a slow decode here
-        // does not make the next frame late.
+        // Leave a few milliseconds of the frame interval unspent, so a slow decode here does not
+        // make the next frame late.
         double interval = frameLength.Value * 1000.0 / Flicks.PerSecond / rate;
         long deadline = Stopwatch.GetTimestamp() + (long)(Math.Max(0.0, interval - 3.0) * TicksPerMillisecond);
         int step = Math.Max(1, (int)Math.Round(rate));
 
-        for (int ahead = 1; ahead <= _options.DecodeAhead && Stopwatch.GetTimestamp() < deadline; ahead++)
+        return frames.DecodeAhead(snapshot.Project, sequence, frame, step, _options.DecodeAhead, deadline, _interrupted, snapshot.Path);
+    }
+
+    /// <summary>True when somebody asked for something while decoding ahead; the signal is put back.</summary>
+    private bool Interrupted()
+    {
+        if (_disposing || _wake.WaitOne(0))
         {
-            if (_disposing || _wake.WaitOne(0))
-            {
-                // Somebody asked for something; that comes first. Put the signal back.
-                _wake.Set();
-                return false;
-            }
-
-            // A reversed clip is primed a group at a time when it is rendered; decoding ahead of
-            // it one frame at a time would be a seek per frame.
-            Flicks time = Flicks.FromFrames(frame + (ahead * step), fps);
-            if (TopClip(sequence, time) is not { MediaId: { } mediaId, Reverse: false } clip
-                || snapshot.Project.MediaItem(mediaId) is not { } item
-                || _failedMedia.ContainsKey(item.Id))
-            {
-                continue;
-            }
-
-            try
-            {
-                server.GetSourceFrame(snapshot.Project, clip, time, snapshot.Path, PlayDirection.Forward);
-            }
-            catch (Exception exception) when (exception is not OutOfMemoryException)
-            {
-                // The render of that frame will meet the same error and report it properly.
-                _log.Debug(exception, "Decoding ahead failed at {Time}", time);
-                return true;
-            }
+            _wake.Set();
+            return true;
         }
 
-        return true;
+        return false;
     }
 
     private int MillisecondsToNextFrame(Flicks time, long frame, Rational fps, double rate)
