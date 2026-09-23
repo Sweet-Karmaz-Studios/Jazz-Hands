@@ -126,6 +126,23 @@ public static class ExportPlanner
                     "nothing-to-export",
                     "Every stretch is shorter than the distance between two keyframes, so a copy would keep nothing. Export with --mode encode.");
             }
+            else if (index.HasLeadingPictures && EndsEarly(copy, index, snapped))
+            {
+                // An open group of pictures: the pictures shown just before a keyframe are decoded
+                // after it and refer to it, so a stretch that stops at that keyframe cannot keep
+                // them. Smart cut re-encodes them; until it exists, say so.
+                const string OpenGop =
+                    "The source uses open groups of pictures, so each stretch that ends at a keyframe loses the few pictures shown just before it, which depend on that keyframe.";
+
+                if (request.Mode == ExportMode.Copy)
+                {
+                    reasons.Add($"{OpenGop} Encode for an exact cut; smart cut (Phase 23) will keep them.");
+                    return CopyPlan(request, preset, sequence, output, container, ranges, copy, snapped, snaps, reasons);
+                }
+
+                reasons.Add($"{OpenGop} Encoding instead, so no picture is lost.");
+                copy = null;
+            }
             else
             {
                 return CopyPlan(request, preset, sequence, output, container, ranges, copy, snapped, snaps, reasons);
@@ -498,6 +515,14 @@ public static class ExportPlanner
         }
 
         return true;
+    }
+
+    /// <summary>True when some stretch stops at a keyframe rather than running to the end of the file.</summary>
+    private static bool EndsEarly(CopySource copy, KeyframeIndex index, ImmutableArray<TimeRange> snapped)
+    {
+        Rational rate = copy.Video.FrameRate ?? Rational.Fps30;
+        Flicks endish = Flicks.Min(index.Duration, copy.Media.Duration) - (Flicks.FromFrames(1, rate) / 2);
+        return snapped.Any(stretch => stretch.End < endish);
     }
 
     /// <summary>Moves each stretch's ends to the nearest keyframes, recording every move.</summary>

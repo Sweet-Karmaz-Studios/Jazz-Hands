@@ -27,7 +27,7 @@ namespace JazzHands.Media.Decode;
 public sealed class KeyframeIndex
 {
     /// <summary>The version written into a cached index, so an older one is ignored rather than trusted.</summary>
-    private const int Version = 1;
+    private const int Version = 2;
 
     private readonly ImmutableArray<Flicks> _times;
 
@@ -58,6 +58,17 @@ public sealed class KeyframeIndex
     /// Worth knowing because a seek in such a stream never has to decode forward at all.
     /// </remarks>
     public bool IsAllKeyframes { get; private init; }
+
+    /// <summary>
+    /// True when pictures shown just before a keyframe are decoded after it, as in an open group of
+    /// pictures (x265 by default, HEVC CRA frames).
+    /// </summary>
+    /// <remarks>
+    /// Those leading pictures refer to the keyframe after them, so a stream copy that ends a stretch
+    /// at a keyframe cannot keep them: the stretch comes out a few frames short. Smart cut (Phase 23)
+    /// re-encodes them; until then the export planner says so.
+    /// </remarks>
+    public bool HasLeadingPictures { get; private init; }
 
     /// <summary>Reads a stream's keyframe positions.</summary>
     /// <param name="path">The file, or an image sequence pattern.</param>
@@ -97,6 +108,8 @@ public sealed class KeyframeIndex
         Flicks end = Flicks.Zero;
         long packets = 0;
         bool complete = true;
+        bool leading = false;
+        Flicks? lastKeyframe = null;
 
         demuxer.Rewind();
 
@@ -140,6 +153,11 @@ public sealed class KeyframeIndex
             if ((packet->flags & ffmpeg.AV_PKT_FLAG_KEY) != 0)
             {
                 times.Add(at);
+                lastKeyframe = at;
+            }
+            else if (lastKeyframe is { } keyframe && at < keyframe)
+            {
+                leading = true;
             }
         }
 
@@ -160,6 +178,7 @@ public sealed class KeyframeIndex
         return new KeyframeIndex(sorted, end, complete)
         {
             IsAllKeyframes = complete && packets > 0 && sorted.Length == packets,
+            HasLeadingPictures = leading,
         };
     }
 
@@ -189,6 +208,7 @@ public sealed class KeyframeIndex
                 isComplete: true)
             {
                 IsAllKeyframes = stored.AllKeyframes,
+                HasLeadingPictures = stored.LeadingPictures,
             };
         }
         catch (JsonException error)
@@ -214,7 +234,8 @@ public sealed class KeyframeIndex
             Version,
             [.. _times.Select(time => time.Value)],
             Duration.Value,
-            IsAllKeyframes);
+            IsAllKeyframes,
+            HasLeadingPictures);
 
         cache.PutKeyframes(hash, streamIndex, JsonSerializer.Serialize(stored));
         return true;
@@ -293,5 +314,5 @@ public sealed class KeyframeIndex
     }
 
     /// <summary>What goes in the cache. A record so a version bump is a compile error away from being handled.</summary>
-    private sealed record Stored(int Version, long[] Times, long Duration, bool AllKeyframes);
+    private sealed record Stored(int Version, long[] Times, long Duration, bool AllKeyframes, bool LeadingPictures);
 }
