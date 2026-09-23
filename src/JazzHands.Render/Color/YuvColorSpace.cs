@@ -16,6 +16,9 @@ public enum TransferFunction
 
     /// <summary>Already linear; used by EXR and by generated sources.</summary>
     Linear = 3,
+
+    /// <summary>IEC 61966-2-1, for PNG, JPEG and other stills.</summary>
+    Srgb = 4,
 }
 
 /// <summary>
@@ -30,6 +33,12 @@ public sealed record YuvColorSpace(Matrix4x4 Matrix, bool IsFullRange, TransferF
 {
     /// <summary>BT.709 limited range, 8-bit. The default for HD video.</summary>
     public static readonly YuvColorSpace Bt709Limited = new(BuildMatrix(0.2126, 0.0722), false, TransferFunction.Bt709, 8);
+
+    /// <summary>
+    /// An RGB source, such as a still: no matrix and full range, just the transfer function it
+    /// was encoded with.
+    /// </summary>
+    public static YuvColorSpace Rgb(TransferFunction transfer) => new(Matrix4x4.Identity, true, transfer, 8);
 
     /// <summary>The luma offset to subtract: 16/255 for limited range, zero for full.</summary>
     public float LumaOffset => IsFullRange ? 0.0f : 16.0f / 255.0f;
@@ -76,6 +85,7 @@ public sealed record YuvColorSpace(Matrix4x4 Matrix, bool IsFullRange, TransferF
             "smpte2084" => TransferFunction.Pq,
             "arib-std-b67" => TransferFunction.Hlg,
             "linear" => TransferFunction.Linear,
+            "iec61966-2-1" or "srgb" => TransferFunction.Srgb,
             _ => TransferFunction.Bt709,
         };
 

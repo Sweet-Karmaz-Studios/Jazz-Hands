@@ -60,6 +60,12 @@ public enum BlendMode
 
     /// <summary>Absolute difference.</summary>
     Difference,
+
+    /// <summary>A gentle overlay: darkens or lightens depending on the layer.</summary>
+    SoftLight,
+
+    /// <summary>Overlay with the roles swapped: the layer decides multiply or screen.</summary>
+    HardLight,
 }
 
 /// <summary>Which of a source's channels an audio clip plays.</summary>
@@ -115,6 +121,83 @@ public sealed record Transform(
         AnimatedValue.Constant(0.0f),
         AnimatedValue.Constant(new ParamValue.Float2(Vector2.Zero)));
 }
+
+/// <summary>How much of each side of a clip's picture is cut away.</summary>
+/// <param name="Left">Percent of the width taken off the left, 0 to 100.</param>
+/// <param name="Top">Percent of the height taken off the top.</param>
+/// <param name="Right">Percent of the width taken off the right.</param>
+/// <param name="Bottom">Percent of the height taken off the bottom.</param>
+public sealed record Crop(
+    AnimatedValue Left,
+    AnimatedValue Top,
+    AnimatedValue Right,
+    AnimatedValue Bottom) : IEquatable<Crop>
+{
+    /// <summary>Nothing cut away.</summary>
+    public static Crop None { get; } = new(
+        AnimatedValue.Constant(0.0f),
+        AnimatedValue.Constant(0.0f),
+        AnimatedValue.Constant(0.0f),
+        AnimatedValue.Constant(0.0f));
+}
+
+/// <summary>The outline a mask follows.</summary>
+public enum MaskShape
+{
+    /// <summary>An axis-aligned rectangle given by its bounds.</summary>
+    Rectangle,
+
+    /// <summary>The ellipse inscribed in its bounds.</summary>
+    Ellipse,
+
+    /// <summary>Straight edges through a list of points.</summary>
+    Polygon,
+
+    /// <summary>A path of straight and cubic bezier segments.</summary>
+    Bezier,
+}
+
+/// <summary>How a mask combines with the masks before it on the same clip.</summary>
+public enum MaskMode
+{
+    /// <summary>Adds its area to what is shown.</summary>
+    Add,
+
+    /// <summary>Takes its area away from what is shown.</summary>
+    Subtract,
+
+    /// <summary>Shows only where it overlaps what is already shown.</summary>
+    Intersect,
+}
+
+/// <summary>
+/// A shape that limits what of a clip is seen.
+/// </summary>
+/// <remarks>
+/// Coordinates are in the clip's own source pixels, so a mask stays on the same part of the
+/// picture when the clip is moved, scaled or rotated. A rectangle or ellipse is its
+/// <see cref="Bounds"/>; a polygon or bezier is its <see cref="PathData"/>, in SVG path syntax
+/// (<c>M 10 10 L 200 10 C 250 50 250 150 200 190 Z</c>).
+/// </remarks>
+/// <param name="Id">The mask identifier.</param>
+/// <param name="Shape">The outline.</param>
+/// <param name="Bounds">x, y, width and height, for a rectangle or ellipse.</param>
+/// <param name="PathData">The outline of a polygon or bezier path.</param>
+/// <param name="Feather">Softening of the edge, in sequence pixels.</param>
+/// <param name="Opacity">How strongly it applies, 0 to 1.</param>
+/// <param name="Mode">How it combines with the masks before it.</param>
+/// <param name="Invert">Keep the outside instead of the inside.</param>
+/// <param name="Enabled">Masks can be switched off without being removed.</param>
+public sealed record Mask(
+    string Id,
+    MaskShape Shape,
+    AnimatedValue? Bounds = null,
+    AnimatedValue? PathData = null,
+    AnimatedValue? Feather = null,
+    AnimatedValue? Opacity = null,
+    MaskMode Mode = MaskMode.Add,
+    bool Invert = false,
+    bool Enabled = true) : IEquatable<Mask>;
 
 /// <summary>A fade at one end of a clip.</summary>
 /// <param name="Duration">How long the fade lasts. Zero means none.</param>
@@ -252,6 +335,8 @@ public sealed record Marker(
 /// <param name="GroupId">Clips sharing this identifier are selected together.</param>
 /// <param name="Name">A display name, usually taken from the media on insert.</param>
 /// <param name="ChannelMap">Which of the source's channels an audio clip plays, when not all of them as they are. Null for all.</param>
+/// <param name="Crop">How much of each side of the picture is cut away. Null for none.</param>
+/// <param name="Masks">Shapes limiting what of the picture is seen, in the order they combine.</param>
 public sealed record Clip(
     string Id,
     TimeRange Range,
@@ -275,7 +360,9 @@ public sealed record Clip(
     string? LinkGroupId = null,
     string? GroupId = null,
     string Name = "",
-    AudioChannelMap? ChannelMap = null) : IEquatable<Clip>
+    AudioChannelMap? ChannelMap = null,
+    Crop? Crop = null,
+    EquatableArray<Mask> Masks = default) : IEquatable<Clip>
 {
     /// <summary>Playback rate, defaulting to normal speed.</summary>
     public Rational EffectiveSpeed => Speed ?? Rational.One;

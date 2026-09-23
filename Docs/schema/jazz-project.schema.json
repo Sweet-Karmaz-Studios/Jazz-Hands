@@ -174,7 +174,9 @@
             "overlay",
             "darken",
             "lighten",
-            "difference"
+            "difference",
+            "softLight",
+            "hardLight"
           ]
         },
         "volume": {
@@ -267,12 +269,51 @@
               "type": "null"
             }
           ]
+        },
+        "crop": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/crop"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "masks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/mask"
+          }
         }
       },
       "required": [
         "id",
         "range",
         "sourceIn"
+      ]
+    },
+    "crop": {
+      "type": "object",
+      "properties": {
+        "left": {
+          "$ref": "#/$defs/animatedValue"
+        },
+        "top": {
+          "$ref": "#/$defs/animatedValue"
+        },
+        "right": {
+          "$ref": "#/$defs/animatedValue"
+        },
+        "bottom": {
+          "$ref": "#/$defs/animatedValue"
+        }
+      },
+      "required": [
+        "left",
+        "top",
+        "right",
+        "bottom"
       ]
     },
     "effect": {
@@ -471,6 +512,81 @@
         "time",
         "duration",
         "name"
+      ]
+    },
+    "mask": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "shape": {
+          "type": "string",
+          "enum": [
+            "rectangle",
+            "ellipse",
+            "polygon",
+            "bezier"
+          ]
+        },
+        "bounds": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/animatedValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pathData": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/animatedValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "feather": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/animatedValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/animatedValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "add",
+            "subtract",
+            "intersect"
+          ]
+        },
+        "invert": {
+          "type": "boolean"
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "shape"
       ]
     },
     "mediaInfo": {

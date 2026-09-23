@@ -15,6 +15,17 @@ public sealed record PixelPlane(Format Format, int WidthShift, int HeightShift, 
 
     /// <summary>This plane's height for a given frame height.</summary>
     public int HeightFor(int frameHeight) => Math.Max(1, (frameHeight + (1 << HeightShift) - 1) >> HeightShift);
+
+    /// <summary>Bytes in one sample of one channel: one, two or four.</summary>
+    public int SampleBytes => Format switch
+    {
+        Format.R16_UNorm or Format.R16G16_UNorm or Format.R16G16B16A16_UNorm => 2,
+        Format.R32_Float => 4,
+        _ => 1,
+    };
+
+    /// <summary>Bytes in one row of this plane at a frame width.</summary>
+    public int RowBytes(int frameWidth) => WidthFor(frameWidth) * Channels * SampleBytes;
 }
 
 /// <summary>
@@ -71,14 +82,37 @@ public sealed record PixelLayout(string Name, ImmutableArray<PixelPlane> Planes,
     /// <summary>12-bit planar 4:2:0, which some camera intermediates use.</summary>
     public static readonly PixelLayout Yuv420P12 = Planar("yuv420p12le", Format.R16_UNorm, 1, 1, 12);
 
+    /// <summary>Eight bit interleaved RGBA, what the image decoder gives for an ordinary still.</summary>
+    public static readonly PixelLayout Rgba = new("rgba", [new PixelPlane(Format.R8G8B8A8_UNorm, 0, 0, 4)], 8);
+
+    /// <summary>Sixteen bit interleaved RGBA, for sixteen bit PNG and TIFF.</summary>
+    public static readonly PixelLayout Rgba64 = new("rgba64le", [new PixelPlane(Format.R16G16B16A16_UNorm, 0, 0, 4)], 16);
+
+    /// <summary>
+    /// Planar float in G, B, R, A order, for EXR. Planar because swscale has no packed float
+    /// output, and in that order because it is FFmpeg's.
+    /// </summary>
+    public static readonly PixelLayout Gbrapf32 = new(
+        "gbrapf32le",
+        [
+            new PixelPlane(Format.R32_Float, 0, 0, 1),
+            new PixelPlane(Format.R32_Float, 0, 0, 1),
+            new PixelPlane(Format.R32_Float, 0, 0, 1),
+            new PixelPlane(Format.R32_Float, 0, 0, 1),
+        ],
+        32);
+
     /// <summary>Every layout this build knows, by the FFmpeg name it answers to.</summary>
     public static readonly ImmutableArray<PixelLayout> All =
     [
-        Nv12, P010, Yuv420P, Yuv420P10, Yuv420P12, Yuv422P, Yuv422P10, Yuv444P, Yuv444P10,
+        Nv12, P010, Yuv420P, Yuv420P10, Yuv420P12, Yuv422P, Yuv422P10, Yuv444P, Yuv444P10, Rgba, Rgba64, Gbrapf32,
     ];
 
     /// <summary>How many textures a frame in this layout needs.</summary>
     public int PlaneCount => Planes.Length;
+
+    /// <summary>True when the samples are RGB rather than YUV.</summary>
+    public bool IsRgb => Name is "rgba" or "rgba64le" or "gbrapf32le";
 
     /// <summary>
     /// True when chroma arrives as one plane of interleaved pairs, which is what a hardware
@@ -94,7 +128,7 @@ public sealed record PixelLayout(string Name, ImmutableArray<PixelPlane> Planes,
         foreach (PixelPlane plane in Planes)
         {
             long samples = (long)plane.WidthFor(width) * plane.HeightFor(height) * plane.Channels;
-            total += samples * (BitDepth > 8 ? 2 : 1);
+            total += samples * plane.SampleBytes;
         }
 
         return total;

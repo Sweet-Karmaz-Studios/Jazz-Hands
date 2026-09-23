@@ -9,9 +9,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="JazzHands.Render.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Shaders are embedded and compiled at runtime, so editing one needs no build step and the
          compiled cache can key on the source hash. See the hlsl-effects skill. -->
     <EmbeddedResource Include="Shaders\*.hlsl" />
+    <EmbeddedResource Include="Shaders\*.hlsli" />
   </ItemGroup>
 
   <ItemGroup>

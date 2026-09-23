@@ -76,8 +76,7 @@ public sealed class PlaneUploader(RenderDevice device)
         SourcePlane plane,
         PixelPlane description)
     {
-        int sampleBytes = description.Channels * (texture.Description.Format is Vortice.DXGI.Format.R16_UNorm
-            or Vortice.DXGI.Format.R16G16_UNorm ? 2 : 1);
+        int sampleBytes = description.Channels * description.SampleBytes;
 
         int rowBytes = plane.Width * sampleBytes;
         int rows = Math.Min(plane.Height, (int)texture.Description.Height);

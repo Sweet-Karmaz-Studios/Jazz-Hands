@@ -1,0 +1,73 @@
+// The first pass of every layer: a decoded frame, in whatever layout it arrived, to premultiplied
+// linear BT.709 light at half float, at the source's own size. Everything after this works in
+// that one format, so range expansion, the matrix and the transfer function happen here and
+// nowhere else. See the color-science skill.
+
+#include "Common.hlsli"
+#include "Color.hlsli"
+
+// Layouts, matching SourceLayout in C#.
+#define LAYOUT_SEMIPLANAR 0   // NV12, P010: luma, then interleaved chroma
+#define LAYOUT_PLANAR 1       // yuv420p and friends: Y, U, V
+#define LAYOUT_RGBA 2         // one interleaved RGBA plane, straight alpha
+#define LAYOUT_GBRA_PLANAR 3  // four float planes in G, B, R, A order
+
+cbuffer SourceConstants : register(b0)
+{
+    float3 MatrixRow0;
+    float SampleScale;      // turns a UNORM sample back into the fraction of full scale it means
+    float3 MatrixRow1;
+    float LumaOffset;
+    float3 MatrixRow2;
+    float ChromaOffset;
+    float LumaRange;
+    float ChromaRange;
+    uint Transfer;
+    uint Layout;
+};
+
+Texture2D<float4> Plane0 : register(t0);
+Texture2D<float4> Plane1 : register(t1);
+Texture2D<float4> Plane2 : register(t2);
+Texture2D<float4> Plane3 : register(t3);
+
+FullScreenVertex VsMain(uint vertexId : SV_VertexID)
+{
+    return FullScreenTriangle(vertexId);
+}
+
+float4 PsMain(FullScreenVertex input) : SV_TARGET
+{
+    float2 uv = input.Uv;
+
+    if (Layout == LAYOUT_RGBA)
+    {
+        float4 straight = Plane0.SampleLevel(LinearClamp, uv, 0);
+        return Premultiply(float4(ToLinear(straight.rgb, Transfer), straight.a));
+    }
+
+    if (Layout == LAYOUT_GBRA_PLANAR)
+    {
+        float g = Plane0.SampleLevel(LinearClamp, uv, 0).r;
+        float b = Plane1.SampleLevel(LinearClamp, uv, 0).r;
+        float r = Plane2.SampleLevel(LinearClamp, uv, 0).r;
+        float a = Plane3.SampleLevel(LinearClamp, uv, 0).r;
+        return Premultiply(float4(ToLinear(float3(r, g, b), Transfer), saturate(a)));
+    }
+
+    float luma = Plane0.SampleLevel(LinearClamp, uv, 0).r * SampleScale;
+    float4 first = Plane1.SampleLevel(LinearClamp, uv, 0);
+    float2 chroma = Layout == LAYOUT_PLANAR
+        ? float2(first.r, Plane2.SampleLevel(LinearClamp, uv, 0).r)
+        : first.rg;
+    chroma *= SampleScale;
+
+    // Studio swing to full swing before the matrix, or black is not black.
+    float3 yuv;
+    yuv.x = (luma - LumaOffset) * LumaRange;
+    yuv.y = (chroma.x - ChromaOffset) * ChromaRange;
+    yuv.z = (chroma.y - ChromaOffset) * ChromaRange;
+
+    float3 encoded = saturate(float3(dot(MatrixRow0, yuv), dot(MatrixRow1, yuv), dot(MatrixRow2, yuv)));
+    return float4(ToLinear(encoded, Transfer), 1.0);
+}
