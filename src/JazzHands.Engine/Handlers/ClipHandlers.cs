@@ -1,0 +1,437 @@
+using JazzHands.Core.Commands;
+using JazzHands.Core.Editing;
+using JazzHands.Core.Model;
+using JazzHands.Core.Time;
+using JazzHands.Engine.Commands;
+
+namespace JazzHands.Engine.Handlers;
+
+/// <summary>Puts a clip on a track.</summary>
+public sealed class AddClipHandler : ICommandHandler<AddClipCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, AddClipCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        (Sequence sequence, Track track) = HandlerHelp.Track(project, command.TrackId);
+        HandlerHelp.RequireUnlocked(track);
+
+        int sources = (command.MediaId is null ? 0 : 1)
+            + (command.GeneratorId is null ? 0 : 1)
+            + (command.SequenceId is null ? 0 : 1);
+
+        if (sources != 1)
+        {
+            throw new CommandException(
+                sources == 0 ? "clip-without-source" : "clip-with-many-sources",
+                "A clip plays exactly one of --media, --generator or --sequence.");
+        }
+
+        if (command.MediaId is { } mediaId && project.MediaItem(mediaId) is null)
+        {
+            throw new CommandException("missing-media-reference", $"No media with id '{mediaId}' in this project.");
+        }
+
+        if (command.SequenceId is { } nestedId)
+        {
+            if (project.Sequence(nestedId) is null)
+            {
+                throw new CommandException("missing-sequence-reference", $"No sequence with id '{nestedId}'.");
+            }
+
+            if (string.Equals(nestedId, sequence.Id, StringComparison.Ordinal))
+            {
+                throw new CommandException("sequence-cycle", "A sequence cannot nest itself.");
+            }
+        }
+
+        Flicks duration = command.Duration ?? DefaultDuration(project, command);
+        if (duration <= Flicks.Zero)
+        {
+            throw new CommandException("empty-clip", "A clip needs a duration greater than zero.");
+        }
+
+        if (command.At < Flicks.Zero)
+        {
+            throw new CommandException("time-out-of-range", "A clip cannot start before the timeline does.");
+        }
+
+        string id = HandlerHelp.IdOr(command.ClipId);
+        HandlerHelp.RequireUnused(project, id);
+
+        var clip = new Clip(
+            id,
+            new TimeRange(command.At, duration),
+            command.SourceIn ?? Flicks.Zero,
+            MediaId: command.MediaId,
+            GeneratorId: command.GeneratorId,
+            SequenceId: command.SequenceId,
+            SourceStreamIndex: command.SourceStreamIndex,
+            Name: command.Name ?? DefaultName(project, command));
+
+        if (EditOps.Overlaps(track, clip))
+        {
+            throw new CommandException(
+                "would-overlap",
+                $"A clip already occupies that part of '{track.Name}'. Move it, or pick another time.");
+        }
+
+        context.Changed(id);
+        context.Changed(track.Id);
+        return project.ReplaceTrack(track.AddClip(clip));
+    }
+
+    private static Flicks DefaultDuration(Project project, AddClipCommand command)
+    {
+        if (command.MediaId is { } mediaId && project.MediaItem(mediaId) is { } media)
+        {
+            Flicks remaining = media.Duration - (command.SourceIn ?? Flicks.Zero);
+            return remaining > Flicks.Zero ? remaining : Flicks.Zero;
+        }
+
+        if (command.SequenceId is { } nestedId && project.Sequence(nestedId) is { } nested)
+        {
+            return nested.Duration;
+        }
+
+        // A generator has no natural length, so it gets the five seconds every editor uses for a
+        // title dropped on a timeline.
+        return Flicks.FromSeconds(5);
+    }
+
+    private static string DefaultName(Project project, AddClipCommand command) =>
+        command.MediaId is { } mediaId && project.MediaItem(mediaId) is { } media ? media.Name
+        : command.SequenceId is { } nestedId && project.Sequence(nestedId) is { } nested ? nested.Name
+        : command.GeneratorId ?? string.Empty;
+}
+
+/// <summary>Takes a clip off its track.</summary>
+public sealed class RemoveClipHandler : ICommandHandler<RemoveClipCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, RemoveClipCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        ClipLocation found = HandlerHelp.Clip(project, command.ClipId);
+        HandlerHelp.RequireUnlocked(found.Track);
+
+        Track updated = command.Ripple
+            ? HandlerContext.Require(EditOps.RippleDelete(found.Track, command.ClipId))
+            : HandlerContext.Require(EditOps.Lift(found.Track, command.ClipId));
+
+        context.Changed(command.ClipId);
+        context.Changed(found.Track.Id);
+
+        if (command.Ripple)
+        {
+            context.Changed(updated.Clips.Select(clip => clip.Id));
+        }
+
+        return project.ReplaceTrack(updated);
+    }
+}
+
+/// <summary>Cuts a clip in two at a timeline time.</summary>
+public sealed class SplitClipHandler : ICommandHandler<SplitClipCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, SplitClipCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        ClipLocation found = HandlerHelp.Clip(project, command.ClipId);
+        HandlerHelp.RequireUnlocked(found.Track);
+
+        string newId = HandlerHelp.IdOr(command.NewClipId);
+        HandlerHelp.RequireUnused(project, newId);
+
+        Track updated = HandlerContext.Require(EditOps.Split(found.Track, command.ClipId, command.At, newId));
+
+        context.Changed(command.ClipId);
+        context.Changed(newId);
+        context.Changed(found.Track.Id);
+        return project.ReplaceTrack(updated);
+    }
+}
+
+/// <summary>Moves a clip's start or end without moving the other.</summary>
+public sealed class TrimClipHandler : ICommandHandler<TrimClipCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, TrimClipCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        ClipLocation found = HandlerHelp.Clip(project, command.ClipId);
+        HandlerHelp.RequireUnlocked(found.Track);
+
+        if (command.In is null && command.Out is null)
+        {
+            throw new CommandException("nothing-to-do", "A trim needs --in, --out, or both.");
+        }
+
+        Track track = found.Track;
+
+        if (command.In is { } inPoint)
+        {
+            track = HandlerContext.Require(EditOps.TrimIn(track, command.ClipId, inPoint, command.Ripple));
+        }
+
+        if (command.Out is { } outPoint)
+        {
+            track = HandlerContext.Require(EditOps.TrimOut(track, command.ClipId, outPoint, command.Ripple));
+        }
+
+        context.Changed(command.ClipId);
+        context.Changed(found.Track.Id);
+
+        if (command.Ripple)
+        {
+            context.Changed(track.Clips.Select(clip => clip.Id));
+        }
+
+        return project.ReplaceTrack(track);
+    }
+}
+
+/// <summary>Moves the cut between two touching clips.</summary>
+public sealed class RollClipsHandler : ICommandHandler<RollClipsCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, RollClipsCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        ClipLocation left = HandlerHelp.Clip(project, command.LeftClipId);
+        HandlerHelp.RequireUnlocked(left.Track);
+
+        if (left.Track.Clip(command.RightClipId) is null)
+        {
+            throw new CommandException(
+                "not-adjacent",
+                $"'{command.RightClipId}' is not on the same track as '{command.LeftClipId}'.");
+        }
+
+        Track updated = HandlerContext.Require(
+            EditOps.Roll(left.Track, command.LeftClipId, command.RightClipId, command.By));
+
+        context.Changed(command.LeftClipId);
+        context.Changed(command.RightClipId);
+        context.Changed(left.Track.Id);
+        return project.ReplaceTrack(updated);
+    }
+}
+
+/// <summary>Changes which part of the source a clip shows.</summary>
+public sealed class SlipClipHandler : ICommandHandler<SlipClipCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, SlipClipCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        ClipLocation found = HandlerHelp.Clip(project, command.ClipId);
+        HandlerHelp.RequireUnlocked(found.Track);
+
+        Flicks? sourceDuration = SourceDuration(project, found.Clip);
+        Track updated = HandlerContext.Require(
+            EditOps.Slip(found.Track, command.ClipId, command.By, sourceDuration));
+
+        context.Changed(command.ClipId);
+        context.Changed(found.Track.Id);
+        return project.ReplaceTrack(updated);
+    }
+
+    internal static Flicks? SourceDuration(Project project, Clip clip) =>
+        clip.MediaId is { } mediaId && project.MediaItem(mediaId) is { } media ? media.Duration
+        : clip.SequenceId is { } nestedId && project.Sequence(nestedId) is { } nested ? nested.Duration
+        : null;
+}
+
+/// <summary>Moves a clip, taking the time out of its neighbours.</summary>
+public sealed class SlideClipHandler : ICommandHandler<SlideClipCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, SlideClipCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        ClipLocation found = HandlerHelp.Clip(project, command.ClipId);
+        HandlerHelp.RequireUnlocked(found.Track);
+
+        Track updated = HandlerContext.Require(EditOps.Slide(found.Track, command.ClipId, command.By));
+
+        context.Changed(command.ClipId);
+        context.Changed(found.Track.Id);
+
+        // The neighbours changed length, and the caller has no way to know which they were.
+        int index = found.Track.IndexOf(command.ClipId);
+        if (index > 0)
+        {
+            context.Changed(found.Track.Clips[index - 1].Id);
+        }
+
+        if (index >= 0 && index < found.Track.Clips.Length - 1)
+        {
+            context.Changed(found.Track.Clips[index + 1].Id);
+        }
+
+        return project.ReplaceTrack(updated);
+    }
+}
+
+/// <summary>Moves a clip to another time, and optionally to another track.</summary>
+public sealed class MoveClipHandler : ICommandHandler<MoveClipCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, MoveClipCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        ClipLocation found = HandlerHelp.Clip(project, command.ClipId);
+        HandlerHelp.RequireUnlocked(found.Track);
+
+        Sequence sequence = found.Sequence;
+
+        if (command.ToTrackId is { } toTrackId)
+        {
+            Track destination = sequence.Track(toTrackId)
+                ?? throw new CommandException(
+                    "track-not-found",
+                    $"No track with id '{toTrackId}' in '{sequence.Name}'. A clip cannot move to another sequence.");
+
+            HandlerHelp.RequireUnlocked(destination);
+            context.Changed(destination.Id);
+        }
+
+        Sequence updated = HandlerContext.Require(
+            EditOps.Move(sequence, command.ClipId, command.ToTrackId, command.To));
+
+        context.Changed(command.ClipId);
+        context.Changed(found.Track.Id);
+        return project.ReplaceSequence(updated);
+    }
+}
+
+/// <summary>Puts a copy of a clip somewhere else.</summary>
+public sealed class CopyClipHandler : ICommandHandler<CopyClipCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, CopyClipCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        ClipLocation found = HandlerHelp.Clip(project, command.ClipId);
+
+        Track destination = command.ToTrackId is { } toTrackId
+            ? found.Sequence.Track(toTrackId)
+                ?? throw new CommandException("track-not-found", $"No track with id '{toTrackId}'.")
+            : found.Track;
+
+        HandlerHelp.RequireUnlocked(destination);
+
+        string newId = HandlerHelp.IdOr(command.NewClipId);
+        HandlerHelp.RequireUnused(project, newId);
+
+        Clip copy = Copy(found.Clip, newId, command.At);
+
+        if (EditOps.Overlaps(destination, copy))
+        {
+            throw new CommandException(
+                "would-overlap",
+                $"A clip already occupies that part of '{destination.Name}'.");
+        }
+
+        context.Changed(newId);
+        context.Changed(destination.Id);
+        return project.ReplaceTrack(destination.AddClip(copy));
+    }
+
+    /// <summary>
+    /// A copy at a new time, with fresh identifiers for everything inside it.
+    /// </summary>
+    /// <remarks>
+    /// The effects and markers on a clip carry their own ids, and two of anything sharing an id
+    /// would make "which one did you mean" unanswerable. The link group is deliberately dropped:
+    /// a copy is not in sync with the original, and inheriting the link would drag the original
+    /// about whenever the copy moved.
+    /// </remarks>
+    internal static Clip Copy(Clip clip, string newId, Flicks at) => clip with
+    {
+        Id = newId,
+        Range = new TimeRange(at, clip.Duration),
+        LinkGroupId = null,
+        GroupId = null,
+        Effects = new EquatableArray<Effect>(
+            clip.Effects.Select(effect => effect with { Id = Id.New() }).ToArray()),
+        Markers = new EquatableArray<Marker>(
+            clip.Markers.Select(marker => marker with { Id = Id.New() }).ToArray()),
+    };
+}
+
+/// <summary>Puts a copy of a clip immediately after it.</summary>
+public sealed class DuplicateClipHandler : ICommandHandler<DuplicateClipCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, DuplicateClipCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        ClipLocation found = HandlerHelp.Clip(project, command.ClipId);
+        HandlerHelp.RequireUnlocked(found.Track);
+
+        string newId = HandlerHelp.IdOr(command.NewClipId);
+        HandlerHelp.RequireUnused(project, newId);
+
+        Clip copy = CopyClipHandler.Copy(found.Clip, newId, found.Clip.End);
+
+        if (EditOps.Overlaps(found.Track, copy))
+        {
+            throw new CommandException(
+                "would-overlap",
+                $"'{found.Clip.Name}' is followed immediately by another clip, so there is no room for a copy.");
+        }
+
+        context.Changed(newId);
+        context.Changed(found.Track.Id);
+        return project.ReplaceTrack(found.Track.AddClip(copy));
+    }
+}
+
+/// <summary>Stretches a clip to a new duration by changing its speed.</summary>
+public sealed class RateStretchClipHandler : ICommandHandler<RateStretchClipCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, RateStretchClipCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        ClipLocation found = HandlerHelp.Clip(project, command.ClipId);
+        HandlerHelp.RequireUnlocked(found.Track);
+
+        Track updated = HandlerContext.Require(
+            EditOps.RateStretch(found.Track, command.ClipId, command.ToDuration));
+
+        context.Changed(command.ClipId);
+        context.Changed(found.Track.Id);
+        return project.ReplaceTrack(updated);
+    }
+}

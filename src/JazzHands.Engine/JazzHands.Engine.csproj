@@ -5,10 +5,20 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- The tests check a few internal helpers whose contract matters on its own. -->
+    <InternalsVisibleTo Include="JazzHands.Engine.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\JazzHands.Core\JazzHands.Core.csproj" />
     <ProjectReference Include="..\JazzHands.Media\JazzHands.Media.csproj" />
     <ProjectReference Include="..\JazzHands.Render\JazzHands.Render.csproj" />
     <ProjectReference Include="..\JazzHands.Audio\JazzHands.Audio.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The tests check a few internal helpers whose contract matters on its own. -->
+    <InternalsVisibleTo Include="JazzHands.Engine.Tests" />
   </ItemGroup>
 
   <ItemGroup>

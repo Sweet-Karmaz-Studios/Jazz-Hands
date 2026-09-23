@@ -178,6 +178,17 @@ public static class ProjectMutations
         return project with { Sequences = project.Sequences.Add(sequence) };
     }
 
+    /// <summary>A copy without the sequence, or the same project when it was not there.</summary>
+    public static Project RemoveSequence(this Project project, string sequenceId)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+
+        int index = project.Sequences.IndexOf(
+            sequence => string.Equals(sequence.Id, sequenceId, StringComparison.Ordinal));
+
+        return index < 0 ? project : project with { Sequences = project.Sequences.RemoveAt(index) };
+    }
+
     /// <summary>Replaces a track anywhere in the project, finding its sequence.</summary>
     public static Project ReplaceTrack(this Project project, Track track)
     {

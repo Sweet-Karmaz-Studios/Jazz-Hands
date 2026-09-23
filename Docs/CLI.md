@@ -178,6 +178,65 @@ The allocation figure averages the whole run, warm-up included, so it sits a lit
 steady-state 96 bytes per frame recorded in `Docs/spikes/S2.md`. The allocation test is the one
 that holds the line; this number is for spotting a change, not for quoting.
 
+## Generated verbs
+
+From Phase 05, every command and query in `CommandRegistry` is a `jazz` verb. Nothing in the CLI
+knows what any of them are: the verbs, arguments and options are read from the registry, so a
+command is typeable the moment it exists and is spelled the same way it is spelled over JSON-RPC
+and to MCP.
+
+```
+jazz <area> <verb> <project.jazz> [arguments] [--options]
+```
+
+The project comes first because every headless invocation needs one. `jazz clip --help` lists the
+clip verbs, and `jazz clip split --help` lists what that one takes.
+
+```bash
+jazz clip add trailer.jazz <track-id> --at 00:00:04:00 --media <media-id> --dur 6s --name "wide"
+```
+
+```
+clip.add: 2 item(s) changed, saved C:\work\trailer.jazz
+```
+
+| Option | Meaning |
+|---|---|
+| `--no-save` | Run the command but do not write the project back. |
+| `--json` | `{"ok": true, "version": 3, "changed": [...], "saved": true}`, or the error object. |
+
+Queries print their result: `timeline.describe` as text, everything else as JSON.
+
+```bash
+jazz timeline describe trailer.jazz
+```
+
+```
+trailer (01M35X3ZBRVSWSBVJVB9C08WFV)
+  3840x2160 at 60 fps, 48000 Hz stereo, bt709 (from the project)
+  00:00:06:00 long, 2 tracks, 2 clips
+
+V1 (video, order 0)
+  00:00:00:00 00:00:02:00 wide
+  00:00:02:00 00:00:04:00 wide
+
+A1 (audio, order 1)
+  empty
+
+markers
+  00:00:04:00 Wishlist now [chapter]
+```
+
+Times accept every form `Timecode.Parse` takes: `00:00:04:12`, `00:00:04.500`, `4.5s`, `135f`,
+`3175200000fl`. They are read against the active sequence's frame rate.
+
+**`jazz undo` and `jazz redo` do not work headless**, and say so rather than reporting an empty
+history. Undo belongs to an open session, and each headless invocation is a new one. They become
+useful with `--attach` in Phase 25.
+
+`jazz project new`, `open` and `save` are hand-written rather than generated, because they are
+about which file is open rather than about editing one; see `jazz new` above.
+
 ## Coming in later phases
 
 | Phase | Adds |

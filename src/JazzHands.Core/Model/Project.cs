@@ -226,7 +226,8 @@ public sealed record Marker(
 /// <param name="FadeOut">Fade at the end.</param>
 /// <param name="Effects">Effects in application order.</param>
 /// <param name="Markers">Markers relative to the clip start.</param>
-/// <param name="LinkGroupId">Clips sharing this identifier move together.</param>
+/// <param name="LinkGroupId">Clips sharing this identifier move together, as a camera and its sound do.</param>
+/// <param name="GroupId">Clips sharing this identifier are selected together.</param>
 /// <param name="Name">A display name, usually taken from the media on insert.</param>
 public sealed record Clip(
     string Id,
@@ -249,6 +250,7 @@ public sealed record Clip(
     EquatableArray<Effect> Effects = default,
     EquatableArray<Marker> Markers = default,
     string? LinkGroupId = null,
+    string? GroupId = null,
     string Name = "") : IEquatable<Clip>
 {
     /// <summary>Playback rate, defaulting to normal speed.</summary>
@@ -294,6 +296,15 @@ public sealed record Clip(
         Flicks scaled = ScaleBySpeed(offset, EffectiveSpeed);
         return Reverse ? SourceOut - scaled : SourceIn + scaled;
     }
+
+    /// <summary>
+    /// How long this clip would occupy the timeline at another rate, showing the same source.
+    /// </summary>
+    /// <remarks>
+    /// Halving the speed doubles the duration. Exact, because the arithmetic is done on the
+    /// rational rather than on a double: a clip at 1001/1000 speed stays at 1001/1000 speed.
+    /// </remarks>
+    public Flicks DurationForSpeed(Rational speed) => ScaleBySpeed(SourceDuration, speed.Inverse);
 
     /// <summary>Scales a duration by a playback rate, exactly.</summary>
     internal static Flicks ScaleBySpeed(Flicks duration, Rational speed)

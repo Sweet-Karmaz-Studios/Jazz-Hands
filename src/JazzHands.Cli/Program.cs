@@ -47,6 +47,7 @@ namespace JazzHands.Cli
             root.Options.Add(VerboseOption);
             root.Subcommands.Add(BuildVersionCommand());
             ProjectCommands.AddTo(root);
+            GeneratedCommands.AddTo(root);
             root.Subcommands.Add(BuildPerfCommand());
             return root;
         }
