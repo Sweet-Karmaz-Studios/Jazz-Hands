@@ -244,6 +244,17 @@ public readonly record struct Rational : IComparable<Rational>
         ? Num.ToString(CultureInfo.InvariantCulture)
         : string.Create(CultureInfo.InvariantCulture, $"{Num}/{Den}");
 
+    /// <summary>
+    /// Renders for a person to read: "30", "29.97", "23.976".
+    /// </summary>
+    /// <remarks>
+    /// For labels and columns only. It is lossy and is never parsed back; <see cref="ToString"/>
+    /// is the form the project file, the wire and the CLI use.
+    /// </remarks>
+    public string ToDisplayString() => Den == 1
+        ? Num.ToString(CultureInfo.InvariantCulture)
+        : string.Create(CultureInfo.InvariantCulture, $"{ToDouble():0.###}");
+
     private static Rational FromBig(Int128 num, Int128 den)
     {
         if (den == 0)

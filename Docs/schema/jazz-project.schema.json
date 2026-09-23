@@ -356,6 +356,29 @@
       "type": "integer",
       "description": "A time in flicks, 1/705600000 s. One frame at 30 fps is 23520000."
     },
+    "imageSequenceInfo": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "integer"
+        },
+        "count": {
+          "type": "integer"
+        },
+        "frameRate": {
+          "$ref": "#/$defs/rational"
+        },
+        "padding": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start",
+        "count",
+        "frameRate",
+        "padding"
+      ]
+    },
     "keyframe": {
       "type": "object",
       "properties": {
@@ -434,6 +457,39 @@
         "name"
       ]
     },
+    "mediaInfo": {
+      "type": "object",
+      "properties": {
+        "formatName": {
+          "type": "string"
+        },
+        "duration": {
+          "$ref": "#/$defs/flicks"
+        },
+        "sizeBytes": {
+          "type": "integer"
+        },
+        "bitRate": {
+          "type": "integer"
+        },
+        "streams": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/mediaStream"
+          }
+        },
+        "probedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "formatName",
+        "duration",
+        "sizeBytes",
+        "bitRate"
+      ]
+    },
     "mediaItem": {
       "type": "object",
       "properties": {
@@ -467,12 +523,161 @@
           "items": {
             "type": "string"
           }
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "movie",
+            "still",
+            "imageSequence"
+          ]
+        },
+        "folder": {
+          "type": "string"
+        },
+        "color": {
+          "type": "string"
+        },
+        "conform": {
+          "type": "string",
+          "enum": [
+            "fit",
+            "fill",
+            "stretch",
+            "native"
+          ]
+        },
+        "deinterlace": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "on",
+            "off"
+          ]
+        },
+        "vfrConform": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "on",
+            "off"
+          ]
+        },
+        "info": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/mediaInfo"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sequence": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/imageSequenceInfo"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
         "id",
         "relativePath",
         "name",
+        "duration"
+      ]
+    },
+    "mediaStream": {
+      "type": "object",
+      "properties": {
+        "index": {
+          "type": "integer"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "video",
+            "audio",
+            "subtitle",
+            "data",
+            "attachment"
+          ]
+        },
+        "codec": {
+          "type": "string"
+        },
+        "duration": {
+          "$ref": "#/$defs/flicks"
+        },
+        "language": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "width": {
+          "type": "integer"
+        },
+        "height": {
+          "type": "integer"
+        },
+        "frameRate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/rational"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bitDepth": {
+          "type": "integer"
+        },
+        "isInterlaced": {
+          "type": "boolean"
+        },
+        "isVariableFrameRate": {
+          "type": "boolean"
+        },
+        "isHdr": {
+          "type": "boolean"
+        },
+        "hasAlpha": {
+          "type": "boolean"
+        },
+        "sampleRate": {
+          "type": "integer"
+        },
+        "channels": {
+          "type": "integer"
+        },
+        "channelLayout": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "index",
+        "kind",
+        "codec",
         "duration"
       ]
     },

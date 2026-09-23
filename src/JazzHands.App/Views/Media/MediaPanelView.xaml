@@ -1,0 +1,226 @@
+<UserControl x:Class="JazzHands.App.Views.Media.MediaPanelView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:JazzHands.App.ViewModels.Media"
+             xmlns:views="clr-namespace:JazzHands.App.Views.Media"
+             d:DataContext="{d:DesignInstance vm:MediaPanelViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             Background="{DynamicResource Brush.Background.Panel}">
+
+    <UserControl.Resources>
+        <views:ColorLabelConverter x:Key="ColorLabel" />
+        <views:EnumMatchConverter x:Key="EnumMatch" />
+        <BooleanToVisibilityConverter x:Key="BoolToVisible" />
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Toolbar: import, view mode, and the search box the exit criteria are about. -->
+        <Grid Grid.Row="0" Margin="6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <Button Grid.Column="0"
+                    Content="Import..."
+                    Command="{Binding ImportCommand, Mode=OneWay}" />
+
+            <TextBox Grid.Column="1"
+                     x:Name="SearchBox"
+                     Margin="6,0"
+                     VerticalContentAlignment="Center"
+                     Text="{Binding Search, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                     ToolTip="Search names, tags, folders, codecs and stream titles." />
+
+            <StackPanel Grid.Column="2" Orientation="Horizontal">
+                <RadioButton Content="List"
+                             Margin="0,0,6,0"
+                             VerticalAlignment="Center"
+                             Foreground="{DynamicResource Brush.Text.Secondary}"
+                             IsChecked="{Binding ViewMode, Mode=TwoWay, Converter={StaticResource EnumMatch}, ConverterParameter=List}" />
+                <RadioButton Content="Grid"
+                             VerticalAlignment="Center"
+                             Foreground="{DynamicResource Brush.Text.Secondary}"
+                             IsChecked="{Binding ViewMode, Mode=TwoWay, Converter={StaticResource EnumMatch}, ConverterParameter=Grid}" />
+            </StackPanel>
+        </Grid>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="180" MinWidth="120" />
+                <ColumnDefinition Width="4" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- The folder tree, derived from the folder on each item. -->
+            <TreeView Grid.Column="0"
+                      x:Name="FolderTree"
+                      Background="{DynamicResource Brush.Background.Base}"
+                      BorderBrush="{DynamicResource Brush.Border}"
+                      ItemsSource="{Binding Folders, Mode=OneWay}"
+                      SelectedItemChanged="OnFolderSelected">
+                <TreeView.ItemTemplate>
+                    <HierarchicalDataTemplate DataType="{x:Type vm:MediaFolderViewModel}"
+                                              ItemsSource="{Binding Children, Mode=OneWay}">
+                        <TextBlock Text="{Binding Label, Mode=OneWay}" />
+                    </HierarchicalDataTemplate>
+                </TreeView.ItemTemplate>
+                <TreeView.ItemContainerStyle>
+                    <Style TargetType="TreeViewItem">
+                        <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                    </Style>
+                </TreeView.ItemContainerStyle>
+            </TreeView>
+
+            <GridSplitter Grid.Column="1"
+                          Width="4"
+                          HorizontalAlignment="Stretch"
+                          Background="{DynamicResource Brush.Border}" />
+
+            <!-- List mode: the columns the phase prompt asks for. -->
+            <ListView Grid.Column="2"
+                      x:Name="ItemList"
+                      Background="{DynamicResource Brush.Background.Base}"
+                      BorderBrush="{DynamicResource Brush.Border}"
+                      Foreground="{DynamicResource Brush.Text.Primary}"
+                      ItemsSource="{Binding Items, Mode=OneWay}"
+                      SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
+                      SelectionMode="Extended"
+                      VirtualizingPanel.IsVirtualizing="True"
+                      VirtualizingPanel.VirtualizationMode="Recycling"
+                      PreviewMouseLeftButtonDown="OnListMouseDown"
+                      MouseMove="OnListMouseMove"
+                      Visibility="{Binding IsListMode, Mode=OneWay, Converter={StaticResource BoolToVisible}}">
+                <ListView.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="Reveal in Explorer" Command="{Binding RevealCommand, Mode=OneWay}" />
+                        <MenuItem Header="Re-read from disk" Command="{Binding ReprobeCommand, Mode=OneWay}" />
+                        <MenuItem Header="Generate proxy" Command="{Binding GenerateProxyCommand, Mode=OneWay}" />
+                        <Separator />
+                        <MenuItem Header="Colour label">
+                            <MenuItem Header="None" Command="{Binding SetColorCommand, Mode=OneWay}" CommandParameter="" />
+                            <MenuItem Header="Red" Command="{Binding SetColorCommand, Mode=OneWay}" CommandParameter="red" />
+                            <MenuItem Header="Orange" Command="{Binding SetColorCommand, Mode=OneWay}" CommandParameter="orange" />
+                            <MenuItem Header="Yellow" Command="{Binding SetColorCommand, Mode=OneWay}" CommandParameter="yellow" />
+                            <MenuItem Header="Green" Command="{Binding SetColorCommand, Mode=OneWay}" CommandParameter="green" />
+                            <MenuItem Header="Blue" Command="{Binding SetColorCommand, Mode=OneWay}" CommandParameter="blue" />
+                            <MenuItem Header="Purple" Command="{Binding SetColorCommand, Mode=OneWay}" CommandParameter="purple" />
+                        </MenuItem>
+                        <Separator />
+                        <MenuItem Header="Remove from project" Command="{Binding RemoveCommand, Mode=OneWay}" />
+                    </ContextMenu>
+                </ListView.ContextMenu>
+
+                <ListView.View>
+                    <GridView>
+                        <GridViewColumn Header="" Width="16">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate DataType="{x:Type vm:MediaItemViewModel}">
+                                    <Border Width="5"
+                                            Height="16"
+                                            CornerRadius="2"
+                                            Background="{Binding Color, Mode=OneWay, Converter={StaticResource ColorLabel}}" />
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+                        <GridViewColumn Header="Name" Width="220">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate DataType="{x:Type vm:MediaItemViewModel}">
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal">
+                                            <ToggleButton Margin="0,0,4,0"
+                                                          VerticalAlignment="Center"
+                                                          Style="{DynamicResource ToggleButton.Disclosure}"
+                                                          IsChecked="{Binding IsStreamListOpen, Mode=TwoWay}" />
+                                            <TextBlock Text="{Binding Name, Mode=OneWay}" VerticalAlignment="Center" />
+                                            <TextBlock Text="  conformed"
+                                                       VerticalAlignment="Center"
+                                                       FontSize="{DynamicResource Text.Caption}"
+                                                       Foreground="{DynamicResource Brush.Warning}"
+                                                       ToolTip="{Binding ConformSummary, Mode=OneWay}"
+                                                       Visibility="{Binding IsConformed, Mode=OneWay, Converter={StaticResource BoolToVisible}}" />
+                                        </StackPanel>
+                                        <ItemsControl Margin="18,2,0,2"
+                                                      ItemsSource="{Binding Streams, Mode=OneWay}"
+                                                      Visibility="{Binding IsStreamListOpen, Mode=OneWay, Converter={StaticResource BoolToVisible}}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Mode=OneWay}"
+                                                               FontFamily="{DynamicResource Font.Mono}"
+                                                               FontSize="{DynamicResource Text.Caption}"
+                                                               Foreground="{DynamicResource Brush.Text.Secondary}" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+                        <GridViewColumn Header="Duration" Width="90" DisplayMemberBinding="{Binding Duration, Mode=OneWay}" />
+                        <GridViewColumn Header="Fps" Width="60" DisplayMemberBinding="{Binding FrameRate, Mode=OneWay}" />
+                        <GridViewColumn Header="Size" Width="80" DisplayMemberBinding="{Binding Size, Mode=OneWay}" />
+                        <GridViewColumn Header="Codec" Width="70" DisplayMemberBinding="{Binding Codec, Mode=OneWay}" />
+                        <GridViewColumn Header="Audio" Width="50" DisplayMemberBinding="{Binding AudioStreams, Mode=OneWay}" />
+                        <GridViewColumn Header="Tags" Width="140" DisplayMemberBinding="{Binding Tags, Mode=OneWay}" />
+                    </GridView>
+                </ListView.View>
+            </ListView>
+
+            <!-- Grid mode: tiles, with a placeholder where Phase 14 puts the thumbnail. -->
+            <ListBox Grid.Column="2"
+                     Background="{DynamicResource Brush.Background.Base}"
+                     BorderBrush="{DynamicResource Brush.Border}"
+                     ItemsSource="{Binding Items, Mode=OneWay}"
+                     SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     VirtualizingPanel.IsVirtualizing="True"
+                     VirtualizingPanel.VirtualizationMode="Recycling"
+                     PreviewMouseLeftButtonDown="OnListMouseDown"
+                     MouseMove="OnListMouseMove"
+                     Visibility="{Binding IsGridMode, Mode=OneWay, Converter={StaticResource BoolToVisible}}">
+                <ListBox.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                </ListBox.ItemsPanel>
+                <ListBox.ItemTemplate>
+                    <DataTemplate DataType="{x:Type vm:MediaItemViewModel}">
+                        <StackPanel Width="140" Margin="4">
+                            <Border Height="79"
+                                    Background="{DynamicResource Brush.Background.Raised}"
+                                    BorderBrush="{Binding Color, Mode=OneWay, Converter={StaticResource ColorLabel}}"
+                                    BorderThickness="0,0,0,3">
+                                <TextBlock Text="{Binding Kind, Mode=OneWay}"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           Foreground="{DynamicResource Brush.Text.Disabled}" />
+                            </Border>
+                            <TextBlock Text="{Binding Name, Mode=OneWay}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding Summary, Mode=OneWay}"
+                                       FontSize="{DynamicResource Text.Caption}"
+                                       Foreground="{DynamicResource Brush.Text.Secondary}"
+                                       TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Grid>
+
+        <StatusBar Grid.Row="2"
+                   Background="{DynamicResource Brush.Background.Raised}"
+                   Foreground="{DynamicResource Brush.Text.Secondary}">
+            <TextBlock Text="{Binding CountSummary, Mode=OneWay}" />
+            <Separator />
+            <TextBlock Text="{Binding Status, Mode=OneWay}" />
+        </StatusBar>
+    </Grid>
+</UserControl>

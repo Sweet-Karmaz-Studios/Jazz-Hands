@@ -6,10 +6,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\JazzHands.Core\JazzHands.Core.csproj" />
+    <InternalsVisibleTo Include="JazzHands.Media.Tests" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="FFmpeg.AutoGen" />
+    <PackageReference Include="System.IO.Hashing" />
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="Serilog" />
   </ItemGroup>

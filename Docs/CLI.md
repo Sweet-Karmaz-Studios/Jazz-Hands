@@ -237,6 +237,51 @@ useful with `--attach` in Phase 25.
 `jazz project new`, `open` and `save` are hand-written rather than generated, because they are
 about which file is open rather than about editing one; see `jazz new` above.
 
+### Media
+
+`media add` takes files, folders and globs. A folder is read one level deep unless `--recursive`,
+and a run of numbered images inside it becomes one item rather than one per frame.
+
+```bash
+jazz media add trailer.jazz .\captures\*.mp4 --folder "footage/day one" --tags raw,approved
+jazz media add trailer.jazz .\renders --fps 24
+```
+
+| Option | Meaning |
+|---|---|
+| `--folder <path>` | Where they go in the bin, slash separated. Folders exist because something is in them. |
+| `--tags <a,b>` | Tags applied to everything imported. |
+| `--color <name>` | A colour label: red, orange, yellow, green, blue, purple, grey. |
+| `--conform <policy>` | `fit`, `fill`, `stretch` or `native`: how the picture is fitted to a frame of a different shape. |
+| `--deinterlace <auto\|on\|off>` | Deinterlace on decode. `auto` follows what the file says it is. |
+| `--vfr-conform <auto\|on\|off>` | Remap variable frame timing onto the project grid. `auto` follows the file. |
+| `--recursive` | Look inside sub-folders. |
+| `--fps <rate>` | The rate an image sequence plays at. Images carry no timing of their own. |
+
+Media is matched by content, not by path, so importing the same file twice is a no-op rather than
+two bin entries.
+
+`media probe` reads a file without importing it, which is how to find out what conforming it
+would need before committing to it. The conform options say what to assume, and change the
+warnings accordingly.
+
+```bash
+jazz media probe trailer.jazz .\captures\phone.mp4 --json
+jazz media probe trailer.jazz .\captures\old.mov --deinterlace off
+```
+
+```
+"warnings": [
+  { "code": "interlaced", "message": "The picture is interlaced and deinterlacing is off, so it will comb on motion." }
+]
+```
+
+Warning codes: `variable-frame-rate`, `interlaced`, `hdr`, `no-audio`, `no-streams`, `cannot-read`.
+The import dialog in the application shows this same list, from this same query.
+
+The rest of the bin is `media list`, `media get`, `media set`, `media remove`, `media relink` and
+`media reprobe`.
+
 ## Coming in later phases
 
 | Phase | Adds |

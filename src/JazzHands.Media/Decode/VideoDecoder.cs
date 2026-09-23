@@ -26,7 +26,7 @@ public enum DecodePath
 /// managed heap: frame shells come from a <see cref="FramePool"/> and the pixels never leave
 /// unmanaged memory.
 /// </remarks>
-public sealed unsafe class VideoDecoder : IDisposable
+public sealed unsafe class VideoDecoder : IVideoSource
 {
     private static readonly AVPixelFormat[] PreferredHardwareFormats = [AVPixelFormat.AV_PIX_FMT_D3D11];
 
@@ -214,6 +214,10 @@ public sealed unsafe class VideoDecoder : IDisposable
         ffmpeg.avcodec_flush_buffers(_codec.Handle);
         _flushed = false;
     }
+
+    /// <inheritdoc />
+    /// <remarks>The decoder keeps no output frame grid, so the resume position is not needed.</remarks>
+    void IVideoSource.Flush(Flicks resumeAt) => Flush();
 
     /// <inheritdoc />
     public void Dispose()

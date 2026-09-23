@@ -405,14 +405,30 @@ public sealed record ProjectSettings(
     public string Size => $"{Width}x{Height}";
 }
 
-/// <summary>A file the project uses, with everything the probe found out about it.</summary>
+/// <summary>
+/// A file the project uses, with everything the probe found out about it.
+/// </summary>
+/// <remarks>
+/// The probe result is kept here rather than looked up, so that opening a project does not have
+/// to touch every file it references: a project whose drive is unplugged still shows its bin,
+/// its durations and its stream lists, and says which files are missing rather than refusing to
+/// open. <see cref="Hash"/> is what notices a file that has been replaced.
+/// </remarks>
 /// <param name="Id">The media identifier.</param>
-/// <param name="RelativePath">Path relative to the project file, with forward slashes.</param>
+/// <param name="RelativePath">Path relative to the project file, with forward slashes. A numbered pattern for an image sequence.</param>
 /// <param name="Name">Display name, usually the file name without its extension.</param>
 /// <param name="Duration">How long the file runs.</param>
-/// <param name="Hash">A content hash, used as the cache key.</param>
+/// <param name="Hash">A content hash, used as the cache key and to notice a replaced file.</param>
 /// <param name="ProxyPath">A proxy file, when one has been made.</param>
 /// <param name="Tags">Free-form tags for the media bin.</param>
+/// <param name="Kind">A movie, a still, or a numbered image sequence.</param>
+/// <param name="Folder">Where it sits in the bin, as a slash-separated path. Empty for the root.</param>
+/// <param name="Color">A colour label for the bin, as an sRGB hex string. Empty for none.</param>
+/// <param name="Conform">How its picture is fitted to a frame of a different shape.</param>
+/// <param name="Deinterlace">Whether to deinterlace on decode.</param>
+/// <param name="VfrConform">Whether to remap variable frame timing onto the project's grid.</param>
+/// <param name="Info">What the probe found, cached.</param>
+/// <param name="Sequence">The numbering, when this is an image sequence.</param>
 public sealed record MediaItem(
     string Id,
     string RelativePath,
@@ -420,7 +436,42 @@ public sealed record MediaItem(
     Flicks Duration,
     string Hash = "",
     string? ProxyPath = null,
-    EquatableArray<string> Tags = default) : IEquatable<MediaItem>;
+    EquatableArray<string> Tags = default,
+    MediaKind Kind = MediaKind.Movie,
+    string Folder = "",
+    string Color = "",
+    ConformPolicy Conform = ConformPolicy.Fit,
+    AutoSetting Deinterlace = AutoSetting.Auto,
+    AutoSetting VfrConform = AutoSetting.Auto,
+    MediaInfo? Info = null,
+    ImageSequenceInfo? Sequence = null) : IEquatable<MediaItem>
+{
+    /// <summary>
+    /// True when this item's frames should be remapped onto the project's grid.
+    /// </summary>
+    /// <remarks>
+    /// Auto means "if the file needs it", which is the setting almost everything keeps. A phone
+    /// recording whose frames drift is conformed; a camera file on a fixed grid is not, because
+    /// conforming one would duplicate and drop frames for nothing.
+    /// </remarks>
+    public bool ShouldConformFrameRate => VfrConform switch
+    {
+        AutoSetting.On => true,
+        AutoSetting.Off => false,
+        _ => Info?.IsVariableFrameRate == true,
+    };
+
+    /// <summary>True when this item should be deinterlaced on decode.</summary>
+    public bool ShouldDeinterlace => Deinterlace switch
+    {
+        AutoSetting.On => true,
+        AutoSetting.Off => false,
+        _ => Info?.IsInterlaced == true,
+    };
+
+    /// <summary>True when this item is a still or a run of numbered images.</summary>
+    public bool IsImages => Kind is MediaKind.Still or MediaKind.ImageSequence;
+}
 
 /// <summary>
 /// A timeline: tracks of clips with a shared frame grid.

@@ -1,0 +1,45 @@
+using JazzHands.App.Services;
+using JazzHands.App.ViewModels;
+using JazzHands.App.ViewModels.Media;
+using JazzHands.Core.Model;
+using JazzHands.Engine;
+using JazzHands.Engine.Commands;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace JazzHands.App;
+
+/// <summary>Wires the application's services, panels and dialogs.</summary>
+/// <remarks>
+/// Panels are singletons: one media panel exists for the life of the window, and the docking
+/// layout refers to it by content id. Dialogs are transient, because each one is about a
+/// different set of files.
+/// </remarks>
+public static class AppServices
+{
+    /// <summary>Registers everything the window needs.</summary>
+    /// <param name="services">The collection to add to.</param>
+    /// <param name="project">The project to open.</param>
+    /// <param name="path">Where it lives, or empty for one that has never been saved.</param>
+    public static IServiceCollection AddJazzHandsApp(this IServiceCollection services, Project project, string path)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(project);
+
+        services.AddJazzHandsEngine();
+
+        services.AddSingleton(provider => new Session(project, provider, path, recovery: path.Length > 0));
+        services.AddSingleton<ISession>(provider => new EngineSession(provider.GetRequiredService<Session>()));
+
+        services.AddSingleton<IUiDispatcher, WpfDispatcher>();
+        services.AddSingleton<IFileDialogService, FileDialogService>();
+        services.AddSingleton<IDialogService>(provider =>
+            new DialogService(provider.GetRequiredService<ImportViewModel>));
+
+        services.AddTransient<ImportViewModel>();
+
+        services.AddSingleton<MediaPanelViewModel>();
+        services.AddSingleton<MainViewModel>();
+
+        return services;
+    }
+}

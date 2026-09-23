@@ -39,17 +39,46 @@ public sealed unsafe class AvFormatContext : IDisposable
     /// Probe the streams. Needed for anything that inspects codec parameters, which is everything
     /// except a raw packet-index scan.
     /// </param>
-    public static AvFormatContext OpenInput(string path, bool findStreamInfo = true)
+    /// <param name="options">
+    /// Demuxer options, for example the frame rate and start number of an image sequence. Null
+    /// for the defaults.
+    /// </param>
+    /// <param name="fileMustExist">
+    /// False for an input that is not one file, such as a <c>%04d</c> image sequence pattern.
+    /// </param>
+    public static AvFormatContext OpenInput(
+        string path,
+        bool findStreamInfo = true,
+        IReadOnlyDictionary<string, string>? options = null,
+        bool fileMustExist = true)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         FfmpegLoader.Initialize();
-        if (!File.Exists(path))
+        if (fileMustExist && !File.Exists(path))
         {
             throw new FileNotFoundException($"Media file '{path}' does not exist.", path);
         }
 
         AVFormatContext* context = null;
-        int result = ffmpeg.avformat_open_input(&context, path, null, null);
+        AVDictionary* dictionary = null;
+        int result;
+        try
+        {
+            if (options is not null)
+            {
+                foreach ((string key, string value) in options)
+                {
+                    Av.Check(ffmpeg.av_dict_set(&dictionary, key, value, 0), "av_dict_set", key);
+                }
+            }
+
+            result = ffmpeg.avformat_open_input(&context, path, null, &dictionary);
+        }
+        finally
+        {
+            ffmpeg.av_dict_free(&dictionary);
+        }
+
         if (result < 0)
         {
             // open_input frees the context itself when it fails.

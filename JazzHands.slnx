@@ -20,6 +20,9 @@
     </Project>
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/JazzHands.App.Tests/JazzHands.App.Tests.csproj">
+      <Platform Project="x64" />
+    </Project>
     <Project Path="tests/JazzHands.Audio.Tests/JazzHands.Audio.Tests.csproj">
       <Platform Project="x64" />
     </Project>

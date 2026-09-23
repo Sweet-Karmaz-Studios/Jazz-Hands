@@ -28,6 +28,15 @@ public static unsafe class Av
     /// <summary>AVERROR_DECODER_NOT_FOUND.</summary>
     public static readonly int DecoderNotFound = FfmpegTag(0xF8, 'D', 'E', 'C');
 
+    /// <summary>
+    /// AV_BUFFERSRC_FLAG_KEEP_REF: the buffer source takes a reference instead of the caller's.
+    /// </summary>
+    /// <remarks>
+    /// Hand written because FFmpeg.AutoGen does not generate the buffersrc flag constants. The
+    /// value is from buffersrc.h and has not changed since libavfilter 3.
+    /// </remarks>
+    public const int BufferSrcKeepRef = 8;
+
     /// <summary>Throws <see cref="FfmpegException"/> when <paramref name="code"/> is negative.</summary>
     /// <param name="code">The FFmpeg return code.</param>
     /// <param name="operation">The call that produced it, for the message.</param>

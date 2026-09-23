@@ -149,6 +149,32 @@ public sealed unsafe class VideoFrame : IDisposable
         }
     }
 
+    /// <summary>
+    /// A second frame over the same pixels, at a new position.
+    /// </summary>
+    /// <remarks>
+    /// Reference counted, not copied: both frames point at the same texture slice or the same
+    /// system memory planes, and the pixels are released when the last of them is disposed. This
+    /// is how a conform stage holds one decoded frame across several output frames without ever
+    /// touching the image.
+    /// </remarks>
+    internal VideoFrame Reference(FramePool pool, Flicks pts, Flicks duration)
+    {
+        ArgumentNullException.ThrowIfNull(pool);
+
+        Interop.AvFrame copy = pool.Rent();
+        try
+        {
+            Interop.Av.Check(ffmpeg.av_frame_ref(copy.Handle, Handle), "av_frame_ref");
+            return new VideoFrame(copy, pool, pts, duration, Color);
+        }
+        catch
+        {
+            pool.Return(copy);
+            throw;
+        }
+    }
+
     /// <summary>Returns the frame to its pool. Always dispose: a leaked frame starves the decoder.</summary>
     public void Dispose()
     {

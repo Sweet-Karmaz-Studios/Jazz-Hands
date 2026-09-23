@@ -24,6 +24,15 @@ public sealed unsafe class Demuxer : IDisposable
 
     /// <summary>Opens a file for reading.</summary>
     public Demuxer(string path)
+        : this(path, options: null)
+    {
+    }
+
+    /// <summary>Opens a file, or an image sequence pattern, with demuxer options.</summary>
+    /// <param name="path">The file, or a <c>%04d</c> style pattern.</param>
+    /// <param name="options">Demuxer options such as an image sequence's frame rate.</param>
+    /// <param name="fileMustExist">False when the path is a pattern rather than one file.</param>
+    public Demuxer(string path, IReadOnlyDictionary<string, string>? options, bool fileMustExist = true)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
@@ -34,7 +43,7 @@ public sealed unsafe class Demuxer : IDisposable
 
         _packet = new AvPacket();
         Path = System.IO.Path.GetFullPath(path);
-        _format = AvFormatContext.OpenInput(Path);
+        _format = AvFormatContext.OpenInput(Path, findStreamInfo: true, options, fileMustExist);
     }
 
     /// <summary>The file being read.</summary>

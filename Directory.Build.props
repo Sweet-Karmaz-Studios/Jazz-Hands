@@ -40,7 +40,14 @@
     <Copyright>Copyright (c) Sweet Karmaz Studios</Copyright>
     <VersionPrefix>0.1.0</VersionPrefix>
     <RootNamespace>$(MSBuildProjectName)</RootNamespace>
-    <AssemblyName>$(MSBuildProjectName)</AssemblyName>
+    <!-- AssemblyName is deliberately not set here. It defaults to the project name already, and
+         setting it in Directory.Build.props breaks WPF: the XAML markup compiler builds a
+         generated <name>_<hash>_wpftmp project to resolve types the XAML refers to in this same
+         assembly, that project imports this file, and the value it computes for itself stops
+         MarkupCompilePass2 finding those types. It fails as "MC3050: cannot find the type" on
+         perfectly ordinary XAML. A project that wants a different assembly name sets it in its
+         own file, which still works. -->
+
     <NeutralLanguage>en-US</NeutralLanguage>
   </PropertyGroup>
 

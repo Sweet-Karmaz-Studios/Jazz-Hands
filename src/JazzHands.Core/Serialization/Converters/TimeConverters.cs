@@ -83,13 +83,21 @@ public sealed class RationalConverter : JsonConverter<Rational>
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// A default <see cref="Rational"/> has a zero denominator, because a struct's default is all
+    /// zeroes and the type's constructor is what normally forbids that. Writing it out verbatim
+    /// would produce a document this converter's own reader refuses, which is the worst kind of
+    /// format bug: the file saves and then will not open. It is written as 0/1 instead, which is
+    /// the same number and is readable. Model members that can be unset should be nullable rather
+    /// than relying on this.
+    /// </remarks>
     public override void Write(Utf8JsonWriter writer, Rational value, JsonSerializerOptions options)
     {
         ArgumentNullException.ThrowIfNull(writer);
 
         writer.WriteStartObject();
         writer.WriteNumber("num", value.Num);
-        writer.WriteNumber("den", value.Den);
+        writer.WriteNumber("den", value.Den == 0 ? 1 : value.Den);
         writer.WriteEndObject();
     }
 }

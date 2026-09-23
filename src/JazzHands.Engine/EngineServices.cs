@@ -2,6 +2,7 @@ using System.Reflection;
 using JazzHands.Core.Commands;
 using JazzHands.Engine.Commands;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace JazzHands.Engine;
 
@@ -18,6 +19,13 @@ public static class EngineServices
     public static IServiceCollection AddJazzHandsEngine(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
+
+        // The media handlers need an importer, and the importer needs somewhere to cache probes.
+        // Both are singletons: the cache holds a SQLite connection, and opening one per import
+        // would cost more than the probe it saves.
+        services.TryAddSingleton<Media.Import.CacheManager>();
+        services.TryAddSingleton(provider =>
+            new Media.Import.MediaImporter(provider.GetService<Media.Import.CacheManager>()));
 
         foreach (Type type in typeof(EngineServices).Assembly.GetTypes())
         {

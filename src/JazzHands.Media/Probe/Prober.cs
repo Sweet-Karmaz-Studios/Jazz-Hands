@@ -406,7 +406,7 @@ public sealed unsafe class Prober
                 continue;
             }
 
-            FrameRateMode mode = ClassifyTimestamps(measured);
+            FrameRateMode mode = ClassifyTimestamps(measured, ReorderDepth(context, info.Index));
             streams[i] = info with { Video = info.Video with { FrameRateMode = mode } };
 
             if (mode == FrameRateMode.Variable)
@@ -418,11 +418,34 @@ public sealed unsafe class Prober
         }
     }
 
+    /// <summary>How many frames a stream may hold back before presenting one.</summary>
+    private static int ReorderDepth(AVFormatContext* context, int streamIndex)
+    {
+        for (uint index = 0; index < context->nb_streams; index++)
+        {
+            AVStream* stream = context->streams[index];
+            if (stream->index == streamIndex)
+            {
+                return Math.Max(0, stream->codecpar->video_delay);
+            }
+        }
+
+        return 0;
+    }
+
     /// <summary>
     /// Constant when every packet interval matches the median within one percent. Encoders round
     /// timestamps, so exact equality is too strict; a genuinely variable file is off by far more.
     /// </summary>
-    private static FrameRateMode ClassifyTimestamps(List<long> timestamps)
+    /// <remarks>
+    /// The scan stops after a couple of seconds, part way through a group of pictures, and
+    /// packets arrive in decode order. With B-frames that means the last few presentation
+    /// timestamps collected have holes in them: the frames that fill the holes are in packets
+    /// that would have been read next. Sorted, a hole is indistinguishable from a doubled
+    /// interval, so every file with a reorder delay looked variable. The tail is trimmed by the
+    /// reorder depth, which bounds how far ahead a collected timestamp can be of a complete one.
+    /// </remarks>
+    private static FrameRateMode ClassifyTimestamps(List<long> timestamps, int reorderDepth)
     {
         if (timestamps.Count < 8)
         {
@@ -431,6 +454,14 @@ public sealed unsafe class Prober
 
         long[] ordered = [.. timestamps];
         Array.Sort(ordered);
+
+        int complete = ordered.Length - reorderDepth;
+        if (complete < 8)
+        {
+            return FrameRateMode.Unknown;
+        }
+
+        ordered = ordered[..complete];
 
         var deltas = new List<long>(ordered.Length);
         for (int i = 1; i < ordered.Length; i++)

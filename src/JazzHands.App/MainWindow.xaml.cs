@@ -1,17 +1,19 @@
 using System.Windows;
+using JazzHands.App.ViewModels;
 
 namespace JazzHands.App;
 
 /// <summary>
-/// The shell window. Phase 27 fills it with the docking layout; today it proves the app starts
-/// and that the engine assemblies load in a WPF process.
+/// The shell window. Phase 27 fills it out with every panel, the workspaces and the layout
+/// service; today it holds the docking manager and the media panel.
 /// </summary>
 public partial class MainWindow : Window
 {
     /// <summary>Creates the window.</summary>
-    public MainWindow()
+    /// <param name="model">The window's viewmodel, from the host.</param>
+    public MainWindow(MainViewModel model)
     {
         InitializeComponent();
-        Banner.Text = "Jazz Hands\nThe shell arrives in Phase 27.";
+        DataContext = model;
     }
 }
