@@ -12,7 +12,12 @@ LogSetup.ConfigureForCli();
 try
 {
     RootCommand root = JazzCli.BuildRootCommand();
-    return root.Parse(args).Invoke();
+    ParseResult parsed = root.Parse(args);
+    int code = parsed.Invoke();
+
+    // System.CommandLine prints what was wrong and exits 1; the contract says a usage error is 2,
+    // so a script can tell "you typed it wrong" from "it was refused".
+    return parsed.Errors.Count > 0 ? ExitCode.UsageError : code;
 }
 finally
 {
