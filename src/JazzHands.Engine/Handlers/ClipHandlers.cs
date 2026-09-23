@@ -498,3 +498,64 @@ public sealed class RateStretchClipHandler : ICommandHandler<RateStretchClipComm
         return project.ReplaceTrack(updated);
     }
 }
+
+/// <summary>Moves clips by whole frames, together or not at all.</summary>
+public sealed class NudgeClipsHandler : ICommandHandler<NudgeClipsCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, NudgeClipsCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        string[] ids = [.. command.ClipIds.Distinct(StringComparer.Ordinal)];
+        if (ids.Length == 0)
+        {
+            throw new CommandException("no-clips", "Name at least one clip to nudge.");
+        }
+
+        ClipLocation[] found = [.. ids.Select(id => HandlerHelp.Clip(project, id))];
+        Sequence sequence = found[0].Sequence;
+
+        if (found.Any(location => !string.Equals(location.Sequence.Id, sequence.Id, StringComparison.Ordinal)))
+        {
+            throw new CommandException("mixed-sequences", "Clips nudged together have to be in one sequence.");
+        }
+
+        if (command.Frames == 0)
+        {
+            return project;
+        }
+
+        foreach (ClipLocation location in found)
+        {
+            HandlerHelp.RequireUnlocked(location.Track);
+        }
+
+        Flicks delta = Flicks.FromFrames(command.Frames, project.SettingsFor(sequence).FrameRate);
+
+        // Front first, in the direction of travel: moving later, the last clip goes first, so no
+        // clip lands on a neighbour that is about to move out of its way.
+        IEnumerable<ClipLocation> order = command.Frames > 0
+            ? found.OrderByDescending(location => location.Clip.Start)
+            : found.OrderBy(location => location.Clip.Start);
+
+        foreach (ClipLocation location in order)
+        {
+            Flicks to = location.Clip.Start + delta;
+            if (to.IsNegative)
+            {
+                throw new CommandException(
+                    "before-start",
+                    $"Nudging '{location.Clip.Name}' {command.Frames} frame(s) would put it before the start of the sequence.");
+            }
+
+            sequence = HandlerContext.Require(EditOps.Move(sequence, location.Clip.Id, null, to));
+            context.Changed(location.Clip.Id);
+            context.Changed(location.Track.Id);
+        }
+
+        return project.ReplaceSequence(sequence);
+    }
+}

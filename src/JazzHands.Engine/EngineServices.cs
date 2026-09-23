@@ -24,6 +24,10 @@ public static class EngineServices
         // Both are singletons: the cache holds a SQLite connection, and opening one per import
         // would cost more than the probe it saves.
         services.TryAddSingleton<Media.Import.CacheManager>();
+
+        // What the editor is pointing at. One per host, like the session it belongs to; the
+        // selection commands find it here, which is what lets a script select and then act.
+        services.TryAddSingleton<Selection.SelectionService>();
         services.TryAddSingleton(provider =>
             new Media.Import.MediaImporter(provider.GetService<Media.Import.CacheManager>()));
 
