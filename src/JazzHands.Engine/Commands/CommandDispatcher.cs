@@ -154,7 +154,7 @@ public sealed class CommandDispatcher : IAsyncDisposable
         Type adapterType = typeof(QueryAdapter<,>).MakeGenericType(query.GetType(), typeof(TResult));
         var adapter = (IQueryAdapter<TResult>)Activator.CreateInstance(adapterType)!;
 
-        return adapter.Handle(handler, Project, query, new QueryContext(session));
+        return adapter.Handle(handler, Project, query, new QueryContext(session, _services));
     }
 
     /// <summary>Replaces the project wholesale, as opening or creating one does.</summary>

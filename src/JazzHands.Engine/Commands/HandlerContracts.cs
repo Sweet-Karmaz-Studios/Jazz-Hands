@@ -102,7 +102,11 @@ public interface IQueryHandler<in TQuery, out TResult>
 
 /// <summary>What a query handler is given besides the project and the query.</summary>
 /// <param name="Session">The session, for the few queries that ask about it rather than the project.</param>
-public sealed record QueryContext(ISessionState? Session = null);
+/// <param name="Services">
+/// The session's services, for the few queries about something outside the project, such as
+/// where the playhead is.
+/// </param>
+public sealed record QueryContext(ISessionState? Session = null, IServiceProvider? Services = null);
 
 /// <summary>The parts of a session a query may read.</summary>
 /// <remarks>

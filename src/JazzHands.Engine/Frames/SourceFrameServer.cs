@@ -204,6 +204,22 @@ public sealed class SourceFrameServer : IDisposable
         return served;
     }
 
+    /// <summary>The frame a clip shows at a timeline position if it is already cached, without decoding anything.</summary>
+    public FrameTexture? GetCachedFrame(Project project, Clip clip, Flicks timelineTime)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(clip);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        if (clip.MediaId is not { } mediaId || project.MediaItem(mediaId) is not { Hash.Length: > 0 } item)
+        {
+            return null;
+        }
+
+        Rational rate = RateOf(item, clip.SourceStreamIndex);
+        return _cache.Get(new FrameKey(item.Hash, clip.SourceStreamIndex, SourceTimeFor(clip, timelineTime, rate)));
+    }
+
     /// <summary>
     /// Fills the cache with the group of pictures a time sits inside, which is how a source is
     /// played backwards.

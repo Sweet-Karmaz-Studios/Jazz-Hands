@@ -112,7 +112,10 @@ public sealed class Session : ISessionState, IAsyncDisposable
                 CommandResult result = await _dispatcher.ExecuteAsync(command, cancellationToken)
                     .ConfigureAwait(false);
 
-                if (result.Ok && _history is not null && command is not (UndoCommand or RedoCommand))
+                // Only what changes the project goes in the log. It is replayed after a crash, and
+                // replaying undo, redo or a press of play would do something other than rebuild
+                // the edit.
+                if (result.Ok && _history is not null && CommandRegistry.Describe(command).Undoable)
                 {
                     _history.Append(CommandRegistry.NameOf(command), CommandRegistry.ArgsToJson(command));
                 }

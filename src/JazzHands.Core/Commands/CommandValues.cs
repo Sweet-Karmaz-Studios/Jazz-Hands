@@ -229,9 +229,20 @@ public static class CommandValues
 
         if (type == typeof(bool))
         {
+            // On and off as well, because "jazz playback loop on" is what anyone would type.
+            if (string.Equals(text, "on", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (string.Equals(text, "off", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
             return bool.TryParse(text, out bool flag)
                 ? flag
-                : throw new CommandException("invalid-value", $"'{name}' takes true or false, not '{text}'.");
+                : throw new CommandException("invalid-value", $"'{name}' takes true or false (or on or off), not '{text}'.");
         }
 
         if (type == typeof(int))

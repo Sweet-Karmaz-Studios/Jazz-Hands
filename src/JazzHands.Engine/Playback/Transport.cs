@@ -81,6 +81,18 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
     private TransportState _state = TransportState.Stopped;
     private long _playedFrom;
 
+    // Scrub grains. The control side posts a position under a sequence number, the decode thread
+    // arms it once the audio is there, and the audio thread plays it.
+    private long _grainRequest;
+    private long _grainSample;
+    private long _grainArmed;
+    private long _grainTaken;
+    private long _grainPosition;
+    private int _grainLeft;
+    private bool _graphDirty;
+    private readonly int _grainLength;
+    private readonly int _grainFade;
+
     /// <summary>Creates a transport and starts its output, silent until something plays.</summary>
     /// <param name="output">Where the sound goes. Owned by the transport from here on.</param>
     /// <param name="cache">The block cache, which may be shared with export.</param>
@@ -93,6 +105,11 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
         _server = new AudioSampleServer(_cache, output.SampleRate, AudioReadMode.Realtime);
         _graph = new AudioGraph(_server, output.SampleRate, output.Channels);
         Clock = new PlaybackClock(output);
+
+        // Forty milliseconds of sound around each scrub position, faded in and out over five so a
+        // grain starts and stops without a click.
+        _grainLength = output.SampleRate * 40 / 1000;
+        _grainFade = output.SampleRate * 5 / 1000;
 
         _decoder = new Thread(DecodeLoop) { IsBackground = true, Name = "Jazz audio decode" };
         _decoder.Start();
@@ -112,6 +129,27 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
 
     /// <summary>The position being heard now.</summary>
     public Flicks Position => Clock.Now;
+
+    /// <summary>
+    /// Where the playhead is as far as a caller is concerned: the clock once the last request has
+    /// been heard, and the requested position until then.
+    /// </summary>
+    /// <remarks>
+    /// The clock only moves when the audio thread applies a request, a buffer or so after it was
+    /// posted. Two frame steps in quick succession, or a play straight after a seek, must start
+    /// from where the previous request put the playhead rather than from a clock that has not
+    /// heard about it yet.
+    /// </remarks>
+    public Flicks Playhead
+    {
+        get
+        {
+            lock (_post)
+            {
+                return Flicks.FromSamples(Here(), _output.SampleRate);
+            }
+        }
+    }
 
     /// <summary>Playing, paused or stopped, as last asked.</summary>
     public TransportState State
@@ -138,7 +176,7 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
 
             lock (_post)
             {
-                Post(_requestPlaying, Clock.Sample, value);
+                Post(_requestPlaying, Here(), value);
             }
         }
     }
@@ -152,6 +190,18 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
         get => Volatile.Read(ref _monitorGain);
         set => Volatile.Write(ref _monitorGain, Math.Clamp(value, 0.0f, 4.0f));
     }
+
+    /// <summary>Plays a short grain of sound at each scrub position while stopped. On by default.</summary>
+    public bool ScrubAudio { get; set; } = true;
+
+    /// <summary>
+    /// True when rates other than 1 keep their pitch. False until the stretcher arrives: shuttling
+    /// is silent.
+    /// </summary>
+    public bool CanStretch => false;
+
+    /// <summary>Scrub grains played, for tests and diagnostics.</summary>
+    public long GrainsPlayed => Volatile.Read(ref _grainTaken);
 
     /// <summary>True once the audio thread is actually moving: a play has been armed and applied.</summary>
     public bool IsRolling => Volatile.Read(ref _appliedSequence) == Volatile.Read(ref _requestSequence) && Volatile.Read(ref _playing);
@@ -223,7 +273,7 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
                 return;
             }
 
-            long from = Clock.Sample;
+            long from = Here();
             _playedFrom = from;
             _state = TransportState.Playing;
             Post(playing: true, from, _requestRate);
@@ -241,7 +291,7 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
             }
 
             _state = TransportState.Paused;
-            Post(playing: false, Clock.Sample, _requestRate);
+            Post(playing: false, Here(), _requestRate);
         }
     }
 
@@ -269,6 +319,38 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
 
             Post(_state == TransportState.Playing, sample, _requestRate);
         }
+    }
+
+    /// <summary>
+    /// Plays a grain of sound at a position while stopped: what makes dragging the playhead
+    /// audible. Ignored while playing, and when <see cref="ScrubAudio"/> is off.
+    /// </summary>
+    /// <remarks>
+    /// The grain is centred on the position and plays once the decode thread has the audio for
+    /// it, usually within a buffer. A newer grain replaces one still playing, so a fast drag
+    /// sounds like a run of short grains rather than a queue of stale ones.
+    /// </remarks>
+    public void Scrub(Flicks time)
+    {
+        if (!ScrubAudio)
+        {
+            return;
+        }
+
+        long sample = Math.Max(0, time.ToSamples(_output.SampleRate, RoundingMode.Floor));
+
+        lock (_post)
+        {
+            if (_state == TransportState.Playing)
+            {
+                return;
+            }
+
+            Volatile.Write(ref _grainSample, sample);
+            Interlocked.Increment(ref _grainRequest);
+        }
+
+        _wake.Set();
     }
 
     /// <summary>Waits until a play has actually started, for tests and scripts. Not for the UI thread.</summary>
@@ -314,9 +396,17 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
 
             if (consistent && armed)
             {
-                if (sample != _renderSample)
+                // A grain moves the graph somewhere else, so the next play starts it afresh even
+                // when it resumes exactly where it paused.
+                if (sample != _renderSample || _graphDirty)
                 {
                     _graph.Reset();
+                    _graphDirty = false;
+                }
+
+                if (playing)
+                {
+                    _grainLeft = 0;
                 }
 
                 _playing = playing;
@@ -330,6 +420,7 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
         if (!_playing)
         {
             output.Clear(0, frames);
+            RenderGrain(output, frames);
             return;
         }
 
@@ -359,6 +450,68 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
 
         Volatile.Write(ref _renderPosition, _renderSample);
     }
+
+    /// <summary>
+    /// Plays the newest armed scrub grain into the start of a silent buffer. Audio thread only;
+    /// no lock, no allocation.
+    /// </summary>
+    private void RenderGrain(AudioBuffer output, int frames)
+    {
+        long armed = Volatile.Read(ref _grainArmed);
+        if (armed > _grainTaken)
+        {
+            _grainPosition = Math.Max(0, Volatile.Read(ref _grainSample) - (_grainLength / 2));
+            _grainLeft = _grainLength;
+            _graph.Reset();
+            _graphDirty = true;
+            Volatile.Write(ref _grainTaken, armed);
+        }
+
+        if (_grainLeft <= 0)
+        {
+            return;
+        }
+
+        int count = Math.Min(frames, _grainLeft);
+        int played = _grainLength - _grainLeft;
+        _graph.Pull(_grainPosition, output, 0, count);
+
+        float monitor = Volatile.Read(ref _monitorGain);
+        for (int channel = 0; channel < output.Channels; channel++)
+        {
+            Span<float> plane = output.Plane(channel, 0, count);
+            for (int index = 0; index < count; index++)
+            {
+                plane[index] *= GrainEnvelope(played + index) * monitor;
+            }
+        }
+
+        _grainPosition += count;
+        _grainLeft -= count;
+    }
+
+    /// <summary>A raised cosine at each end of the grain, flat in between.</summary>
+    private float GrainEnvelope(int index)
+    {
+        int fromEnd = _grainLength - 1 - index;
+        int edge = Math.Min(index, fromEnd);
+        if (edge >= _grainFade)
+        {
+            return 1.0f;
+        }
+
+        float phase = (float)edge / _grainFade;
+        return 0.5f - (0.5f * MathF.Cos(MathF.PI * phase));
+    }
+
+    /// <summary>
+    /// The sample the playhead is at: the clock when the audio thread has applied everything
+    /// posted, and the last request otherwise. Call under <see cref="_post"/>.
+    /// </summary>
+    private long Here() =>
+        Volatile.Read(ref _appliedSequence) == _requestSequence
+            ? Clock.Sample
+            : Volatile.Read(ref _requestSample);
 
     /// <summary>Posts a request for the audio thread. Call under <see cref="_post"/>.</summary>
     private void Post(bool playing, long sample, double rate)
@@ -427,6 +580,23 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
                 foreach (SourceDemand demand in demands)
                 {
                     _server.Prefetch(demand.Source, demand.StartSample, demand.Frames);
+                }
+
+                // A scrub grain is armed once the forty milliseconds around it are decoded.
+                long grain = Volatile.Read(ref _grainRequest);
+                if (grain > Volatile.Read(ref _grainArmed))
+                {
+                    long start = Math.Max(0, Volatile.Read(ref _grainSample) - (_grainLength / 2));
+
+                    demands.Clear();
+                    _graph.Snapshot.CollectDemands(start, _grainLength, demands);
+
+                    foreach (SourceDemand demand in demands)
+                    {
+                        _server.Prefetch(demand.Source, demand.StartSample, demand.Frames);
+                    }
+
+                    Volatile.Write(ref _grainArmed, grain);
                 }
 
                 // Everything the new position starts with is decoded, so a play can begin.
