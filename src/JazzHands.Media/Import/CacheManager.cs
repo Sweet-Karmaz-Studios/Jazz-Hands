@@ -109,6 +109,67 @@ public sealed class CacheManager : IDisposable
         }
     }
 
+    /// <summary>The cached keyframe index for a hash and stream, as stored JSON, or null.</summary>
+    public string? GetKeyframes(string hash, int streamIndex)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(hash);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        lock (_gate)
+        {
+            using SqliteCommand command = _connection.CreateCommand();
+            command.CommandText = "SELECT ptsJson FROM keyframes WHERE hash = $hash AND stream = $stream";
+            command.Parameters.AddWithValue("$hash", hash);
+            command.Parameters.AddWithValue("$stream", streamIndex);
+
+            if (command.ExecuteScalar() is string json)
+            {
+                TouchKeyframes(hash, streamIndex);
+                return json;
+            }
+
+            return null;
+        }
+    }
+
+    /// <summary>Stores a keyframe index against a hash and stream, replacing any previous one.</summary>
+    public void PutKeyframes(string hash, int streamIndex, string json)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(hash);
+        ArgumentNullException.ThrowIfNull(json);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        lock (_gate)
+        {
+            using SqliteCommand command = _connection.CreateCommand();
+            command.CommandText =
+                "INSERT INTO keyframes (hash, stream, ptsJson, lastUsed) VALUES ($hash, $stream, $json, $now) "
+                + "ON CONFLICT(hash, stream) DO UPDATE SET ptsJson = $json, lastUsed = $now";
+
+            command.Parameters.AddWithValue("$hash", hash);
+            command.Parameters.AddWithValue("$stream", streamIndex);
+            command.Parameters.AddWithValue("$json", json);
+            command.Parameters.AddWithValue("$now", Now());
+            command.ExecuteNonQuery();
+        }
+    }
+
+    /// <summary>How many keyframe indexes are cached, for `jazz cache stats` and the tests.</summary>
+    public int KeyframeIndexCount
+    {
+        get
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+
+            lock (_gate)
+            {
+                using SqliteCommand command = _connection.CreateCommand();
+                command.CommandText = "SELECT COUNT(*) FROM keyframes";
+                return Convert.ToInt32(command.ExecuteScalar(), CultureInfo.InvariantCulture);
+            }
+        }
+    }
+
     /// <summary>Forgets everything known about a hash, which is what a replaced file needs.</summary>
     public void Forget(string hash)
     {
@@ -247,6 +308,17 @@ public sealed class CacheManager : IDisposable
         command.CommandText = $"UPDATE {table} SET lastUsed = $now WHERE hash = $hash";
         command.Parameters.AddWithValue("$now", Now());
         command.Parameters.AddWithValue("$hash", hash);
+        command.ExecuteNonQuery();
+    }
+
+    /// <summary>Marks one stream's keyframe index as used.</summary>
+    private void TouchKeyframes(string hash, int streamIndex)
+    {
+        using SqliteCommand command = _connection.CreateCommand();
+        command.CommandText = "UPDATE keyframes SET lastUsed = $now WHERE hash = $hash AND stream = $stream";
+        command.Parameters.AddWithValue("$now", Now());
+        command.Parameters.AddWithValue("$hash", hash);
+        command.Parameters.AddWithValue("$stream", streamIndex);
         command.ExecuteNonQuery();
     }
 

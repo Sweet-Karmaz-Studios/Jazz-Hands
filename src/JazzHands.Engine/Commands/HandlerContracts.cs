@@ -122,4 +122,7 @@ public interface ISessionState
 
     /// <summary>What has been done, oldest first.</summary>
     ImmutableArray<HistoryInfo> History(int limit);
+
+    /// <summary>What the session has noticed that a person should know about: fallbacks, missing files.</summary>
+    ImmutableArray<Core.Diagnostics.Diagnostic> Diagnostics { get; }
 }

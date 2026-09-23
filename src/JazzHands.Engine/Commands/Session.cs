@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using JazzHands.Core.Commands;
 using JazzHands.Core.Model;
 using JazzHands.Core.Serialization;
+using JazzHands.Engine.Diagnostics;
 using JazzHands.Engine.Recovery;
 using Serilog;
 
@@ -140,6 +141,19 @@ public sealed class Session : ISessionState, IAsyncDisposable
 
     /// <summary>What has been done, oldest first.</summary>
     public ImmutableArray<HistoryInfo> History(int limit) => Undo.History(limit);
+
+    /// <summary>
+    /// What this session has noticed that a person should know about.
+    /// </summary>
+    /// <remarks>
+    /// The decode pipeline reports into this: a file that fell back to software, a file that is
+    /// not where the project says it is. Every surface reads the same list, which is why it is on
+    /// the session and not on whichever panel happened to notice.
+    /// </remarks>
+    public DiagnosticsLog Notices { get; } = new();
+
+    /// <inheritdoc />
+    ImmutableArray<Core.Diagnostics.Diagnostic> ISessionState.Diagnostics => Notices.All;
 
     /// <inheritdoc />
     public async ValueTask DisposeAsync()

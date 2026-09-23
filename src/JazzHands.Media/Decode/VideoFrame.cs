@@ -107,6 +107,40 @@ public sealed unsafe class VideoFrame : IDisposable
         return new ReadOnlySpan<byte>(frame->data[(uint)plane], stride * height);
     }
 
+    /// <summary>
+    /// The first byte of a plane, for a caller that uploads it somewhere without copying it here
+    /// first.
+    /// </summary>
+    /// <remarks>
+    /// The pointer belongs to this frame and is valid until it is disposed. It exists because the
+    /// render layer's plane upload takes several planes at once, and a span of spans is not
+    /// expressible; see <c>PlaneUploader</c>.
+    /// </remarks>
+    public IntPtr PlanePointer(int plane)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(plane);
+
+        if (Location != FrameLocation.Cpu)
+        {
+            throw new InvalidOperationException("This frame is on the GPU; there is no system memory plane to point at.");
+        }
+
+        return (IntPtr)Handle->data[(uint)plane];
+    }
+
+    /// <summary>How many planes this frame's pixel format uses.</summary>
+    public int PlaneCount
+    {
+        get
+        {
+            AVPixFmtDescriptor* descriptor = ffmpeg.av_pix_fmt_desc_get(PixelFormat);
+            return descriptor is null ? 1 : ffmpeg.av_pix_fmt_count_planes(PixelFormat);
+        }
+    }
+
+    /// <summary>The name FFmpeg calls this frame's pixel format, which is how the render layer maps it.</summary>
+    public string PixelFormatName => ffmpeg.av_get_pix_fmt_name(PixelFormat) ?? "unknown";
+
     /// <summary>The byte stride of a plane.</summary>
     public int GetStride(int plane)
     {

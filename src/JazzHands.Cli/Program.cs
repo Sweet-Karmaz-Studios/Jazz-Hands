@@ -56,6 +56,7 @@ namespace JazzHands.Cli
         {
             var perf = new Command("perf", "Measure the engine. Numbers land in Docs/PERF.md.");
             perf.Subcommands.Add(BuildDecodeBenchmarkCommand());
+            perf.Subcommands.Add(BuildScrubBenchmarkCommand());
             return perf;
         }
 
@@ -107,6 +108,98 @@ namespace JazzHands.Cli
                         reuseDecoder: parseResult.GetValue(reuse));
 
                     Console.Out.WriteLine(parseResult.GetValue(JsonOption) ? result.ToJson() : result.ToText());
+                    return ExitCode.Ok;
+                }
+                catch (JazzHands.Media.Interop.FfmpegException ex)
+                {
+                    Console.Error.WriteLine($"jazz: {ex.Message}");
+                    return ExitCode.MediaError;
+                }
+                catch (InvalidOperationException ex)
+                {
+                    Console.Error.WriteLine($"jazz: {ex.Message}");
+                    return ExitCode.CommandError;
+                }
+            });
+
+            return command;
+        }
+
+        private static Command BuildScrubBenchmarkCommand()
+        {
+            var file = new Argument<FileInfo>("file") { Description = "The media file to scrub." };
+            var software = new Option<bool>("--software")
+            {
+                Description = "Force the software decoder instead of trying D3D11VA.",
+            };
+            var requests = new Option<int>("--requests")
+            {
+                Description = "How many random seeks to make.",
+                DefaultValueFactory = _ => 200,
+            };
+            var seed = new Option<int>("--seed")
+            {
+                Description = "The random seed, so a run repeats exactly.",
+                DefaultValueFactory = _ => 20260923,
+            };
+            var drag = new Option<bool>("--drag")
+            {
+                Description = "Move the playhead in small steps, the way a hand does, instead of at random.",
+            };
+            var reverse = new Option<bool>("--reverse")
+            {
+                Description = "Play backwards one frame at a time, priming each group of pictures.",
+            };
+            var nearest = new Option<bool>("--nearest")
+            {
+                Description = "Take the nearest keyframe instead of the exact frame, the way shuttling does.",
+            };
+
+            var command = new Command(
+                "scrub",
+                "Seek to random times and report how long a frame takes to reach a texture.")
+            {
+                file,
+                software,
+                requests,
+                seed,
+                drag,
+                reverse,
+                nearest,
+            };
+
+            command.SetAction(parseResult =>
+            {
+                FileInfo target = parseResult.GetValue(file)!;
+                if (!target.Exists)
+                {
+                    Console.Error.WriteLine($"jazz: '{target.FullName}' does not exist.");
+                    return ExitCode.CommandError;
+                }
+
+                if (parseResult.GetValue(VerboseOption))
+                {
+                    LogSetup.ConfigureForCli(LogEventLevel.Debug);
+                }
+
+                try
+                {
+                    ScrubBenchmarkResult result = ScrubBenchmark.Run(
+                        target.FullName,
+                        requests: Math.Max(1, parseResult.GetValue(requests)),
+                        useHardware: !parseResult.GetValue(software),
+                        seed: parseResult.GetValue(seed),
+                        pattern: parseResult.GetValue(reverse)
+                            ? ScrubPattern.Reverse
+                            : parseResult.GetValue(drag) ? ScrubPattern.Drag : ScrubPattern.Random,
+                        mode: parseResult.GetValue(nearest)
+                            ? JazzHands.Media.Decode.SeekMode.Nearest
+                            : JazzHands.Media.Decode.SeekMode.Exact);
+
+                    Console.Out.WriteLine(parseResult.GetValue(JsonOption)
+                        ? System.Text.Json.JsonSerializer.Serialize(result, JazzHands.Core.Serialization.JazzJson.Options)
+                        : ScrubBenchmark.Describe(result));
+
                     return ExitCode.Ok;
                 }
                 catch (JazzHands.Media.Interop.FfmpegException ex)

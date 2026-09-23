@@ -178,6 +178,43 @@ The allocation figure averages the whole run, warm-up included, so it sits a lit
 steady-state 96 bytes per frame recorded in `Docs/spikes/S2.md`. The allocation test is the one
 that holds the line; this number is for spotting a change, not for quoting.
 
+### `jazz perf scrub <file>`
+
+Seeks around a file and reports how long a frame takes to reach a texture. This is the number that
+decides whether scrubbing feels connected to the mouse, so it is reported as percentiles: a median
+of 15 ms with a tail at 90 ms feels worse than a flat 25 ms, because the tail is what the hand
+feels.
+
+```bash
+jazz perf scrub tests\corpus\hevc10_2160p60_5s.mp4
+jazz perf scrub tests\corpus\av1_1080p60_5s.mkv --reverse --requests 300
+```
+
+```
+hevc10_2160p60_5s.mp4
+  path         hardware on NVIDIA GeForce RTX 4090
+  pattern      random, exact
+  requests     200, 200 served
+  p50          41.4 ms
+  p95          107.1 ms
+  worst        128.4 ms
+  cache hits   19 %
+  decoders     1 opened
+```
+
+| Option | Meaning |
+|---|---|
+| `--drag` | Move the playhead in small steps the way a hand does, instead of at random. This is what a scrub actually is; random access is the worst case. |
+| `--reverse` | Play backwards one frame at a time, priming each group of pictures. Reports how many frames missed the playback budget. |
+| `--nearest` | Take the nearest keyframe instead of the exact frame, the way shuttling does. |
+| `--software` | Force the software decoder. |
+| `--requests <n>` | How many seeks to make. Default 200. |
+| `--seed <n>` | The random seed, so a run repeats exactly. |
+
+The four combinations answer different questions and their numbers are not comparable. Random and
+exact is the worst case and is dominated by the decode from the enclosing keyframe; drag is what a
+person does; nearest is what a shuttle does. `Docs/PERF.md` records all of them for the corpus.
+
 ## Generated verbs
 
 From Phase 05, every command and query in `CommandRegistry` is a `jazz` verb. Nothing in the CLI

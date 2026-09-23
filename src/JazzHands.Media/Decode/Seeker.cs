@@ -29,7 +29,7 @@ public enum SeekMode
 /// target is only a little ahead of where the decoder already is, which is the common case while
 /// playing or nudging the playhead.
 /// </remarks>
-public sealed class Seeker : IDisposable
+public sealed class Seeker : IVideoSource
 {
     /// <summary>
     /// How far back the first retry steps when a seek overshoots its target. Eight frames clears
@@ -45,6 +45,7 @@ public sealed class Seeker : IDisposable
     private readonly Rational _frameRate;
     private readonly bool _ownsResources;
 
+    private VideoFrame? _pending;
     private long _currentFrameIndex = -1;
     private bool _disposed;
 
@@ -108,6 +109,10 @@ public sealed class Seeker : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
+        // A new seek makes any frame held by Flush stale, and this method reads through ReadNext,
+        // which would otherwise hand that stale frame back as the seek's result.
+        DropPending();
+
         long targetFrame = target.ToFrames(_frameRate, RoundingMode.Floor);
         if (targetFrame < 0)
         {
@@ -129,10 +134,44 @@ public sealed class Seeker : IDisposable
         return canDecodeForward ? ScanForwardTo(targetFrame) : SeekBackThenScan(target, targetFrame);
     }
 
+    /// <summary>
+    /// The frame at <paramref name="resumeAt"/>, held back so the next read returns it.
+    /// </summary>
+    /// <remarks>
+    /// This is what makes a seeker an <see cref="IVideoSource"/> and so lets the conform stages
+    /// sit on top of one. A stage flushes its own state and then pulls, and what it pulls has to
+    /// be the frame at the position it flushed to; holding the frame here is how a seek and a
+    /// read stay one operation from the stage's point of view.
+    /// </remarks>
+    public void Flush(Flicks resumeAt)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        DropPending();
+        _pending = Seek(resumeAt);
+    }
+
+    /// <inheritdoc />
+    VideoFrame? IVideoSource.ReadFrame() => ReadNext();
+
+    /// <summary>Throws away a frame held by <see cref="Flush"/>, if there is one.</summary>
+    private void DropPending()
+    {
+        _pending?.Dispose();
+        _pending = null;
+    }
+
     /// <summary>Reads the next frame in order, keeping the seeker's position in step.</summary>
     public VideoFrame? ReadNext()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+
+        if (_pending is not null)
+        {
+            VideoFrame held = _pending;
+            _pending = null;
+            return held;
+        }
 
         VideoFrame? frame = _decoder.ReadFrame();
         if (frame is not null)
@@ -152,6 +191,9 @@ public sealed class Seeker : IDisposable
         }
 
         _disposed = true;
+        DropPending();
+
+
         if (_ownsResources)
         {
             _decoder.Dispose();
