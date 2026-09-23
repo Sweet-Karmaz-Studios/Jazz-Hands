@@ -276,6 +276,66 @@ Inside the bar of 0.1%.
 "Late" is how far into its frame interval each frame went up. Exit code 1 when more than 0.1% of
 the frames due were dropped.
 
+### `jazz trim <file>`
+
+Cuts stretches out of one recording and writes them back to back: a Quick Trim from the command
+line. It sends the commands the GUI sends (`media.add`, `trim.start`, `trim.set-segments`,
+`track.set-mute`) and exports with the planner and exporter the queue uses, so the same trim made
+here and in the editor gives the same bytes.
+
+```bash
+jazz trim capture.mkv --keep 00:10-00:25,01:00-01:30 --mute-stream Mic --out cut.mp4
+```
+
+```
+Copy to C:\work\cut.mp4 (mp4), 00:00:45.000
+  Copying the source's packets, as asked: no quality lost, and fast.
+  Picture: stream 0. Sound: Game (stream 1), Discord (stream 3).
+  Stretch 1: 00:00:10.000 to 00:00:26.000 (frames 600 to 1560)
+  Stretch 2: 00:01:00.000 to 00:01:30.000 (frames 3600 to 5400)
+  Moved the end at 00:00:25.000 to the keyframe at 00:00:26.000 (frame 1560).
+Wrote C:\work\cut.mp4: 43.1 MB, 00:00:46.000 in 0.2 s (230.0x real time) with copy.
+```
+
+| Option | Meaning |
+|---|---|
+| `--keep <ranges>` | Stretches to keep, in source time, as `start-end` pairs separated by commas. Any time form works: `00:10-00:25`, `10s-25s`, `600f-1500f`. The whole file when left out. |
+| `--mute-stream <streams>` | Sound streams to leave out, by container index (`2`) or title (`Mic`), comma separated. |
+| `--out <file>` | Required. `.mp4`, `.mkv` or `.mov`. |
+| `--mode copy\|encode` | `copy` (the default) keeps the source's packets; `encode` renders and re-encodes so cuts are exact. |
+| `--exact` | For a copy, refuse cuts that are not on keyframes instead of moving them to the nearest. |
+| `--preset <name>` | The preset for an encode. |
+| `--use-external-ffmpeg` | Encode through ffmpeg.exe with the same frames and options, to tell an encoder bug from ours. |
+| `--dry-run` | Print the plan and write nothing. With `--json`, the plan as JSON. |
+| `--save <project.jazz>` | Also save the Quick Trim as a project to open in the editor. |
+
+A copy cuts on keyframes. Each cut moves to the nearest one, the start back or on and the end on
+or back, and every move is printed with the frame it landed on; `--json` puts them in `snaps`.
+
+### `jazz export <project.jazz>`
+
+Exports a sequence in the foreground, printing progress on stderr. A running editor's queue is
+reached with `jazz export enqueue` instead (Phase 25's `--attach`).
+
+```bash
+jazz export trailer.jazz --out renders/trailer.mp4 --preset youtube-1080p
+```
+
+| Option | Meaning |
+|---|---|
+| `--out <file>` | Required. Relative to the project. The extension picks the container; left off, the preset's is added. |
+| `--preset <name>` | `youtube-1080p` (default), `youtube-4k`, `proof`, `lossless`. `jazz export presets <project>` lists them. |
+| `--mode auto\|copy\|encode` | `auto` copies when the timeline plays one file untouched and the preset would write what the source already is, and encodes otherwise. |
+| `--sequence <id>` | Which sequence. The active one when left out. |
+| `--snap-to-keyframes` | For a copy, move cuts to the nearest keyframe instead of refusing. |
+| `--use-in-out` | Export only between the sequence's in and out points. |
+| `--use-external-ffmpeg` | Encode through ffmpeg.exe. |
+| `--dry-run` | Print the plan, with the reasons for the mode, and write nothing. |
+
+A Quick Trim sequence exports its kept stretches back to back; any other sequence exports from its
+start to its last clip. The plan says in sentences why it copies or encodes, and `--dry-run` is
+the way to ask.
+
 ## Generated verbs
 
 From Phase 05, every command and query in `CommandRegistry` is a `jazz` verb. Nothing in the CLI
@@ -513,6 +573,29 @@ jazz clip nudge trailer.jazz <clip-id>,<clip-id> --frames -2
 Ids are taken literally. It is the timeline that widens a click to a clip's linked sound; a
 script that wants both names both.
 
+### Quick Trim
+
+A Quick Trim is a sequence over one file laid out at its source times: the kept stretches are
+clips, and a cut is a gap. `jazz trim` above is the one-line form.
+
+| Verb | Does |
+|---|---|
+| `jazz trim start <project> <media-id>` | Makes a Quick Trim sequence for the file, keeping all of it, and shows it. |
+| `jazz trim set-segments <project> <ranges>` | Keeps exactly these stretches, written as for `--keep`. |
+| `jazz trim add-segment <project> --in <t> --out <t>` | Keeps one more stretch, joining any it touches. |
+| `jazz trim remove-range <project> --in <t> --out <t>` | Cuts a range out of whatever it crosses. |
+
+### Export
+
+| Verb | Does |
+|---|---|
+| `jazz export plan <project> <output>` | The plan without running it: mode, stretches, encoders, snaps, reasons. |
+| `jazz export presets <project>` | The presets. |
+| `jazz export enqueue <project> <output>` | Plans and queues an export in a running editor; the job id comes back as the changed id. A headless process has no queue and says to use `jazz export`. |
+| `jazz export cancel <project> <job-id>` | Stops a queued or running export; the partial file is deleted. |
+| `jazz export clear <project>` | Takes finished jobs off the queue. |
+| `jazz export list <project>` | The queue with progress. Empty in a headless process. |
+
 ### Keys
 
 The editor's editing keys are bindings to these same commands, kept in a keymap. The defaults:
@@ -526,9 +609,10 @@ The editor's editing keys are bindings to these same commands, kept in a keymap.
 | I, O | `playback.set-in`, `playback.set-out` at the playhead |
 | Ctrl+K | `clip.split` at the playhead: the selected clips under it, or every clip under it when none is selected there |
 | Ctrl+A | `selection.set` to every clip |
+| Enter, Backspace | `trim.add-segment`, `trim.remove-range` between the in and out points, in a Quick Trim |
 
 A `keymap.json` in `%APPDATA%\JazzHands` changes them a key at a time. Each binding names a
-command and its arguments as JSON-RPC would send them, with `$selection`, `$playhead`,
+command and its arguments as JSON-RPC would send them, with `$selection`, `$playhead`, `$in`, `$out`,
 `$clipsAtPlayhead` and `$allClips` filled in when the key is pressed; a binding with an empty
 command frees the key. Bindings that do not parse or name a command that does not exist are
 skipped and logged.
@@ -548,8 +632,7 @@ skipped and logged.
 |---|---|
 | 04 | `jazz new`, `open`, `validate`, `fmt` |
 | 06 | `jazz media add`, `media probe`, `media list` |
-| 12 | `jazz clip add`, `clip split`, `clip trim` |
-| 22 | `jazz export`, `jazz presets` |
+| 22 | More presets, and presets from files |
 | 24 | The generated command tree, `jazz apply`, `describe`, `frame`, `proof`, `docs` |
 | 25 | `jazz rpc call`, `rpc list`, `rpc events`, `--attach` |
 | 26 | `jazz mcp` |
