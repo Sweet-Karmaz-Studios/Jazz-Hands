@@ -55,6 +55,10 @@
   <ItemGroup Label="Test">
     <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.0.0" />
     <PackageVersion Include="xunit.v3" Version="4.0.1" />
+    <!-- The assertion library on its own, for JazzHands.TestSupport: xunit.v3 refuses to be
+         referenced by a project that is not an executable test project, and a library of helpers
+         is not one. -->
+    <PackageVersion Include="xunit.v3.assert" Version="4.0.1" />
     <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.4.1" />
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
   </ItemGroup>
