@@ -112,6 +112,7 @@ public static class AudioGraphBuilder
             fadeOut.Duration.ToSamples(rate, RoundingMode.Nearest),
             fadeOut.Curve,
             ScalarCurve.From(clip.Volume, 0.0f, rate),
-            ScalarCurve.From(clip.Pan, 0.0f, rate));
+            ScalarCurve.From(clip.Pan, 0.0f, rate),
+            clip.ChannelMap ?? AudioChannelMap.Auto);
     }
 }

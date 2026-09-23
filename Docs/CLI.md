@@ -319,6 +319,48 @@ The import dialog in the application shows this same list, from this same query.
 The rest of the bin is `media list`, `media get`, `media set`, `media remove`, `media relink` and
 `media reprobe`.
 
+### Audio
+
+A movie put on a video track brings its sound with it: each audio stream becomes a clip on an
+audio track of its own, named from the stream title (OBS names them Game, Mic, Discord), and all
+of them are linked to the picture. A stream with no title goes on A1, A2 and so on. A second
+capture dropped on the timeline lands its microphone on the same Mic track as the first.
+
+```bash
+jazz clip add trailer.jazz <v1-id> --at 0 --media <capture-id>
+jazz clip add trailer.jazz <v1-id> --at 0 --media <capture-id> --audio false
+```
+
+`--audio false` puts down the picture alone. On an audio track, `--stream` picks the stream and
+defaults to the first audio one.
+
+```bash
+jazz audio mute-stream trailer.jazz <clip-id> --stream 2
+jazz audio set-gain trailer.jazz <clip-id> --db -6
+jazz audio set-pan trailer.jazz <clip-id> --pan -0.25
+jazz audio set-fade-in trailer.jazz <clip-id> --dur 0.5s --curve ease-in-out
+jazz audio set-channel-map trailer.jazz <clip-id> left
+jazz track set-volume trailer.jazz <track-id> --db -3
+```
+
+| Verb | Does |
+|---|---|
+| `audio mute-stream <clip> [--stream n] [--muted false]` | Switches off the linked audio clip playing stream n. The clip given can be the picture or any clip linked to it. |
+| `audio set-gain <clip> --db x` | Clip gain, -144 (silence) to +24. 0 clears it. |
+| `audio set-pan <clip> --pan x` | -1 hard left to 1 hard right. Mono clips pan at constant power; stereo clips balance. |
+| `audio set-fade-in`, `set-fade-out <clip> --dur t [--curve c]` | `linear`, `ease-in-out` (smooth), `ease-in` (slow start), `ease-out` (fast start), `bezier` (S curve). `--dur 0` removes it. |
+| `audio set-channel-map <clip> auto\|left\|right\|mono` | Plays one side of a stereo stream, or the sum, as a mono signal. For a microphone recorded on one channel. |
+| `audio detach <clip>` | Unlinks the audio from the picture. The audio clips stay linked to each other. |
+| `audio replace <clip> <media> [--stream n]` | Plays another media item's audio in the clip, keeping its place, gain, fades and links. |
+| `track set-volume <track> --db x`, `track set-pan <track> --pan x` | The track fader and balance, applied after each clip's own. |
+
+`timeline describe` shows what is set on each audio clip:
+
+```
+Mic (audio, order 3)
+  00:00:00:00 00:00:05:00 capture [linked, stream 2, gain -6 dB, fade in 0.5 s]
+```
+
 ## Coming in later phases
 
 | Phase | Adds |

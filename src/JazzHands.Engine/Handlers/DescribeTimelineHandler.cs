@@ -114,7 +114,7 @@ public sealed class DescribeTimelineHandler : IQueryHandler<DescribeTimelineQuer
 
         foreach (Clip clip in track.Clips)
         {
-            AppendClip(text, project, clip, fps, full);
+            AppendClip(text, project, clip, fps, full, track.IsAudio);
         }
 
         foreach (Gap gap in TimelineQueries.Gaps(track))
@@ -134,7 +134,7 @@ public sealed class DescribeTimelineHandler : IQueryHandler<DescribeTimelineQuer
         }
     }
 
-    private static void AppendClip(StringBuilder text, Project project, Clip clip, Rational fps, bool full)
+    private static void AppendClip(StringBuilder text, Project project, Clip clip, Rational fps, bool full, bool audio)
     {
         text.Append(CultureInfo.InvariantCulture,
             $"  {Timecode.Format(clip.Start, fps)} {Timecode.Format(clip.Duration, fps)} {Name(clip)}");
@@ -149,6 +149,7 @@ public sealed class DescribeTimelineHandler : IQueryHandler<DescribeTimelineQuer
                 clip.LinkGroupId is null ? null : "linked",
                 clip.GroupId is null ? null : "grouped",
             }.Where(note => note is not null).Select(note => note!),
+            .. (audio ? AudioNotes(clip) : []),
         ];
 
         if (notes.Length > 0)
@@ -241,6 +242,47 @@ public sealed class DescribeTimelineHandler : IQueryHandler<DescribeTimelineQuer
         }
 
         return -1;
+    }
+
+    /// <summary>
+    /// What is set on an audio clip, in the words a mixer would use, so a reader can tell the
+    /// mic lane is at -6 with a half second fade without opening the project file.
+    /// </summary>
+    private static IEnumerable<string> AudioNotes(Clip clip)
+    {
+        if (clip.IsMedia)
+        {
+            yield return string.Create(CultureInfo.InvariantCulture, $"stream {clip.SourceStreamIndex}");
+        }
+
+        if (clip.Volume is not null)
+        {
+            yield return clip.Volume is StaticValue { Value: ParamValue.Float gain }
+                ? string.Create(CultureInfo.InvariantCulture, $"gain {gain.Value:+0.#;-0.#} dB")
+                : "gain automated";
+        }
+
+        if (clip.Pan is not null)
+        {
+            yield return clip.Pan is StaticValue { Value: ParamValue.Float pan }
+                ? string.Create(CultureInfo.InvariantCulture, $"pan {pan.Value:+0.##;-0.##}")
+                : "pan automated";
+        }
+
+        if (clip.FadeIn is { IsNone: false } fadeIn)
+        {
+            yield return string.Create(CultureInfo.InvariantCulture, $"fade in {fadeIn.Duration.ToSeconds():0.###} s");
+        }
+
+        if (clip.FadeOut is { IsNone: false } fadeOut)
+        {
+            yield return string.Create(CultureInfo.InvariantCulture, $"fade out {fadeOut.Duration.ToSeconds():0.###} s");
+        }
+
+        if (clip.ChannelMap is { } map and not AudioChannelMap.Auto)
+        {
+            yield return map == AudioChannelMap.Mono ? "summed to mono" : $"{map.ToString().ToLowerInvariant()} channel only";
+        }
     }
 
     private static string Name(Clip clip) => clip.Name.Length > 0 ? clip.Name : Short(clip.Id);

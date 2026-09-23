@@ -61,6 +61,11 @@ public sealed class AddClipHandler : ICommandHandler<AddClipCommand>
         string id = HandlerHelp.IdOr(command.ClipId);
         HandlerHelp.RequireUnused(project, id);
 
+        MediaItem? media = command.MediaId is { } playing ? project.MediaItem(playing) : null;
+        MediaStream[] linkedAudio = command.WithAudio && track.Kind == TrackKind.Video && media?.Info is { } info
+            ? [.. info.AudioStreams]
+            : [];
+
         var clip = new Clip(
             id,
             new TimeRange(command.At, duration),
@@ -68,7 +73,8 @@ public sealed class AddClipHandler : ICommandHandler<AddClipCommand>
             MediaId: command.MediaId,
             GeneratorId: command.GeneratorId,
             SequenceId: command.SequenceId,
-            SourceStreamIndex: command.SourceStreamIndex,
+            SourceStreamIndex: command.SourceStreamIndex ?? DefaultStream(media, track.Kind),
+            LinkGroupId: linkedAudio.Length > 0 ? Id.New() : null,
             Name: command.Name ?? DefaultName(project, command));
 
         if (EditOps.Overlaps(track, clip))
@@ -80,7 +86,64 @@ public sealed class AddClipHandler : ICommandHandler<AddClipCommand>
 
         context.Changed(id);
         context.Changed(track.Id);
-        return project.ReplaceTrack(track.AddClip(clip));
+        Project result = project.ReplaceTrack(track.AddClip(clip));
+
+        for (int index = 0; index < linkedAudio.Length; index++)
+        {
+            result = AddLinkedAudio(result, sequence.Id, clip, linkedAudio[index], index, context);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Puts one audio stream of a movie on an audio track, linked to its picture.
+    /// </summary>
+    /// <remarks>
+    /// The track is found by the stream's title, which is how OBS names its tracks, so a second
+    /// capture dropped on the timeline lands its microphone on the same Mic track as the first.
+    /// A stream with no title takes A1, A2 and so on by its place among the audio streams, which
+    /// puts a camera's one stream on the A1 every project starts with. When the track is locked
+    /// or already has something there, a new track of that name is made rather than the stream
+    /// being dropped or anything being moved.
+    /// </remarks>
+    private static Project AddLinkedAudio(Project project, string sequenceId, Clip picture, MediaStream stream, int index, HandlerContext context)
+    {
+        Sequence sequence = project.Sequence(sequenceId)!;
+        string name = stream.Title is { Length: > 0 } title ? title : $"A{index + 1}";
+
+        var audio = new Clip(
+            Id.New(),
+            picture.Range,
+            picture.SourceIn,
+            MediaId: picture.MediaId,
+            SourceStreamIndex: stream.Index,
+            LinkGroupId: picture.LinkGroupId,
+            Name: picture.Name);
+
+        Track? target = sequence.Tracks.FirstOrDefault(candidate =>
+            candidate.Kind == TrackKind.Audio
+            && !candidate.Locked
+            && string.Equals(candidate.Name, name, StringComparison.OrdinalIgnoreCase)
+            && !EditOps.Overlaps(candidate, audio));
+
+        if (target is null)
+        {
+            target = new Track(Id.New(), TrackKind.Audio, name, sequence.NextTrackOrder());
+            project = project.ReplaceSequence(sequence.AddTrack(target));
+            context.Changed(sequence.Id);
+        }
+
+        context.Changed(audio.Id);
+        context.Changed(target.Id);
+        return project.ReplaceTrack(target.AddClip(audio));
+    }
+
+    /// <summary>The first stream of the kind the track carries, or 0 when the media was never probed.</summary>
+    private static int DefaultStream(MediaItem? media, TrackKind kind)
+    {
+        MediaStreamKind wanted = kind == TrackKind.Audio ? MediaStreamKind.Audio : MediaStreamKind.Video;
+        return media?.Info?.Streams.FirstOrDefault(stream => stream.Kind == wanted)?.Index ?? 0;
     }
 
     private static Flicks DefaultDuration(Project project, AddClipCommand command)

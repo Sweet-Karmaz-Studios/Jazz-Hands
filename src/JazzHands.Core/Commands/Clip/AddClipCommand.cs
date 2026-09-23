@@ -15,8 +15,15 @@ namespace JazzHands.Core.Commands;
 /// <param name="SourceIn">Where playback starts inside the source.</param>
 /// <param name="Duration">How long it runs. Defaults to the rest of the source.</param>
 /// <param name="Name">Its display name.</param>
-/// <param name="SourceStreamIndex">Which stream of the media to play.</param>
+/// <param name="SourceStreamIndex">
+/// Which stream of the media to play. Left out, the first video stream on a video track and the
+/// first audio stream on an audio track.
+/// </param>
 /// <param name="ClipId">The identifier to give it. A fresh one when left out.</param>
+/// <param name="WithAudio">
+/// When a movie goes on a video track, also put each of its audio streams on an audio track of
+/// its own, named from the stream title (Game, Mic), and link them all to the picture.
+/// </param>
 [Command("clip.add", Description = "Put a clip on a track")]
 public sealed record AddClipCommand(
     [property: Arg(0, "The track id")] string TrackId,
@@ -27,5 +34,6 @@ public sealed record AddClipCommand(
     [property: Option("in", "Where playback starts inside the source")] Flicks? SourceIn = null,
     [property: Option("dur", "How long it runs")] Flicks? Duration = null,
     [property: Option("name", "Its display name")] string? Name = null,
-    [property: Option("stream", "Which stream of the media to play")] int SourceStreamIndex = 0,
-    [property: Option("id", "The identifier to give it")] string? ClipId = null) : ICommand;
+    [property: Option("stream", "Which stream of the media to play; the first of the right kind when left out")] int? SourceStreamIndex = null,
+    [property: Option("id", "The identifier to give it")] string? ClipId = null,
+    [property: Option("audio", "Also put each audio stream on an audio track, linked to the picture")] bool WithAudio = true) : ICommand;

@@ -172,6 +172,54 @@ public static class Dsp
     }
 
     /// <summary>
+    /// The channel matrix for a clip that plays only some of its source's channels.
+    /// </summary>
+    /// <remarks>
+    /// Left and right take one channel as a mono signal; mono averages them all, which keeps a
+    /// signal that is the same on both sides at the level it was rather than doubling it. The
+    /// mono signal is then panned like any mono source. A source that is already mono has
+    /// nothing to choose between, so every map plays it as it is.
+    /// </remarks>
+    public static void ChannelMatrix(int sourceChannels, int outputChannels, float pan, AudioChannelMap map, Span<float> matrix)
+    {
+        if (map == AudioChannelMap.Auto || sourceChannels == 1)
+        {
+            ChannelMatrix(sourceChannels, outputChannels, pan, matrix);
+            return;
+        }
+
+        ArgumentOutOfRangeException.ThrowIfLessThan(matrix.Length, sourceChannels * outputChannels);
+
+        Span<float> mono = stackalloc float[MaxChannels];
+        ChannelMatrix(1, outputChannels, pan, mono);
+        matrix[..(sourceChannels * outputChannels)].Clear();
+
+        for (int output = 0; output < outputChannels; output++)
+        {
+            int row = output * sourceChannels;
+
+            switch (map)
+            {
+                case AudioChannelMap.Left:
+                    matrix[row] = mono[output];
+                    break;
+
+                case AudioChannelMap.Right:
+                    matrix[row + 1] = mono[output];
+                    break;
+
+                default:
+                    for (int input = 0; input < sourceChannels; input++)
+                    {
+                        matrix[row + input] = mono[output] / sourceChannels;
+                    }
+
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
     /// Which side of a balance one channel of a mix takes, as a track's pan applies to its bus.
     /// </summary>
     public static float SideGain(int channel, int channels, float leftGain, float rightGain)

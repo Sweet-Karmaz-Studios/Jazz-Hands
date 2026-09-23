@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using JazzHands.Core.Model;
 using JazzHands.Core.Time;
 
@@ -249,11 +250,16 @@ public static class CommandValues
 
         if (type.IsEnum)
         {
-            return Enum.TryParse(type, text, ignoreCase: true, out object? member)
+            // The command line and the project file both spell a multi-word member in kebab
+            // case (ease-in-out), so the hyphens go before the name is matched. A digit is
+            // refused, because Enum.TryParse would otherwise accept any number as a member.
+            string bare = text.Replace("-", string.Empty, StringComparison.Ordinal).Replace("_", string.Empty, StringComparison.Ordinal);
+
+            return bare.Length > 0 && !char.IsAsciiDigit(bare[0]) && Enum.TryParse(type, bare, ignoreCase: true, out object? member)
                 ? member
                 : throw new CommandException(
                     "invalid-value",
-                    $"'{text}' is not one of {string.Join(", ", Enum.GetNames(type))}.");
+                    $"'{text}' is not one of {string.Join(", ", Enum.GetNames(type).Select(JsonNamingPolicy.KebabCaseLower.ConvertName))}.");
         }
 
         if (type == typeof(string[]))

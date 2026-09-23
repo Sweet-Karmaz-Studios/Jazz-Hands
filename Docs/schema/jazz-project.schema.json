@@ -251,6 +251,22 @@
         },
         "name": {
           "type": "string"
+        },
+        "channelMap": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "auto",
+                "left",
+                "right",
+                "mono"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [

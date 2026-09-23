@@ -178,7 +178,8 @@ public sealed class ClipMix
         long fadeOutLength = 0,
         Interp fadeOutCurve = Interp.Linear,
         ScalarCurve? volume = null,
-        ScalarCurve? pan = null)
+        ScalarCurve? pan = null,
+        AudioChannelMap channelMap = AudioChannelMap.Auto)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(source.Channels);
@@ -202,6 +203,7 @@ public sealed class ClipMix
         FadeOutCurve = fadeOutCurve;
         Volume = volume ?? ScalarCurve.Constant(0.0f);
         Pan = pan ?? ScalarCurve.Constant(0.0f);
+        ChannelMap = channelMap;
     }
 
     /// <summary>The clip identifier.</summary>
@@ -251,6 +253,9 @@ public sealed class ClipMix
 
     /// <summary>Pan, over clip time in samples.</summary>
     public ScalarCurve Pan { get; }
+
+    /// <summary>Which of the source's channels play.</summary>
+    public AudioChannelMap ChannelMap { get; }
 
     /// <summary>True when the source is read one for one, forwards, which is the fast path.</summary>
     public bool IsStraight => SpeedNum == SpeedDen && !Reverse;

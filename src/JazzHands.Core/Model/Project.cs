@@ -62,6 +62,28 @@ public enum BlendMode
     Difference,
 }
 
+/// <summary>Which of a source's channels an audio clip plays.</summary>
+/// <remarks>
+/// A capture card or a recorder often puts a mono microphone on one side of a stereo stream and
+/// nothing, or a second microphone, on the other. Played as it is, that voice sits hard left.
+/// Picking the one channel turns it into a mono signal the clip's pan then places, centred unless
+/// somebody says otherwise.
+/// </remarks>
+public enum AudioChannelMap
+{
+    /// <summary>Every channel, as the source has them. The default.</summary>
+    Auto,
+
+    /// <summary>The left channel alone, as a mono signal.</summary>
+    Left,
+
+    /// <summary>The right channel alone, as a mono signal.</summary>
+    Right,
+
+    /// <summary>Every channel summed to one mono signal.</summary>
+    Mono,
+}
+
 /// <summary>Where a transition sits relative to the cut.</summary>
 public enum TransitionAlignment
 {
@@ -229,6 +251,7 @@ public sealed record Marker(
 /// <param name="LinkGroupId">Clips sharing this identifier move together, as a camera and its sound do.</param>
 /// <param name="GroupId">Clips sharing this identifier are selected together.</param>
 /// <param name="Name">A display name, usually taken from the media on insert.</param>
+/// <param name="ChannelMap">Which of the source's channels an audio clip plays, when not all of them as they are. Null for all.</param>
 public sealed record Clip(
     string Id,
     TimeRange Range,
@@ -251,7 +274,8 @@ public sealed record Clip(
     EquatableArray<Marker> Markers = default,
     string? LinkGroupId = null,
     string? GroupId = null,
-    string Name = "") : IEquatable<Clip>
+    string Name = "",
+    AudioChannelMap? ChannelMap = null) : IEquatable<Clip>
 {
     /// <summary>Playback rate, defaulting to normal speed.</summary>
     public Rational EffectiveSpeed => Speed ?? Rational.One;

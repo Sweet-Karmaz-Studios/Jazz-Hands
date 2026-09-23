@@ -252,12 +252,12 @@ public sealed class AudioGraph
 
         Span<float> matrixFrom = stackalloc float[Dsp.MaxChannels * Dsp.MaxChannels];
         Span<float> matrixTo = stackalloc float[Dsp.MaxChannels * Dsp.MaxChannels];
-        Dsp.ChannelMatrix(sourceChannels, Channels, clip.Pan.Evaluate(clipSample), matrixFrom);
+        Dsp.ChannelMatrix(sourceChannels, Channels, clip.Pan.Evaluate(clipSample), clip.ChannelMap, matrixFrom);
 
         bool panMoves = !clip.Pan.IsConstant;
         if (panMoves)
         {
-            Dsp.ChannelMatrix(sourceChannels, Channels, clip.Pan.Evaluate(clipSample + frames), matrixTo);
+            Dsp.ChannelMatrix(sourceChannels, Channels, clip.Pan.Evaluate(clipSample + frames), clip.ChannelMap, matrixTo);
         }
 
         for (int output = 0; output < Channels; output++)
