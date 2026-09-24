@@ -115,7 +115,8 @@ public static class AppServices
             provider.GetRequiredService<SelectionService>(),
             provider.GetRequiredService<IUiDispatcher>(),
             provider.GetRequiredService<IPreviewEngine>(),
-            provider.GetRequiredService<IDialogService>()));
+            provider.GetRequiredService<IDialogService>(),
+            new WindowsClipboardService()));
 
         // The keymap: embedded defaults under %APPDATA%\JazzHands\keymap.json if there is one.
         services.AddSingleton(provider =>

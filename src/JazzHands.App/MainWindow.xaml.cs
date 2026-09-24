@@ -38,8 +38,15 @@ public partial class MainWindow : Window
         Key key = e.Key == Key.System ? e.SystemKey : e.Key;
         bool swallowed = Swallowed(e.OriginalSource as DependencyObject, key);
 
-        // The keymap first (editing: Delete, Ctrl+Z, Ctrl+K and the rest), then the preview's
+        // The timeline in front first, for a number being typed or an edit point being trimmed;
+        // then the keymap (editing: Delete, Ctrl+Z, Ctrl+K and the rest); then the preview's
         // transport keys, which are not in the keymap because JKL needs key-up as well.
+        if (_model.Timelines?.ActiveTimeline is { } timeline && !swallowed && timeline.KeyDown(key, Keyboard.Modifiers))
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (_model.Keys is { } keys && !swallowed && keys.TryHandle(key, Keyboard.Modifiers, e.IsRepeat))
         {
             e.Handled = true;

@@ -27,6 +27,15 @@ public enum TimelineCursor
 
     /// <summary>Clips are being moved.</summary>
     Move,
+
+    /// <summary>The razor, over a clip: a click cuts here.</summary>
+    Razor,
+
+    /// <summary>The hand: dragging scrolls.</summary>
+    Hand,
+
+    /// <summary>Slip or slide, over a clip.</summary>
+    Slip,
 }
 
 /// <summary>Where one clip would end up, drawn over the timeline while a gesture is in progress.</summary>
@@ -103,6 +112,13 @@ public sealed partial class TimelineViewModel
         TrimEnd,
         Box,
         Scrub,
+        Razor,
+        Ripple,
+        Roll,
+        Slip,
+        Slide,
+        Stretch,
+        Hand,
     }
 
     /// <summary>What a gesture in progress would do, or null.</summary>
@@ -163,6 +179,18 @@ public sealed partial class TimelineViewModel
         _modifiers = modifiers;
         _grabbed = null;
         _pending = [];
+        _dragged = false;
+        _bypassSnap = false;
+        _snap = SnapService.None;
+        SetGuide(null);
+
+        if (Tools.Tool == TimelineTool.Hand)
+        {
+            _gesture = Gesture.Hand;
+            _handScroll = Geometry.Scroll;
+            _handOffset = Geometry.VerticalOffset;
+            return;
+        }
 
         TimelineHit hit = HitAt(point);
 
@@ -188,11 +216,18 @@ public sealed partial class TimelineViewModel
         if (hit.Clip is { } clip)
         {
             _grabbed = clip;
+            SetSelectedEdit(null);
+
+            if (ToolDown(hit, clip, modifiers))
+            {
+                return;
+            }
 
             if (hit.Edge != ClipEdge.None)
             {
                 _gesture = hit.Edge == ClipEdge.Start ? Gesture.TrimStart : Gesture.TrimEnd;
                 _trimmed = [.. SameEdge(clip, hit.Edge)];
+                _snap = Snapper(_trimmed.Select(view => view.Id));
                 return;
             }
 
@@ -223,21 +258,50 @@ public sealed partial class TimelineViewModel
             }
 
             _gesture = Gesture.Pressed;
+            _snap = Snapper(_dragIds);
             return;
         }
 
+        SetSelectedEdit(null);
         _gesture = Gesture.Box;
         Box = new Rect(point, point);
         Invalidate(TimelineLayers.Selection);
     }
 
     /// <summary>The pointer moved, with or without a button down.</summary>
-    public void PointerMove(Point point)
+    /// <param name="point">Where it is.</param>
+    /// <param name="modifiers">The keys held: Ctrl holds snapping off.</param>
+    public void PointerMove(Point point, ModifierKeys modifiers = ModifierKeys.None)
     {
+        _bypassSnap = modifiers.HasFlag(ModifierKeys.Control);
+
         switch (_gesture)
         {
             case Gesture.None:
-                SetCursor(CursorFor(HitAt(point), point));
+                TimelineHit hover = HitAt(point);
+                SetCursor(CursorFor(hover, point));
+
+                // The razor shows where it would cut.
+                if (Tools.Tool == TimelineTool.Razor && hover.Clip is not null)
+                {
+                    _snap = Snapper(null);
+                    SetGuide(Snapped(Geometry.TimeAt(point.X)));
+                }
+                else
+                {
+                    SetGuide(null);
+                }
+
+                return;
+
+            case Gesture.Razor:
+            case Gesture.Ripple:
+            case Gesture.Roll:
+            case Gesture.Slip:
+            case Gesture.Slide:
+            case Gesture.Stretch:
+            case Gesture.Hand:
+                ToolMove(point);
                 return;
 
             case Gesture.Scrub:
@@ -301,6 +365,16 @@ public sealed partial class TimelineViewModel
 
             case Gesture.Box:
                 FinishBox(point);
+                break;
+
+            case Gesture.Razor:
+            case Gesture.Ripple:
+            case Gesture.Roll:
+            case Gesture.Slip:
+            case Gesture.Slide:
+            case Gesture.Stretch:
+            case Gesture.Hand:
+                ToolUp(gesture, point);
                 break;
         }
 
@@ -382,9 +456,10 @@ public sealed partial class TimelineViewModel
     /// <summary>Forgets any gesture's ghost and box.</summary>
     internal void ClearGesture()
     {
-        bool had = Ghost is not null || Box is not null;
+        bool had = Ghost is not null || Box is not null || Guide is not null;
         Ghost = null;
         Box = null;
+        Guide = null;
         _pending = [];
 
         if (had)
@@ -426,12 +501,16 @@ public sealed partial class TimelineViewModel
         return null;
     }
 
-    private TimelineCursor CursorFor(TimelineHit hit, Point point) => hit switch
+    private TimelineCursor CursorFor(TimelineHit hit, Point point) => (Tools.Tool, hit) switch
     {
-        { Region: TimelineRegion.Ruler } => TimelineCursor.Scrub,
-        { Edge: ClipEdge.Start } => TimelineCursor.TrimStart,
-        { Edge: ClipEdge.End } => TimelineCursor.TrimEnd,
-        { Region: TimelineRegion.Track or TimelineRegion.Empty } when NearPlayhead(point.X) => TimelineCursor.Scrub,
+        (TimelineTool.Hand, _) => TimelineCursor.Hand,
+        (_, { Region: TimelineRegion.Ruler }) => TimelineCursor.Scrub,
+        (TimelineTool.Razor, { Clip: not null }) => TimelineCursor.Razor,
+        (TimelineTool.Slip or TimelineTool.Slide, { Clip: not null }) => TimelineCursor.Slip,
+        (TimelineTool.RateStretch, { Edge: ClipEdge.Start }) => TimelineCursor.Arrow,
+        (_, { Edge: ClipEdge.Start }) => TimelineCursor.TrimStart,
+        (_, { Edge: ClipEdge.End }) => TimelineCursor.TrimEnd,
+        (_, { Region: TimelineRegion.Track or TimelineRegion.Empty }) when NearPlayhead(point.X) => TimelineCursor.Scrub,
         _ => TimelineCursor.Arrow,
     };
 
@@ -515,12 +594,31 @@ public sealed partial class TimelineViewModel
         Flicks delta = Geometry.TimeAt(point.X) - Geometry.TimeAt(_downAt.X);
         Flicks earliest = moving.Min(clip => clip.Start);
 
+        // Whichever edge of the group comes nearest something snaps it there.
+        if (!_bypassSnap && _snap.FindFor(moving.SelectMany(clip => new[] { clip.Start + delta, clip.End + delta }), Geometry) is { } snap)
+        {
+            delta += snap.Correction;
+            SetGuide(snap.Target.Time);
+        }
+        else
+        {
+            SetGuide(null);
+        }
+
         if ((earliest + delta).IsNegative)
         {
             delta = Flicks.Zero - earliest;
         }
 
         int shift = RowShift(grabbed, point, moving);
+
+        // On a magnetic sequence a clip dragged along the primary track goes in at a cut.
+        if (shift == 0 && Content.Sequence.IsMagnetic && Content.Sequence.PrimaryTrack is { Locked: false } primary
+            && string.Equals(grabbed.TrackId, primary.Id, StringComparison.Ordinal))
+        {
+            PreviewStoryline(moving, primary, delta);
+            return;
+        }
 
         var moves = new List<(ClipView Clip, string TrackId, Flicks To)>(moving.Length);
         foreach (ClipView clip in moving)
@@ -562,6 +660,15 @@ public sealed partial class TimelineViewModel
             [.. moves.Select(move => new GhostClip(move.TrackId, move.To, move.To + move.Clip.Clip.Duration))],
             refused);
         Invalidate(TimelineLayers.Ghost);
+    }
+
+    private void PreviewStoryline(ClipView[] moving, Track primary, Flicks delta)
+    {
+        Flicks to = moving.Where(clip => clip.TrackId == primary.Id).Min(clip => clip.Start) + delta;
+        string[] ids = [.. moving.Select(clip => clip.Id)];
+
+        _pending = [new StorylineMoveClipsCommand([.. ids], to)];
+        ShowResult(EditOps.MoveOnStoryline(Content.Sequence, ids, to), ids);
     }
 
     /// <summary>
@@ -623,7 +730,7 @@ public sealed partial class TimelineViewModel
             return;
         }
 
-        Flicks to = Geometry.TimeAt(point.X);
+        Flicks to = Snapped(Geometry.TimeAt(point.X));
         bool start = _gesture == Gesture.TrimStart;
         Sequence sequence = Content.Sequence;
         string? refused = null;
@@ -675,9 +782,18 @@ public sealed partial class TimelineViewModel
             return;
         }
 
-        string label = _pending[0] is TrimClipCommand
-            ? "Trim"
-            : _pending.Length == 1 ? "Move clip" : $"Move {_pending.Length} clips";
+        string label = _pending[0] switch
+        {
+            TrimClipCommand => "Trim",
+            RippleTrimClipsCommand => "Ripple trim",
+            RollClipsCommand => "Roll",
+            SlipClipCommand => "Slip",
+            SlideClipCommand => "Slide",
+            RateStretchClipCommand => "Rate stretch",
+            SplitClipCommand => "Cut",
+            StorylineMoveClipsCommand => "Move along the storyline",
+            _ => _pending.Length == 1 ? "Move clip" : $"Move {_pending.Length} clips",
+        };
 
         _ = RunAsync(new BatchCommand([.. _pending], label));
     }

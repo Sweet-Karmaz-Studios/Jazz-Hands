@@ -1,8 +1,8 @@
 {
-  "comment": "Default key bindings. Each names a jazz command and its arguments as JSON-RPC would send them. $selection is the selected clips (a command that takes one clip runs once per clip, as one undo step), $playhead the playhead, $clipsAtPlayhead the selected clips under the playhead or, with none selected there, every clip under it. $in and $out are the in and out points, which Enter keeps and Backspace cuts in a Quick Trim. Put a keymap.json with the same shape in %APPDATA%/JazzHands to change a key; a binding there with an empty command frees the key.",
+  "comment": "Default key bindings. Each names a jazz command and its arguments as JSON-RPC would send them. $selection is the selected clips (a command that takes one clip runs once per clip, as one undo step), $playhead the playhead, $clipsAtPlayhead the selected clips under the playhead or, with none selected there, every clip under it. $in and $out are the in and out points, which Enter keeps and Backspace cuts in a Quick Trim. Commands that start with ui. are the editor's own: tools, snapping, the clipboard and match frame. Put a keymap.json with the same shape in %APPDATA%/JazzHands to change a key; a binding there with an empty command frees the key.",
   "bindings": [
     { "keys": "Delete", "command": "clip.remove", "args": { "clipId": "$selection" } },
-    { "keys": "Shift+Delete", "command": "clip.remove", "args": { "clipId": "$selection", "ripple": true } },
+    { "keys": "Shift+Delete", "command": "clip.ripple-delete", "args": { "clipIds": "$selection" } },
     { "keys": "Ctrl+Z", "command": "undo", "repeat": true },
     { "keys": "Ctrl+Y", "command": "redo", "repeat": true },
     { "keys": "Ctrl+Shift+Z", "command": "redo", "repeat": true },
@@ -16,6 +16,22 @@
     { "keys": "Ctrl+K", "command": "clip.split", "args": { "clipId": "$clipsAtPlayhead", "at": "$playhead" } },
     { "keys": "Ctrl+A", "command": "selection.set", "args": { "ids": "$allClips" } },
     { "keys": "Enter", "command": "trim.add-segment", "args": { "in": "$in", "out": "$out" } },
-    { "keys": "Back", "command": "trim.remove-range", "args": { "in": "$in", "out": "$out" } }
+    { "keys": "Back", "command": "trim.remove-range", "args": { "in": "$in", "out": "$out" } },
+    { "keys": "Q", "command": "clip.ripple-trim", "args": { "clipIds": "$clipsAtPlayhead", "edge": "start", "to": "$playhead" } },
+    { "keys": "W", "command": "clip.ripple-trim", "args": { "clipIds": "$clipsAtPlayhead", "edge": "end", "to": "$playhead" } },
+    { "keys": "V", "command": "ui.tool.select" },
+    { "keys": "C", "command": "ui.tool.razor" },
+    { "keys": "B", "command": "ui.tool.ripple" },
+    { "keys": "N", "command": "ui.tool.roll" },
+    { "keys": "Y", "command": "ui.tool.slip" },
+    { "keys": "U", "command": "ui.tool.slide" },
+    { "keys": "R", "command": "ui.tool.rate-stretch" },
+    { "keys": "H", "command": "ui.tool.hand" },
+    { "keys": "S", "command": "ui.snap" },
+    { "keys": "F", "command": "ui.match-frame" },
+    { "keys": "Ctrl+C", "command": "ui.copy" },
+    { "keys": "Ctrl+X", "command": "ui.cut" },
+    { "keys": "Ctrl+V", "command": "ui.paste" },
+    { "keys": "Ctrl+Shift+V", "command": "ui.paste-insert" }
   ]
 }

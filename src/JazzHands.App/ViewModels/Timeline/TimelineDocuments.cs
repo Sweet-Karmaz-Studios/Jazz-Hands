@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using JazzHands.App.Services;
@@ -23,11 +24,19 @@ public sealed partial class TimelineDocuments : ObservableObject
     private readonly IUiDispatcher _ui;
     private readonly IPreviewEngine? _preview;
     private readonly IDialogService? _dialogs;
+    private readonly IClipboardService? _clipboard;
     private TimelineViewModel? _active;
     private bool _syncQueued;
+    private ImmutableArray<string> _trail = [];
 
     /// <summary>Creates the tabs for the project as it is.</summary>
-    public TimelineDocuments(ISession session, SelectionService selection, IUiDispatcher ui, IPreviewEngine? preview = null, IDialogService? dialogs = null)
+    public TimelineDocuments(
+        ISession session,
+        SelectionService selection,
+        IUiDispatcher ui,
+        IPreviewEngine? preview = null,
+        IDialogService? dialogs = null,
+        IClipboardService? clipboard = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(selection);
@@ -38,10 +47,14 @@ public sealed partial class TimelineDocuments : ObservableObject
         _ui = ui;
         _preview = preview;
         _dialogs = dialogs;
+        _clipboard = clipboard;
 
         _session.ProjectChanged += (_, _) => QueueSync();
         Sync();
     }
+
+    /// <summary>The tool in hand and snapping, the same in every tab.</summary>
+    public TimelineTools Tools { get; } = new();
 
     /// <summary>One timeline per sequence, in the project's order.</summary>
     public ObservableCollection<TimelineViewModel> Documents { get; } = [];
@@ -67,11 +80,63 @@ public sealed partial class TimelineDocuments : ObservableObject
             {
                 _ = timeline.RunAsync(new SetActiveSequenceCommand(timeline.SequenceId));
             }
+
+            UpdateTrails();
         }
     }
 
     /// <summary>The timeline in front, typed.</summary>
     public TimelineViewModel? ActiveTimeline => _active;
+
+    /// <summary>The sequences opened one inside the other, outermost first.</summary>
+    public ImmutableArray<string> Trail => _trail;
+
+    /// <summary>
+    /// Brings a sequence's tab to the front. Opened from a compound clip in another sequence, it
+    /// goes on the trail after that one, so the breadcrumb leads back; opened from the trail, the
+    /// trail is cut back to it.
+    /// </summary>
+    /// <param name="sequenceId">The sequence to show.</param>
+    /// <param name="fromSequenceId">The sequence whose compound clip opened it, or null.</param>
+    public void Open(string sequenceId, string? fromSequenceId)
+    {
+        ArgumentNullException.ThrowIfNull(sequenceId);
+
+        if (fromSequenceId is not null)
+        {
+            int from = _trail.IndexOf(fromSequenceId);
+            _trail = (from >= 0 ? _trail[..(from + 1)] : [fromSequenceId]).Add(sequenceId);
+        }
+        else if (_trail.IndexOf(sequenceId) is var at and >= 0)
+        {
+            _trail = _trail[..(at + 1)];
+        }
+
+        if (Documents.FirstOrDefault(document => string.Equals(document.SequenceId, sequenceId, StringComparison.Ordinal)) is { } document)
+        {
+            Active = document;
+        }
+
+        UpdateTrails();
+    }
+
+    private void UpdateTrails()
+    {
+        // A tab picked by hand that is not on the trail ends the trail.
+        if (_active is not null && !_trail.Contains(_active.SequenceId))
+        {
+            _trail = [];
+        }
+
+        Project project = _session.Project;
+        foreach (TimelineViewModel document in Documents)
+        {
+            int at = _trail.IndexOf(document.SequenceId);
+            document.SetTrail(at < 0 || _trail.Length < 2
+                ? []
+                : [.. _trail[..(at + 1)].Select((id, index) => new SequenceCrumb(id, project.Sequence(id)?.Name ?? id, index == at))]);
+        }
+    }
 
     private void QueueSync()
     {
@@ -108,7 +173,11 @@ public sealed partial class TimelineDocuments : ObservableObject
 
             if (at < 0)
             {
-                Documents.Insert(index, new TimelineViewModel(_session, id, _selection, _ui, _preview, _dialogs));
+                Documents.Insert(index, new TimelineViewModel(_session, id, _selection, _ui, _preview, _dialogs, Tools)
+                {
+                    Clipboard = _clipboard,
+                    OpenSequence = Open,
+                });
             }
             else if (at != index)
             {
@@ -125,6 +194,8 @@ public sealed partial class TimelineDocuments : ObservableObject
             OnPropertyChanged(nameof(Active));
             OnPropertyChanged(nameof(ActiveTimeline));
         }
+
+        UpdateTrails();
     }
 
     private int IndexOf(string sequenceId)

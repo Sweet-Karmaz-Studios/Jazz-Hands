@@ -281,7 +281,7 @@ public sealed class Keymap
             {
                 KeyChord gesture = KeyChord.Parse(keys);
 
-                if (command.Length > 0 && CommandRegistry.Find(command) is null)
+                if (UiActions.IsAction(command) ? !UiActions.Known.Contains(command) : command.Length > 0 && CommandRegistry.Find(command) is null)
                 {
                     throw new FormatException($"there is no command called '{command}'");
                 }

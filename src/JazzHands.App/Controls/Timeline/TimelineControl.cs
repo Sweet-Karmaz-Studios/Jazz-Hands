@@ -198,8 +198,58 @@ public sealed class TimelineControl : FrameworkElement
         }
 
         Focus();
+
+        if (e.ClickCount == 2)
+        {
+            _model.DoubleClick(e.GetPosition(this));
+            e.Handled = true;
+            return;
+        }
+
         CaptureMouse();
         _model.PointerDown(e.GetPosition(this), Keyboard.Modifiers);
+        e.Handled = true;
+    }
+
+    /// <inheritdoc />
+    protected override void OnMouseRightButtonUp(MouseButtonEventArgs e)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        base.OnMouseRightButtonUp(e);
+
+        if (_model is null)
+        {
+            return;
+        }
+
+        IReadOnlyList<TimelineMenuItem> items = _model.MenuAt(e.GetPosition(this));
+        if (items.Count == 0)
+        {
+            return;
+        }
+
+        var menu = new System.Windows.Controls.ContextMenu { PlacementTarget = this };
+        foreach (TimelineMenuItem item in items)
+        {
+            if (item.IsSeparator)
+            {
+                menu.Items.Add(new System.Windows.Controls.Separator());
+                continue;
+            }
+
+            var entry = new System.Windows.Controls.MenuItem
+            {
+                Header = item.Header,
+                InputGestureText = item.Shortcut ?? string.Empty,
+                IsEnabled = item.Enabled,
+            };
+
+            Func<Task> run = item.Run!;
+            entry.Click += async (_, _) => await run().ConfigureAwait(true);
+            menu.Items.Add(entry);
+        }
+
+        menu.IsOpen = true;
         e.Handled = true;
     }
 
@@ -208,7 +258,7 @@ public sealed class TimelineControl : FrameworkElement
     {
         ArgumentNullException.ThrowIfNull(e);
         base.OnMouseMove(e);
-        _model?.PointerMove(e.GetPosition(this));
+        _model?.PointerMove(e.GetPosition(this), Keyboard.Modifiers);
     }
 
     /// <inheritdoc />
@@ -370,6 +420,9 @@ public sealed class TimelineControl : FrameworkElement
                 TimelineCursor.TrimStart or TimelineCursor.TrimEnd => Cursors.SizeWE,
                 TimelineCursor.Scrub => Cursors.IBeam,
                 TimelineCursor.Move => Cursors.SizeAll,
+                TimelineCursor.Razor => Cursors.Cross,
+                TimelineCursor.Hand => Cursors.Hand,
+                TimelineCursor.Slip => Cursors.ScrollWE,
                 _ => Cursors.Arrow,
             };
         }
@@ -816,6 +869,26 @@ public sealed class TimelineControl : FrameworkElement
             dc.DrawRoundedRectangle(null, palette.SelectionPen, new Rect(left + 1, top + 1, Math.Max(1, right - left - 3), Math.Max(1, row.Height - (ClipInset * 2) - 2)), 3, 3);
         }
 
+        // An edit point picked with the ripple or roll tool: a bar on the edge the keys trim.
+        if (model.SelectedEdit is { } edit)
+        {
+            IEnumerable<string> tracks = edit.Tool == TimelineTool.Roll
+                ? edit.Rolls.Select(pair => pair.TrackId)
+                : edit.ClipIds.Select(model.Content.Clip).OfType<ClipView>().Select(clip => clip.TrackId);
+
+            double x = Math.Round(geometry.XOf(edit.Time)) + 0.5;
+            double offset = edit.Tool == TimelineTool.Roll ? 0.0 : edit.Edge == ClipEdge.Start ? 2.0 : -2.0;
+
+            foreach (string trackId in tracks)
+            {
+                if (geometry.Row(trackId) is { } row)
+                {
+                    double top = geometry.TopOf(row) + ClipInset;
+                    dc.DrawLine(palette.EditPen, new Point(x + offset, top), new Point(x + offset, top + row.Height - (ClipInset * 2)));
+                }
+            }
+        }
+
         dc.Pop();
 
         if (model.Box is { } box)
@@ -831,6 +904,14 @@ public sealed class TimelineControl : FrameworkElement
         TimelineGeometry geometry = model.Geometry;
 
         using DrawingContext dc = _ghost.RenderOpen();
+
+        // What a drag snapped to, or where the razor would cut, from the ruler down.
+        if (model.Guide is { } guide)
+        {
+            double x = Math.Round(geometry.XOf(guide)) + 0.5;
+            dc.DrawLine(palette.GuidePen, new Point(x, 0), new Point(x, ActualHeight));
+        }
+
         if (model.Ghost is not { } ghost)
         {
             return;
@@ -916,6 +997,8 @@ public sealed class TimelineControl : FrameworkElement
             BoxPen = Frozen(new Pen(Find("Brush.Accent", Color.FromRgb(0x4C, 0x9A, 0xFF)), 1.0));
             GhostPen = Frozen(new Pen(Find("Brush.Text.Primary", Color.FromRgb(0xE6, 0xE6, 0xE6)), 1.0) { DashStyle = DashStyles.Dash });
             PlayheadPen = Frozen(new Pen(Playhead, 1.0));
+            GuidePen = Frozen(new Pen(Find("Brush.Warning", Color.FromRgb(0xF2, 0xC1, 0x4E)), 1.0));
+            EditPen = Frozen(new Pen(Find("Brush.Accent", Color.FromRgb(0x4C, 0x9A, 0xFF)), 4.0));
         }
 
         public Brush Background { get; }
@@ -939,6 +1022,10 @@ public sealed class TimelineControl : FrameworkElement
         public Brush Ghost { get; }
 
         public Brush Refused { get; }
+
+        public Pen GuidePen { get; }
+
+        public Pen EditPen { get; }
 
         public Brush ClipText { get; }
 

@@ -16,6 +16,7 @@
         <local:GlyphSwitchConverter x:Key="Glyph" />
         <local:ColorBrushConverter x:Key="ColorBrush" />
         <BooleanToVisibilityConverter x:Key="Visible" />
+        <local:EqualsConverter x:Key="Is" />
 
         <!-- A header toggle: a plain button whose glyph and colour follow the state, because a
              ToggleButton bound one way loses its binding on the first click. -->
@@ -30,290 +31,385 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+
+        <!-- A toolbar toggle: text in the UI font, bright when on. -->
+        <Style x:Key="Toolbar.Toggle" TargetType="Button" BasedOn="{StaticResource Header.Toggle}">
+            <Setter Property="Width" Value="24" />
+            <Setter Property="Height" Value="24" />
+            <Setter Property="FontFamily" Value="{DynamicResource Font.Ui}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
     </UserControl.Resources>
 
-    <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="200" />
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="Auto" />
-            <ColumnDefinition Width="Auto" />
-        </Grid.ColumnDefinitions>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
-
-        <!-- Headers: the playhead timecode over the ruler and marker lane, then one header per
-             track, moved up by as much as the tracks are scrolled. -->
-        <Grid Grid.Column="0" Grid.Row="0" Background="{DynamicResource Brush.Background.Panel}">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="44" />
-                <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
-
-            <TextBlock Grid.Row="0"
-                       Text="{Binding Timecode, Mode=OneWay}"
-                       Margin="8,0"
-                       VerticalAlignment="Center"
-                       FontFamily="{DynamicResource Font.Mono}"
-                       FontSize="{DynamicResource Text.Heading}"
-                       Foreground="{DynamicResource Brush.Accent}"
-                       ToolTip="Playhead" />
-
-            <Canvas Grid.Row="1" ClipToBounds="True">
-                <ItemsControl ItemsSource="{Binding Headers, Mode=OneWay}"
-                              Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Canvas}, Mode=OneWay}"
-                              Focusable="False">
-                    <ItemsControl.RenderTransform>
-                        <TranslateTransform Y="{Binding HeadersOffset, Mode=OneWay}" />
-                    </ItemsControl.RenderTransform>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="{x:Type vm:TrackHeaderViewModel}">
-                            <Grid Height="{Binding Height, Mode=OneWay}">
-                                <Border BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,0,1,1">
-                                    <Grid Margin="0,2,4,2">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="6" />
-                                            <ColumnDefinition Width="30" />
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-
-                                        <Button Grid.Column="0"
-                                                Command="{Binding NextColorCommand, Mode=OneWay}"
-                                                Background="{Binding Color, Converter={StaticResource ColorBrush}, Mode=OneWay}"
-                                                BorderThickness="0"
-                                                Cursor="Hand"
-                                                ToolTip="Track colour: click for the next"
-                                                AutomationProperties.Name="Track colour">
-                                            <Button.Template>
-                                                <ControlTemplate TargetType="Button">
-                                                    <Border Background="{TemplateBinding Background}" />
-                                                </ControlTemplate>
-                                            </Button.Template>
-                                        </Button>
-
-                                        <TextBlock Grid.Column="1"
-                                                   Text="{Binding Label, Mode=OneWay}"
-                                                   Margin="6,0,0,0"
-                                                   VerticalAlignment="Top"
-                                                   FontFamily="{DynamicResource Font.Mono}"
-                                                   FontSize="{DynamicResource Text.Caption}"
-                                                   Foreground="{DynamicResource Brush.Text.Secondary}" />
-
-                                        <TextBox Grid.Column="2"
-                                                 Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                 VerticalAlignment="Top"
-                                                 Background="Transparent"
-                                                 BorderThickness="0"
-                                                 Foreground="{DynamicResource Brush.Text.Primary}"
-                                                 CaretBrush="{DynamicResource Brush.Text.Primary}"
-                                                 FontSize="{DynamicResource Text.Body}"
-                                                 KeyDown="OnNameKeyDown"
-                                                 LostKeyboardFocus="OnNameLostFocus"
-                                                 AutomationProperties.Name="Track name" />
-
-                                        <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Top">
-                                            <Button Style="{StaticResource Header.Toggle}"
-                                                    Tag="{Binding Locked, Mode=OneWay}"
-                                                    Content="{Binding Locked, Converter={StaticResource Glyph}, ConverterParameter='&#xE72E;|&#xE785;', Mode=OneWay}"
-                                                    Command="{Binding ToggleLockCommand, Mode=OneWay}"
-                                                    ToolTip="Lock"
-                                                    AutomationProperties.Name="Lock track" />
-                                            <Button Style="{StaticResource Header.Toggle}"
-                                                    Tag="{Binding Muted, Mode=OneWay}"
-                                                    Content="{Binding Muted, Converter={StaticResource Glyph}, ConverterParameter='&#xE74F;|&#xE767;', Mode=OneWay}"
-                                                    Command="{Binding ToggleMuteCommand, Mode=OneWay}"
-                                                    ToolTip="Mute"
-                                                    AutomationProperties.Name="Mute track" />
-                                            <Button Style="{StaticResource Header.Toggle}"
-                                                    Tag="{Binding Solo, Mode=OneWay}"
-                                                    Content="S"
-                                                    FontFamily="{DynamicResource Font.Ui}"
-                                                    FontWeight="SemiBold"
-                                                    Command="{Binding ToggleSoloCommand, Mode=OneWay}"
-                                                    ToolTip="Solo"
-                                                    AutomationProperties.Name="Solo track" />
-                                        </StackPanel>
-                                    </Grid>
-                                </Border>
-
-                                <!-- Drag the bottom edge to change the height. -->
-                                <Thumb Height="5"
-                                       VerticalAlignment="Bottom"
-                                       Cursor="SizeNS"
-                                       Opacity="0"
-                                       DragDelta="OnHeightDragDelta"
-                                       DragCompleted="OnHeightDragCompleted" />
-                            </Grid>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </Canvas>
-        </Grid>
-
-        <timeline:TimelineControl Grid.Column="1" Grid.Row="0" x:Name="Timeline" AutomationProperties.Name="Timeline" />
-
-        <ScrollBar Grid.Column="2"
-                   Grid.Row="0"
-                   Orientation="Vertical"
-                   Margin="0,44,0,0"
-                   Minimum="0"
-                   Maximum="{Binding VerticalMaximum, Mode=OneWay}"
-                   ViewportSize="{Binding TracksViewportHeight, Mode=OneWay}"
-                   Value="{Binding VerticalOffset, Mode=TwoWay}"
-                   SmallChange="20"
-                   LargeChange="100"
-                   AutomationProperties.Name="Scroll tracks" />
-
-        <!-- Zoom on the left, the time scroll bar across, what went wrong last on the right. -->
-        <StackPanel Grid.Column="0" Grid.Row="1" Orientation="Horizontal" Background="{DynamicResource Brush.Background.Panel}">
-            <Button Style="{StaticResource Button.Icon}" Content="&#xE71F;" Command="{Binding ZoomOutCommand, Mode=OneWay}" ToolTip="Zoom out" AutomationProperties.Name="Zoom out" />
-            <Slider Width="100"
-                    VerticalAlignment="Center"
-                    Minimum="{x:Static vm:TimelineViewModel.MinZoomLevel}"
-                    Maximum="{x:Static vm:TimelineViewModel.MaxZoomLevel}"
-                    Value="{Binding ZoomLevel, Mode=TwoWay}"
-                    ToolTip="Zoom"
-                    AutomationProperties.Name="Zoom" />
-            <Button Style="{StaticResource Button.Icon}" Content="&#xE8A3;" Command="{Binding ZoomInCommand, Mode=OneWay}" ToolTip="Zoom in" AutomationProperties.Name="Zoom in" />
-            <Button Style="{StaticResource Button.Icon}" Content="&#xE9A6;" Command="{Binding ZoomToFitCommand, Mode=OneWay}" ToolTip="Fit the sequence" AutomationProperties.Name="Zoom to fit" />
-        </StackPanel>
-
-        <Grid Grid.Column="1" Grid.ColumnSpan="2" Grid.Row="1">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-
-            <ScrollBar Grid.Column="0"
-                       Orientation="Horizontal"
-                       Minimum="0"
-                       Maximum="{Binding ScrollMaximum, Mode=OneWay}"
-                       ViewportSize="{Binding ViewportSeconds, Mode=OneWay}"
-                       Value="{Binding ScrollSeconds, Mode=TwoWay}"
-                       AutomationProperties.Name="Scroll time" />
-
-            <TextBlock Grid.Column="1"
-                       Text="{Binding Status, Mode=OneWay}"
-                       MaxWidth="480"
-                       Margin="8,0"
-                       VerticalAlignment="Center"
-                       TextTrimming="CharacterEllipsis"
-                       FontSize="{DynamicResource Text.Caption}"
-                       Foreground="{DynamicResource Brush.Warning}"
-                       ToolTip="{Binding Status, Mode=OneWay}" />
-        </Grid>
-
-        <!-- Quick Trim: the kept stretches and what to do between the in and out points. Only on
-             a Quick Trim timeline; the lanes' mute buttons are the headers' own. -->
-        <Border Grid.Column="3"
-                Grid.Row="0"
-                Grid.RowSpan="2"
-                Width="300"
+    <DockPanel>
+        <!-- The toolbar: the way back up from a compound clip, then the tools, snapping and
+             magnetic mode. Each tool button shows its key, which is how Premiere and Resolve
+             users already know them. -->
+        <Border DockPanel.Dock="Top"
                 Background="{DynamicResource Brush.Background.Panel}"
                 BorderBrush="{DynamicResource Brush.Border}"
-                BorderThickness="1,0,0,0"
-                Visibility="{Binding IsQuickTrim, Converter={StaticResource Visible}, Mode=OneWay}">
-            <Grid DataContext="{Binding QuickTrim, Mode=OneWay}" Margin="8">
+                BorderThickness="0,0,0,1">
+            <DockPanel Margin="8,2">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button Style="{StaticResource Toolbar.Toggle}"
+                            Width="Auto"
+                            Padding="6,0"
+                            Tag="{Binding Tools.Snapping, Mode=OneWay}"
+                            Content="Snap"
+                            Command="{Binding ToggleSnappingCommand, Mode=OneWay}"
+                            ToolTip="Snap to clip edges, markers and the playhead (S). Hold Ctrl while dragging to not snap."
+                            AutomationProperties.Name="Snapping" />
+                    <Button Style="{StaticResource Toolbar.Toggle}"
+                            Width="Auto"
+                            Padding="6,0"
+                            Tag="{Binding Magnetic, Mode=OneWay}"
+                            Content="Magnetic"
+                            Command="{Binding ToggleMagneticCommand, Mode=OneWay}"
+                            ToolTip="Keep the lowest picture track free of gaps"
+                            AutomationProperties.Name="Magnetic timeline" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal">
+                    <Button Style="{StaticResource Toolbar.Toggle}" Content="V" Tag="{Binding Tools.Tool, Converter={StaticResource Is}, ConverterParameter={x:Static vm:TimelineTool.Select}, Mode=OneWay}" Command="{Binding PickToolCommand, Mode=OneWay}" CommandParameter="{x:Static vm:TimelineTool.Select}" ToolTip="Select (V)" AutomationProperties.Name="Select tool" />
+                    <Button Style="{StaticResource Toolbar.Toggle}" Content="C" Tag="{Binding Tools.Tool, Converter={StaticResource Is}, ConverterParameter={x:Static vm:TimelineTool.Razor}, Mode=OneWay}" Command="{Binding PickToolCommand, Mode=OneWay}" CommandParameter="{x:Static vm:TimelineTool.Razor}" ToolTip="Razor (C): click to cut; Shift cuts every track" AutomationProperties.Name="Razor tool" />
+                    <Button Style="{StaticResource Toolbar.Toggle}" Content="B" Tag="{Binding Tools.Tool, Converter={StaticResource Is}, ConverterParameter={x:Static vm:TimelineTool.Ripple}, Mode=OneWay}" Command="{Binding PickToolCommand, Mode=OneWay}" CommandParameter="{x:Static vm:TimelineTool.Ripple}" ToolTip="Ripple trim (B): drag an edge and everything after follows" AutomationProperties.Name="Ripple tool" />
+                    <Button Style="{StaticResource Toolbar.Toggle}" Content="N" Tag="{Binding Tools.Tool, Converter={StaticResource Is}, ConverterParameter={x:Static vm:TimelineTool.Roll}, Mode=OneWay}" Command="{Binding PickToolCommand, Mode=OneWay}" CommandParameter="{x:Static vm:TimelineTool.Roll}" ToolTip="Roll (N): move the cut between two clips" AutomationProperties.Name="Roll tool" />
+                    <Button Style="{StaticResource Toolbar.Toggle}" Content="Y" Tag="{Binding Tools.Tool, Converter={StaticResource Is}, ConverterParameter={x:Static vm:TimelineTool.Slip}, Mode=OneWay}" Command="{Binding PickToolCommand, Mode=OneWay}" CommandParameter="{x:Static vm:TimelineTool.Slip}" ToolTip="Slip (Y): change which part of the source a clip shows" AutomationProperties.Name="Slip tool" />
+                    <Button Style="{StaticResource Toolbar.Toggle}" Content="U" Tag="{Binding Tools.Tool, Converter={StaticResource Is}, ConverterParameter={x:Static vm:TimelineTool.Slide}, Mode=OneWay}" Command="{Binding PickToolCommand, Mode=OneWay}" CommandParameter="{x:Static vm:TimelineTool.Slide}" ToolTip="Slide (U): move a clip between its neighbours" AutomationProperties.Name="Slide tool" />
+                    <Button Style="{StaticResource Toolbar.Toggle}" Content="R" Tag="{Binding Tools.Tool, Converter={StaticResource Is}, ConverterParameter={x:Static vm:TimelineTool.RateStretch}, Mode=OneWay}" Command="{Binding PickToolCommand, Mode=OneWay}" CommandParameter="{x:Static vm:TimelineTool.RateStretch}" ToolTip="Rate stretch (R): drag an end to change the speed" AutomationProperties.Name="Rate stretch tool" />
+                    <Button Style="{StaticResource Toolbar.Toggle}" Content="H" Tag="{Binding Tools.Tool, Converter={StaticResource Is}, ConverterParameter={x:Static vm:TimelineTool.Hand}, Mode=OneWay}" Command="{Binding PickToolCommand, Mode=OneWay}" CommandParameter="{x:Static vm:TimelineTool.Hand}" ToolTip="Hand (H): drag to scroll" AutomationProperties.Name="Hand tool" />
+
+                    <!-- The way back up from a compound clip. -->
+                    <ItemsControl Margin="16,0,0,0"
+                                  VerticalAlignment="Center"
+                                  ItemsSource="{Binding Trail, Mode=OneWay}"
+                                  Visibility="{Binding HasTrail, Converter={StaticResource Visible}, Mode=OneWay}"
+                                  Focusable="False">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:SequenceCrumb}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Style="{StaticResource Button.Text}"
+                                            Content="{Binding Name, Mode=OneWay}"
+                                            Command="{Binding DataContext.GoToCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}, Mode=OneWay}"
+                                            CommandParameter="{Binding SequenceId, Mode=OneWay}"
+                                            ToolTip="Go back to this sequence"
+                                            AutomationProperties.Name="{Binding Name, Mode=OneWay}" />
+                                    <TextBlock Text="&gt;"
+                                               Margin="6,0"
+                                               VerticalAlignment="Center"
+                                               Foreground="{DynamicResource Brush.Text.Secondary}">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsCurrent, Mode=OneWay}" Value="True">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="200" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- Headers: the playhead timecode over the ruler and marker lane, then one header per
+                 track, moved up by as much as the tracks are scrolled. -->
+            <Grid Grid.Column="0" Grid.Row="0" Background="{DynamicResource Brush.Background.Panel}">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="44" />
                     <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
                 <TextBlock Grid.Row="0"
-                           Text="Quick Trim"
+                           Text="{Binding Timecode, Mode=OneWay}"
+                           Margin="8,0"
+                           VerticalAlignment="Center"
+                           FontFamily="{DynamicResource Font.Mono}"
                            FontSize="{DynamicResource Text.Heading}"
-                           Foreground="{DynamicResource Brush.Text.Primary}" />
+                           Foreground="{DynamicResource Brush.Accent}"
+                           ToolTip="Playhead" />
 
-                <TextBlock Grid.Row="1"
-                           Margin="0,4,0,0"
-                           Text="{Binding Summary, Mode=OneWay}"
-                           TextWrapping="Wrap"
+                <Canvas Grid.Row="1" ClipToBounds="True">
+                    <ItemsControl ItemsSource="{Binding Headers, Mode=OneWay}"
+                                  Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Canvas}, Mode=OneWay}"
+                                  Focusable="False">
+                        <ItemsControl.RenderTransform>
+                            <TranslateTransform Y="{Binding HeadersOffset, Mode=OneWay}" />
+                        </ItemsControl.RenderTransform>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:TrackHeaderViewModel}">
+                                <Grid Height="{Binding Height, Mode=OneWay}">
+                                    <Border BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,0,1,1">
+                                        <Grid Margin="0,2,4,2">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="6" />
+                                                <ColumnDefinition Width="30" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <Button Grid.Column="0"
+                                                    Command="{Binding NextColorCommand, Mode=OneWay}"
+                                                    Background="{Binding Color, Converter={StaticResource ColorBrush}, Mode=OneWay}"
+                                                    BorderThickness="0"
+                                                    Cursor="Hand"
+                                                    ToolTip="Track colour: click for the next"
+                                                    AutomationProperties.Name="Track colour">
+                                                <Button.Template>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <Border Background="{TemplateBinding Background}" />
+                                                    </ControlTemplate>
+                                                </Button.Template>
+                                            </Button>
+
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{Binding Label, Mode=OneWay}"
+                                                       Margin="6,0,0,0"
+                                                       VerticalAlignment="Top"
+                                                       FontFamily="{DynamicResource Font.Mono}"
+                                                       FontSize="{DynamicResource Text.Caption}"
+                                                       Foreground="{DynamicResource Brush.Text.Secondary}" />
+
+                                            <TextBox Grid.Column="2"
+                                                     Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                     VerticalAlignment="Top"
+                                                     Background="Transparent"
+                                                     BorderThickness="0"
+                                                     Foreground="{DynamicResource Brush.Text.Primary}"
+                                                     CaretBrush="{DynamicResource Brush.Text.Primary}"
+                                                     FontSize="{DynamicResource Text.Body}"
+                                                     KeyDown="OnNameKeyDown"
+                                                     LostKeyboardFocus="OnNameLostFocus"
+                                                     AutomationProperties.Name="Track name" />
+
+                                            <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Top">
+                                                <Button Style="{StaticResource Header.Toggle}"
+                                                        Tag="{Binding SyncLocked, Mode=OneWay}"
+                                                        Content="&#xE71B;"
+                                                        Command="{Binding ToggleSyncLockCommand, Mode=OneWay}"
+                                                        ToolTip="Sync lock: ripples on other tracks move this one too"
+                                                        AutomationProperties.Name="Sync lock track" />
+                                                <Button Style="{StaticResource Header.Toggle}"
+                                                        Tag="{Binding Locked, Mode=OneWay}"
+                                                        Content="{Binding Locked, Converter={StaticResource Glyph}, ConverterParameter='&#xE72E;|&#xE785;', Mode=OneWay}"
+                                                        Command="{Binding ToggleLockCommand, Mode=OneWay}"
+                                                        ToolTip="Lock"
+                                                        AutomationProperties.Name="Lock track" />
+                                                <Button Style="{StaticResource Header.Toggle}"
+                                                        Tag="{Binding Muted, Mode=OneWay}"
+                                                        Content="{Binding Muted, Converter={StaticResource Glyph}, ConverterParameter='&#xE74F;|&#xE767;', Mode=OneWay}"
+                                                        Command="{Binding ToggleMuteCommand, Mode=OneWay}"
+                                                        ToolTip="Mute"
+                                                        AutomationProperties.Name="Mute track" />
+                                                <Button Style="{StaticResource Header.Toggle}"
+                                                        Tag="{Binding Solo, Mode=OneWay}"
+                                                        Content="S"
+                                                        FontFamily="{DynamicResource Font.Ui}"
+                                                        FontWeight="SemiBold"
+                                                        Command="{Binding ToggleSoloCommand, Mode=OneWay}"
+                                                        ToolTip="Solo"
+                                                        AutomationProperties.Name="Solo track" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+
+                                    <!-- Drag the bottom edge to change the height. -->
+                                    <Thumb Height="5"
+                                           VerticalAlignment="Bottom"
+                                           Cursor="SizeNS"
+                                           Opacity="0"
+                                           DragDelta="OnHeightDragDelta"
+                                           DragCompleted="OnHeightDragCompleted" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Canvas>
+            </Grid>
+
+            <timeline:TimelineControl Grid.Column="1" Grid.Row="0" x:Name="Timeline" AutomationProperties.Name="Timeline" />
+
+            <ScrollBar Grid.Column="2"
+                       Grid.Row="0"
+                       Orientation="Vertical"
+                       Margin="0,44,0,0"
+                       Minimum="0"
+                       Maximum="{Binding VerticalMaximum, Mode=OneWay}"
+                       ViewportSize="{Binding TracksViewportHeight, Mode=OneWay}"
+                       Value="{Binding VerticalOffset, Mode=TwoWay}"
+                       SmallChange="20"
+                       LargeChange="100"
+                       AutomationProperties.Name="Scroll tracks" />
+
+            <!-- Zoom on the left, the time scroll bar across, what went wrong last on the right. -->
+            <StackPanel Grid.Column="0" Grid.Row="1" Orientation="Horizontal" Background="{DynamicResource Brush.Background.Panel}">
+                <Button Style="{StaticResource Button.Icon}" Content="&#xE71F;" Command="{Binding ZoomOutCommand, Mode=OneWay}" ToolTip="Zoom out" AutomationProperties.Name="Zoom out" />
+                <Slider Width="100"
+                        VerticalAlignment="Center"
+                        Minimum="{x:Static vm:TimelineViewModel.MinZoomLevel}"
+                        Maximum="{x:Static vm:TimelineViewModel.MaxZoomLevel}"
+                        Value="{Binding ZoomLevel, Mode=TwoWay}"
+                        ToolTip="Zoom"
+                        AutomationProperties.Name="Zoom" />
+                <Button Style="{StaticResource Button.Icon}" Content="&#xE8A3;" Command="{Binding ZoomInCommand, Mode=OneWay}" ToolTip="Zoom in" AutomationProperties.Name="Zoom in" />
+                <Button Style="{StaticResource Button.Icon}" Content="&#xE9A6;" Command="{Binding ZoomToFitCommand, Mode=OneWay}" ToolTip="Fit the sequence" AutomationProperties.Name="Zoom to fit" />
+            </StackPanel>
+
+            <Grid Grid.Column="1" Grid.ColumnSpan="2" Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <ScrollBar Grid.Column="0"
+                           Orientation="Horizontal"
+                           Minimum="0"
+                           Maximum="{Binding ScrollMaximum, Mode=OneWay}"
+                           ViewportSize="{Binding ViewportSeconds, Mode=OneWay}"
+                           Value="{Binding ScrollSeconds, Mode=TwoWay}"
+                           AutomationProperties.Name="Scroll time" />
+
+                <TextBlock Grid.Column="1"
+                           Text="{Binding Status, Mode=OneWay}"
+                           MaxWidth="480"
+                           Margin="8,0"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
                            FontSize="{DynamicResource Text.Caption}"
-                           Foreground="{DynamicResource Brush.Text.Secondary}" />
+                           Foreground="{DynamicResource Brush.Warning}"
+                           ToolTip="{Binding Status, Mode=OneWay}" />
+            </Grid>
 
-                <StackPanel Grid.Row="2" Margin="0,8,0,8">
-                    <TextBlock Text="{Binding InOut, Mode=OneWay}"
+            <!-- Quick Trim: the kept stretches and what to do between the in and out points. Only on
+                 a Quick Trim timeline; the lanes' mute buttons are the headers' own. -->
+            <Border Grid.Column="3"
+                    Grid.Row="0"
+                    Grid.RowSpan="2"
+                    Width="300"
+                    Background="{DynamicResource Brush.Background.Panel}"
+                    BorderBrush="{DynamicResource Brush.Border}"
+                    BorderThickness="1,0,0,0"
+                    Visibility="{Binding IsQuickTrim, Converter={StaticResource Visible}, Mode=OneWay}">
+                <Grid DataContext="{Binding QuickTrim, Mode=OneWay}" Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0"
+                               Text="Quick Trim"
+                               FontSize="{DynamicResource Text.Heading}"
+                               Foreground="{DynamicResource Brush.Text.Primary}" />
+
+                    <TextBlock Grid.Row="1"
+                               Margin="0,4,0,0"
+                               Text="{Binding Summary, Mode=OneWay}"
                                TextWrapping="Wrap"
-                               FontFamily="{DynamicResource Font.Mono}"
                                FontSize="{DynamicResource Text.Caption}"
                                Foreground="{DynamicResource Brush.Text.Secondary}" />
-                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                        <Button Style="{StaticResource Button.Text}"
-                                Content="Keep in to out"
-                                Command="{Binding KeepInOutCommand, Mode=OneWay}"
-                                ToolTip="Keep the stretch between the in and out points (Enter)"
-                                AutomationProperties.Name="Keep in to out" />
-                        <Button Style="{StaticResource Button.Text}"
-                                Margin="8,0,0,0"
-                                Content="Cut in to out"
-                                Command="{Binding CutInOutCommand, Mode=OneWay}"
-                                ToolTip="Cut the stretch between the in and out points (Backspace)"
-                                AutomationProperties.Name="Cut in to out" />
+
+                    <StackPanel Grid.Row="2" Margin="0,8,0,8">
+                        <TextBlock Text="{Binding InOut, Mode=OneWay}"
+                                   TextWrapping="Wrap"
+                                   FontFamily="{DynamicResource Font.Mono}"
+                                   FontSize="{DynamicResource Text.Caption}"
+                                   Foreground="{DynamicResource Brush.Text.Secondary}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                            <Button Style="{StaticResource Button.Text}"
+                                    Content="Keep in to out"
+                                    Command="{Binding KeepInOutCommand, Mode=OneWay}"
+                                    ToolTip="Keep the stretch between the in and out points (Enter)"
+                                    AutomationProperties.Name="Keep in to out" />
+                            <Button Style="{StaticResource Button.Text}"
+                                    Margin="8,0,0,0"
+                                    Content="Cut in to out"
+                                    Command="{Binding CutInOutCommand, Mode=OneWay}"
+                                    ToolTip="Cut the stretch between the in and out points (Backspace)"
+                                    AutomationProperties.Name="Cut in to out" />
+                        </StackPanel>
                     </StackPanel>
-                </StackPanel>
 
-                <ListBox Grid.Row="3"
-                         ItemsSource="{Binding Segments, Mode=OneWay}"
-                         Background="{DynamicResource Brush.Background.Base}"
-                         BorderThickness="0"
-                         HorizontalContentAlignment="Stretch"
-                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                         AutomationProperties.Name="Kept stretches">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate DataType="{x:Type vm:TrimSegmentViewModel}">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="20" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0"
-                                           Text="{Binding Number, Mode=OneWay}"
-                                           VerticalAlignment="Center"
-                                           Foreground="{DynamicResource Brush.Text.Secondary}"
-                                           FontSize="{DynamicResource Text.Caption}" />
-                                <Button Grid.Column="1"
-                                        Style="{StaticResource Button.Text}"
-                                        HorizontalContentAlignment="Left"
-                                        Content="{Binding Label, Mode=OneWay}"
-                                        FontFamily="{DynamicResource Font.Mono}"
-                                        FontSize="{DynamicResource Text.Caption}"
-                                        Command="{Binding GoToCommand, Mode=OneWay}"
-                                        ToolTip="Go to the start of this stretch"
-                                        AutomationProperties.Name="Go to stretch" />
-                                <TextBlock Grid.Column="2"
-                                           Text="{Binding Length, Mode=OneWay}"
-                                           Margin="6,0"
-                                           VerticalAlignment="Center"
-                                           Foreground="{DynamicResource Brush.Text.Secondary}"
-                                           FontSize="{DynamicResource Text.Caption}" />
-                                <Button Grid.Column="3"
-                                        Style="{StaticResource Button.Icon}"
-                                        Content="&#xE711;"
-                                        Command="{Binding RemoveCommand, Mode=OneWay}"
-                                        ToolTip="Cut this stretch"
-                                        AutomationProperties.Name="Cut stretch" />
-                            </Grid>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
+                    <ListBox Grid.Row="3"
+                             ItemsSource="{Binding Segments, Mode=OneWay}"
+                             Background="{DynamicResource Brush.Background.Base}"
+                             BorderThickness="0"
+                             HorizontalContentAlignment="Stretch"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             AutomationProperties.Name="Kept stretches">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:TrimSegmentViewModel}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="20" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0"
+                                               Text="{Binding Number, Mode=OneWay}"
+                                               VerticalAlignment="Center"
+                                               Foreground="{DynamicResource Brush.Text.Secondary}"
+                                               FontSize="{DynamicResource Text.Caption}" />
+                                    <Button Grid.Column="1"
+                                            Style="{StaticResource Button.Text}"
+                                            HorizontalContentAlignment="Left"
+                                            Content="{Binding Label, Mode=OneWay}"
+                                            FontFamily="{DynamicResource Font.Mono}"
+                                            FontSize="{DynamicResource Text.Caption}"
+                                            Command="{Binding GoToCommand, Mode=OneWay}"
+                                            ToolTip="Go to the start of this stretch"
+                                            AutomationProperties.Name="Go to stretch" />
+                                    <TextBlock Grid.Column="2"
+                                               Text="{Binding Length, Mode=OneWay}"
+                                               Margin="6,0"
+                                               VerticalAlignment="Center"
+                                               Foreground="{DynamicResource Brush.Text.Secondary}"
+                                               FontSize="{DynamicResource Text.Caption}" />
+                                    <Button Grid.Column="3"
+                                            Style="{StaticResource Button.Icon}"
+                                            Content="&#xE711;"
+                                            Command="{Binding RemoveCommand, Mode=OneWay}"
+                                            ToolTip="Cut this stretch"
+                                            AutomationProperties.Name="Cut stretch" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
 
-                <Button Grid.Row="4"
-                        Margin="0,8,0,0"
-                        Style="{StaticResource Button.Text}"
-                        HorizontalAlignment="Right"
-                        Content="Export..."
-                        Command="{Binding ExportCommand, Mode=OneWay}"
-                        ToolTip="Export the kept stretches back to back"
-                        AutomationProperties.Name="Export" />
-            </Grid>
-        </Border>
-    </Grid>
+                    <Button Grid.Row="4"
+                            Margin="0,8,0,0"
+                            Style="{StaticResource Button.Text}"
+                            HorizontalAlignment="Right"
+                            Content="Export..."
+                            Command="{Binding ExportCommand, Mode=OneWay}"
+                            ToolTip="Export the kept stretches back to back"
+                            AutomationProperties.Name="Export" />
+                </Grid>
+            </Border>
+        </Grid>
+    </DockPanel>
 </UserControl>

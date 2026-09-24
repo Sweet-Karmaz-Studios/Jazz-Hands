@@ -47,6 +47,11 @@ public sealed class KeymapService
     /// <summary>The bindings in use.</summary>
     public Keymap Keymap { get; }
 
+    /// <summary>
+    /// Where <c>ui.</c> actions go, the timeline in front; true when it did something with one.
+    /// </summary>
+    public Func<string, bool>? Actions { get; set; }
+
     /// <summary>Handles a key if it is bound.</summary>
     /// <returns>True when the key was bound, and so was used up.</returns>
     public bool TryHandle(Key key, ModifierKeys modifiers, bool isRepeat)
@@ -58,6 +63,16 @@ public sealed class KeymapService
 
         if (isRepeat && !binding.Repeat)
         {
+            return true;
+        }
+
+        if (UiActions.IsAction(binding.Command))
+        {
+            if (Actions?.Invoke(binding.Command) != true)
+            {
+                Message?.Invoke(this, "Open a timeline for that.");
+            }
+
             return true;
         }
 

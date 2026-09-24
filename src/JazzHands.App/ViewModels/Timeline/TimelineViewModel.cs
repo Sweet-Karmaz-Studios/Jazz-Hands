@@ -82,7 +82,8 @@ public sealed partial class TimelineViewModel : DocumentViewModel
         SelectionService selection,
         IUiDispatcher ui,
         IPreviewEngine? preview = null,
-        IDialogService? dialogs = null)
+        IDialogService? dialogs = null,
+        TimelineTools? tools = null)
         : base($"timeline:{sequenceId}", "Timeline")
     {
         ArgumentNullException.ThrowIfNull(session);
@@ -95,6 +96,7 @@ public sealed partial class TimelineViewModel : DocumentViewModel
         _ui = ui;
         _preview = preview;
         _dialogs = dialogs;
+        Tools = tools ?? new TimelineTools();
         SequenceId = sequenceId;
 
         _session.ProjectChanged += (_, _) => QueueRefresh();
@@ -335,6 +337,7 @@ public sealed partial class TimelineViewModel : DocumentViewModel
         UpdateQuickTrim(project);
 
         OnPropertyChanged(nameof(Content));
+        OnPropertyChanged(nameof(Magnetic));
         OnPropertyChanged(nameof(ScrollMaximum));
         OnPropertyChanged(nameof(VerticalMaximum));
         OnPropertyChanged(nameof(Timecode));

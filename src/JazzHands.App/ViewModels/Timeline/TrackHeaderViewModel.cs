@@ -38,6 +38,9 @@ public sealed partial class TrackHeaderViewModel : ObservableObject
     private bool _solo;
 
     [ObservableProperty]
+    private bool _syncLocked = true;
+
+    [ObservableProperty]
     private double _height;
 
     [ObservableProperty]
@@ -64,6 +67,7 @@ public sealed partial class TrackHeaderViewModel : ObservableObject
         Locked = track.Locked;
         Muted = track.Muted;
         Solo = track.Solo;
+        SyncLocked = track.IsSyncLocked;
         Height = height;
         Color = track.Color;
         IsAudio = track.Kind == TrackKind.Audio;
@@ -98,6 +102,10 @@ public sealed partial class TrackHeaderViewModel : ObservableObject
     /// <summary>Solos or unsolos the track.</summary>
     [RelayCommand]
     public Task ToggleSoloAsync() => _timeline.RunAsync(new SetTrackSoloCommand(TrackId, !Solo));
+
+    /// <summary>Turns sync lock on or off: whether ripples on other tracks move this one.</summary>
+    [RelayCommand]
+    public Task ToggleSyncLockAsync() => _timeline.RunAsync(new SetTrackSyncLockCommand(TrackId, !SyncLocked));
 
     /// <summary>Moves the track to the next colour in the palette.</summary>
     [RelayCommand]
