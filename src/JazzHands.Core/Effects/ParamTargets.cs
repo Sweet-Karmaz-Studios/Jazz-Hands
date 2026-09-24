@@ -163,7 +163,11 @@ public static class ParamTargets
 
         return owner.Kind switch
         {
-            ParamOwnerKind.Clip when owner.Track.Kind is TrackKind.Video or TrackKind.Adjustment => [Transform, Opacity, Crop],
+            // A generator's own parameters (a solid's colour) come first, as what the clip is.
+            ParamOwnerKind.Clip when owner.Track.Kind is TrackKind.Video or TrackKind.Adjustment =>
+                registry.Find(owner.Clip!.GeneratorId) is { Kind: EffectKind.Generator } generator
+                    ? [generator, Transform, Opacity, Crop]
+                    : [Transform, Opacity, Crop],
             ParamOwnerKind.Clip when owner.Track.Kind == TrackKind.Audio => [Audio],
             ParamOwnerKind.Track when owner.Track.Kind == TrackKind.Audio => [Audio],
             ParamOwnerKind.Effect => registry.Find(owner.Effect!.TypeId) is { } descriptor ? [descriptor] : [],
@@ -281,8 +285,18 @@ public static class ParamTargets
         return project.ReplaceTrack(owner.Track with { Effects = owner.Track.Effects.SetItem(at, effect) });
     }
 
+    /// <summary>The effect entry holding a generator clip's own parameters, or null.</summary>
+    private static Effect? OwnParameters(Clip clip) =>
+        clip.Effects.FirstOrDefault(effect => EffectChains.IsOwnParameters(clip, effect));
+
+    private static bool IsIntrinsic(string name) =>
+        name is "opacity" or "volume" or "pan"
+        || name.StartsWith("transform.", StringComparison.Ordinal)
+        || name.StartsWith("crop.", StringComparison.Ordinal);
+
     private static AnimatedValue? ClipValue(Clip clip, string name) => name switch
     {
+        _ when !IsIntrinsic(name) => OwnParameters(clip)?.Parameter(name),
         "transform.position" => clip.Transform?.Position,
         "transform.scale" => clip.Transform?.Scale,
         "transform.rotation" => clip.Transform?.Rotation,
@@ -300,6 +314,24 @@ public static class ParamTargets
     private static Clip WithClipValue(Clip clip, string name, AnimatedValue? value, ParamDescriptor descriptor)
     {
         AnimatedValue stored = value ?? AnimatedValue.Constant(descriptor.Default);
+
+        if (!IsIntrinsic(name))
+        {
+            // A generator's parameter lives on the effect entry of its own type, made on first use.
+            Effect? own = OwnParameters(clip);
+            if (own is null && value is null)
+            {
+                return clip;
+            }
+
+            own ??= Effect.Create(clip.GeneratorId!);
+            Effect changed = value is null
+                ? own with { Parameters = new EquatableArray<EffectParameter>(own.Parameters.Where(parameter => !Is(parameter.Name, name))) }
+                : own.WithParameter(name, value);
+
+            int index = clip.Effects.IndexOf(effect => Is(effect.Id, own.Id));
+            return clip with { Effects = index < 0 ? clip.Effects.Insert(0, changed) : clip.Effects.SetItem(index, changed) };
+        }
 
         switch (name)
         {
