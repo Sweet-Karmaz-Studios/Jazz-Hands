@@ -763,6 +763,50 @@ jazz keyframe add trailer.jazz <arrow-id> end --at 1s --local --value "400, 0" -
 Grain, noise and flicker are seeded from the clip or effect id, so the same frame always looks the
 same in the preview, in `jazz frame` and in an export.
 
+### Colour, HDR and scopes (Phase 17)
+
+The colour effects are ordinary effects (`effect add <clip> color.wheels`), with parameters set
+by `param set` like any other. Curves are text points, x,y from 0 to 1; a LUT is a `.cube` path,
+full or relative to the project's folder.
+
+```bash
+jazz effect add trailer.jazz <clip-id> color.basic --id <fx>
+jazz param set trailer.jazz <fx> temperature 25
+jazz effect add trailer.jazz <clip-id> color.wheels --id <wheels>
+jazz param set trailer.jazz <wheels> gain "0.06, 0.015, -0.05, 0"
+jazz effect add trailer.jazz <clip-id> color.curves --id <curves>
+jazz param set trailer.jazz <curves> master "0,0 0.25,0.2 0.75,0.82 1,1"
+jazz effect apply-preset trailer.jazz <clip-id> "Cinematic Teal/Orange"
+jazz clip set-tone-map trailer.jazz <clip-id> --operator hable --peak 4000
+jazz color sample trailer.jazz --at 00:00:12.000 --x 120 --y -40 --before <white-balance-id>
+jazz scopes measure trailer.jazz --at 00:00:12.000
+```
+
+| Type | Does |
+|---|---|
+| `color.basic` | Exposure (stops), contrast about 18% grey, temperature and tint (Bradford), saturation, vibrance. Linear light. |
+| `color.wheels` | Lift, gamma, gain and offset, each `"r, g, b, master"`; saturation, contrast and pivot. Perceptual values. |
+| `color.curves` | `master`, `red`, `green`, `blue` tone curves; `hue-vs-sat`, `hue-vs-hue`, `sat-vs-sat` (flat at 0.5 for no change). |
+| `color.hsl` | A hue, saturation and luma qualifier with softness and invert, then hue shift, saturation and lightness inside it; `view matte`. |
+| `color.lut` | A 3D `.cube` LUT: `file`, `intensity`, `domain` (`srgb`, `linear`, `logc`), `interpolation` (`trilinear`, `tetrahedral`). |
+| `color.white-balance` | `neutral`, a colour that should be grey (pick it with `color sample --before`), and `amount`. |
+
+| Verb | Does |
+|---|---|
+| `clip set-tone-map <clip> [--operator] [--peak] [--desaturate] [--reset]` | How an HDR clip comes down to SDR: `bt2390` (default), `hable`, `mobius` or `clip`; the source's peak in nits over the file's MaxCLL or mastering level; how much compressed highlights desaturate. `--reset` follows the project again. |
+| `project set-tone-map [--operator] [--desaturate]` | The default for every clip that does not say. |
+| `color sample --at t [--x] [--y] [--before <effect>] [--size]` | The colour at a point (sequence pixels from the centre), averaged over a square, in linear light and as hex. `--before` reads the picture with that effect and those after it off. |
+| `scopes measure --at t` | Histograms (red, green, blue, luma), clipping at each end, the 1% and 99% luma and the mean, on the delivered signal. |
+| `effect list-presets` | Now also lists the built-in looks (`builtIn: true`): Cinematic Teal/Orange, Bleach Bypass, Game Capture Punch. `apply-preset` takes them by name; they cannot be removed. |
+
+Errors: `value-out-of-range` (a peak outside 100 to 10000 nits, desaturation outside 0 to 1, a
+sample square outside 1 to 64), `point-outside-frame`, `time-out-of-range`, `no-renderer`,
+`built-in-preset`, `invalid-value` (`--reset` with anything else).
+
+HDR sources (PQ and HLG) are tone mapped on the way in, from the file's peak (MaxCLL, else the
+mastering display's, else 1000 nits) to SDR white at 203 nits, and BT.2020 is brought into BT.709.
+Exports are BT.709 SDR and tagged so.
+
 ### Keys
 
 The editor's editing keys are bindings to these same commands, kept in a keymap. The defaults:
