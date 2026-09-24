@@ -7,6 +7,7 @@ using JazzHands.Core.Queries;
 using JazzHands.Core.Time;
 using JazzHands.Core.Validation;
 using JazzHands.Engine.Commands;
+using JazzHands.Engine.Effects;
 
 namespace JazzHands.Engine.Handlers;
 
@@ -125,14 +126,55 @@ public sealed class DescribeTimelineHandler : IQueryHandler<DescribeTimelineQuer
                 $"  gap    {Timecode.Format(gap.Range.Start, fps)} to {Timecode.Format(gap.Range.End, fps)}\n");
         }
 
-        if (full && !track.Transitions.IsEmpty)
+        foreach (Transition transition in track.Transitions)
         {
-            foreach (Transition transition in track.Transitions)
-            {
-                text.Append(CultureInfo.InvariantCulture,
-                    $"  transition {transition.TypeId} {Timecode.Format(transition.Duration, fps)}"
-                    + $" between {Short(transition.LeftClipId)} and {Short(transition.RightClipId)}\n");
-            }
+            AppendTransition(text, project, track, transition, fps, full);
+        }
+    }
+
+    /// <summary>
+    /// A transition, where it plays and on which cut, and in full its id, type and anything wrong
+    /// with it: fitted shorter than asked, or holding a frame where a file runs out.
+    /// </summary>
+    private static void AppendTransition(StringBuilder text, Project project, Track track, Transition transition, Rational fps, bool full)
+    {
+        string name = EffectCatalog.Registry.Find(transition.TypeId)?.Name ?? transition.TypeId;
+        if (TransitionTiming.Span(track, transition, fps) is not { } span)
+        {
+            text.Append(CultureInfo.InvariantCulture,
+                $"  transition {name} between {Short(transition.LeftClipId)} and {Short(transition.RightClipId)}, which do not meet: it does not play\n");
+            return;
+        }
+
+        text.Append(CultureInfo.InvariantCulture,
+            $"  transition {name} {Timecode.Format(span.Range.Start, fps)} to {Timecode.Format(span.Range.End, fps)}"
+            + $" on the cut at {Timecode.Format(span.Cut, fps)}\n");
+
+        if (!full)
+        {
+            return;
+        }
+
+        string alignment = transition.Alignment switch
+        {
+            TransitionAlignment.EndOfLeft => "before the cut",
+            TransitionAlignment.StartOfRight => "after the cut",
+            _ => "centred",
+        };
+
+        text.Append(CultureInfo.InvariantCulture,
+            $"         id {transition.Id}, {transition.TypeId}, {alignment}, between {Short(transition.LeftClipId)} and {Short(transition.RightClipId)}\n");
+
+        if (span.IsClamped)
+        {
+            text.Append(CultureInfo.InvariantCulture,
+                $"         asks for {Timecode.Format(transition.Duration, fps)}; the clips leave room for {Timecode.Format(span.Range.Duration, fps)}\n");
+        }
+
+        (Flicks leftShort, Flicks rightShort) = TransitionTiming.Shortfall(project, span);
+        if (leftShort.Value > 0 || rightShort.Value > 0)
+        {
+            text.Append(CultureInfo.InvariantCulture, $"         {Validator.ShortHandles(span.Left, span.Right, leftShort, rightShort)}\n");
         }
     }
 
