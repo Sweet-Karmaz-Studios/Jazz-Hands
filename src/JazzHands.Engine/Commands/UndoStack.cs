@@ -46,6 +46,9 @@ public sealed class UndoStack
         _limit = limit;
     }
 
+    /// <summary>How soon after a step a command that continues it has to arrive to join it.</summary>
+    public static TimeSpan MergeWindow { get; } = TimeSpan.FromSeconds(1.5);
+
     /// <summary>How many commands could be taken back.</summary>
     public int UndoCount { get; private set; }
 
@@ -71,6 +74,19 @@ public sealed class UndoStack
     public void Push(UndoEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
+
+        // A slider drag is many commands and one edit: a command that continues the last one,
+        // straight after it, becomes part of its step. Its Before stays the first command's.
+        if (RedoCount == 0
+            && NextUndo is { } top
+            && entry.Command is IMergeableCommand merging
+            && merging.Continues(top.Command)
+            && ReferenceEquals(top.After, entry.Before)
+            && entry.At - top.At <= MergeWindow)
+        {
+            _entries[UndoCount - 1] = entry with { Before = top.Before, ChangedIds = [.. top.ChangedIds.Union(entry.ChangedIds, StringComparer.Ordinal)] };
+            return;
+        }
 
         // Doing something new after undoing abandons the branch that was undone.
         if (RedoCount > 0)

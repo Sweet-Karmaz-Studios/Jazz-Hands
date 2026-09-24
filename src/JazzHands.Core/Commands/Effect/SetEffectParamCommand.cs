@@ -18,4 +18,9 @@ public sealed record SetEffectParamCommand(
     [property: Arg(1, "The parameter name")] string Param,
     [property: Arg(2, "The value, for example 12, '100, 50' or #FF8800")] string Value,
     [property: Option("at", "For a keyframed parameter, the keyframe's time on the sequence")] Flicks? At = null,
-    [property: Option("local", "Read --at from the clip's start rather than the sequence's")] bool Local = false) : ICommand;
+    [property: Option("local", "Read --at from the clip's start rather than the sequence's")] bool Local = false) : IMergeableCommand
+{
+    /// <inheritdoc />
+    public bool Continues(ICommand previous) =>
+        previous is SetEffectParamCommand before && before.EffectId == EffectId && before.Param == Param && before.At == At && before.Local == Local;
+}

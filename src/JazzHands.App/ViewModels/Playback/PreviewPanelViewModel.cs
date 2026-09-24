@@ -50,6 +50,7 @@ public sealed partial class PreviewPanelViewModel : ToolViewModel
     private readonly IPreviewEngine _engine;
     private readonly IUiDispatcher _ui;
     private readonly IFullScreenPreview? _fullScreen;
+    private readonly PointPicker? _picker;
     private readonly JklShuttle _shuttle = new();
     private bool _applyingState;
 
@@ -109,7 +110,7 @@ public sealed partial class PreviewPanelViewModel : ToolViewModel
     private bool _isFullScreen;
 
     /// <summary>Creates the panel.</summary>
-    public PreviewPanelViewModel(ISession session, IPreviewEngine engine, IUiDispatcher ui, IFullScreenPreview? fullScreen = null)
+    public PreviewPanelViewModel(ISession session, IPreviewEngine engine, IUiDispatcher ui, IFullScreenPreview? fullScreen = null, PointPicker? picker = null)
         : base(PanelId, "Preview")
     {
         ArgumentNullException.ThrowIfNull(session);
@@ -120,6 +121,15 @@ public sealed partial class PreviewPanelViewModel : ToolViewModel
         _engine = engine;
         _ui = ui;
         _fullScreen = fullScreen;
+        _picker = picker;
+
+        // The inspector's points and picks show on the picture.
+        _picker?.PropertyChanged += (_, _) => _ui.Post(() =>
+        {
+            OnPropertyChanged(nameof(Markers));
+            OnPropertyChanged(nameof(IsPicking));
+            OnPropertyChanged(nameof(PickHint));
+        });
 
         _engine.PlayheadMoved += (_, _) => _ui.Post(Refresh);
         _session.ProjectChanged += (_, _) => _ui.Post(Refresh);
@@ -128,6 +138,21 @@ public sealed partial class PreviewPanelViewModel : ToolViewModel
 
         Refresh();
     }
+
+    /// <summary>The inspector's point parameters, for the overlay.</summary>
+    public IReadOnlyList<PreviewMarker> Markers => _picker?.Markers ?? [];
+
+    /// <summary>True while a click on the picture sets a point.</summary>
+    public bool IsPicking => _picker?.IsPicking == true;
+
+    /// <summary>What a click will set, for the hint over the picture.</summary>
+    public string PickHint => IsPicking ? $"Click the picture to set {_picker!.Picking}. Right-click to cancel." : string.Empty;
+
+    /// <summary>A click on the picture while picking: hands the point on, in sequence pixels from the centre.</summary>
+    public bool PickAt(System.Numerics.Vector2 fromCentre) => _picker?.Pick(fromCentre) == true;
+
+    /// <summary>Gives up a pick.</summary>
+    public void CancelPick() => _picker?.Cancel();
 
     /// <summary>The engine, for the view to attach its presenter to.</summary>
     public IPreviewEngine Engine => _engine;

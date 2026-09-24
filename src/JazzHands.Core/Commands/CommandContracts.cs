@@ -17,6 +17,22 @@ namespace JazzHands.Core.Commands;
 /// </remarks>
 public interface ICommand;
 
+/// <summary>
+/// A command that folds into the undo step before it when it only continues the same edit.
+/// </summary>
+/// <remarks>
+/// Dragging a slider sends a command for every step so the preview follows the drag, and one
+/// undo should take the whole drag back, not the last pixel of it. The undo stack merges a
+/// command into the step before when this says it continues it, nothing else has happened in
+/// between and it arrives within a second or so. The project is exactly what it would have been;
+/// only the history is shorter.
+/// </remarks>
+public interface IMergeableCommand : ICommand
+{
+    /// <summary>True when this command changes the same thing <paramref name="previous"/> did, to another value.</summary>
+    bool Continues(ICommand previous);
+}
+
 /// <summary>Something that reads the project without changing it.</summary>
 /// <typeparam name="TResult">What the query returns.</typeparam>
 public interface IQuery<out TResult>;

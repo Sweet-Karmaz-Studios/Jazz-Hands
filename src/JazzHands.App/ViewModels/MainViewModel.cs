@@ -45,7 +45,9 @@ public sealed partial class MainViewModel : ObservableObject
         KeymapService? keys = null,
         IFileDialogService? files = null,
         IDialogService? dialogs = null,
-        ExportQueuePanelViewModel? exports = null)
+        ExportQueuePanelViewModel? exports = null,
+        Inspector.InspectorPanelViewModel? inspector = null,
+        Effects.EffectsPanelViewModel? effects = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(media);
@@ -58,6 +60,8 @@ public sealed partial class MainViewModel : ObservableObject
         Timelines = timelines;
         Keys = keys;
         Exports = exports;
+        Inspector = inspector;
+        Effects = effects;
         _files = files;
         _dialogs = dialogs;
 
@@ -76,6 +80,16 @@ public sealed partial class MainViewModel : ObservableObject
         if (preview is not null)
         {
             Panels.Add(preview);
+        }
+
+        if (effects is not null)
+        {
+            Panels.Add(effects);
+        }
+
+        if (inspector is not null)
+        {
+            Panels.Add(inspector);
         }
 
         if (exports is not null)
@@ -104,6 +118,12 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>The Export Queue panel, when the window has a queue.</summary>
     public ExportQueuePanelViewModel? Exports { get; }
+
+    /// <summary>The inspector, when the editor has one.</summary>
+    public Inspector.InspectorPanelViewModel? Inspector { get; }
+
+    /// <summary>The effects browser, when the editor has one.</summary>
+    public Effects.EffectsPanelViewModel? Effects { get; }
 
     /// <summary>Every dockable panel, in the order they were registered.</summary>
     public ObservableCollection<ToolViewModel> Panels { get; }

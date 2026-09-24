@@ -19,13 +19,21 @@ public sealed class PanelPlacement : ILayoutUpdateStrategy
     /// <summary>The pane every other panel opens in.</summary>
     public const string ToolsPane = "ToolsPane";
 
+    /// <summary>The pane on the right, where the inspector goes.</summary>
+    public const string InspectorPane = "InspectorPane";
+
     /// <inheritdoc />
     public bool BeforeInsertAnchorable(LayoutRoot layout, LayoutAnchorable anchorableToShow, ILayoutContainer destinationContainer)
     {
         ArgumentNullException.ThrowIfNull(layout);
         ArgumentNullException.ThrowIfNull(anchorableToShow);
 
-        string name = anchorableToShow.Content is PreviewPanelViewModel ? ProgramPane : ToolsPane;
+        string name = anchorableToShow.Content switch
+        {
+            PreviewPanelViewModel => ProgramPane,
+            ViewModels.Inspector.InspectorPanelViewModel => InspectorPane,
+            _ => ToolsPane,
+        };
         LayoutAnchorablePane? pane = layout.Descendents().OfType<LayoutAnchorablePane>()
             .FirstOrDefault(candidate => string.Equals(candidate.Name, name, StringComparison.Ordinal));
 

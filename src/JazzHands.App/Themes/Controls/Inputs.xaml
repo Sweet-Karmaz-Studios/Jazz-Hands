@@ -1,0 +1,79 @@
+<!--
+    Inputs: the number box the inspector is made of, text boxes, check boxes and combo boxes on the
+    dark theme. A default WPF text box is white, which is the one thing a dark panel cannot have.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:controls="clr-namespace:JazzHands.App.Controls">
+
+    <Style x:Key="TextBox.Field" TargetType="TextBox">
+        <Setter Property="Background" Value="{DynamicResource Brush.Background.Input}" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
+        <Setter Property="CaretBrush" Value="{DynamicResource Brush.Text.Primary}" />
+        <Setter Property="SelectionBrush" Value="{DynamicResource Brush.Accent}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="4,2" />
+        <Setter Property="MinHeight" Value="22" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="FontFamily" Value="{DynamicResource Font.Ui}" />
+        <Setter Property="FontSize" Value="{DynamicResource Text.Body}" />
+        <Style.Triggers>
+            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                <Setter Property="BorderBrush" Value="{DynamicResource Brush.Accent}" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Disabled}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- Numbers in the mono face, so a value that changes while dragged does not jitter sideways. -->
+    <Style TargetType="controls:NumberBox" BasedOn="{StaticResource TextBox.Field}">
+        <Setter Property="FontFamily" Value="{DynamicResource Font.Mono}" />
+        <Setter Property="MinWidth" Value="56" />
+        <Setter Property="TextAlignment" Value="Right" />
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource Brush.Background.Hover}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="CheckBox.Dark" TargetType="CheckBox">
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="CheckBox">
+                    <StackPanel Orientation="Horizontal" Background="Transparent">
+                        <Border x:Name="Box"
+                                Width="14"
+                                Height="14"
+                                CornerRadius="2"
+                                BorderThickness="1"
+                                BorderBrush="{DynamicResource Brush.Border.Strong}"
+                                Background="{DynamicResource Brush.Background.Input}">
+                            <Path x:Name="Tick"
+                                  Data="M 2 6 L 5 9 L 11 3"
+                                  Stroke="{DynamicResource Brush.Text.Primary}"
+                                  StrokeThickness="1.6"
+                                  Visibility="Collapsed" />
+                        </Border>
+                        <ContentPresenter Margin="6,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Tick" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="Box" Property="Background" Value="{DynamicResource Brush.Accent}" />
+                            <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource Brush.Accent}" />
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource Brush.Text.Secondary}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+</ResourceDictionary>

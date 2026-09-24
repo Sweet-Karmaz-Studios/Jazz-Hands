@@ -40,7 +40,19 @@
                                     ShowSafeAreas="{Binding ShowSafeAreas, Mode=OneWay}"
                                     ShowGrid="{Binding ShowGrid, Mode=OneWay}"
                                     GuideBrush="{DynamicResource Brush.Preview.Guide}"
-                                    TitleBrush="{DynamicResource Brush.Preview.TitleSafe}" />
+                                    TitleBrush="{DynamicResource Brush.Preview.TitleSafe}"
+                                    ActiveBrush="{DynamicResource Brush.Accent}"
+                                    Markers="{Binding Markers, Mode=OneWay}" />
+            <Border HorizontalAlignment="Center"
+                    VerticalAlignment="Top"
+                    Margin="0,8,0,0"
+                    Padding="8,4"
+                    CornerRadius="3"
+                    IsHitTestVisible="False"
+                    Background="{DynamicResource Brush.Background.Raised}"
+                    Visibility="{Binding IsPicking, Mode=OneWay, Converter={StaticResource Visible}}">
+                <TextBlock Text="{Binding PickHint, Mode=OneWay}" Foreground="{DynamicResource Brush.Text.Primary}" />
+            </Border>
             <TextBlock x:Name="NoDevice"
                        Visibility="Collapsed"
                        HorizontalAlignment="Center"

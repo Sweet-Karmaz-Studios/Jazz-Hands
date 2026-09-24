@@ -15,6 +15,10 @@
         xmlns:shell="clr-namespace:JazzHands.App.Shell"
         xmlns:export="clr-namespace:JazzHands.App.Views.Export"
         xmlns:exportvm="clr-namespace:JazzHands.App.ViewModels.Export"
+        xmlns:inspector="clr-namespace:JazzHands.App.Views.Inspector"
+        xmlns:inspectorvm="clr-namespace:JazzHands.App.ViewModels.Inspector"
+        xmlns:effects="clr-namespace:JazzHands.App.Views.Effects"
+        xmlns:effectsvm="clr-namespace:JazzHands.App.ViewModels.Effects"
         xmlns:vm="clr-namespace:JazzHands.App.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -40,6 +44,12 @@
         </DataTemplate>
         <DataTemplate DataType="{x:Type timelinevm:TimelineViewModel}">
             <timeline:TimelineView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type inspectorvm:InspectorPanelViewModel}">
+            <inspector:InspectorPanelView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type effectsvm:EffectsPanelViewModel}">
+            <effects:EffectsPanelView />
         </DataTemplate>
         <DataTemplate DataType="{x:Type exportvm:ExportQueuePanelViewModel}">
             <export:ExportQueuePanelView />
@@ -113,6 +123,8 @@
                              document pane takes the whole column from the preview. -->
                         <layout:LayoutDocumentPane DockHeight="300" />
                     </layout:LayoutPanel>
+                    <!-- The inspector, beside the preview and the timeline, where the selected clip is changed. -->
+                    <layout:LayoutAnchorablePane Name="InspectorPane" DockWidth="380" />
                 </layout:LayoutPanel>
             </layout:LayoutRoot>
         </dock:DockingManager>

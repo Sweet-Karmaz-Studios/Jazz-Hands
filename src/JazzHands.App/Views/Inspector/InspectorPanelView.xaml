@@ -1,0 +1,347 @@
+<UserControl x:Class="JazzHands.App.Views.Inspector.InspectorPanelView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:JazzHands.App.ViewModels.Inspector"
+             xmlns:controls="clr-namespace:JazzHands.App.Controls"
+             xmlns:local="clr-namespace:JazzHands.App.Views.Inspector"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:InspectorPanelViewModel}"
+             d:DesignWidth="340"
+             d:DesignHeight="600"
+             AllowDrop="True"
+             Background="{DynamicResource Brush.Background.Panel}">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="Visible" />
+        <local:PathDataConverter x:Key="PathData" />
+
+        <!-- The stopwatch takes the accent colour while its parameter is animated. A plain button
+             rather than a toggle, because a toggle bound one way loses its binding on the first click. -->
+        <Style x:Key="Button.Stopwatch" TargetType="Button" BasedOn="{StaticResource Button.Icon}">
+            <Setter Property="Width" Value="22" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Disabled}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsAnimated, Mode=OneWay}" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource Brush.Accent}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="Button.Small" TargetType="ButtonBase" BasedOn="{StaticResource Button.Icon}">
+            <Setter Property="Width" Value="20" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
+        </Style>
+
+        <!-- One parameter: stopwatch, label, the control for its type, keyframe navigation, reset. -->
+        <DataTemplate x:Key="ParamRow" DataType="{x:Type vm:ParamRowViewModel}">
+            <Grid Margin="0,2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="22" />
+                    <ColumnDefinition Width="92" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <Button Grid.Column="0"
+                        Style="{StaticResource Button.Stopwatch}"
+                        Content="&#xE916;"
+                        Visibility="{Binding Animatable, Mode=OneWay, Converter={StaticResource Visible}}"
+                        Command="{Binding ToggleAnimationCommand, Mode=OneWay}"
+                        ToolTip="Animate: keyframe this at the playhead, or stop animating it"
+                        AutomationProperties.Name="Animate" />
+
+                <TextBlock Grid.Column="1"
+                           Text="{Binding Label, Mode=OneWay}"
+                           ToolTip="{Binding Description, Mode=OneWay}"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           Foreground="{DynamicResource Brush.Text.Secondary}" />
+
+                <Grid Grid.Column="2" VerticalAlignment="Center">
+                    <!-- A number, with a slider when it has both ends. -->
+                    <Grid Visibility="{Binding IsNumber, Mode=OneWay, Converter={StaticResource Visible}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Slider Grid.Column="0"
+                                Margin="0,0,6,0"
+                                VerticalAlignment="Center"
+                                Minimum="{Binding SliderMinimum, Mode=OneWay}"
+                                Maximum="{Binding SliderMaximum, Mode=OneWay}"
+                                Value="{Binding Number, Mode=TwoWay}"
+                                Visibility="{Binding HasSlider, Mode=OneWay, Converter={StaticResource Visible}}"
+                                IsTabStop="False"
+                                AutomationProperties.Name="{Binding Label, Mode=OneWay}" />
+                        <controls:NumberBox Grid.Column="1"
+                                            Width="64"
+                                            Value="{Binding Number, Mode=TwoWay}"
+                                            Minimum="{Binding Minimum, Mode=OneWay}"
+                                            Maximum="{Binding Maximum, Mode=OneWay}"
+                                            Step="{Binding Step, Mode=OneWay}"
+                                            Decimals="{Binding Decimals, Mode=OneWay}"
+                                            Unit="{Binding Unit, Mode=OneWay}"
+                                            AutomationProperties.Name="{Binding Label, Mode=OneWay}" />
+                    </Grid>
+
+                    <!-- Two numbers; a point can also be picked on the preview. -->
+                    <StackPanel Orientation="Horizontal" Visibility="{Binding IsPair, Mode=OneWay, Converter={StaticResource Visible}}">
+                        <controls:NumberBox Width="72" Value="{Binding X, Mode=TwoWay}" Step="{Binding Step, Mode=OneWay}" Decimals="{Binding Decimals, Mode=OneWay}" Unit="{Binding Unit, Mode=OneWay}" AutomationProperties.Name="X" />
+                        <controls:NumberBox Width="72" Margin="4,0,0,0" Value="{Binding Y, Mode=TwoWay}" Step="{Binding Step, Mode=OneWay}" Decimals="{Binding Decimals, Mode=OneWay}" Unit="{Binding Unit, Mode=OneWay}" AutomationProperties.Name="Y" />
+                        <Button Style="{StaticResource Button.Small}"
+                                Content="&#xE81D;"
+                                Visibility="{Binding IsPoint, Mode=OneWay, Converter={StaticResource Visible}}"
+                                Command="{Binding PickCommand, Mode=OneWay}"
+                                ToolTip="Pick this point on the preview"
+                                AutomationProperties.Name="Pick on the preview" />
+                    </StackPanel>
+
+                    <UniformGrid Columns="4" Visibility="{Binding IsQuad, Mode=OneWay, Converter={StaticResource Visible}}">
+                        <controls:NumberBox MinWidth="40" Margin="0,0,2,0" Value="{Binding X, Mode=TwoWay}" Decimals="1" AutomationProperties.Name="First" />
+                        <controls:NumberBox MinWidth="40" Margin="0,0,2,0" Value="{Binding Y, Mode=TwoWay}" Decimals="1" AutomationProperties.Name="Second" />
+                        <controls:NumberBox MinWidth="40" Margin="0,0,2,0" Value="{Binding Z, Mode=TwoWay}" Decimals="1" AutomationProperties.Name="Third" />
+                        <controls:NumberBox MinWidth="40" Value="{Binding W, Mode=TwoWay}" Decimals="1" AutomationProperties.Name="Fourth" />
+                    </UniformGrid>
+
+                    <StackPanel Orientation="Horizontal" Visibility="{Binding IsColor, Mode=OneWay, Converter={StaticResource Visible}}">
+                        <Border Width="22"
+                                Height="18"
+                                CornerRadius="2"
+                                BorderThickness="1"
+                                BorderBrush="{DynamicResource Brush.Border.Strong}"
+                                Background="{Binding Swatch, Mode=OneWay}" />
+                        <TextBox Width="96"
+                                 Margin="6,0,0,0"
+                                 Style="{StaticResource TextBox.Field}"
+                                 FontFamily="{DynamicResource Font.Mono}"
+                                 Text="{Binding ColorText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                 KeyDown="OnFieldKeyDown"
+                                 AutomationProperties.Name="{Binding Label, Mode=OneWay}" />
+                    </StackPanel>
+
+                    <CheckBox Style="{StaticResource CheckBox.Dark}"
+                              IsChecked="{Binding Flag, Mode=TwoWay}"
+                              Visibility="{Binding IsFlag, Mode=OneWay, Converter={StaticResource Visible}}"
+                              AutomationProperties.Name="{Binding Label, Mode=OneWay}" />
+
+                    <ComboBox Style="{StaticResource ComboBox.Compact}"
+                              ItemsSource="{Binding Choices, Mode=OneWay}"
+                              SelectedItem="{Binding Choice, Mode=TwoWay}"
+                              Visibility="{Binding IsChoice, Mode=OneWay, Converter={StaticResource Visible}}"
+                              AutomationProperties.Name="{Binding Label, Mode=OneWay}" />
+
+                    <TextBox Style="{StaticResource TextBox.Field}"
+                             Text="{Binding Text, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                             KeyDown="OnFieldKeyDown"
+                             Visibility="{Binding IsText, Mode=OneWay, Converter={StaticResource Visible}}"
+                             AutomationProperties.Name="{Binding Label, Mode=OneWay}" />
+                </Grid>
+
+                <!-- Keyframes: the curve, the arrows either side of the diamond. -->
+                <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="4,0,0,0" VerticalAlignment="Center">
+                    <Path Width="40"
+                          Height="16"
+                          Margin="0,0,4,0"
+                          Data="{Binding CurveData, Mode=OneWay, Converter={StaticResource PathData}}"
+                          Stroke="{DynamicResource Brush.Accent}"
+                          StrokeThickness="1"
+                          Visibility="{Binding IsAnimated, Mode=OneWay, Converter={StaticResource Visible}}"
+                          ToolTip="The curve across the clip" />
+                    <Button Style="{StaticResource Button.Small}"
+                            Content="&#xE76B;"
+                            Command="{Binding PreviousKeyframeCommand, Mode=OneWay}"
+                            Visibility="{Binding IsAnimated, Mode=OneWay, Converter={StaticResource Visible}}"
+                            ToolTip="Go to the keyframe before"
+                            AutomationProperties.Name="Previous keyframe" />
+                    <Button Command="{Binding ToggleKeyframeCommand, Mode=OneWay}"
+                            Visibility="{Binding Animatable, Mode=OneWay, Converter={StaticResource Visible}}"
+                            ToolTip="Add a keyframe at the playhead, or remove the one there"
+                            AutomationProperties.Name="Keyframe at the playhead">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Width="18" Height="22" Background="Transparent">
+                                    <Path x:Name="Diamond"
+                                          Data="M 5 0 L 10 5 L 5 10 L 0 5 Z"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          Stroke="{DynamicResource Brush.Text.Secondary}"
+                                          StrokeThickness="1"
+                                          Fill="Transparent" />
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding HasKeyframeHere, Mode=OneWay}" Value="True">
+                                        <Setter TargetName="Diamond" Property="Fill" Value="{DynamicResource Brush.Accent}" />
+                                        <Setter TargetName="Diamond" Property="Stroke" Value="{DynamicResource Brush.Accent}" />
+                                    </DataTrigger>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="Diamond" Property="Stroke" Value="{DynamicResource Brush.Text.Primary}" />
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                    <Button Style="{StaticResource Button.Small}"
+                            Content="&#xE76C;"
+                            Command="{Binding NextKeyframeCommand, Mode=OneWay}"
+                            Visibility="{Binding IsAnimated, Mode=OneWay, Converter={StaticResource Visible}}"
+                            ToolTip="Go to the keyframe after"
+                            AutomationProperties.Name="Next keyframe" />
+                </StackPanel>
+
+                <Button Grid.Column="4"
+                        Style="{StaticResource Button.Small}"
+                        Content="&#xE72C;"
+                        Command="{Binding ResetCommand, Mode=OneWay}"
+                        ToolTip="Put back to the default"
+                        AutomationProperties.Name="Reset" />
+            </Grid>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="8">
+            <!-- What is selected. -->
+            <TextBlock Text="{Binding Heading, Mode=OneWay}"
+                       FontSize="{DynamicResource Text.Heading}"
+                       TextTrimming="CharacterEllipsis"
+                       Foreground="{DynamicResource Brush.Text.Primary}" />
+            <StackPanel Visibility="{Binding HasTarget, Mode=OneWay, Converter={StaticResource Visible}}">
+                <TextBlock Text="{Binding Source, Mode=OneWay}" FontSize="{DynamicResource Text.Caption}" Foreground="{DynamicResource Brush.Text.Secondary}" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding Range, Mode=OneWay}" FontSize="{DynamicResource Text.Caption}" FontFamily="{DynamicResource Font.Mono}" Foreground="{DynamicResource Brush.Text.Secondary}" />
+                <TextBlock Text="{Binding Speed, Mode=OneWay}" FontSize="{DynamicResource Text.Caption}" Foreground="{DynamicResource Brush.Text.Secondary}" />
+                <TextBlock Text="{Binding SelectionNote, Mode=OneWay}" FontSize="{DynamicResource Text.Caption}" Foreground="{DynamicResource Brush.Accent}" TextWrapping="Wrap" />
+            </StackPanel>
+            <TextBlock Text="{Binding Status, Mode=OneWay}"
+                       Margin="0,4,0,0"
+                       TextWrapping="Wrap"
+                       FontSize="{DynamicResource Text.Caption}"
+                       Foreground="{DynamicResource Brush.Warning}" />
+            <TextBlock Margin="0,12,0,0"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource Brush.Text.Secondary}"
+                       Text="Select a clip on the timeline to see and change its transform, opacity, sound and effects.">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding HasTarget, Mode=OneWay}" Value="True">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+
+            <StackPanel Visibility="{Binding HasTarget, Mode=OneWay, Converter={StaticResource Visible}}">
+                <!-- The clip's own parameters. -->
+                <ItemsControl ItemsSource="{Binding Sections, Mode=OneWay}" Focusable="False">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:InspectorSectionViewModel}">
+                            <StackPanel Margin="0,10,0,0">
+                                <StackPanel Orientation="Horizontal">
+                                    <ToggleButton Style="{StaticResource ToggleButton.Disclosure}"
+                                                  IsChecked="{Binding IsExpanded, Mode=TwoWay}"
+                                                  AutomationProperties.Name="Show or hide" />
+                                    <TextBlock Margin="6,0,0,0"
+                                               Text="{Binding Title, Mode=OneWay}"
+                                               FontSize="{DynamicResource Text.Caption}"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource Brush.Text.Primary}" />
+                                </StackPanel>
+                                <ItemsControl Margin="0,4,0,0"
+                                              ItemsSource="{Binding Rows, Mode=OneWay}"
+                                              ItemTemplate="{StaticResource ParamRow}"
+                                              Focusable="False"
+                                              Visibility="{Binding IsExpanded, Mode=OneWay, Converter={StaticResource Visible}}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Blend mode is not animatable, so it is a setting rather than a parameter row. -->
+                <Grid Margin="22,6,0,0" Visibility="{Binding IsPicture, Mode=OneWay, Converter={StaticResource Visible}}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="92" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Blend" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" />
+                    <ComboBox Grid.Column="1"
+                              Style="{StaticResource ComboBox.Compact}"
+                              ItemsSource="{Binding BlendModes, Mode=OneWay}"
+                              SelectedItem="{Binding Blend, Mode=TwoWay}"
+                              AutomationProperties.Name="Blend mode" />
+                </Grid>
+
+                <!-- Effects, in the order they run. Drop one from the effects panel here to add it. -->
+                <Border Margin="0,14,0,0" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,1,0,0" Padding="0,8,0,0">
+                    <TextBlock Text="Effects"
+                               FontSize="{DynamicResource Text.Caption}"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource Brush.Text.Primary}" />
+                </Border>
+                <TextBlock Text="Drag an effect here from the Effects panel."
+                           FontSize="{DynamicResource Text.Caption}"
+                           Foreground="{DynamicResource Brush.Text.Disabled}" />
+                <ItemsControl x:Name="EffectList" ItemsSource="{Binding Effects, Mode=OneWay}" Focusable="False">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:EffectItemViewModel}">
+                            <Border Margin="0,6,0,0"
+                                    Padding="4"
+                                    CornerRadius="3"
+                                    Background="{DynamicResource Brush.Background.Raised}">
+                                <StackPanel>
+                                    <Grid Background="Transparent"
+                                          Cursor="SizeAll"
+                                          MouseMove="OnEffectHeaderMouseMove"
+                                          Drop="OnEffectHeaderDrop"
+                                          AllowDrop="True">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <ToggleButton Grid.Column="0"
+                                                      Style="{StaticResource ToggleButton.Disclosure}"
+                                                      IsChecked="{Binding IsExpanded, Mode=TwoWay}"
+                                                      AutomationProperties.Name="Show or hide parameters" />
+                                        <CheckBox Grid.Column="1"
+                                                  Margin="6,0,0,0"
+                                                  Style="{StaticResource CheckBox.Dark}"
+                                                  IsChecked="{Binding Enabled, Mode=TwoWay}"
+                                                  ToolTip="On, or bypassed"
+                                                  AutomationProperties.Name="Effect on" />
+                                        <TextBlock Grid.Column="2"
+                                                   Margin="6,0,0,0"
+                                                   VerticalAlignment="Center"
+                                                   Text="{Binding Name, Mode=OneWay}"
+                                                   ToolTip="{Binding TypeId, Mode=OneWay}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Foreground="{DynamicResource Brush.Text.Primary}" />
+                                        <StackPanel Grid.Column="3" Orientation="Horizontal">
+                                            <Button Style="{StaticResource Button.Small}" Content="&#xE70E;" Command="{Binding MoveUpCommand, Mode=OneWay}" ToolTip="Run earlier" AutomationProperties.Name="Move up" />
+                                            <Button Style="{StaticResource Button.Small}" Content="&#xE70D;" Command="{Binding MoveDownCommand, Mode=OneWay}" ToolTip="Run later" AutomationProperties.Name="Move down" />
+                                            <Button Style="{StaticResource Button.Small}" Content="&#xE72C;" Command="{Binding ResetAllCommand, Mode=OneWay}" ToolTip="Put every parameter back to its default" AutomationProperties.Name="Reset effect" />
+                                            <Button Style="{StaticResource Button.Small}" Content="&#xE74D;" Command="{Binding RemoveCommand, Mode=OneWay}" ToolTip="Remove the effect" AutomationProperties.Name="Remove effect" />
+                                        </StackPanel>
+                                    </Grid>
+                                    <ItemsControl Margin="0,4,0,0"
+                                                  ItemsSource="{Binding Rows, Mode=OneWay}"
+                                                  ItemTemplate="{StaticResource ParamRow}"
+                                                  Focusable="False"
+                                                  Visibility="{Binding IsExpanded, Mode=OneWay, Converter={StaticResource Visible}}" />
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -431,6 +431,65 @@ public sealed partial class TimelineViewModel
     public void DragLeave() => ClearGesture();
 
     /// <summary>
+    /// An effect or a preset is being dragged over the timeline: says on the status line what it
+    /// would go on.
+    /// </summary>
+    /// <returns>True when it can be dropped here.</returns>
+    public bool EffectDragOver(string? typeId, string? presetId, Point point)
+    {
+        (string? ownerId, string message) = EffectTarget(typeId, presetId, point);
+        Status = message;
+        return ownerId is not null;
+    }
+
+    /// <summary>
+    /// An effect or a preset was dropped: it goes on the clip under the pointer, or on the track
+    /// when there is no clip there.
+    /// </summary>
+    public async Task DropEffectAsync(string? typeId, string? presetId, Point point)
+    {
+        (string? ownerId, string message) = EffectTarget(typeId, presetId, point);
+        if (ownerId is null)
+        {
+            Status = message;
+            return;
+        }
+
+        await RunAsync(typeId is not null
+            ? new AddEffectCommand(ownerId, typeId)
+            : new ApplyEffectPresetCommand(ownerId, presetId!)).ConfigureAwait(true);
+    }
+
+    /// <summary>What an effect dropped at a point would go on, or why it cannot.</summary>
+    private (string? OwnerId, string Message) EffectTarget(string? typeId, string? presetId, Point point)
+    {
+        TimelineHit hit = HitAt(point);
+        if (hit.Region != TimelineRegion.Track || hit.Row is not { } row)
+        {
+            return (null, "Drop an effect on a clip, or on a track for the whole track.");
+        }
+
+        string ownerId = hit.Clip?.Id ?? row.TrackId;
+        string what = hit.Clip is { } clip ? $"clip '{clip.Clip.Name}'" : $"track {Content.Track(row.TrackId)?.Track.Name ?? string.Empty}";
+
+        if (presetId is not null)
+        {
+            return (ownerId, $"Apply the preset to {what}.");
+        }
+
+        if (typeId is null || Engine.Effects.EffectCatalog.Registry.Find(typeId) is not { } descriptor)
+        {
+            return (null, "That is not an effect this editor has.");
+        }
+
+        bool picture = row.Kind is TrackKind.Video or TrackKind.Adjustment;
+        bool suits = descriptor.Kind == Core.Effects.EffectKind.Audio ? row.Kind == TrackKind.Audio : descriptor.Kind == Core.Effects.EffectKind.Video && picture;
+        return suits
+            ? (ownerId, $"Add {descriptor.Name} to {what}.")
+            : (null, $"{descriptor.Name} works on {(descriptor.Kind == Core.Effects.EffectKind.Audio ? "sound" : "pictures")}, and {what} carries {(picture ? "a picture" : "sound")}.");
+    }
+
+    /// <summary>
     /// Media was dropped: each item goes on the track under the pointer, end to end from the
     /// pointer's time, a movie bringing its sound onto audio tracks linked to the picture.
     /// </summary>

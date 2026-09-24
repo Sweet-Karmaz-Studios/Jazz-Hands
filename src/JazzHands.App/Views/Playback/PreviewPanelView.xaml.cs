@@ -200,6 +200,7 @@ public partial class PreviewPanelView : UserControl
             placement.Top * Stage.ActualHeight,
             placement.Width * Stage.ActualWidth,
             placement.Height * Stage.ActualHeight);
+        Overlay.SequenceSize = new Size(_model.SequenceWidth, _model.SequenceHeight);
     }
 
     private void OnStageMouseDown(object sender, MouseButtonEventArgs e)
@@ -207,6 +208,23 @@ public partial class PreviewPanelView : UserControl
         // Clicking the picture takes keyboard focus away from whatever text box had it, so the
         // playback keys work.
         Stage.Focus();
+
+        // While the inspector is picking a point, a click on the picture is that point.
+        if (_model is { IsPicking: true } picking)
+        {
+            if (e.ChangedButton == MouseButton.Right)
+            {
+                picking.CancelPick();
+            }
+            else if (e.ChangedButton == MouseButton.Left
+                && Controls.Preview.PreviewOverlay.ToSequence(e.GetPosition(Stage), Overlay.Picture, Overlay.SequenceSize) is { } point)
+            {
+                picking.PickAt(point);
+            }
+
+            e.Handled = true;
+            return;
+        }
 
         if (e.ChangedButton == MouseButton.Middle && _model is { Zoom: not PreviewZoom.Fit })
         {

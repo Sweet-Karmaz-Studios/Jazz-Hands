@@ -40,8 +40,8 @@ public sealed record ParamDescriptor(
     /// <summary>The label, or the name made readable when there is none.</summary>
     public string DisplayName => Label.Length > 0 ? Label : Readable(Name);
 
-    /// <summary>The low end of the slider.</summary>
-    public double SliderLow => Min ?? 0.0;
+    /// <summary>The low end of the slider: the minimum, or the slider's top mirrored when the minimum is far below it, as for a rotation.</summary>
+    public double SliderLow => Min is { } low && SliderMax is { } top && low < -top ? -top : Min ?? 0.0;
 
     /// <summary>The high end of the slider.</summary>
     public double SliderHigh => SliderMax ?? Max ?? 100.0;

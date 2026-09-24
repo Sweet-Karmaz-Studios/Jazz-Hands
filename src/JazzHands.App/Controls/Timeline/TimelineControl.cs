@@ -325,6 +325,17 @@ public sealed class TimelineControl : FrameworkElement
         ArgumentNullException.ThrowIfNull(e);
         base.OnDragOver(e);
 
+        // Effects and presets from the effects panel go on the clip or track under the pointer.
+        string? effect = EffectDragData.Effect(e.Data);
+        string? preset = EffectDragData.Preset(e.Data);
+        if (effect is not null || preset is not null)
+        {
+            bool fits = _model is not null && _model.EffectDragOver(effect, preset, e.GetPosition(this));
+            e.Effects = fits ? DragDropEffects.Copy : DragDropEffects.None;
+            e.Handled = true;
+            return;
+        }
+
         IReadOnlyList<string> ids = MediaDragData.Ids(e.Data);
         bool accepted = _model is not null && ids.Count > 0 && _model.DragOver(ids, e.GetPosition(this));
 
@@ -344,6 +355,15 @@ public sealed class TimelineControl : FrameworkElement
     {
         ArgumentNullException.ThrowIfNull(e);
         base.OnDrop(e);
+
+        string? effect = EffectDragData.Effect(e.Data);
+        string? preset = EffectDragData.Preset(e.Data);
+        if (_model is not null && (effect is not null || preset is not null))
+        {
+            e.Handled = true;
+            await _model.DropEffectAsync(effect, preset, e.GetPosition(this)).ConfigureAwait(true);
+            return;
+        }
 
         IReadOnlyList<string> ids = MediaDragData.Ids(e.Data);
         if (_model is null || ids.Count == 0)

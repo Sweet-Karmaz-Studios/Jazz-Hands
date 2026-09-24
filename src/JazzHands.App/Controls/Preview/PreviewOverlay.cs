@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Media;
+using JazzHands.App.Services;
 
 namespace JazzHands.App.Controls.Preview;
 
@@ -100,6 +101,48 @@ public sealed class PreviewOverlay : FrameworkElement
         set => SetValue(TitleBrushProperty, value);
     }
 
+
+    /// <summary>The inspector's point parameters, drawn as crosshairs.</summary>
+    public static readonly DependencyProperty MarkersProperty = DependencyProperty.Register(
+        nameof(Markers),
+        typeof(IReadOnlyList<PreviewMarker>),
+        typeof(PreviewOverlay),
+        new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+
+    /// <summary>The sequence frame in its own pixels, which markers are placed against.</summary>
+    public static readonly DependencyProperty SequenceSizeProperty = DependencyProperty.Register(
+        nameof(SequenceSize),
+        typeof(Size),
+        typeof(PreviewOverlay),
+        new FrameworkPropertyMetadata(Size.Empty, FrameworkPropertyMetadataOptions.AffectsRender));
+
+    /// <summary>The colour of the marker being picked.</summary>
+    public static readonly DependencyProperty ActiveBrushProperty = DependencyProperty.Register(
+        nameof(ActiveBrush),
+        typeof(Brush),
+        typeof(PreviewOverlay),
+        new FrameworkPropertyMetadata(Brushes.DeepSkyBlue, FrameworkPropertyMetadataOptions.AffectsRender));
+
+    /// <summary>The inspector's point parameters.</summary>
+    public IReadOnlyList<PreviewMarker>? Markers
+    {
+        get => (IReadOnlyList<PreviewMarker>?)GetValue(MarkersProperty);
+        set => SetValue(MarkersProperty, value);
+    }
+
+    /// <summary>The sequence frame in its own pixels.</summary>
+    public Size SequenceSize
+    {
+        get => (Size)GetValue(SequenceSizeProperty);
+        set => SetValue(SequenceSizeProperty, value);
+    }
+
+    /// <summary>The colour of the marker being picked.</summary>
+    public Brush ActiveBrush
+    {
+        get => (Brush)GetValue(ActiveBrushProperty);
+        set => SetValue(ActiveBrushProperty, value);
+    }
     /// <summary>A rectangle shrunk about its centre to a fraction of its size.</summary>
     public static Rect Inset(Rect picture, double fraction)
     {
@@ -150,6 +193,42 @@ public sealed class PreviewOverlay : FrameworkElement
             drawingContext.DrawLine(guide, centre with { Y = centre.Y - 8 }, centre with { Y = centre.Y + 8 });
         }
 
+        // The inspector's point parameters, as crosshairs; the one being picked in the accent.
+        if (Markers is { } markers && SequenceSize is { Width: > 0, Height: > 0 } sequence)
+        {
+            var normal = new Pen(GuideBrush, 1.0);
+            var active = new Pen(ActiveBrush, 2.0);
+
+            foreach (PreviewMarker marker in markers)
+            {
+                var at = new Point(
+                    picture.X + (picture.Width * (0.5 + (marker.Position.X / sequence.Width))),
+                    picture.Y + (picture.Height * (0.5 + (marker.Position.Y / sequence.Height))));
+                Pen pen = marker.Active ? active : normal;
+                drawingContext.DrawEllipse(null, pen, at, 5, 5);
+                drawingContext.DrawLine(pen, at with { X = at.X - 10 }, at with { X = at.X - 3 });
+                drawingContext.DrawLine(pen, at with { X = at.X + 3 }, at with { X = at.X + 10 });
+                drawingContext.DrawLine(pen, at with { Y = at.Y - 10 }, at with { Y = at.Y - 3 });
+                drawingContext.DrawLine(pen, at with { Y = at.Y + 3 }, at with { Y = at.Y + 10 });
+            }
+        }
+
         drawingContext.Pop();
+    }
+
+    /// <summary>
+    /// Where a point on the overlay is on the sequence, in sequence pixels from the frame centre,
+    /// which is how point parameters are written. Null off the picture.
+    /// </summary>
+    public static System.Numerics.Vector2? ToSequence(Point point, Rect picture, Size sequence)
+    {
+        if (picture.IsEmpty || picture.Width <= 0 || picture.Height <= 0 || !picture.Contains(point))
+        {
+            return null;
+        }
+
+        return new System.Numerics.Vector2(
+            (float)(((point.X - picture.X) / picture.Width - 0.5) * sequence.Width),
+            (float)(((point.Y - picture.Y) / picture.Height - 0.5) * sequence.Height));
     }
 }

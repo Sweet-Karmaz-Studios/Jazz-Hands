@@ -109,7 +109,8 @@ public static class AppServices
             provider.GetRequiredService<ISession>(),
             provider.GetRequiredService<IPreviewEngine>(),
             provider.GetRequiredService<IUiDispatcher>(),
-            provider.GetRequiredService<IFullScreenPreview>()));
+            provider.GetRequiredService<IFullScreenPreview>(),
+            provider.GetRequiredService<PointPicker>()));
 
         // Thumbnails and waveforms: the engine's caches, turned into bitmaps and peaks for the
         // timeline and the media panel, with their ready events folded onto the UI thread.
@@ -149,6 +150,22 @@ public static class AppServices
                 () => preview.Position,
                 keymap);
         });
+
+        // The inspector and the effects browser. The point picker is what lets the inspector pick
+        // a point on the preview; the favorites are the person's, kept beside the keymap.
+        services.AddSingleton<PointPicker>();
+        services.AddSingleton<IEffectFavorites>(_ => new FileEffectFavorites());
+        services.AddSingleton(provider => new ViewModels.Inspector.InspectorPanelViewModel(
+            provider.GetRequiredService<ISession>(),
+            provider.GetRequiredService<SelectionService>(),
+            provider.GetRequiredService<IUiDispatcher>(),
+            provider.GetRequiredService<IPreviewEngine>(),
+            provider.GetRequiredService<PointPicker>()));
+        services.AddSingleton(provider => new ViewModels.Effects.EffectsPanelViewModel(
+            provider.GetRequiredService<ISession>(),
+            provider.GetRequiredService<SelectionService>(),
+            provider.GetRequiredService<IUiDispatcher>(),
+            provider.GetRequiredService<IEffectFavorites>()));
 
         services.AddSingleton<MediaPanelViewModel>();
         services.AddSingleton<MetersPanelViewModel>(provider => new MetersPanelViewModel(

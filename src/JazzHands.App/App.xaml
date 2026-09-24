@@ -8,6 +8,7 @@
                 <ResourceDictionary Source="Themes/Dark.xaml" />
                 <ResourceDictionary Source="Themes/Controls/Lists.xaml" />
                 <ResourceDictionary Source="Themes/Controls/Buttons.xaml" />
+                <ResourceDictionary Source="Themes/Controls/Inputs.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>
