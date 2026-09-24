@@ -194,18 +194,29 @@ public static class CommandRegistry
     }
 
     /// <summary>Reads a command back from <c>{"command": ..., "args": {...}}</c>.</summary>
-    public static object FromJson(JsonObject document)
+    /// <param name="document">The command object.</param>
+    /// <param name="frameRate">When given, times may be written as text, read at this rate.</param>
+    public static object FromJson(JsonObject document, Rational? frameRate = null)
     {
         ArgumentNullException.ThrowIfNull(document);
 
         string name = document["command"]?.GetValue<string>()
             ?? throw new CommandException("missing-command", "A command object needs a 'command' member.");
 
-        return FromJson(name, document["args"] as JsonObject ?? []);
+        return FromJson(name, document["args"] as JsonObject ?? [], frameRate);
     }
 
     /// <summary>Builds a command of the given name from its arguments.</summary>
-    public static object FromJson(string name, JsonObject args)
+    /// <remarks>
+    /// Times are flicks integers, as the project file writes them. Given a frame rate, a time may
+    /// also be the text the command line takes (<c>"00:00:04.000"</c>, <c>"90f"</c>, <c>"1.5s"</c>), which
+    /// is what makes a script readable; without one, a frame count would mean nothing, so text is
+    /// refused.
+    /// </remarks>
+    /// <param name="name">The command name.</param>
+    /// <param name="args">Its arguments, by JSON name.</param>
+    /// <param name="frameRate">When given, times may be written as text, read at this rate.</param>
+    public static object FromJson(string name, JsonObject args, Rational? frameRate = null)
     {
         ArgumentNullException.ThrowIfNull(args);
 
@@ -233,8 +244,11 @@ public static class CommandRegistry
                 values[index] = parameter.Type == typeof(ICommand[]) && node is JsonArray nested
                     ? nested.Select(entry => (ICommand)FromJson(
                         entry as JsonObject
-                            ?? throw new CommandException("invalid-argument", "A batch holds command objects."))).ToArray()
-                    : node.Deserialize(parameter.Type, JazzJson.Options);
+                            ?? throw new CommandException("invalid-argument", "A batch holds command objects."),
+                        frameRate)).ToArray()
+                    : frameRate is { } rate && IsTime(parameter.Type) && node is JsonValue value && value.TryGetValue(out string? text)
+                        ? CommandValues.Parse(typeof(Flicks), text, rate, parameter.JsonName)
+                        : node.Deserialize(parameter.Type, JazzJson.Options);
             }
             catch (JsonException error)
             {
@@ -478,6 +492,8 @@ public static class CommandRegistry
 
         return null;
     }
+
+    private static bool IsTime(Type type) => (Nullable.GetUnderlyingType(type) ?? type) == typeof(Flicks);
 
     private static string FriendlyTypeName(Type type) =>
         (Nullable.GetUnderlyingType(type) ?? type).Name;
