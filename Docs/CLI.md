@@ -210,6 +210,7 @@ hevc10_2160p60_5s.mp4
 | `--software` | Force the software decoder. |
 | `--requests <n>` | How many seeks to make. Default 200. |
 | `--seed <n>` | The random seed, so a run repeats exactly. |
+| `--proxy` | Scrub the file's half size proxy, making it in the cache first if there is none. |
 
 The four combinations answer different questions and their numbers are not comparable. Random and
 exact is the worst case and is dominated by the decode from the enclosing keyframe; drag is what a
@@ -275,6 +276,35 @@ Inside the bar of 0.1%.
 
 "Late" is how far into its frame interval each frame went up. Exit code 1 when more than 0.1% of
 the frames due were dropped.
+
+### `jazz perf thumbs <file>`
+
+Times a clip's thumbnails and waveform from a cold cache, the way the timeline asks for them: the
+visible stretch of a 1500 pixel timeline at visible priority, the whole clip behind it at idle
+priority, and the first sound stream's waveform. Each zoom runs on an empty cache of its own in a
+temporary folder. Times are from adding the file, so they include hashing and probing.
+
+```bash
+jazz perf thumbs tests\corpus\hevc10_2160p30_10min.mp4
+jazz perf thumbs tests\corpus\hevc10_2160p30_10min.mp4 --zoom 100 --zoom 200
+```
+
+```
+hevc10_2160p30_10min.mp4: 600 s, 3840x2160 hevc 30 fps
+  import (hash and probe)       217 ms
+     2.4 px/s, every 60 s:  10 visible in    574 ms,   10 shown in     574 ms, exact in     574 ms
+    40.0 px/s, every 5 s:   8 visible in    487 ms,  120 shown in    3257 ms, exact in    3335 ms
+  waveform                     1633 ms
+  strip again, from disk         76 ms
+  4 workers; times include the import
+```
+
+| Option | Meaning |
+|---|---|
+| `--zoom <pps>` | Pixels per second to measure at; repeatable. The zoom that fits the file on the timeline, and 40, when left out. |
+
+"Shown" is every thumbnail of the strip on screen, a keyframe near its time at least; "exact" is
+when the workers have finished making each one the frame its grid asks for.
 
 ### `jazz trim <file>`
 
@@ -634,6 +664,25 @@ clips, and a cut is a gap. `jazz trim` above is the one-line form.
 | `jazz export cancel <project> <job-id>` | Stops a queued or running export; the partial file is deleted. |
 | `jazz export clear <project>` | Takes finished jobs off the queue. |
 | `jazz export list <project>` | The queue with progress. Empty in a headless process. |
+
+### Cache and proxies
+
+Thumbnails, waveforms, probes and keyframe indexes live in one cache per user, keyed by each
+file's content, so a moved file keeps them. Proxies live beside them. Both follow the file, not
+the project: another project with the same footage finds them.
+
+| Verb | Does |
+|---|---|
+| `jazz proxy generate <project> --media <id>` | Makes a proxy of one file: half size H.264 with every frame a keyframe. `--all` for every movie, `--auto` for the ones worth it (4K, AV1, 10-bit HEVC), `--scale 0.25` for quarter size, `--preset proxy-dnxhr-lb` for DNxHR. Headless it is made before the command returns; in the editor it goes on the export queue and the job id comes back. |
+| `jazz proxy list <project>` | Each movie's proxy: none, queued, running (with progress), ready (size, path) or failed (why), and whether one is suggested. |
+| `jazz proxy set-enabled <project> true` | Plays proxies instead of their sources in the running editor. Export never uses them. |
+| `jazz proxy remove <project> --media <id>` | Deletes a proxy (`--all` for the project's). |
+| `jazz cache stats <project>` | Where the cache is, its size limit, and what it holds. |
+| `jazz cache clear <project>` | Empties what is made again on demand: thumbnails, waveforms, probes, keyframe indexes. `--thumbs`, `--waveforms`, `--probes`, `--keyframes` for one part, `--proxies` for proxies, `--all` for everything, `--media <id>` for one file. |
+| `jazz cache configure <project> --cap-gb 50` | Sets the size limit for thumbnails and waveforms (0 for none), evicting at once if over. `--location <folder>` moves the cache from the next start; nothing is copied. |
+
+A true or false option can be given on its own: `--auto` is `--auto true`. Put it after the
+positional arguments, because a word following it is read as its value.
 
 ### Keys
 
