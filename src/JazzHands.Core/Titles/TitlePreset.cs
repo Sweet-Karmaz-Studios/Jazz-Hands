@@ -181,6 +181,7 @@ public sealed record TitlePreset(
     }
 
     /// <summary>How long a title from this preset lasts when nothing says.</summary>
+    [JsonIgnore]
     public Flicks DefaultLength => Timecode.TryParse(Duration, Rational.Fps30, out Flicks value) && value > Flicks.Zero ? value : Flicks.FromSeconds(5);
 
     /// <summary>The preset's animations as times.</summary>

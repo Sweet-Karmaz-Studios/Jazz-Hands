@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Globalization;
 using System.Text;
 using JazzHands.Core.Effects;
+using JazzHands.Core.Model;
 
 namespace JazzHands.Core.Titles;
 
@@ -40,7 +41,7 @@ public sealed record TitleSpan(int Start, int Length, TitleStyle Style)
 /// <summary>A title's text read out of its markup: the characters, and their styles in order.</summary>
 /// <param name="Plain">The text as it is drawn, tags and escapes gone.</param>
 /// <param name="Spans">Styled stretches covering <paramref name="Plain"/> end to end, none empty.</param>
-public sealed record TitleText(string Plain, ImmutableArray<TitleSpan> Spans)
+public sealed record TitleText(string Plain, EquatableArray<TitleSpan> Spans)
 {
     /// <summary>The style at a position, plain past the end.</summary>
     public TitleStyle StyleAt(int index)
@@ -196,7 +197,7 @@ public static class TitleMarkup
         }
 
         Close(plain.Length);
-        return new TitleText(plain.ToString(), spans.ToImmutable());
+        return new TitleText(plain.ToString(), new EquatableArray<TitleSpan>(spans.ToImmutable()));
     }
 
     /// <summary>The text with every tag and escape taken out.</summary>
@@ -311,7 +312,7 @@ public static class TitleMarkup
             }
         }
 
-        return Format(new TitleText(text.Plain, spans.ToImmutable()));
+        return Format(new TitleText(text.Plain, new EquatableArray<TitleSpan>(spans.ToImmutable())));
     }
 
     /// <summary>

@@ -510,6 +510,9 @@ public sealed class Compositor : IDisposable
         return target;
     }
 
+    /// <summary>The running instance of a generator class, when one has drawn; for tests of what it keeps.</summary>
+    internal VideoGenerator? Generator(Type type) => _generators.GetValueOrDefault(type);
+
     private VideoGenerator? GeneratorFor(EffectDescriptor descriptor)
     {
         if (descriptor.Implementation is not { } type)
