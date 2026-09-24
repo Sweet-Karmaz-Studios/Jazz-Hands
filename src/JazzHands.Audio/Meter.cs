@@ -26,6 +26,24 @@ public struct MeterReading
 
     /// <summary>The held peak per channel, linear: the highest recent peak, kept for a moment so an eye can catch it.</summary>
     public ChannelLevels Hold;
+
+    /// <summary>True when any sample reached full scale (0 dBFS) in the block.</summary>
+    public bool Clipped;
+
+    /// <summary>The largest reconstructed peak of any channel, linear; zero on a meter that does not measure it.</summary>
+    public float TruePeak;
+
+    /// <summary>Loudness over the last 400 ms, LUFS; negative infinity until there is any, or on a meter without loudness.</summary>
+    public float Momentary;
+
+    /// <summary>Loudness over the last 3 s, LUFS.</summary>
+    public float ShortTerm;
+
+    /// <summary>Gated loudness since it was last reset, LUFS.</summary>
+    public float Integrated;
+
+    /// <summary>How far the master limiter turned the block down, dB (0 or less).</summary>
+    public float ReductionDb;
 }
 
 /// <summary>
@@ -41,15 +59,26 @@ public sealed class Meter
     private readonly long _holdSamples;
     private readonly float[] _hold = new float[Dsp.MaxChannels];
     private readonly long[] _holdUntil = new long[Dsp.MaxChannels];
+    private readonly Loudness? _loudness;
+    private readonly TruePeak[] _truePeaks;
+    private int _resetIntegrated;
 
     /// <summary>Creates a meter.</summary>
     /// <param name="sampleRate">The mix rate.</param>
+    /// <param name="channels">The channels it measures, for loudness weighting.</param>
+    /// <param name="loudness">True to measure loudness (EBU R128) and true peak as well: the master's meter.</param>
     /// <param name="holdSeconds">How long a peak stays held before it falls back.</param>
-    public Meter(int sampleRate, double holdSeconds = 1.5)
+    public Meter(int sampleRate, int channels = 2, bool loudness = false, double holdSeconds = 1.5)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sampleRate);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(channels);
         _holdSamples = (long)(holdSeconds * sampleRate);
+        _loudness = loudness ? new Loudness(sampleRate, channels) : null;
+        _truePeaks = loudness ? [.. Enumerable.Range(0, Math.Min(channels, Dsp.MaxChannels)).Select(_ => new TruePeak())] : [];
     }
+
+    /// <summary>Asks for the integrated loudness to start again from the next block. Any thread.</summary>
+    public void ResetIntegrated() => Volatile.Write(ref _resetIntegrated, 1);
 
     /// <summary>Where readings go.</summary>
     public MeterRing Readings { get; } = new();
@@ -59,11 +88,20 @@ public sealed class Meter
     /// <param name="offset">Where the block starts in the buffer.</param>
     /// <param name="frames">How long it is.</param>
     /// <param name="sample">Where it sits on the timeline, for the reading's time and the hold.</param>
-    public void Process(AudioBuffer buffer, int offset, int frames, long sample)
+    /// <param name="reductionDb">The limiter's gain reduction over the block, for the master's reading.</param>
+    public void Process(AudioBuffer buffer, int offset, int frames, long sample, float reductionDb = 0.0f)
     {
         ArgumentNullException.ThrowIfNull(buffer);
 
-        var reading = new MeterReading { Sample = sample, Channels = Math.Min(buffer.Channels, Dsp.MaxChannels) };
+        var reading = new MeterReading
+        {
+            Sample = sample,
+            Channels = Math.Min(buffer.Channels, Dsp.MaxChannels),
+            Momentary = Loudness.Silent,
+            ShortTerm = Loudness.Silent,
+            Integrated = Loudness.Silent,
+            ReductionDb = reductionDb,
+        };
 
         for (int channel = 0; channel < reading.Channels; channel++)
         {
@@ -87,6 +125,29 @@ public sealed class Meter
             }
 
             reading.Hold[channel] = _hold[channel];
+            reading.Clipped |= peak >= 1.0f;
+
+            if (channel < _truePeaks.Length)
+            {
+                TruePeak detector = _truePeaks[channel];
+                foreach (float value in plane)
+                {
+                    reading.TruePeak = Math.Max(reading.TruePeak, detector.Push(value));
+                }
+            }
+        }
+
+        if (_loudness is { } loudness)
+        {
+            if (Interlocked.Exchange(ref _resetIntegrated, 0) == 1)
+            {
+                loudness.ResetIntegrated();
+            }
+
+            loudness.Process(buffer, offset, frames);
+            reading.Momentary = loudness.Momentary;
+            reading.ShortTerm = loudness.ShortTerm;
+            reading.Integrated = loudness.Integrated;
         }
 
         Readings.Write(reading);
@@ -97,6 +158,11 @@ public sealed class Meter
     {
         Array.Clear(_hold);
         Array.Clear(_holdUntil);
+        _loudness?.Reset();
+        foreach (TruePeak detector in _truePeaks)
+        {
+            detector.Reset();
+        }
     }
 }
 

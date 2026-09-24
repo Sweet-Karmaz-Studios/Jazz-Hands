@@ -65,11 +65,63 @@ public readonly ref struct AudioEffectBlock
 /// </remarks>
 public abstract class AudioEffect
 {
+    /// <summary>
+    /// How long it goes on sounding after its input stops, in seconds: a reverb's decay, a
+    /// delay's echoes. A track keeps running its effects this long after its last clip.
+    /// </summary>
+    public virtual double TailSeconds => 0.0;
+
+    /// <summary>The rate it was last prepared for.</summary>
+    protected int SampleRate { get; private set; }
+
+    /// <summary>The channels it was last prepared for.</summary>
+    protected int Channels { get; private set; }
+
+    /// <summary>
+    /// The parameters at the end of the last block it ran, so the next one ramps from there even
+    /// when the mix was rebuilt in between (a fader moved, a setting typed): a change is a ramp
+    /// across one block, never a step. Made by the building thread, once per instance.
+    /// </summary>
+    internal float[]? Last { get; set; }
+
+    /// <summary>True once <see cref="Last"/> holds the end of a block; false after a reset.</summary>
+    internal bool HasLast { get; set; }
+
+    /// <summary>
+    /// Gets ready to run at a rate and a channel count. Called on the thread that builds the mix,
+    /// never the audio thread, whenever either changes: allocate delay lines and filter state
+    /// here. The base remembers them and calls <see cref="OnPrepare"/> when they differ.
+    /// </summary>
+    public void Prepare(int sampleRate, int channels)
+    {
+        if (sampleRate == SampleRate && channels == Channels)
+        {
+            return;
+        }
+
+        SampleRate = sampleRate;
+        Channels = channels;
+        HasLast = false;
+        OnPrepare(sampleRate, channels);
+    }
+
     /// <summary>Changes a block in place.</summary>
     public abstract void Process(in AudioEffectBlock block);
 
     /// <summary>Forgets any state, for a seek: a filter's memory of the last position is wrong at the new one.</summary>
     public virtual void Reset()
+    {
+    }
+
+    /// <summary>Forgets its state and where its parameters were, for a seek.</summary>
+    internal void ResetAll()
+    {
+        HasLast = false;
+        Reset();
+    }
+
+    /// <summary>Allocates what it needs for a rate and a channel count.</summary>
+    protected virtual void OnPrepare(int sampleRate, int channels)
     {
     }
 }
@@ -107,14 +159,24 @@ public sealed class AudioEffectSlot
     /// <summary>Runs the effect over a block. <paramref name="time"/> is the owner's sample at the block's start.</summary>
     public void Process(AudioBuffer buffer, int offset, int frames, int channels, int sampleRate, long time)
     {
+        // Where the last block ended, if it ran, rather than where the curves start now: a mix
+        // rebuilt with a new setting ramps to it across this block instead of stepping.
+        float[]? last = Effect.Last;
+        bool continuing = Effect.HasLast && last is not null && last.Length == _params.Length;
         for (int index = 0; index < _params.Length; index++)
         {
             ScalarCurve curve = _params[index];
-            _from[index] = curve.Evaluate(time);
-            _to[index] = curve.IsConstant ? _from[index] : curve.Evaluate(time + frames);
+            _from[index] = continuing ? last![index] : curve.Evaluate(time);
+            _to[index] = curve.IsConstant ? curve.Evaluate(time) : curve.Evaluate(time + frames);
         }
 
         Effect.Process(new AudioEffectBlock(buffer, offset, frames, channels, sampleRate, _from, _to));
+
+        if (last is not null && last.Length == _params.Length)
+        {
+            _to.CopyTo(last, 0);
+            Effect.HasLast = true;
+        }
     }
 }
 
@@ -143,8 +205,9 @@ public sealed class AudioEffectHost
     /// </summary>
     /// <param name="effects">The effects on a clip or a track.</param>
     /// <param name="sampleRate">The mix rate.</param>
+    /// <param name="channels">The channels the chain runs on: a clip's source's, or the mix's for a track.</param>
     /// <param name="keep">Collects the ids used, for <see cref="Retain"/>.</param>
-    public AudioEffectSlot[] Chain(EquatableArray<Effect> effects, int sampleRate, ISet<string> keep)
+    public AudioEffectSlot[] Chain(EquatableArray<Effect> effects, int sampleRate, int channels, ISet<string> keep)
     {
         ArgumentNullException.ThrowIfNull(keep);
 
@@ -170,6 +233,8 @@ public sealed class AudioEffectHost
                     _live[effect.Id] = live;
                 }
 
+                live.Effect.Prepare(sampleRate, channels);
+                live.Effect.Last ??= new float[descriptor.Params.Length];
                 keep.Add(effect.Id);
                 slots.Add(new AudioEffectSlot(effect.Id, live.Effect, Curves(descriptor, effect, sampleRate)));
             }

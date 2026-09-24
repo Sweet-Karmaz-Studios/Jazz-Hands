@@ -17,7 +17,9 @@ namespace JazzHands.Audio;
 /// </remarks>
 public sealed class Limiter
 {
-    private readonly float _release;
+    private readonly int _sampleRate;
+    private float _release;
+    private float _releaseMilliseconds;
     private float _gain = 1.0f;
     private float _ceiling;
     private float _ceilingDb;
@@ -31,8 +33,9 @@ public sealed class Limiter
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sampleRate);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(releaseMilliseconds);
 
+        _sampleRate = sampleRate;
         CeilingDb = ceilingDb;
-        _release = 1.0f - MathF.Exp(-1.0f / (releaseMilliseconds * 0.001f * sampleRate));
+        ReleaseMilliseconds = releaseMilliseconds;
     }
 
     /// <summary>False to let everything through untouched.</summary>
@@ -49,11 +52,26 @@ public sealed class Limiter
         }
     }
 
+    /// <summary>How long the gain takes to recover most of the way, in milliseconds.</summary>
+    public float ReleaseMilliseconds
+    {
+        get => _releaseMilliseconds;
+        set
+        {
+            _releaseMilliseconds = Math.Max(value, 0.1f);
+            _release = 1.0f - MathF.Exp(-1.0f / (_releaseMilliseconds * 0.001f * _sampleRate));
+        }
+    }
+
     /// <summary>The deepest the gain went during the last block, in dB. Zero when nothing was touched.</summary>
     public float LastReductionDb { get; private set; }
 
     /// <summary>Limits a range of a buffer in place.</summary>
-    public void Process(AudioBuffer buffer, int offset, int frames)
+    /// <param name="buffer">The samples.</param>
+    /// <param name="offset">Where to start in each plane.</param>
+    /// <param name="frames">How many samples.</param>
+    /// <param name="channels">How many planes carry sound; all of the buffer's when not given.</param>
+    public void Process(AudioBuffer buffer, int offset, int frames, int channels = -1)
     {
         ArgumentNullException.ThrowIfNull(buffer);
 
@@ -63,7 +81,7 @@ public sealed class Limiter
             return;
         }
 
-        int channels = buffer.Channels;
+        channels = channels < 0 ? buffer.Channels : Math.Min(channels, buffer.Channels);
         float ceiling = _ceiling;
         float gain = _gain;
         float deepest = 1.0f;

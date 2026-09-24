@@ -5,20 +5,31 @@ namespace JazzHands.Audio;
 /// </summary>
 /// <remarks>
 /// <code>
-/// source -> clip gain, fades, pan -> track bus -> track gain, pan, mute, solo -> master -> limiter -> meter
+/// source -> clip effects -> clip gain, fades, pan -> track bus -> track effects -> track gain, pan, mute, solo, meter
+///   -> master -> master gain -> true peak limiter -> meter
 /// </code>
+/// <para>
 /// What it mixes is a <see cref="MixSnapshot"/>, published from any thread and picked up at the
 /// start of the next block, so an edit never lands halfway through one. Everything else here is
-/// state that only the pulling thread touches: the scratch buffers, the limiter's release, the
-/// meter's held peaks.
-///
+/// state that only the pulling thread touches: the scratch buffers, the limiter, the meters and
+/// where each track's gain ended the last block. Gains and effect settings ramp from where the
+/// last block ended to where the new snapshot says, across one block, so a fader moved in the
+/// mixer is heard within one block and never as a click.
+/// </para>
+/// <para>
+/// The master limiter looks 5 ms ahead and so is 5 ms late (<see cref="TruePeakLimiter"/>). The
+/// graph takes that up by mixing 5 ms ahead of what it is asked for: output sample n is timeline
+/// sample n. After a jump (a seek, the first pull, a cut in an export) it first mixes the 5 ms
+/// before the limiter's output starts, so what comes out is the timeline from the first sample.
+/// </para>
+/// <para>
 /// <see cref="Pull"/> is the audio thread's whole job during playback, so it follows the audio
 /// thread's rules: no lock, no await, no log, no allocation. Every buffer is made in the
-/// constructor. The one thing it cannot promise is that the samples are ready; the source writes
-/// silence for what is not, and <see cref="StarvedBlocks"/> counts it.
-///
-/// Export pulls the same graph from the start of the range to the end, so what is heard is what
-/// is written.
+/// constructor, and anything a new snapshot needs (a track's meter) in <see cref="Publish"/>.
+/// The one thing it cannot promise is that the samples are ready; the source writes silence for
+/// what is not, and <see cref="StarvedBlocks"/> counts it. Export pulls the same graph from the
+/// start of the range to the end, so what is heard is what is written.
+/// </para>
 /// </remarks>
 public sealed class AudioGraph
 {
@@ -37,9 +48,14 @@ public sealed class AudioGraph
     private readonly AudioBuffer _clipSource;
     private readonly AudioBuffer _window;
     private readonly float[] _gains = new float[BlockSize];
+    private readonly object _stripsGate = new();
+    private Dictionary<string, StripState> _strips = new(StringComparer.Ordinal);
     private MixSnapshot _published;
     private long _starved;
     private long _blocks;
+    private long _next = long.MinValue;
+    private float _masterLast;
+    private bool _masterValid;
 
     /// <summary>Creates a graph.</summary>
     /// <param name="source">Where decoded samples come from.</param>
@@ -62,8 +78,8 @@ public sealed class AudioGraph
         _window = new AudioBuffer(Dsp.MaxChannels, WindowCapacity);
         _published = MixSnapshot.Silent(sampleRate, channels);
 
-        Limiter = new Limiter(sampleRate);
-        Meter = new Meter(sampleRate);
+        Limiter = new TruePeakLimiter(sampleRate, channels);
+        Meter = new Meter(sampleRate, channels, loudness: true);
     }
 
     /// <summary>The mix rate.</summary>
@@ -72,11 +88,14 @@ public sealed class AudioGraph
     /// <summary>The mix channel count.</summary>
     public int Channels { get; }
 
-    /// <summary>The last on the master.</summary>
-    public Limiter Limiter { get; }
+    /// <summary>The last on the master. Its settings come from the snapshot each block.</summary>
+    public TruePeakLimiter Limiter { get; }
 
-    /// <summary>After the limiter, so it shows what leaves.</summary>
+    /// <summary>After the limiter, so it shows what leaves: peak, RMS, true peak and loudness.</summary>
     public Meter Meter { get; }
+
+    /// <summary>How far ahead the graph mixes to make up the limiter's lookahead, in samples.</summary>
+    public int Latency => Limiter.Latency;
 
     /// <summary>The snapshot the next block will mix.</summary>
     public MixSnapshot Snapshot => Volatile.Read(ref _published);
@@ -90,6 +109,10 @@ public sealed class AudioGraph
     /// <summary>
     /// Hands the graph a new mix, which takes effect from the next block. Any thread.
     /// </summary>
+    /// <remarks>
+    /// Each track is given the state it had in the last snapshot (where its gain ended, its
+    /// meter), or new state when it is new, before the snapshot is visible to the audio thread.
+    /// </remarks>
     public void Publish(MixSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
@@ -102,31 +125,74 @@ public sealed class AudioGraph
                 nameof(snapshot));
         }
 
+        lock (_stripsGate)
+        {
+            var strips = new Dictionary<string, StripState>(StringComparer.Ordinal);
+            foreach (TrackMix track in snapshot.TrackArray)
+            {
+                if (!_strips.TryGetValue(track.Id, out StripState? strip))
+                {
+                    strip = new StripState(SampleRate, Channels);
+                }
+
+                track.Strip = strip;
+                strips[track.Id] = strip;
+            }
+
+            _strips = strips;
+        }
+
         Volatile.Write(ref _published, snapshot);
     }
 
+    /// <summary>A track's meter readings, after its volume and pan, or null for a track this graph is not mixing.</summary>
+    public MeterRing? TrackMeter(string trackId)
+    {
+        lock (_stripsGate)
+        {
+            return _strips.TryGetValue(trackId, out StripState? strip) ? strip.Meter.Readings : null;
+        }
+    }
+
     /// <summary>
-    /// Forgets the limiter's release and the meter's held peaks, for a seek. Call from the
-    /// pulling thread, between pulls.
+    /// Forgets the limiter, the meters' held peaks, every effect's state and where every gain was,
+    /// for a seek. Call from the pulling thread, between pulls.
     /// </summary>
     public void Reset()
     {
-        Limiter.Reset();
         Meter.Reset();
+        _next = long.MinValue;
+        Forget(meters: true);
+    }
+
+    /// <summary>Forgets the limiter, where every gain was and every effect's state; the meters' too when asked.</summary>
+    private void Forget(bool meters)
+    {
+        Limiter.Reset();
+        _masterValid = false;
 
         // A filter's memory of where the playhead was is wrong where it is now.
         foreach (TrackMix track in Volatile.Read(ref _published).TrackArray)
         {
+            if (track.Strip is { } strip)
+            {
+                strip.Valid = false;
+                if (meters)
+                {
+                    strip.Meter.Reset();
+                }
+            }
+
             foreach (Effects.AudioEffectSlot effect in track.EffectArray)
             {
-                effect.Effect.Reset();
+                effect.Effect.ResetAll();
             }
 
             foreach (ClipMix clip in track.ClipArray)
             {
                 foreach (Effects.AudioEffectSlot effect in clip.EffectArray)
                 {
-                    effect.Effect.Reset();
+                    effect.Effect.ResetAll();
                 }
             }
         }
@@ -152,10 +218,17 @@ public sealed class AudioGraph
 
         ArgumentOutOfRangeException.ThrowIfGreaterThan(offset + frames, output.Capacity, nameof(frames));
 
+        if (startSample != _next)
+        {
+            Prime(startSample);
+        }
+
         while (frames > 0)
         {
             int count = Math.Min(BlockSize, frames);
-            MixBlock(startSample, count);
+            MixBlock(startSample + Latency, count);
+            Limiter.Process(_master, 0, count);
+            Meter.Process(_master, 0, count, startSample, Limiter.LastReductionDb);
 
             for (int channel = 0; channel < Channels; channel++)
             {
@@ -165,6 +238,28 @@ public sealed class AudioGraph
             startSample += count;
             offset += count;
             frames -= count;
+        }
+
+        _next = startSample;
+    }
+
+    /// <summary>
+    /// After a jump: forgets what was playing (a jump is a cut, with no ramp from the old place
+    /// and no filter memory of it), then fills the limiter's lookahead with the mix just before
+    /// where the output starts, so the first sample out is the timeline's first sample.
+    /// </summary>
+    private void Prime(long startSample)
+    {
+        Forget(meters: false);
+        int remaining = Latency;
+        long at = startSample;
+        while (remaining > 0)
+        {
+            int count = Math.Min(BlockSize, remaining);
+            MixBlock(at, count);
+            Limiter.Process(_master, 0, count);
+            at += count;
+            remaining -= count;
         }
     }
 
@@ -179,15 +274,21 @@ public sealed class AudioGraph
 
         foreach (TrackMix track in snapshot.TrackArray)
         {
-            if (!track.IsAudible(snapshot.AnySolo))
+            bool audible = track.IsAudible(snapshot.AnySolo);
+            StripState? strip = track.Strip;
+
+            // A track that has just been muted still plays this block, fading to nothing; once it
+            // is silent it is skipped, keeping its silence so an unmute ramps up from nothing.
+            if (!audible && (strip is null || !strip.Valid || Silent(strip.Last, Channels)))
             {
                 continue;
             }
 
             ClipMix[] clips = track.ClipArray;
             bool any = false;
+            int first = FirstEndingAfter(clips, start);
 
-            for (int index = FirstEndingAfter(clips, start); index < clips.Length; index++)
+            for (int index = first; index < clips.Length; index++)
             {
                 ClipMix clip = clips[index];
                 if (clip.PlayStart >= end)
@@ -211,21 +312,31 @@ public sealed class AudioGraph
                 starved |= !MixClip(clip, from - clip.Start, (int)(from - start), (int)(to - from));
             }
 
+            // After the last clip, a track's effects go on sounding for their tail: a reverb's
+            // decay, a delay's echoes.
+            if (!any && track.TailSamples > 0 && track.EffectArray.Length > 0 && first > 0
+                && start < clips[first - 1].PlayEnd + track.TailSamples)
+            {
+                _bus.Clear(0, frames);
+                any = true;
+            }
+
             if (any)
             {
-                // Track effects run on the bus, before its volume and pan. A bus with no clip
-                // under the block is not run, so a tail (a reverb, Phase 20) stops there for now.
                 foreach (Effects.AudioEffectSlot effect in track.EffectArray)
                 {
                     effect.Process(_bus, 0, frames, Channels, SampleRate, start);
                 }
 
-                AddBus(track, start, frames);
+                AddBus(track, strip, audible, start, frames);
+            }
+            else
+            {
+                strip?.Valid = false;
             }
         }
 
-        Limiter.Process(_master, 0, frames);
-        Meter.Process(_master, 0, frames, start);
+        ApplyMaster(snapshot.Master, start, frames);
 
         if (starved)
         {
@@ -235,26 +346,57 @@ public sealed class AudioGraph
         Interlocked.Increment(ref _blocks);
     }
 
-    /// <summary>Applies a track's gain and balance to its bus and adds it to the master.</summary>
-    private void AddBus(TrackMix track, long start, int frames)
+    /// <summary>
+    /// Applies a track's gain and balance to its bus, meters it and adds it to the master. The gain
+    /// ramps from where the last block ended, so a change of snapshot (a fader, a mute) is a ramp.
+    /// </summary>
+    private void AddBus(TrackMix track, StripState? strip, bool audible, long start, int frames)
     {
-        float gainFrom = Dsp.DbToGain(track.Volume.Evaluate(start));
-        float gainTo = track.Volume.IsConstant ? gainFrom : Dsp.DbToGain(track.Volume.Evaluate(start + frames));
+        float gainTo = audible ? Dsp.DbToGain(track.Volume.Evaluate(start + frames)) : 0.0f;
+        Dsp.Balance(track.Pan.Evaluate(start + frames), out float leftTo, out float rightTo);
 
-        Dsp.Balance(track.Pan.Evaluate(start), out float leftFrom, out float rightFrom);
-        float leftTo = leftFrom;
-        float rightTo = rightFrom;
-        if (!track.Pan.IsConstant)
+        bool continuing = strip is { Valid: true };
+        float gainFrom = 0.0f, leftFrom = 0.0f, rightFrom = 0.0f;
+        if (!continuing)
         {
-            Dsp.Balance(track.Pan.Evaluate(start + frames), out leftTo, out rightTo);
+            gainFrom = audible ? Dsp.DbToGain(track.Volume.Evaluate(start)) : 0.0f;
+            Dsp.Balance(track.Pan.Evaluate(start), out leftFrom, out rightFrom);
         }
 
         for (int channel = 0; channel < Channels; channel++)
         {
-            float from = gainFrom * Dsp.SideGain(channel, Channels, leftFrom, rightFrom);
+            float from = continuing ? strip!.Last[channel] : gainFrom * Dsp.SideGain(channel, Channels, leftFrom, rightFrom);
             float to = gainTo * Dsp.SideGain(channel, Channels, leftTo, rightTo);
-            Accumulate(_bus.Plane(channel, 0, frames), _master.Plane(channel, 0, frames), from, to);
+            Scale(_bus.Plane(channel, 0, frames), from, to);
+            Add(_bus.Plane(channel, 0, frames), _master.Plane(channel, 0, frames));
+
+            strip?.Last[channel] = to;
         }
+
+        if (strip is not null)
+        {
+            strip.Valid = true;
+            strip.Meter.Process(_bus, 0, frames, start);
+        }
+    }
+
+    /// <summary>The master's volume, ramped like a track's, and the limiter's settings for the block.</summary>
+    private void ApplyMaster(MasterMix master, long start, int frames)
+    {
+        float to = Dsp.DbToGain(master.Volume.Evaluate(start + frames));
+        float from = _masterValid ? _masterLast : Dsp.DbToGain(master.Volume.Evaluate(start));
+        if (from != 1.0f || to != 1.0f)
+        {
+            for (int channel = 0; channel < Channels; channel++)
+            {
+                Scale(_master.Plane(channel, 0, frames), from, to);
+            }
+        }
+
+        _masterLast = to;
+        _masterValid = true;
+        Limiter.Enabled = master.LimiterEnabled;
+        Limiter.CeilingDb = master.CeilingDb;
     }
 
     /// <summary>
@@ -373,21 +515,20 @@ public sealed class AudioGraph
         return ready;
     }
 
-    /// <summary>Adds a plane into another with a gain ramped linearly across it.</summary>
-    private static void Accumulate(ReadOnlySpan<float> from, Span<float> into, float gainFrom, float gainTo)
+    /// <summary>Multiplies a plane by a gain ramped linearly across it.</summary>
+    private static void Scale(Span<float> samples, float gainFrom, float gainTo)
     {
-        int frames = from.Length;
-
+        int frames = samples.Length;
         if (gainFrom == gainTo)
         {
-            if (gainFrom == 0.0f)
+            if (gainFrom == 1.0f)
             {
                 return;
             }
 
             for (int index = 0; index < frames; index++)
             {
-                into[index] += from[index] * gainFrom;
+                samples[index] *= gainFrom;
             }
 
             return;
@@ -395,8 +536,29 @@ public sealed class AudioGraph
 
         for (int index = 0; index < frames; index++)
         {
-            into[index] += from[index] * (gainFrom + ((gainTo - gainFrom) * index / frames));
+            samples[index] *= gainFrom + ((gainTo - gainFrom) * index / frames);
         }
+    }
+
+    private static void Add(ReadOnlySpan<float> from, Span<float> into)
+    {
+        for (int index = 0; index < from.Length; index++)
+        {
+            into[index] += from[index];
+        }
+    }
+
+    private static bool Silent(float[] gains, int channels)
+    {
+        for (int channel = 0; channel < channels; channel++)
+        {
+            if (gains[channel] != 0.0f)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>

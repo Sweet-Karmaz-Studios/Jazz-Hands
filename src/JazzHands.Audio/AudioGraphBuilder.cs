@@ -63,6 +63,8 @@ public static class AudioGraphBuilder
                 }
             }
 
+            AudioEffectSlot[] chain = effects.Chain(track.Effects, rate, channels, used);
+            double tail = chain.Length == 0 ? 0.0 : chain.Max(slot => slot.Effect.TailSeconds);
             tracks.Add(new TrackMix(
                 track.Id,
                 track.Name,
@@ -71,12 +73,18 @@ public static class AudioGraphBuilder
                 ScalarCurve.From(track.Volume, 0.0f, rate),
                 ScalarCurve.From(track.Pan, 0.0f, rate),
                 clips,
-                effects.Chain(track.Effects, rate, used)));
+                chain,
+                (long)Math.Ceiling(tail * rate)));
         }
 
         effects.Retain(used);
-        return new MixSnapshot(rate, channels, tracks);
+        return new MixSnapshot(rate, channels, tracks, Master(sequence.Master, rate));
     }
+
+    /// <summary>The master bus in samples: unity with the limiter on when the sequence says nothing.</summary>
+    internal static MasterMix Master(MasterBus? master, int rate) => master is null
+        ? MasterMix.Default
+        : new MasterMix(ScalarCurve.From(master.Volume, 0.0f, rate), master.LimiterEnabled, (float)Math.Clamp(master.CeilingDb, -24.0, 0.0));
 
     /// <summary>
     /// The mix form of one clip, or null when it has nothing to play.
@@ -126,7 +134,7 @@ public static class AudioGraphBuilder
             ScalarCurve.From(clip.Volume, 0.0f, rate),
             ScalarCurve.From(clip.Pan, 0.0f, rate),
             clip.ChannelMap ?? AudioChannelMap.Auto,
-            effects?.Chain(clip.Effects, rate, used ?? new HashSet<string>(StringComparer.Ordinal)),
+            effects?.Chain(clip.Effects, rate, channels, used ?? new HashSet<string>(StringComparer.Ordinal)),
             joins.LeadIn,
             joins.Tail,
             joins.CrossIn,

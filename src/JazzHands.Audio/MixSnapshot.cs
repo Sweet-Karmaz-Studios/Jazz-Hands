@@ -18,7 +18,11 @@ namespace JazzHands.Audio;
 public sealed class MixSnapshot
 {
     /// <summary>Creates a snapshot.</summary>
-    public MixSnapshot(int sampleRate, int channels, IReadOnlyList<TrackMix> tracks)
+    /// <param name="sampleRate">The mix rate.</param>
+    /// <param name="channels">The mix's channels.</param>
+    /// <param name="tracks">The audio tracks, in stacking order.</param>
+    /// <param name="master">The master bus; unity with the limiter on at -1 dBTP when null.</param>
+    public MixSnapshot(int sampleRate, int channels, IReadOnlyList<TrackMix> tracks, MasterMix? master = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sampleRate);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(channels);
@@ -28,6 +32,7 @@ public sealed class MixSnapshot
         SampleRate = sampleRate;
         Channels = channels;
         TrackArray = [.. tracks];
+        Master = master ?? MasterMix.Default;
 
         foreach (TrackMix track in TrackArray)
         {
@@ -39,6 +44,9 @@ public sealed class MixSnapshot
             }
         }
     }
+
+    /// <summary>The master bus: its volume and its limiter.</summary>
+    public MasterMix Master { get; }
 
     /// <summary>The mix rate.</summary>
     public int SampleRate { get; }
@@ -109,7 +117,8 @@ public sealed class TrackMix
     /// <param name="pan">Balance from -1 to 1 over sequence time.</param>
     /// <param name="clips">Clips, sorted by start.</param>
     /// <param name="effects">The track's effects, run on its bus before its volume and pan.</param>
-    public TrackMix(string id, string name, bool muted, bool solo, ScalarCurve volume, ScalarCurve pan, IReadOnlyList<ClipMix> clips, IReadOnlyList<AudioEffectSlot>? effects = null)
+    /// <param name="tailSamples">How long its effects go on sounding after its last clip, in samples.</param>
+    public TrackMix(string id, string name, bool muted, bool solo, ScalarCurve volume, ScalarCurve pan, IReadOnlyList<ClipMix> clips, IReadOnlyList<AudioEffectSlot>? effects = null, long tailSamples = 0)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(volume);
@@ -124,7 +133,18 @@ public sealed class TrackMix
         Pan = pan;
         ClipArray = [.. clips.OrderBy(clip => clip.Start)];
         EffectArray = effects is null ? [] : [.. effects];
+        TailSamples = Math.Max(0, tailSamples);
     }
+
+    /// <summary>How long its effects go on sounding after its last clip ends: a reverb's decay, a delay's echoes.</summary>
+    public long TailSamples { get; }
+
+    /// <summary>
+    /// What carries over between blocks for this track in one graph: the gain it ended the last
+    /// block at, and its meter. Given by the graph when the snapshot is published, before the
+    /// audio thread can see it, and kept for the track across snapshots.
+    /// </summary>
+    internal StripState? Strip { get; set; }
 
     /// <summary>The track identifier.</summary>
     public string Id { get; }
@@ -391,4 +411,27 @@ public readonly record struct Crossfade(long Start, long Length, Effects.Crossfa
 
     /// <summary>How far through it a sample is, 0 to 1.</summary>
     public float Progress(long sample) => Length <= 0 ? 1.0f : Math.Clamp((float)((double)(sample - Start) / Length), 0.0f, 1.0f);
+}
+
+/// <summary>The master bus of a snapshot: its volume and the true peak limiter that ends the mix.</summary>
+/// <param name="Volume">Gain in decibels over sequence time in samples.</param>
+/// <param name="LimiterEnabled">False to let the mix through without limiting (still as late, so nothing moves).</param>
+/// <param name="CeilingDb">The limiter's ceiling in dBTP.</param>
+public sealed record MasterMix(ScalarCurve Volume, bool LimiterEnabled = true, float CeilingDb = -1.0f)
+{
+    /// <summary>Unity, with the limiter on at -1 dBTP.</summary>
+    public static MasterMix Default { get; } = new(ScalarCurve.Constant(0.0f));
+}
+
+/// <summary>What one graph keeps between blocks for one track: where its gain ended, and its meter.</summary>
+internal sealed class StripState(int sampleRate, int channels)
+{
+    /// <summary>The gain each mix channel ended the last block at.</summary>
+    public float[] Last { get; } = new float[Dsp.MaxChannels];
+
+    /// <summary>True once <see cref="Last"/> holds a block's end; false after a seek.</summary>
+    public bool Valid { get; set; }
+
+    /// <summary>After the track's volume and pan.</summary>
+    public Meter Meter { get; } = new(sampleRate, channels);
 }

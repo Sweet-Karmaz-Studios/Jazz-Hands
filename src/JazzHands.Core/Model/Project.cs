@@ -672,6 +672,7 @@ public sealed record QuickTrim(string MediaId) : IEquatable<QuickTrim>;
 /// True when the primary picture track (the lowest video track) never has gaps: an edit that would
 /// leave one closes it, rippling the sync-locked tracks. Null is off.
 /// </param>
+/// <param name="Master">The master bus: its volume and the limiter that ends the mix. Null is unity with the limiter on at -1 dBTP.</param>
 public sealed record Sequence(
     string Id,
     string Name,
@@ -680,7 +681,8 @@ public sealed record Sequence(
     ProjectSettings? Settings = null,
     TimeRange? InOut = null,
     QuickTrim? QuickTrim = null,
-    bool? Magnetic = null) : IEquatable<Sequence>
+    bool? Magnetic = null,
+    MasterBus? Master = null) : IEquatable<Sequence>
 {
     /// <summary>The first position after the last clip on any track.</summary>
     public Flicks Duration
@@ -857,4 +859,33 @@ public sealed record Project(
         ArgumentNullException.ThrowIfNull(sequence);
         return sequence.Settings ?? Settings;
     }
+}
+
+/// <summary>
+/// A sequence's master bus: what every track is summed into before it leaves.
+/// </summary>
+/// <remarks>
+/// The mix ends in a true peak limiter, on unless turned off, so an export never clips a
+/// codec; its ceiling is in dBTP. Every field is optional so a sequence nobody has mixed stores
+/// nothing.
+/// </remarks>
+/// <param name="Volume">Gain in decibels over sequence time, which may be animated. Null for 0 dB.</param>
+/// <param name="Limiter">False to turn the limiter off. Null is on.</param>
+/// <param name="Ceiling">The limiter's ceiling in dBTP, -24 to 0. Null for -1.</param>
+public sealed record MasterBus(
+    AnimatedValue? Volume = null,
+    bool? Limiter = null,
+    double? Ceiling = null) : IEquatable<MasterBus>
+{
+    /// <summary>The ceiling a limiter has when none is set.</summary>
+    public const double DefaultCeiling = -1.0;
+
+    /// <summary>True when the limiter is on.</summary>
+    public bool LimiterEnabled => Limiter != false;
+
+    /// <summary>The ceiling in dBTP.</summary>
+    public double CeilingDb => Ceiling ?? DefaultCeiling;
+
+    /// <summary>True when this is the same as having no master bus settings at all.</summary>
+    public bool IsDefault => Volume is null && Limiter is null && Ceiling is null;
 }
