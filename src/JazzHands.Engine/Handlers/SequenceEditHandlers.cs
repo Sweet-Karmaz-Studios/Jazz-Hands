@@ -77,6 +77,22 @@ public sealed class RippleDeleteClipsHandler : ICommandHandler<RippleDeleteClips
     }
 }
 
+/// <summary>Moves clips along the primary track.</summary>
+public sealed class StorylineMoveClipsHandler : ICommandHandler<StorylineMoveClipsCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, StorylineMoveClipsCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        Sequence sequence = SequenceEdit.Of(project, command.ClipIds, "A storyline move");
+        Sequence after = HandlerContext.Require(EditOps.MoveOnStoryline(sequence, command.ClipIds, command.To));
+        return SequenceEdit.Commit(project, sequence, after, context);
+    }
+}
+
 /// <summary>Closes a gap on a track.</summary>
 public sealed class CloseGapHandler : ICommandHandler<CloseGapCommand>
 {

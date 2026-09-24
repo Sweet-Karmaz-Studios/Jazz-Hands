@@ -471,13 +471,36 @@ public static partial class EditOps
             return found.Error!;
         }
 
-        if (found.Value.Any(entry => !string.Equals(entry.Track.Id, primary.Id, StringComparison.Ordinal)))
+        Clip[] moving = [.. found.Value.Where(entry => IsOn(entry.Track, primary)).Select(entry => entry.Clip).OrderBy(clip => clip.Start)];
+        if (moving.Length == 0)
         {
-            return EditError.NotAligned($"Only clips on {primary.Name} move along the storyline.");
+            return EditError.NotAligned($"Only clips on {primary.Name} move along the storyline; pick at least one.");
         }
 
-        Clip[] moving = [.. found.Value.Select(entry => entry.Clip).OrderBy(clip => clip.Start)];
-        EditResult<Sequence> removed = RippleDelete(sequence, [.. moving.Select(clip => clip.Id)]);
+        // Clips on other tracks, a shot's sound or a title over it, ride on the storyline clip
+        // they sit over, keeping where they are against it.
+        var riders = new List<(Track Track, Clip Clip, Clip Carrier)>();
+        foreach ((Track track, Clip clip) in found.Value)
+        {
+            if (IsOn(track, primary))
+            {
+                continue;
+            }
+
+            Clip? carrier = moving
+                .Where(candidate => candidate.Start <= clip.Start && clip.Start < candidate.End)
+                .FirstOrDefault();
+
+            if (carrier is null)
+            {
+                return EditError.NotAligned(
+                    $"'{clip.Name}' does not start over any of the clips moving along {primary.Name}, so it cannot go with them.");
+            }
+
+            riders.Add((track, clip, carrier));
+        }
+
+        EditResult<Sequence> removed = RippleDelete(sequence, [.. found.Value.Select(entry => entry.Clip.Id)]);
         if (!removed.IsOk)
         {
             return removed;
@@ -494,16 +517,24 @@ public static partial class EditOps
             }
         }
 
-        // One insert of the whole run, end to end in their order.
+        // One insert of the whole run, end to end in their order, each rider where it was
+        // against its carrier.
         Flicks offset = Flicks.Zero;
-        var placements = new List<Placement>(moving.Length);
+        var offsets = new Dictionary<string, Flicks>(StringComparer.Ordinal);
+        var placements = new List<Placement>(moving.Length + riders.Count);
         foreach (Clip clip in moving)
         {
+            offsets[clip.Id] = offset;
             placements.Add(new Placement(primary.Id, clip, offset));
             offset += clip.Duration;
         }
 
-        // The primary track was unlocked for the delete and every clip has a length, so this holds.
+        foreach ((Track track, Clip clip, Clip carrier) in riders)
+        {
+            placements.Add(new Placement(track.Id, clip, offsets[carrier.Id] + (clip.Start - carrier.Start)));
+        }
+
+        // Every track was unlocked for the delete and every clip has a length, so this holds.
         return Insert(removed.Value, cut, placements).Value;
     }
 
@@ -542,6 +573,8 @@ public static partial class EditOps
     }
 
     private static Flicks Distance(Flicks a, Flicks b) => a > b ? a - b : b - a;
+
+    private static bool IsOn(Track track, Track other) => string.Equals(track.Id, other.Id, StringComparison.Ordinal);
 
     /// <summary>Opens space at a time on one track, splitting a clip that straddles it.</summary>
     private static Track Open(Track track, Flicks at, Flicks delta)
