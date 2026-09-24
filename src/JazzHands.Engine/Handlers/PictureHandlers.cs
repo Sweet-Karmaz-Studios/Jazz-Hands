@@ -58,25 +58,60 @@ internal static class PictureHelp
     internal static ParamValue Current(AnimatedValue value) => AnimationEvaluator.Evaluate(value, Core.Time.Flicks.Zero);
 
     /// <summary>Where a mask is, and the clip it is on.</summary>
-    internal static (ClipLocation Clip, int Index) FindMask(Project project, string maskId)
+    internal static Core.Effects.ParamOwner FindMask(Project project, string maskId)
     {
-        foreach (Sequence sequence in project.Sequences)
+        if (Core.Effects.ParamTargets.Find(project, maskId) is { Kind: Core.Effects.ParamOwnerKind.Mask } found)
         {
-            foreach (Track track in sequence.Tracks)
-            {
-                foreach (Clip clip in track.Clips)
-                {
-                    int index = clip.Masks.IndexOf(mask => string.Equals(mask.Id, maskId, StringComparison.Ordinal));
-                    if (index >= 0)
-                    {
-                        HandlerHelp.RequireUnlocked(track);
-                        return (new ClipLocation(sequence, track, clip), index);
-                    }
-                }
-            }
+            HandlerHelp.RequireUnlocked(found.Track);
+            return found;
         }
 
         throw new CommandException("mask-not-found", $"No mask with id '{maskId}'.", "/sequences");
+    }
+
+    /// <summary>
+    /// What a mask goes on: a clip with a picture, or a picture effect. The owner returned is the
+    /// clip or the effect, unlocked.
+    /// </summary>
+    internal static Core.Effects.ParamOwner MaskHost(Project project, string ownerId)
+    {
+        Core.Effects.ParamOwner owner = ParamHelp.Owner(project, ownerId);
+
+        if (owner.Kind == Core.Effects.ParamOwnerKind.Clip)
+        {
+            PictureClip(project, ownerId);
+            return owner;
+        }
+
+        if (owner.Kind == Core.Effects.ParamOwnerKind.Effect && owner.Track.Kind is TrackKind.Video or TrackKind.Adjustment)
+        {
+            HandlerHelp.RequireUnlocked(owner.Track);
+            return owner;
+        }
+
+        throw new CommandException(
+            "not-a-mask-owner",
+            $"'{ownerId}' is {ParamHelp.Describe(owner)}. Masks go on clips with a picture and on picture effects.");
+    }
+
+    /// <summary>The masks a host has.</summary>
+    internal static EquatableArray<Mask> MasksOf(Core.Effects.ParamOwner host) =>
+        host.Kind == Core.Effects.ParamOwnerKind.Effect || (host.Kind == Core.Effects.ParamOwnerKind.Mask && host.Effect is not null)
+            ? host.Effect!.Masks
+            : host.Clip!.Masks;
+
+    /// <summary>A project with a host's masks replaced, reporting the host and what it sits on.</summary>
+    internal static Project WithMasks(Project project, Core.Effects.ParamOwner host, EquatableArray<Mask> masks, HandlerContext context)
+    {
+        if (host.Effect is { } effect)
+        {
+            context.Changed(effect.Id);
+            context.Changed(host.Clip?.Id ?? host.Track.Id);
+            return Core.Effects.ParamTargets.ReplaceEffect(project, host, effect with { Masks = masks });
+        }
+
+        context.Changed(host.Clip!.Id);
+        return project.ReplaceTrack(host.Track.ReplaceClip(host.Clip with { Masks = masks }));
     }
 
     /// <summary>Refuses a mask whose shape has nothing to draw.</summary>
@@ -257,14 +292,9 @@ public sealed class AddMaskHandler : ICommandHandler<AddMaskCommand>
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(context);
 
-        ClipLocation found = PictureHelp.PictureClip(project, command.ClipId);
+        Core.Effects.ParamOwner host = PictureHelp.MaskHost(project, command.OwnerId);
         string id = HandlerHelp.IdOr(command.MaskId);
         HandlerHelp.RequireUnused(project, id);
-
-        if (project.Sequences.Any(sequence => sequence.Tracks.Any(track => track.Clips.Any(clip => clip.Masks.Any(mask => mask.Id == id)))))
-        {
-            throw new CommandException("duplicate-id", $"'{id}' is already a mask in this project.");
-        }
 
         var mask = new Mask(
             id,
@@ -274,13 +304,20 @@ public sealed class AddMaskHandler : ICommandHandler<AddMaskCommand>
             command.Feather == 0 ? null : AnimatedValue.Constant(Feather(command.Feather)),
             command.Opacity == 1 ? null : AnimatedValue.Constant(PictureHelp.Unit(command.Opacity, "Mask opacity")),
             command.Mode,
-            command.Invert);
+            command.Invert,
+            Expansion: command.Expansion == 0 ? null : AnimatedValue.Constant(Expansion(command.Expansion)));
 
         PictureHelp.RequireDrawable(mask);
         context.Changed(id);
 
-        return PictureHelp.Replace(project, found, found.Clip with { Masks = found.Clip.Masks.Add(mask) }, context);
+        return PictureHelp.WithMasks(project, host, PictureHelp.MasksOf(host).Add(mask), context);
     }
+
+    /// <summary>An expansion, grow or shrink, within a thousand pixels either way.</summary>
+    internal static float Expansion(double value) =>
+        double.IsFinite(value) && Math.Abs(value) <= 1000
+            ? (float)value
+            : throw new CommandException("value-out-of-range", $"An expansion is a distance in pixels from -1000 to 1000; {value} is not.");
 
     /// <summary>Bounds from whichever of the four numbers were given, over what was there.</summary>
     internal static AnimatedValue? Bounds(double? x, double? y, double? width, double? height, AnimatedValue? current)
@@ -314,10 +351,11 @@ public sealed class RemoveMaskHandler : ICommandHandler<RemoveMaskCommand>
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(context);
 
-        (ClipLocation found, int index) = PictureHelp.FindMask(project, command.MaskId);
+        Core.Effects.ParamOwner found = PictureHelp.FindMask(project, command.MaskId);
         context.Changed(command.MaskId);
 
-        return PictureHelp.Replace(project, found, found.Clip with { Masks = found.Clip.Masks.RemoveAt(index) }, context);
+        EquatableArray<Mask> masks = PictureHelp.MasksOf(found);
+        return PictureHelp.WithMasks(project, found, masks.RemoveAt(masks.IndexOf(mask => mask.Id == command.MaskId)), context);
     }
 }
 
@@ -330,8 +368,8 @@ public sealed class SetMaskHandler : ICommandHandler<SetMaskCommand>
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(context);
 
-        (ClipLocation found, int index) = PictureHelp.FindMask(project, command.MaskId);
-        Mask current = found.Clip.Masks[index];
+        Core.Effects.ParamOwner found = PictureHelp.FindMask(project, command.MaskId);
+        Mask current = found.Mask!;
 
         Mask changed = current with
         {
@@ -343,6 +381,7 @@ public sealed class SetMaskHandler : ICommandHandler<SetMaskCommand>
             Mode = command.Mode ?? current.Mode,
             Invert = command.Invert ?? current.Invert,
             Enabled = command.Enabled ?? current.Enabled,
+            Expansion = command.Expansion is { } expansion ? (expansion == 0 ? null : AnimatedValue.Constant(AddMaskHandler.Expansion(expansion))) : current.Expansion,
         };
 
         if (changed == current)
@@ -353,6 +392,7 @@ public sealed class SetMaskHandler : ICommandHandler<SetMaskCommand>
         PictureHelp.RequireDrawable(changed);
         context.Changed(command.MaskId);
 
-        return PictureHelp.Replace(project, found, found.Clip with { Masks = found.Clip.Masks.SetItem(index, changed) }, context);
+        EquatableArray<Mask> masks = PictureHelp.MasksOf(found);
+        return PictureHelp.WithMasks(project, found, masks.SetItem(masks.IndexOf(mask => mask.Id == command.MaskId), changed), context);
     }
 }

@@ -24,12 +24,15 @@ public sealed class GaussianBlurEffect : VideoEffect
     /// <summary>The widest kernel run at full size, in texels; wider ones run on a smaller copy.</summary>
     internal const float MaxSigma = 24.0f;
 
-    private static readonly PassDescriptor Blur = new("GaussianBlur.hlsl", "PsBlur");
+    private static readonly PassDescriptor BlurPass = new("GaussianBlur.hlsl", "PsBlur");
     private static readonly PassDescriptor Down = new("GaussianBlur.hlsl", "PsDown");
     private static readonly PassDescriptor Up = new("GaussianBlur.hlsl", "PsUp");
 
+    /// <summary>The passes <see cref="Blur"/> draws with, for effects built on it to list.</summary>
+    internal static ImmutableArray<PassDescriptor> BlurPasses { get; } = [BlurPass, Down, Up];
+
     /// <inheritdoc />
-    public override ImmutableArray<PassDescriptor> Passes { get; } = [Blur, Down, Up];
+    public override ImmutableArray<PassDescriptor> Passes => BlurPasses;
 
     /// <inheritdoc />
     public override void Apply(EffectContext context, ParameterSet parameters, RenderTarget input, RenderTarget output)
@@ -39,12 +42,23 @@ public sealed class GaussianBlurEffect : VideoEffect
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(output);
 
-        float sigma = parameters.Float("radius") * context.QualityScale / 3.0f;
         string direction = parameters.Enum("direction");
-        bool across = direction != "vertical";
-        bool down = direction != "horizontal";
-        bool repeat = parameters.Bool("repeat-edges");
+        Blur(
+            context,
+            input,
+            output,
+            parameters.Float("radius") * context.QualityScale / 3.0f,
+            across: direction != "vertical",
+            down: direction != "horizontal",
+            repeat: parameters.Bool("repeat-edges"));
+    }
 
+    /// <summary>
+    /// A Gaussian of <paramref name="sigma"/> texels from one target into another the same size,
+    /// halving past <see cref="MaxSigma"/>. What glow, sharpen and drop shadow blur with.
+    /// </summary>
+    internal static void Blur(EffectContext context, RenderTarget input, RenderTarget output, float sigma, bool across = true, bool down = true, bool repeat = true)
+    {
         if (sigma < 0.1f)
         {
             context.Copy(input, output);
@@ -104,7 +118,7 @@ public sealed class GaussianBlurEffect : VideoEffect
             RepeatEdges = repeat ? 1u : 0u,
         };
 
-        context.Draw(Blur, to, in constants, from);
+        context.Draw(BlurPass, to, in constants, from);
     }
 
     [StructLayout(LayoutKind.Sequential)]

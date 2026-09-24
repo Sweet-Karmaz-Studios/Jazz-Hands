@@ -15,7 +15,7 @@ namespace JazzHands.Render.Effects.Distort;
 /// top of a move, or sit on an adjustment layer to move everything underneath. Position and
 /// anchor are sequence pixels from the frame centre.
 /// </remarks>
-[VideoEffect("video.transform", Name = "Transform", Category = "Distort", Description = "Moves, scales and turns the picture as it stands at this point in the effect chain.")]
+[VideoEffect("video.transform", Name = "Transform", Category = "Transform", Description = "Moves, scales and turns the picture as it stands at this point in the effect chain.")]
 [Param("position", ParamType.Point, Default = "0, 0", Unit = "px", Description = "Offset from where the picture is, in sequence pixels.")]
 [Param("scale", ParamType.Float2, Default = "1, 1", SliderMax = 4, Description = "Multiplier per axis; a negative flips.")]
 [Param("rotation", ParamType.Float, Default = "0", Min = -36000, Max = 36000, SliderMax = 360, Unit = "deg", Description = "Degrees clockwise.")]

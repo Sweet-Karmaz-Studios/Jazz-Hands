@@ -87,3 +87,12 @@ float4 PsCombine(FullScreenVertex input) : SV_TARGET
 
     return float4(1.0, 1.0, 1.0, result);
 }
+
+Texture2D<float4> MixMatte : register(t2);
+
+// An effect limited by masks: its result (t1) inside the matte, the picture before it (t0) outside.
+float4 PsMix(FullScreenVertex input) : SV_TARGET
+{
+    int3 texel = int3(input.Position.xy, 0);
+    return lerp(Input.Load(texel), Current.Load(texel), MixMatte.Load(texel).a);
+}

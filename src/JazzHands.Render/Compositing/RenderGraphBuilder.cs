@@ -181,7 +181,7 @@ public static class RenderGraphBuilder
 
             Flicks local = time - clip.Start;
 
-            ImmutableArray<EffectNode> effects = Effects(clip, track, local, time, options);
+            ImmutableArray<EffectNode> effects = Effects(clip, track, local, time, sequence, options);
 
             if (track.Kind == TrackKind.Adjustment)
             {
@@ -189,7 +189,7 @@ public static class RenderGraphBuilder
                 continue;
             }
 
-            if (Source(project, clip, time, track.Order, frameSize, frames, options, depth) is not { } source)
+            if (Source(project, clip, time, track.Order, frameSize, frames, options, depth, settings.FrameRate) is not { } source)
             {
                 continue;
             }
@@ -213,7 +213,8 @@ public static class RenderGraphBuilder
         Vector2 frameSize,
         IFrameProvider frames,
         RenderOptions options,
-        int depth)
+        int depth,
+        Rational frameRate)
     {
         if (clip.MediaId is { } mediaId)
         {
@@ -241,6 +242,27 @@ public static class RenderGraphBuilder
             RenderGraph inner = Build(project, nested, clip.SourceTimeAt(time), frames, options, depth + 1);
             ProjectSettings innerSettings = project.SettingsFor(nested);
             return (new NestedLayerSource(inner), new Vector2(innerSettings.Width, innerSettings.Height), ConformPolicy.Fit);
+        }
+
+        if (clip.GeneratorId is { } generatorId
+            && !string.Equals(generatorId, SolidGenerator, StringComparison.Ordinal)
+            && options.Effects.Find(generatorId) is { Kind: EffectKind.Generator, Implementation: { } type } descriptor
+            && typeof(VideoGenerator).IsAssignableFrom(type))
+        {
+            Flicks local = time - clip.Start;
+            Effect? own = clip.Effects.FirstOrDefault(effect => EffectChains.IsOwnParameters(clip, effect));
+            var node = new EffectNode(descriptor, ParameterSet.Evaluate(descriptor, own, local))
+            {
+                InstanceId = clip.Id,
+                LocalTime = local,
+                Seed = StableSeed(clip.Id),
+                Model = own,
+                OwnerLength = clip.Duration,
+                SequenceTime = time,
+                FrameRate = frameRate,
+            };
+
+            return (new GeneratorLayerSource(node), frameSize, ConformPolicy.Stretch);
         }
 
         if (string.Equals(clip.GeneratorId, SolidGenerator, StringComparison.Ordinal))
@@ -280,7 +302,7 @@ public static class RenderGraphBuilder
             CropRect(clip.Crop, local),
             Float(clip.Opacity, Intrinsic.Opacity, local),
             clip.BlendMode,
-            Mattes(clip, local),
+            Mattes(clip.Masks, local),
             options.Scale);
     }
 
@@ -289,7 +311,7 @@ public static class RenderGraphBuilder
     /// sequence time. A generator's own parameters, disabled effects and types the registry does
     /// not have as picture effects are left out.
     /// </summary>
-    private static ImmutableArray<EffectNode> Effects(Clip clip, Track track, Flicks local, Flicks time, RenderOptions options)
+    private static ImmutableArray<EffectNode> Effects(Clip clip, Track track, Flicks local, Flicks time, Sequence sequence, RenderOptions options)
     {
         if (clip.Effects.IsEmpty && track.Effects.IsEmpty)
         {
@@ -297,10 +319,11 @@ public static class RenderGraphBuilder
         }
 
         var nodes = ImmutableArray.CreateBuilder<EffectNode>();
+        Flicks sequenceLength = track.Effects.IsEmpty ? Flicks.Zero : sequence.Duration;
 
         foreach (Effect effect in clip.Effects)
         {
-            if (!string.Equals(effect.TypeId, clip.GeneratorId, StringComparison.Ordinal) && Node(effect, local, options) is { } node)
+            if (!string.Equals(effect.TypeId, clip.GeneratorId, StringComparison.Ordinal) && Node(effect, local, clip.Duration, time, options) is { } node)
             {
                 nodes.Add(node);
             }
@@ -308,7 +331,7 @@ public static class RenderGraphBuilder
 
         foreach (Effect effect in track.Effects)
         {
-            if (Node(effect, time, options) is { } node)
+            if (Node(effect, time, sequenceLength, time, options) is { } node)
             {
                 nodes.Add(node);
             }
@@ -317,7 +340,7 @@ public static class RenderGraphBuilder
         return nodes.ToImmutable();
     }
 
-    private static EffectNode? Node(Effect effect, Flicks time, RenderOptions options)
+    private static EffectNode? Node(Effect effect, Flicks time, Flicks ownerLength, Flicks sequenceTime, RenderOptions options)
     {
         if (!effect.Enabled || options.Effects.Find(effect.TypeId) is not { Kind: EffectKind.Video } descriptor)
         {
@@ -330,6 +353,9 @@ public static class RenderGraphBuilder
             LocalTime = time,
             Seed = StableSeed(effect.Id),
             Model = effect,
+            Masks = Mattes(effect.Masks, time),
+            OwnerLength = ownerLength,
+            SequenceTime = sequenceTime,
         };
     }
 
@@ -361,22 +387,22 @@ public static class RenderGraphBuilder
             LayerNode.NoCrop,
             Float(clip.Opacity, Intrinsic.Opacity, local),
             clip.BlendMode,
-            Mattes(clip, local),
+            Mattes(clip.Masks, local),
             options.Scale)
         {
             IsAdjustment = true,
         };
     }
 
-    private static ImmutableArray<MatteShape> Mattes(Clip clip, Flicks local)
+    private static ImmutableArray<MatteShape> Mattes(EquatableArray<Mask> masks, Flicks local)
     {
-        if (clip.Masks.IsEmpty)
+        if (masks.IsEmpty)
         {
             return [];
         }
 
         var shapes = ImmutableArray.CreateBuilder<MatteShape>();
-        foreach (Mask mask in clip.Masks)
+        foreach (Mask mask in masks)
         {
             if (!mask.Enabled)
             {
@@ -390,7 +416,8 @@ public static class RenderGraphBuilder
                 Float(mask.Feather, Intrinsic.MaskFeather, local),
                 Float(mask.Opacity, Intrinsic.MaskOpacity, local),
                 mask.Mode,
-                mask.Invert));
+                mask.Invert,
+                Float(mask.Expansion, Intrinsic.MaskExpansion, local)));
         }
 
         return shapes.ToImmutable();
@@ -465,5 +492,6 @@ public static class RenderGraphBuilder
         public static readonly ParamDescriptor MaskPath = ParamTargets.MaskParams.Param("path")!;
         public static readonly ParamDescriptor MaskFeather = ParamTargets.MaskParams.Param("feather")!;
         public static readonly ParamDescriptor MaskOpacity = ParamTargets.MaskParams.Param("opacity")!;
+        public static readonly ParamDescriptor MaskExpansion = ParamTargets.MaskParams.Param("expansion")!;
     }
 }

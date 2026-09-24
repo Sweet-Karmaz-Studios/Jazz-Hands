@@ -350,15 +350,11 @@
             "$ref": "#/$defs/effectParameter"
           }
         },
-        "maskId": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
+        "masks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/mask"
+          }
         }
       },
       "required": [
@@ -619,6 +615,16 @@
         },
         "enabled": {
           "type": "boolean"
+        },
+        "expansion": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/animatedValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [

@@ -14,6 +14,7 @@ namespace JazzHands.Core.Commands;
 /// <param name="Opacity">How strongly it applies, 0 to 1.</param>
 /// <param name="Mode">add, subtract or intersect.</param>
 /// <param name="Invert">Keep the outside instead.</param>
+/// <param name="Expansion">Grow the shape by this many sequence pixels; shrink it when negative.</param>
 /// <param name="Enabled">Switch it on or off without removing it.</param>
 [Command("mask.set", Description = "Change a mask")]
 public sealed record SetMaskCommand(
@@ -28,4 +29,5 @@ public sealed record SetMaskCommand(
     [property: Option("opacity", "0 to 1")] double? Opacity = null,
     [property: Option("mode", "add, subtract or intersect")] MaskMode? Mode = null,
     [property: Option("invert", "Keep the outside instead")] bool? Invert = null,
+    [property: Option("expansion", "Grow the shape by this many pixels; negative shrinks it")] double? Expansion = null,
     [property: Option("enabled", "on or off")] bool? Enabled = null) : ICommand;

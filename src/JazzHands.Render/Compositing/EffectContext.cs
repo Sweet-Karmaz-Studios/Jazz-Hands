@@ -32,6 +32,7 @@ public sealed class EffectContext : IDisposable
     private readonly ID3D11Buffer _common;
     private int _generation = -1;
     private EffectNode? _node;
+    private Drawing2D? _drawing;
 
     /// <summary>Creates a context on a device, sharing a compositor's samplers.</summary>
     internal EffectContext(RenderDevice device, RenderTargetPool pool, ID3D11SamplerState[] samplers)
@@ -53,6 +54,21 @@ public sealed class EffectContext : IDisposable
 
     /// <summary>The time the frame is at, relative to the effect's owner: clip time for a clip's effects.</summary>
     public Flicks Time => _node?.LocalTime ?? Flicks.Zero;
+
+    /// <summary>Direct2D and DirectWrite on this device, for shapes and text; made on first use.</summary>
+    public Drawing2D Drawing => _drawing ??= new Drawing2D(Device);
+
+    /// <summary>The sequence's frame rate, for anything that counts frames (a timecode).</summary>
+    public Core.Time.Rational FrameRate => _node?.FrameRate ?? Core.Time.Rational.Fps30;
+
+    /// <summary>How long the effect's owner lasts: the clip's duration, or the sequence's for a track.</summary>
+    public Flicks OwnerLength => _node?.OwnerLength ?? Flicks.Zero;
+
+    /// <summary>The frame's time on the sequence.</summary>
+    public Flicks SequenceTime => _node?.SequenceTime ?? Flicks.Zero;
+
+    /// <summary>How far through its owner the frame is, 0 at the start and 1 at the end.</summary>
+    public float Progress => OwnerLength.Value > 0 ? Math.Clamp((float)((double)Time.Value / OwnerLength.Value), 0.0f, 1.0f) : 0.0f;
 
     /// <summary>A seed that is the same for this effect instance on every frame and every run.</summary>
     public int Seed => _node?.Seed ?? 0;
@@ -147,6 +163,7 @@ public sealed class EffectContext : IDisposable
     /// <inheritdoc />
     public void Dispose()
     {
+        _drawing?.Dispose();
         ReleaseShaders();
         foreach (ID3D11Buffer buffer in _buffers.Values)
         {
@@ -165,10 +182,15 @@ public sealed class EffectContext : IDisposable
     }
 
     /// <summary>Compiles every pass of an effect, so a shader that does not compile fails before the frame does.</summary>
-    internal void Prepare(VideoEffect effect)
+    internal void Prepare(VideoEffect effect) => Prepare(effect.Passes);
+
+    /// <summary>Compiles every pass of a generator.</summary>
+    internal void Prepare(VideoGenerator generator) => Prepare(generator.Passes);
+
+    private void Prepare(IEnumerable<PassDescriptor> passes)
     {
         Refresh();
-        foreach (PassDescriptor pass in effect.Passes)
+        foreach (PassDescriptor pass in passes)
         {
             VertexShader(pass.File, pass.Vertex);
             PixelShader(pass.File, pass.Pixel);

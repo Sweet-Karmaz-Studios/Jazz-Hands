@@ -20,6 +20,13 @@ public sealed record FrameLayerSource(FrameTexture Frame, YuvColorSpace Color, s
 /// <summary>A flat colour, premultiplied linear light.</summary>
 public sealed record SolidLayerSource(Vector4 Color) : LayerSource;
 
+/// <summary>
+/// A generator's picture, drawn at the working resolution each frame: a gradient, noise, a shape,
+/// a countdown. <paramref name="Node"/> carries its type, its parameters at this frame and its
+/// times, as an effect's node does.
+/// </summary>
+public sealed record GeneratorLayerSource(EffectNode Node) : LayerSource;
+
 /// <summary>Another sequence, rendered first and then placed like any other picture.</summary>
 public sealed record NestedLayerSource(RenderGraph Graph) : LayerSource;
 
@@ -31,6 +38,7 @@ public sealed record NestedLayerSource(RenderGraph Graph) : LayerSource;
 /// <param name="Opacity">How strongly it applies, 0 to 1.</param>
 /// <param name="Mode">How it combines with the masks before it.</param>
 /// <param name="Invert">Keep the outside instead of the inside.</param>
+/// <param name="Expansion">Grows the shape by this many sequence pixels; shrinks it when negative.</param>
 public sealed record MatteShape(
     MaskShape Shape,
     Vector4 Bounds,
@@ -38,7 +46,8 @@ public sealed record MatteShape(
     float Feather,
     float Opacity,
     MaskMode Mode,
-    bool Invert);
+    bool Invert,
+    float Expansion = 0.0f);
 
 /// <summary>One layer of the stack, with every animated value already evaluated.</summary>
 /// <param name="Source">Where the picture comes from.</param>
@@ -127,6 +136,18 @@ public sealed record EffectNode(EffectDescriptor Descriptor, ParameterSet Parame
 
     /// <summary>The instance as the project holds it, for an effect that evaluates itself at other times.</summary>
     public Effect? Model { get; init; }
+
+    /// <summary>Masks limiting where the effect applies, in the layer's source pixels; everywhere when empty.</summary>
+    public ImmutableArray<MatteShape> Masks { get; init; } = [];
+
+    /// <summary>How long the effect's owner lasts, for effects that run across it (a Ken Burns move).</summary>
+    public Flicks OwnerLength { get; init; }
+
+    /// <summary>The frame's time on the sequence, for effects driven by it (a timecode).</summary>
+    public Flicks SequenceTime { get; init; }
+
+    /// <summary>The sequence's frame rate.</summary>
+    public Rational FrameRate { get; init; } = Rational.Fps30;
 
     /// <summary>A runner in place of the descriptor's class, for effects that are not registered.</summary>
     public ILayerEffect? Custom { get; init; }

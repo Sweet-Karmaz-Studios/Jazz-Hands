@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -78,6 +79,7 @@ public sealed class Compositor : IDisposable
     private readonly MaskRasterizer _masks;
     private readonly EffectContext _effectContext;
     private readonly Dictionary<Type, VideoEffect?> _effects = [];
+    private readonly Dictionary<Type, VideoGenerator?> _generators = [];
 
     private Shaders? _shaders;
     private int _shaderGeneration = -1;
@@ -228,6 +230,11 @@ public sealed class Compositor : IDisposable
         foreach (VideoEffect? effect in _effects.Values)
         {
             effect?.Dispose();
+        }
+
+        foreach (VideoGenerator? generator in _generators.Values)
+        {
+            generator?.Dispose();
         }
 
         _effectContext.Dispose();
@@ -416,6 +423,21 @@ public sealed class Compositor : IDisposable
                 effect!.Apply(_effectContext, node.Parameters, current, output);
             }
 
+            // An effect with masks applies inside them: the rest is the picture as it came in.
+            if (!node.Masks.IsDefaultOrEmpty)
+            {
+                RenderTarget matte = Matte(graph, node.Masks, layer.Transform, layer.Scale);
+                RenderTarget mixed = Pool.Rent(graph.Width, graph.Height);
+                var constants = new MatteConstants();
+                _views[0] = current.Resource;
+                _views[1] = output.Resource;
+                _views[2] = matte.Resource;
+                FullScreen(_shaders!.MatteMix, mixed.View, mixed.Width, mixed.Height, in constants, 3);
+                Pool.Return(matte);
+                Pool.Return(output);
+                output = mixed;
+            }
+
             if (!ReferenceEquals(current, input))
             {
                 Pool.Return(current);
@@ -457,6 +479,48 @@ public sealed class Compositor : IDisposable
 
         _effects[type] = effect;
         return effect;
+    }
+
+    /// <summary>
+    /// A generator's picture at the working resolution: its own size (the frame's, for every
+    /// generator so far) times the quality. Transparent when the type has no generator to run.
+    /// </summary>
+    private RenderTarget Generate(LayerNode layer, EffectNode node)
+    {
+        int width = Math.Max(1, (int)MathF.Ceiling(layer.SourceWidth * layer.Scale));
+        int height = Math.Max(1, (int)MathF.Ceiling(layer.SourceHeight * layer.Scale));
+        RenderTarget target = Pool.Rent(width, height);
+
+        if (GeneratorFor(node.Descriptor) is not { } generator)
+        {
+            Clear(target, Vector4.Zero);
+            return target;
+        }
+
+        _effectContext.Begin(node, layer.Scale);
+        generator.Render(_effectContext, node.Parameters, target);
+        return target;
+    }
+
+    private VideoGenerator? GeneratorFor(EffectDescriptor descriptor)
+    {
+        if (descriptor.Implementation is not { } type)
+        {
+            return null;
+        }
+
+        if (!_generators.TryGetValue(type, out VideoGenerator? generator))
+        {
+            generator = typeof(VideoGenerator).IsAssignableFrom(type) ? (VideoGenerator)Activator.CreateInstance(type)! : null;
+            if (generator is not null)
+            {
+                _effectContext.Prepare(generator);
+            }
+
+            _generators[type] = generator;
+        }
+
+        return generator;
     }
 
     /// <summary>A placed picture the frame is done with: kept by the cache, or back to the pool.</summary>
@@ -572,6 +636,9 @@ public sealed class Compositor : IDisposable
             case NestedLayerSource nested:
                 return Render(nested.Graph);
 
+            case GeneratorLayerSource generated:
+                return Generate(layer, generated.Node);
+
             default:
                 throw new NotSupportedException($"{layer.Source.GetType().Name} is not a source the compositor knows.");
         }
@@ -650,17 +717,20 @@ public sealed class Compositor : IDisposable
     /// <summary>
     /// Every mask on a layer, rasterized in frame space, feathered and combined into one matte.
     /// </summary>
-    private RenderTarget Matte(RenderGraph graph, LayerNode layer)
+    private RenderTarget Matte(RenderGraph graph, LayerNode layer) => Matte(graph, layer.Masks, layer.Transform, layer.Scale);
+
+    /// <summary>Masks through a matrix, rasterized in frame space, feathered and combined into one matte.</summary>
+    private RenderTarget Matte(RenderGraph graph, ImmutableArray<MatteShape> masks, Matrix3x2 transform, float scale)
     {
         RenderTarget? matte = null;
         bool first = true;
 
-        foreach (MatteShape shape in layer.Masks)
+        foreach (MatteShape shape in masks)
         {
             RenderTarget coverage = Pool.Rent(graph.Width, graph.Height, Format.B8G8R8A8_UNorm);
-            _masks.Rasterize(coverage, shape, layer.Transform);
+            _masks.Rasterize(coverage, shape, transform, scale);
 
-            float sigma = Math.Clamp(shape.Feather * layer.Scale / 2.0f, 0.0f, 64.0f);
+            float sigma = Math.Clamp(shape.Feather * scale / 2.0f, 0.0f, 64.0f);
             RenderTarget feathered = sigma > 0.25f ? Feather(coverage, sigma) : coverage;
             if (!ReferenceEquals(feathered, coverage))
             {
@@ -865,6 +935,7 @@ public sealed class Compositor : IDisposable
             CompositePixel = ShaderLibrary.PixelShader(device, "Composite.hlsl", "PsMain");
             MatteBlur = ShaderLibrary.PixelShader(device, "Matte.hlsl", "PsBlur");
             MatteCombine = ShaderLibrary.PixelShader(device, "Matte.hlsl", "PsCombine");
+            MatteMix = ShaderLibrary.PixelShader(device, "Matte.hlsl", "PsMix");
             OutputPixel = ShaderLibrary.PixelShader(device, "Output.hlsl", "PsMain");
             YuvLuma = ShaderLibrary.PixelShader(device, "OutputYuv.hlsl", "PsLuma");
             YuvChroma = ShaderLibrary.PixelShader(device, "OutputYuv.hlsl", "PsChroma");
@@ -884,6 +955,8 @@ public sealed class Compositor : IDisposable
 
         public ID3D11PixelShader MatteCombine { get; }
 
+        public ID3D11PixelShader MatteMix { get; }
+
         public ID3D11PixelShader OutputPixel { get; }
 
         public ID3D11PixelShader YuvLuma { get; }
@@ -895,6 +968,7 @@ public sealed class Compositor : IDisposable
             YuvChroma.Dispose();
             YuvLuma.Dispose();
             OutputPixel.Dispose();
+            MatteMix.Dispose();
             MatteCombine.Dispose();
             MatteBlur.Dispose();
             CompositePixel.Dispose();

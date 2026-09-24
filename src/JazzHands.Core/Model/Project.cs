@@ -171,13 +171,14 @@ public enum MaskMode
 }
 
 /// <summary>
-/// A shape that limits what of a clip is seen.
+/// A shape that limits what of a clip, or of one effect on it, is seen.
 /// </summary>
 /// <remarks>
 /// Coordinates are in the clip's own source pixels, so a mask stays on the same part of the
 /// picture when the clip is moved, scaled or rotated. A rectangle or ellipse is its
 /// <see cref="Bounds"/>; a polygon or bezier is its <see cref="PathData"/>, in SVG path syntax
-/// (<c>M 10 10 L 200 10 C 250 50 250 150 200 190 Z</c>).
+/// (<c>M 10 10 L 200 10 C 250 50 250 150 200 190 Z</c>). On a clip, masks limit its picture; on an
+/// effect, they limit where the effect applies, the rest of the picture passing through as it was.
 /// </remarks>
 /// <param name="Id">The mask identifier.</param>
 /// <param name="Shape">The outline.</param>
@@ -188,6 +189,7 @@ public enum MaskMode
 /// <param name="Mode">How it combines with the masks before it.</param>
 /// <param name="Invert">Keep the outside instead of the inside.</param>
 /// <param name="Enabled">Masks can be switched off without being removed.</param>
+/// <param name="Expansion">Grows the shape outwards by this many sequence pixels, or shrinks it when negative.</param>
 public sealed record Mask(
     string Id,
     MaskShape Shape,
@@ -197,7 +199,8 @@ public sealed record Mask(
     AnimatedValue? Opacity = null,
     MaskMode Mode = MaskMode.Add,
     bool Invert = false,
-    bool Enabled = true) : IEquatable<Mask>;
+    bool Enabled = true,
+    AnimatedValue? Expansion = null) : IEquatable<Mask>;
 
 /// <summary>A fade at one end of a clip.</summary>
 /// <param name="Duration">How long the fade lasts. Zero means none.</param>
@@ -216,13 +219,13 @@ public sealed record Fade(Flicks Duration, Interp Curve = Interp.Linear) : IEqua
 /// <param name="TypeId">Which effect, for example video.blur.gaussian.</param>
 /// <param name="Enabled">Effects can be bypassed without removing them.</param>
 /// <param name="Parameters">Parameter values by name, each of which may be animated.</param>
-/// <param name="MaskId">The mask limiting this effect, when there is one.</param>
+/// <param name="Masks">Shapes limiting where the effect applies, in the order they combine; everywhere when none.</param>
 public sealed record Effect(
     string Id,
     string TypeId,
     bool Enabled,
     EquatableArray<EffectParameter> Parameters,
-    string? MaskId = null) : IEquatable<Effect>
+    EquatableArray<Mask> Masks = default) : IEquatable<Effect>
 {
     /// <summary>Creates an effect with no parameters set, so every parameter takes its default.</summary>
     public static Effect Create(string typeId) =>

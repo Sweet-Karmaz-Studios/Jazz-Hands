@@ -94,7 +94,8 @@ public static class ParamTargets
         new ParamDescriptor("bounds", ParamType.Float4, new ParamValue.Float4(Vector4.Zero), "Bounds", "x, y, width and height of a rectangle or ellipse, in source pixels."),
         new ParamDescriptor("path", ParamType.Path, new ParamValue.Path(string.Empty), "Path", "The outline of a polygon or bezier mask, SVG path syntax, in source pixels."),
         new ParamDescriptor("feather", ParamType.Float, new ParamValue.Float(0), "Feather", "Softening of the edge, in sequence pixels.", Min: 0, Max: 1000, SliderMax: 200, Unit: "px"),
-        new ParamDescriptor("opacity", ParamType.Float, new ParamValue.Float(1), "Opacity", "How strongly it applies, 0 to 1.", Min: 0, Max: 1));
+        new ParamDescriptor("opacity", ParamType.Float, new ParamValue.Float(1), "Opacity", "How strongly it applies, 0 to 1.", Min: 0, Max: 1),
+        new ParamDescriptor("expansion", ParamType.Float, new ParamValue.Float(0), "Expansion", "Grows the shape outwards by this many sequence pixels, or shrinks it when negative.", Min: -1000, Max: 1000, SliderMax: 100, Unit: "px"));
 
     /// <summary>Finds whatever has an identifier, or null.</summary>
     public static ParamOwner? Find(Project project, string id)
@@ -121,6 +122,11 @@ public static class ParamTargets
                     {
                         return new ParamOwner(ParamOwnerKind.Effect, id, sequence, track, Effect: effect);
                     }
+
+                    if (MaskOf(effect.Masks, id) is { } mask)
+                    {
+                        return new ParamOwner(ParamOwnerKind.Mask, id, sequence, track, Effect: effect, Mask: mask);
+                    }
                 }
 
                 foreach (Clip clip in track.Clips)
@@ -136,14 +142,16 @@ public static class ParamTargets
                         {
                             return new ParamOwner(ParamOwnerKind.Effect, id, sequence, track, clip, effect);
                         }
+
+                        if (MaskOf(effect.Masks, id) is { } effectMask)
+                        {
+                            return new ParamOwner(ParamOwnerKind.Mask, id, sequence, track, clip, effect, effectMask);
+                        }
                     }
 
-                    foreach (Mask mask in clip.Masks)
+                    if (MaskOf(clip.Masks, id) is { } mask)
                     {
-                        if (Is(mask.Id, id))
-                        {
-                            return new ParamOwner(ParamOwnerKind.Mask, id, sequence, track, clip, Mask: mask);
-                        }
+                        return new ParamOwner(ParamOwnerKind.Mask, id, sequence, track, clip, Mask: mask);
                     }
                 }
             }
@@ -208,6 +216,7 @@ public static class ParamTargets
                 "path" => owner.Mask!.PathData,
                 "feather" => owner.Mask!.Feather,
                 "opacity" => owner.Mask!.Opacity,
+                "expansion" => owner.Mask!.Expansion,
                 _ => null,
             },
             ParamOwnerKind.Track => name switch
@@ -258,14 +267,30 @@ public static class ParamTargets
                     "bounds" => mask with { Bounds = value },
                     "path" => mask with { PathData = value },
                     "feather" => mask with { Feather = value },
+                    "expansion" => mask with { Expansion = value },
                     _ => mask with { Opacity = value },
                 };
-                Clip masked = owner.Clip! with { Masks = owner.Clip.Masks.SetItem(owner.Clip.Masks.IndexOf(item => Is(item.Id, mask.Id)), edited) };
-                return project.ReplaceTrack(owner.Track.ReplaceClip(masked));
+                return ReplaceMask(project, owner, edited);
 
             default:
                 return project.ReplaceTrack(owner.Track.ReplaceClip(WithClipValue(owner.Clip!, name, value, descriptor)));
         }
+    }
+
+    /// <summary>A project with a mask replaced where it is, on its clip or on its effect.</summary>
+    public static Project ReplaceMask(Project project, ParamOwner owner, Mask mask)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(owner);
+        ArgumentNullException.ThrowIfNull(mask);
+
+        if (owner.Effect is { } effect)
+        {
+            return ReplaceEffect(project, owner, effect with { Masks = effect.Masks.SetItem(effect.Masks.IndexOf(item => Is(item.Id, mask.Id)), mask) });
+        }
+
+        Clip clip = owner.Clip!;
+        return project.ReplaceTrack(owner.Track.ReplaceClip(clip with { Masks = clip.Masks.SetItem(clip.Masks.IndexOf(item => Is(item.Id, mask.Id)), mask) }));
     }
 
     /// <summary>A project with an effect instance replaced where it is, on its clip or its track.</summary>
@@ -373,4 +398,17 @@ public static class ParamTargets
         new(typeId, EffectKind.Video, name, "Intrinsic", string.Empty, [.. parameters]);
 
     private static bool Is(string a, string b) => string.Equals(a, b, StringComparison.Ordinal);
+
+    private static Mask? MaskOf(EquatableArray<Mask> masks, string id)
+    {
+        foreach (Mask mask in masks)
+        {
+            if (Is(mask.Id, id))
+            {
+                return mask;
+            }
+        }
+
+        return null;
+    }
 }
