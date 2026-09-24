@@ -117,7 +117,9 @@ public sealed record EffectInfo(
 /// <param name="Id">The preset identifier.</param>
 /// <param name="Name">Its name.</param>
 /// <param name="TypeIds">The effect types in it, in order.</param>
+/// <param name="BuiltIn">True for a look the editor comes with, which every project has and none can remove.</param>
 public sealed record EffectPresetInfo(
     string Id,
     string Name,
-    string[] TypeIds);
+    string[] TypeIds,
+    bool BuiltIn = false);

@@ -82,7 +82,13 @@ public sealed class ListEffectPresetsHandler : IQueryHandler<ListEffectPresetsQu
     {
         ArgumentNullException.ThrowIfNull(project);
 
-        return [.. project.EffectPresets.Select(preset => new EffectPresetInfo(preset.Id, preset.Name, [.. preset.Effects.Select(effect => effect.TypeId)]))];
+        return
+        [
+            .. project.EffectPresets.Select(preset => new EffectPresetInfo(preset.Id, preset.Name, [.. preset.Effects.Select(effect => effect.TypeId)])),
+            .. Looks.All
+                .Where(look => !project.EffectPresets.Any(preset => string.Equals(preset.Name, look.Name, StringComparison.OrdinalIgnoreCase)))
+                .Select(look => new EffectPresetInfo(look.Id, look.Name, [.. look.Effects.Select(effect => effect.TypeId)], BuiltIn: true)),
+        ];
     }
 }
 

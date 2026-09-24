@@ -151,7 +151,7 @@
                 <Border Margin="0,8,0,4" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,1,0,0" Padding="0,8,0,0">
                     <TextBlock Style="{StaticResource Heading}" Text="Presets" />
                 </Border>
-                <TextBlock Text="Effect chains saved with this project. Drag one onto a clip, or select clips and press +."
+                <TextBlock Text="Effect chains saved with this project, and the looks the editor comes with. Drag one onto a clip, or select clips and press +."
                            TextWrapping="Wrap"
                            FontSize="{DynamicResource Text.Caption}"
                            Foreground="{DynamicResource Brush.Text.Disabled}" />
@@ -172,7 +172,7 @@
                                                Foreground="{DynamicResource Brush.Text.Secondary}" />
                                 </StackPanel>
                                 <Button Grid.Column="1" Style="{StaticResource Button.Small}" Content="&#xE710;" Command="{Binding ApplyCommand, Mode=OneWay}" ToolTip="Apply to the selected clips" AutomationProperties.Name="Apply preset" />
-                                <Button Grid.Column="2" Style="{StaticResource Button.Small}" Content="&#xE74D;" Command="{Binding RemoveCommand, Mode=OneWay}" ToolTip="Delete the preset" AutomationProperties.Name="Delete preset" />
+                                <Button Grid.Column="2" Style="{StaticResource Button.Small}" Content="&#xE74D;" Command="{Binding RemoveCommand, Mode=OneWay}" Visibility="{Binding CanRemove, Mode=OneWay, Converter={StaticResource Visible}}" ToolTip="Delete the preset" AutomationProperties.Name="Delete preset" />
                             </Grid>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>

@@ -135,11 +135,10 @@ internal static class EffectHelp
     internal static EffectPreset Preset(Project project, string idOrName) =>
         project.EffectPresets.FirstOrDefault(preset => string.Equals(preset.Id, idOrName, StringComparison.Ordinal))
         ?? project.EffectPresets.FirstOrDefault(preset => string.Equals(preset.Name, idOrName, StringComparison.OrdinalIgnoreCase))
+        ?? Looks.Find(idOrName)
         ?? throw new CommandException(
             "preset-not-found",
-            project.EffectPresets.IsEmpty
-                ? $"There is no effect preset '{idOrName}'; this project has none. Save one with 'jazz effect save-preset'."
-                : $"There is no effect preset '{idOrName}'. There are {string.Join(", ", project.EffectPresets.Select(preset => preset.Name))}.",
+            $"There is no effect preset '{idOrName}'. There are {string.Join(", ", project.EffectPresets.Concat(Looks.All).Select(preset => preset.Name))}.",
             "/effectPresets");
 
     /// <summary>Refuses a preset name that is empty or already taken.</summary>
@@ -365,6 +364,11 @@ public sealed class RemoveEffectPresetHandler : ICommandHandler<RemoveEffectPres
         ArgumentNullException.ThrowIfNull(context);
 
         EffectPreset preset = EffectHelp.Preset(project, command.Preset);
+        if (!project.EffectPresets.Any(item => item.Id == preset.Id))
+        {
+            throw new CommandException("built-in-preset", $"'{preset.Name}' is one of the looks the editor comes with, which cannot be removed.");
+        }
+
         context.Changed(preset.Id);
         return project with { EffectPresets = new EquatableArray<EffectPreset>(project.EffectPresets.Where(item => item.Id != preset.Id)) };
     }

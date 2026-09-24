@@ -87,8 +87,14 @@ public sealed partial class EffectCategoryViewModel(string title) : ObservableOb
 }
 
 /// <summary>One preset saved in the project.</summary>
-public sealed partial class EffectPresetItemViewModel(EffectsPanelViewModel panel, EffectPreset preset) : ObservableObject
+public sealed partial class EffectPresetItemViewModel(EffectsPanelViewModel panel, EffectPreset preset, bool builtIn = false) : ObservableObject
 {
+    /// <summary>True for a look the editor comes with: listed in every project, never removed.</summary>
+    public bool IsBuiltIn { get; } = builtIn;
+
+    /// <summary>True when the preset can be deleted: the project's own.</summary>
+    public bool CanRemove => !IsBuiltIn;
+
     /// <summary>Its id, which a drag carries.</summary>
     public string Id { get; } = preset.Id;
 
@@ -385,6 +391,12 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
         foreach (EffectPreset preset in _session.Project.EffectPresets)
         {
             Presets.Add(new EffectPresetItemViewModel(this, preset));
+        }
+
+        // The looks every project has, after its own; one of its own with the same name wins.
+        foreach (EffectPreset look in Looks.All.Where(look => !_session.Project.EffectPresets.Any(preset => string.Equals(preset.Name, look.Name, StringComparison.OrdinalIgnoreCase))))
+        {
+            Presets.Add(new EffectPresetItemViewModel(this, look, builtIn: true));
         }
     }
 
