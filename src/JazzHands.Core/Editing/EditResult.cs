@@ -34,6 +34,17 @@ public sealed record EditError(string Code, string Message)
 
     /// <summary>The operation was given nothing to work on.</summary>
     public static EditError NothingSelected(string message) => new("nothing-selected", message);
+
+    /// <summary>A ripple would push a clip on a sync-locked track into another, or cut through it.</summary>
+    public static EditError SyncLockBlocked(string trackName, string clipName) => new(
+        "sync-lock-blocked",
+        $"'{clipName}' on {trackName} is in the way, and {trackName} is sync locked. Move it, or turn sync lock off on {trackName}.");
+
+    /// <summary>There is no gap where one was asked for.</summary>
+    public static EditError NotAGap(string message) => new("not-a-gap", message);
+
+    /// <summary>Clips edited together do not share the edge being edited.</summary>
+    public static EditError NotAligned(string message) => new("not-aligned", message);
 }
 
 /// <summary>
@@ -88,4 +99,17 @@ public readonly record struct EditResult<T>
 
     /// <summary>The value when it succeeded, otherwise the fallback.</summary>
     public T ValueOr(T fallback) => Error is null ? _value! : fallback;
+}
+
+/// <summary>Which edge of a clip.</summary>
+public enum ClipEdge
+{
+    /// <summary>Neither.</summary>
+    None,
+
+    /// <summary>The start.</summary>
+    Start,
+
+    /// <summary>The end.</summary>
+    End,
 }

@@ -69,19 +69,6 @@ public enum TimelineRegion
     Empty,
 }
 
-/// <summary>Which edge of a clip.</summary>
-public enum ClipEdge
-{
-    /// <summary>Neither.</summary>
-    None,
-
-    /// <summary>The start.</summary>
-    Start,
-
-    /// <summary>The end.</summary>
-    End,
-}
-
 /// <summary>The mouse side of the timeline: selecting, moving, trimming, scrubbing, dropping.</summary>
 /// <remarks>
 /// Kept free of WPF input types beyond a point and the modifier keys, so tests can drive every

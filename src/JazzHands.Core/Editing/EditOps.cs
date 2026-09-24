@@ -16,7 +16,7 @@ namespace JazzHands.Core.Editing;
 /// the file system or the media; a trim that runs off the end of the source is caught by the
 /// caller passing the source duration in.
 /// </remarks>
-public static class EditOps
+public static partial class EditOps
 {
     /// <summary>
     /// Splits a clip in two at a timeline position. The left piece keeps the identifier, so
@@ -103,11 +103,19 @@ public static class EditOps
         }
 
         Flicks delta = to - clip.Start;
-        Flicks newSourceIn = clip.SourceIn + Clip.ScaleBySpeed(delta, clip.EffectiveSpeed);
+        Flicks newSourceIn = clip.IsHold ? clip.SourceIn : clip.SourceIn + Clip.ScaleBySpeed(delta, clip.EffectiveSpeed);
         if (newSourceIn.IsNegative)
         {
             return EditError.NoSourceLeft(
                 $"'{clip.Name}' has no source material before its current start.");
+        }
+
+        if (ripple)
+        {
+            // A ripple trim keeps the clip where it starts and takes the material off its front;
+            // what follows closes up behind it, or makes room when it grows.
+            Clip rippled = clip with { Range = TimeRange.FromBounds(clip.Start, clip.End - delta), SourceIn = newSourceIn };
+            return ShiftFrom(track.ReplaceClip(rippled), clip.End, -delta, clip.Id);
         }
 
         Clip trimmed = clip with
@@ -116,13 +124,12 @@ public static class EditOps
             SourceIn = newSourceIn,
         };
 
-        if (!ripple && delta.IsNegative && OverlapsPrevious(track, trimmed))
+        if (delta.IsNegative && OverlapsPrevious(track, trimmed))
         {
             return EditError.WouldOverlap($"Extending '{clip.Name}' backwards would overlap the clip before it.");
         }
 
-        Track updated = track.ReplaceClip(trimmed);
-        return ripple ? ShiftFrom(updated, trimmed.End, delta, trimmed.Id) : updated;
+        return track.ReplaceClip(trimmed);
     }
 
     /// <summary>
@@ -160,7 +167,7 @@ public static class EditOps
 
         Clip trimmed = clip with { Range = TimeRange.FromBounds(clip.Start, to) };
 
-        if (sourceDuration is { } available && clip.SourceIn + trimmed.SourceDuration > available)
+        if (!clip.IsHold && sourceDuration is { } available && clip.SourceIn + trimmed.SourceDuration > available)
         {
             return EditError.NoSourceLeft(
                 $"'{clip.Name}' only has {Timecode.FormatClock(available - clip.SourceIn)} of source left.");
@@ -228,12 +235,12 @@ public static class EditOps
         }
 
         Clip newLeft = left with { Range = TimeRange.FromBounds(left.Start, cut) };
-        if (leftSourceDuration is { } available && left.SourceIn + newLeft.SourceDuration > available)
+        if (!left.IsHold && leftSourceDuration is { } available && left.SourceIn + newLeft.SourceDuration > available)
         {
             return EditError.NoSourceLeft($"'{left.Name}' has no source material past its current end.");
         }
 
-        Flicks newRightSourceIn = right.SourceIn + Clip.ScaleBySpeed(delta, right.EffectiveSpeed);
+        Flicks newRightSourceIn = right.IsHold ? right.SourceIn : right.SourceIn + Clip.ScaleBySpeed(delta, right.EffectiveSpeed);
         if (newRightSourceIn.IsNegative)
         {
             return EditError.NoSourceLeft($"'{right.Name}' has no source material before its current start.");
@@ -340,7 +347,7 @@ public static class EditOps
                 return EditError.EmptyResult($"Sliding that far would leave nothing of '{next.Name}'.");
             }
 
-            Flicks nextSourceIn = next.SourceIn + Clip.ScaleBySpeed(moved.End - next.Start, next.EffectiveSpeed);
+            Flicks nextSourceIn = next.IsHold ? next.SourceIn : next.SourceIn + Clip.ScaleBySpeed(moved.End - next.Start, next.EffectiveSpeed);
             if (nextSourceIn.IsNegative)
             {
                 return EditError.NoSourceLeft($"'{next.Name}' has no source material before its current start.");
@@ -612,7 +619,11 @@ public static class EditOps
     }
 
     /// <summary>Moves every clip starting at or after a position by a delta, skipping one clip.</summary>
-    private static EditResult<Track> ShiftFrom(Track track, Flicks from, Flicks delta, string exceptClipId)
+    /// <remarks>
+    /// Callers pull clips back by no more than the edited clip lost, or push them on, so nothing
+    /// moves before zero.
+    /// </remarks>
+    private static Track ShiftFrom(Track track, Flicks from, Flicks delta, string exceptClipId)
     {
         if (delta.IsZero)
         {
@@ -627,14 +638,7 @@ public static class EditOps
                 continue;
             }
 
-            Flicks newStart = clip.Start + delta;
-            if (newStart.IsNegative)
-            {
-                return EditError.TimeOutOfRange(
-                    $"Rippling by {Timecode.FormatClock(delta)} would push '{clip.Name}' before the start.");
-            }
-
-            updated = updated.ReplaceClip(clip with { Range = clip.Range.WithStart(newStart) });
+            updated = updated.ReplaceClip(clip with { Range = clip.Range.Shift(delta) });
         }
 
         return updated;

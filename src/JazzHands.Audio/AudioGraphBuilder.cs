@@ -70,13 +70,13 @@ public static class AudioGraphBuilder
     /// The mix form of one clip, or null when it has nothing to play.
     /// </summary>
     /// <remarks>
-    /// A disabled clip, a generator, a compound clip and a clip whose media or stream cannot be
+    /// A disabled clip, a freeze frame, a generator, a compound clip and a clip whose media or stream cannot be
     /// found are all silent. The last is not an error here: a project whose drive is unplugged
     /// still opens, and validation is where a missing file is reported.
     /// </remarks>
     internal static ClipMix? BuildClip(Project project, Clip clip, int rate)
     {
-        if (!clip.Enabled || clip.MediaId is not { } mediaId || clip.Duration <= Flicks.Zero)
+        if (!clip.Enabled || clip.IsHold || clip.MediaId is not { } mediaId || clip.Duration <= Flicks.Zero)
         {
             return null;
         }

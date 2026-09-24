@@ -337,6 +337,7 @@ public sealed record Marker(
 /// <param name="ChannelMap">Which of the source's channels an audio clip plays, when not all of them as they are. Null for all.</param>
 /// <param name="Crop">How much of each side of the picture is cut away. Null for none.</param>
 /// <param name="Masks">Shapes limiting what of the picture is seen, in the order they combine.</param>
+/// <param name="Hold">True for a freeze frame: the clip shows the frame at <c>SourceIn</c> for its whole length, and is silent.</param>
 public sealed record Clip(
     string Id,
     TimeRange Range,
@@ -362,7 +363,8 @@ public sealed record Clip(
     string Name = "",
     AudioChannelMap? ChannelMap = null,
     Crop? Crop = null,
-    EquatableArray<Mask> Masks = default) : IEquatable<Clip>
+    EquatableArray<Mask> Masks = default,
+    bool? Hold = null) : IEquatable<Clip>
 {
     /// <summary>Playback rate, defaulting to normal speed.</summary>
     public Rational EffectiveSpeed => Speed ?? Rational.One;
@@ -397,12 +399,21 @@ public sealed record Clip(
     /// <summary>True when this clip nests another sequence.</summary>
     public bool IsCompound => SequenceId is not null;
 
+    /// <summary>True for a freeze frame, which shows one source frame for its whole length.</summary>
+    public bool IsHold => Hold == true;
+
     /// <summary>
     /// The source position shown at a timeline position, before it is snapped to the source's
-    /// frame grid. Outside the clip this extrapolates, which is what trimming previews need.
+    /// frame grid. Outside the clip this extrapolates, which is what trimming previews need. A
+    /// freeze frame shows its <c>SourceIn</c> throughout.
     /// </summary>
     public Flicks SourceTimeAt(Flicks timelineTime)
     {
+        if (IsHold)
+        {
+            return SourceIn;
+        }
+
         Flicks offset = timelineTime - Range.Start;
         Flicks scaled = ScaleBySpeed(offset, EffectiveSpeed);
         return Reverse ? SourceOut - scaled : SourceIn + scaled;
@@ -448,6 +459,10 @@ public sealed record Clip(
 /// <param name="Color">A colour for the timeline, as an sRGB hex string.</param>
 /// <param name="Volume">Track gain in decibels.</param>
 /// <param name="Pan">Track stereo position.</param>
+/// <param name="SyncLock">
+/// Whether ripple edits on other tracks move this one too, so it stays in sync with them. Null is
+/// the default, which is on, as it is in Premiere and Resolve; false turns it off.
+/// </param>
 public sealed record Track(
     string Id,
     TrackKind Kind,
@@ -462,7 +477,8 @@ public sealed record Track(
     double Height = 72.0,
     string Color = "#3A6EA5",
     AnimatedValue? Volume = null,
-    AnimatedValue? Pan = null) : IEquatable<Track>
+    AnimatedValue? Pan = null,
+    bool? SyncLock = null) : IEquatable<Track>
 {
     /// <summary>The first position after the last clip, or zero for an empty track.</summary>
     public Flicks Duration => Clips.IsEmpty ? Flicks.Zero : Clips[^1].End;
@@ -487,6 +503,9 @@ public sealed record Track(
     /// <summary>The index of a clip, or -1.</summary>
     public int IndexOf(string clipId) =>
         Clips.IndexOf(clip => string.Equals(clip.Id, clipId, StringComparison.Ordinal));
+
+    /// <summary>True when ripple edits elsewhere move this track too. On unless turned off.</summary>
+    public bool IsSyncLocked => SyncLock ?? true;
 }
 
 /// <summary>
@@ -607,6 +626,10 @@ public sealed record QuickTrim(string MediaId) : IEquatable<QuickTrim>;
 /// <param name="Settings">Overrides for the project settings, when this sequence differs.</param>
 /// <param name="InOut">The in and out points, when a range is set.</param>
 /// <param name="QuickTrim">Set when this sequence is a Quick Trim of one file: its clips are the kept stretches.</param>
+/// <param name="Magnetic">
+/// True when the primary picture track (the lowest video track) never has gaps: an edit that would
+/// leave one closes it, rippling the sync-locked tracks. Null is off.
+/// </param>
 public sealed record Sequence(
     string Id,
     string Name,
@@ -614,7 +637,8 @@ public sealed record Sequence(
     EquatableArray<Marker> Markers = default,
     ProjectSettings? Settings = null,
     TimeRange? InOut = null,
-    QuickTrim? QuickTrim = null) : IEquatable<Sequence>
+    QuickTrim? QuickTrim = null,
+    bool? Magnetic = null) : IEquatable<Sequence>
 {
     /// <summary>The first position after the last clip on any track.</summary>
     public Flicks Duration
@@ -628,6 +652,27 @@ public sealed record Sequence(
             }
 
             return end;
+        }
+    }
+
+    /// <summary>True when the primary picture track closes its gaps.</summary>
+    public bool IsMagnetic => Magnetic == true;
+
+    /// <summary>The primary picture track: the lowest video track, or null when there is none.</summary>
+    public Track? PrimaryTrack
+    {
+        get
+        {
+            Track? lowest = null;
+            foreach (Track track in Tracks)
+            {
+                if (track.Kind == TrackKind.Video && (lowest is null || track.Order < lowest.Order))
+                {
+                    lowest = track;
+                }
+            }
+
+            return lowest;
         }
     }
 

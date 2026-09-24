@@ -285,6 +285,16 @@
           "items": {
             "$ref": "#/$defs/mask"
           }
+        },
+        "hold": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -964,6 +974,16 @@
               "type": "null"
             }
           ]
+        },
+        "magnetic": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -1054,6 +1074,16 @@
           "anyOf": [
             {
               "$ref": "#/$defs/animatedValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "syncLock": {
+          "anyOf": [
+            {
+              "type": "boolean"
             },
             {
               "type": "null"

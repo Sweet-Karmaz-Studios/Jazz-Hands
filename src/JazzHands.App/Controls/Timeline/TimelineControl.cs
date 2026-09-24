@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using JazzHands.App.Services;
 using JazzHands.App.ViewModels.Timeline;
+using JazzHands.Core.Editing;
 using JazzHands.Core.Model;
 using JazzHands.Core.Time;
 
