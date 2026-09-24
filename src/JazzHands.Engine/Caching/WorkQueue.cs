@@ -152,7 +152,10 @@ public sealed class WorkQueue : IDisposable
             var item = new Item(key, priority, work, stillWanted);
             _waiting[key] = item;
             _queue.Enqueue(item, ((int)priority, _order++));
-            Monitor.Pulse(_gate);
+
+            // All, not one: Release and WaitIdle wait on this monitor too, and a single pulse that
+            // woke one of them would leave the item for a worker's idle timeout.
+            Monitor.PulseAll(_gate);
             return true;
         }
     }
