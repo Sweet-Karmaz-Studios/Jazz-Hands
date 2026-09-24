@@ -10,6 +10,7 @@ using Serilog.Events;
 // Every jazz invocation logs to %LOCALAPPDATA%\JazzHands\logs and warns on stderr. Human output
 // goes to stdout so "jazz describe --json | jq" stays clean.
 LogSetup.ConfigureForCli();
+EffectCatalog.LoadUserTransitions();
 
 try
 {

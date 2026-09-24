@@ -26,6 +26,7 @@ public partial class App : Application
         bool spike = e.Args.Contains("--spike", StringComparer.Ordinal);
         LogSetup.ConfigureForApp(spike ? LogEventLevel.Debug : LogEventLevel.Information);
         Log.ForContext<App>().Information("Jazz Hands starting");
+        Engine.Effects.EffectCatalog.LoadUserTransitions();
 
         // Nothing should die without saying why. Phase 33 adds the recovery save and the last
         // fifty commands; this is the floor.

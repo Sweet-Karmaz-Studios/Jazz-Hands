@@ -96,7 +96,8 @@ public static class VideoEffects
     {
         ArgumentNullException.ThrowIfNull(loaded);
 
-        Volatile.Write(ref _registry, new EffectRegistry(BuiltIn.All.Concat(loaded)));
+        EffectDescriptor[] extra = [.. loaded];
+        Volatile.Write(ref _registry, extra.Length == 0 ? Scanned : new EffectRegistry(Scanned.All.Concat(extra)));
         Changed?.Invoke(null, EventArgs.Empty);
     }
 }

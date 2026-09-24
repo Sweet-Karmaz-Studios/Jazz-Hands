@@ -35,6 +35,14 @@ public static class EffectCatalog
         }
     }
 
+    /// <summary>
+    /// Loads the transitions in <c>%APPDATA%\JazzHands\transitions</c> into the registry, watching the
+    /// folder in a debug build. Every host calls it once at start, after logging: what cannot be
+    /// loaded is logged and skipped, never fatal.
+    /// </summary>
+    public static void LoadUserTransitions() =>
+        Render.Effects.Transitions.CustomTransitions.Load(Render.Effects.Transitions.CustomTransitions.DefaultFolder, Render.Effects.Transitions.CustomTransitions.WatchByDefault);
+
     /// <summary>The picture registry a join was made from, and the join.</summary>
     private sealed class Joined(EffectRegistry video)
     {

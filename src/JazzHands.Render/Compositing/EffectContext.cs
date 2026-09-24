@@ -26,8 +26,8 @@ public sealed class EffectContext : IDisposable
 {
     private readonly ID3D11SamplerState[] _samplers;
     private readonly ID3D11ShaderResourceView?[] _views = new ID3D11ShaderResourceView?[4];
-    private readonly Dictionary<(string File, string Entry), ID3D11PixelShader> _pixels = [];
-    private readonly Dictionary<(string File, string Entry), ID3D11VertexShader> _vertices = [];
+    private readonly Dictionary<(string File, string Entry, string? Source), ID3D11PixelShader> _pixels = [];
+    private readonly Dictionary<(string File, string Entry, string? Source), ID3D11VertexShader> _vertices = [];
     private readonly Dictionary<Type, ID3D11Buffer> _buffers = [];
     private readonly ID3D11Buffer _common;
     private int _generation = -1;
@@ -233,12 +233,12 @@ public sealed class EffectContext : IDisposable
 
     private ID3D11PixelShader PixelShader(PassDescriptor pass)
     {
-        if (!_pixels.TryGetValue((pass.File, pass.Pixel), out ID3D11PixelShader? shader))
+        if (!_pixels.TryGetValue((pass.File, pass.Pixel, pass.Source), out ID3D11PixelShader? shader))
         {
             shader = pass.Source is { } source
                 ? Device.Device.CreatePixelShader(ShaderLibrary.BytecodeFromSource(source, pass.File, pass.Pixel, "ps_5_0"))
                 : ShaderLibrary.PixelShader(Device, pass.File, pass.Pixel);
-            _pixels[(pass.File, pass.Pixel)] = shader;
+            _pixels[(pass.File, pass.Pixel, pass.Source)] = shader;
         }
 
         return shader;
@@ -246,12 +246,12 @@ public sealed class EffectContext : IDisposable
 
     private ID3D11VertexShader VertexShader(PassDescriptor pass)
     {
-        if (!_vertices.TryGetValue((pass.File, pass.Vertex), out ID3D11VertexShader? shader))
+        if (!_vertices.TryGetValue((pass.File, pass.Vertex, pass.Source), out ID3D11VertexShader? shader))
         {
             shader = pass.Source is { } source
                 ? Device.Device.CreateVertexShader(ShaderLibrary.BytecodeFromSource(source, pass.File, pass.Vertex, "vs_5_0"))
                 : ShaderLibrary.VertexShader(Device, pass.File, pass.Vertex);
-            _vertices[(pass.File, pass.Vertex)] = shader;
+            _vertices[(pass.File, pass.Vertex, pass.Source)] = shader;
         }
 
         return shader;

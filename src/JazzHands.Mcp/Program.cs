@@ -3,6 +3,7 @@ using Serilog;
 
 // stdout carries the MCP protocol, so nothing else may write to it: logging goes to file only.
 LogSetup.ConfigureForMcp();
+JazzHands.Engine.Effects.EffectCatalog.LoadUserTransitions();
 
 try
 {

@@ -705,7 +705,9 @@ public sealed class Compositor : IDisposable
                 return known;
             }
 
+            // Every renderer drops its compiled shaders, so the old source's are not kept.
             known.Dispose();
+            ShaderLibrary.Invalidate();
         }
 
         VideoTransition? transition = null;
