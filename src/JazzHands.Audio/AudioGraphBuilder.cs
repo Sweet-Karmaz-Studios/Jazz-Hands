@@ -84,7 +84,7 @@ public static class AudioGraphBuilder
     /// <summary>The master bus in samples: unity with the limiter on when the sequence says nothing.</summary>
     internal static MasterMix Master(MasterBus? master, int rate) => master is null
         ? MasterMix.Default
-        : new MasterMix(ScalarCurve.From(master.Volume, 0.0f, rate), master.LimiterEnabled, (float)Math.Clamp(master.CeilingDb, -24.0, 0.0));
+        : new MasterMix(ScalarCurve.From(master.Volume, 0.0f, rate), master.LimiterEnabled, double.IsNaN(master.CeilingDb) ? (float)MasterBus.DefaultCeiling : (float)Math.Clamp(master.CeilingDb, -24.0, 0.0));
 
     /// <summary>
     /// The mix form of one clip, or null when it has nothing to play.

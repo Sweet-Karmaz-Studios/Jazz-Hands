@@ -190,6 +190,15 @@ public static class Validator
                 $"'{sequence.Name}' is a Quick Trim of media '{trim.MediaId}', which is not in the project. It opens as an ordinary sequence; 'jazz repair' drops the Quick Trim mark."));
         }
 
+        if (sequence.Master?.Ceiling is { } ceiling && !(ceiling is >= -24.0 and <= 0.0))
+        {
+            issues.Add(new ValidationIssue(
+                Severity.Warning,
+                "ceiling-out-of-range",
+                $"{sequencePath}/master/ceiling",
+                $"The master limiter's ceiling on '{sequence.Name}' is {ceiling} dBTP; it plays as the nearest of -24 to 0."));
+        }
+
         var trackIds = new HashSet<string>(StringComparer.Ordinal);
         var clipIds = new HashSet<string>(StringComparer.Ordinal);
 

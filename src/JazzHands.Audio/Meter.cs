@@ -15,6 +15,9 @@ public struct MeterReading
     /// <summary>The first sample of the block, at the mix rate.</summary>
     public long Sample;
 
+    /// <summary>How many samples the block had.</summary>
+    public int Frames;
+
     /// <summary>How many channels are filled in.</summary>
     public int Channels;
 
@@ -96,6 +99,7 @@ public sealed class Meter
         var reading = new MeterReading
         {
             Sample = sample,
+            Frames = frames,
             Channels = Math.Min(buffer.Channels, Dsp.MaxChannels),
             Momentary = Loudness.Silent,
             ShortTerm = Loudness.Silent,

@@ -1,4 +1,5 @@
 using JazzHands.Core.Commands;
+using JazzHands.Core.Effects;
 using JazzHands.Core.Model;
 using JazzHands.Core.Time;
 using JazzHands.Engine.Commands;
@@ -68,6 +69,45 @@ internal static class AudioHelp
         return (float)pan;
     }
 
+    /// <summary>
+    /// Sets a clip's or a track's volume or pan: the whole value, or with a time a keyframe there.
+    /// Without a time a keyframed value is refused rather than flattened, as <c>param.set</c> does,
+    /// and the default (0 dB, centre) is stored as no value at all.
+    /// </summary>
+    internal static Project Level(Project project, string ownerId, string name, float value, Flicks? at, HandlerContext context)
+    {
+        ParamOwner owner = ParamHelp.Owner(project, ownerId);
+        ParamDescriptor descriptor = ParamHelp.Param(owner, name);
+        AnimatedValue? current = ParamTargets.Get(owner, name);
+        var typed = new ParamValue.Float(value);
+
+        AnimatedValue? updated;
+        if (at is { } time)
+        {
+            Flicks when = ParamHelp.Local(owner, time, local: false);
+            updated = ParamHelp.Upsert(current as KeyframedValue, descriptor, when, typed, interp: null, ParamHelp.Tolerance(project, owner));
+        }
+        else if (current is KeyframedValue { IsAnimated: true })
+        {
+            throw new CommandException(
+                "param-animated",
+                $"The {name} of {ParamHelp.Describe(owner)} has keyframes, so it has no one value to set. Give --at to set the keyframe there, or turn them off with 'jazz param clear-keyframes {owner.Id} {name}'.");
+        }
+        else
+        {
+            updated = value == 0.0f ? null : AnimatedValue.Constant(value);
+        }
+
+        Project changed = ParamHelp.Store(project, owner, descriptor, updated, context);
+        if (changed != project && owner.Clip is not null)
+        {
+            // A clip's level redraws its track's mixer strip as well as the clip.
+            context.Changed(owner.Track.Id);
+        }
+
+        return changed;
+    }
+
     /// <summary>A fade that fits the clip, or a refusal saying how long the clip is.</summary>
     internal static Fade Fade(Clip clip, Flicks duration, Interp curve)
     {
@@ -127,12 +167,7 @@ public sealed class SetAudioGainHandler : ICommandHandler<SetAudioGainCommand>
         ArgumentNullException.ThrowIfNull(context);
 
         ClipLocation found = AudioHelp.AudioClip(project, command.ClipId);
-        float db = AudioHelp.Gain(command.Db);
-
-        // Zero is the default, so it is stored as no value at all rather than as a zero that a
-        // hand editor would have to read past.
-        AnimatedValue? volume = db == 0.0f ? null : AnimatedValue.Constant(db);
-        return AudioHelp.Replace(project, found, found.Clip with { Volume = volume }, context);
+        return AudioHelp.Level(project, found.Clip.Id, "volume", AudioHelp.Gain(command.Db), command.At, context);
     }
 }
 
@@ -146,10 +181,7 @@ public sealed class SetAudioPanHandler : ICommandHandler<SetAudioPanCommand>
         ArgumentNullException.ThrowIfNull(context);
 
         ClipLocation found = AudioHelp.AudioClip(project, command.ClipId);
-        float pan = AudioHelp.Pan(command.Pan);
-
-        AnimatedValue? value = pan == 0.0f ? null : AnimatedValue.Constant(pan);
-        return AudioHelp.Replace(project, found, found.Clip with { Pan = value }, context);
+        return AudioHelp.Level(project, found.Clip.Id, "pan", AudioHelp.Pan(command.Pan), command.At, context);
     }
 }
 
@@ -365,16 +397,7 @@ public sealed class SetTrackVolumeHandler : ICommandHandler<SetTrackVolumeComman
         ArgumentNullException.ThrowIfNull(context);
 
         Track track = AudioHelp.AudioTrack(project, command.TrackId);
-        float db = AudioHelp.Gain(command.Db);
-        Track updated = track with { Volume = db == 0.0f ? null : AnimatedValue.Constant(db) };
-
-        if (updated == track)
-        {
-            return project;
-        }
-
-        context.Changed(track.Id);
-        return project.ReplaceTrack(updated);
+        return AudioHelp.Level(project, track.Id, "volume", AudioHelp.Gain(command.Db), command.At, context);
     }
 }
 
@@ -388,15 +411,6 @@ public sealed class SetTrackPanHandler : ICommandHandler<SetTrackPanCommand>
         ArgumentNullException.ThrowIfNull(context);
 
         Track track = AudioHelp.AudioTrack(project, command.TrackId);
-        float pan = AudioHelp.Pan(command.Pan);
-        Track updated = track with { Pan = pan == 0.0f ? null : AnimatedValue.Constant(pan) };
-
-        if (updated == track)
-        {
-            return project;
-        }
-
-        context.Changed(track.Id);
-        return project.ReplaceTrack(updated);
+        return AudioHelp.Level(project, track.Id, "pan", AudioHelp.Pan(command.Pan), command.At, context);
     }
 }
