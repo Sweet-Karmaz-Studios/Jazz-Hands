@@ -13,7 +13,17 @@ namespace JazzHands.Render.Compositing;
 /// <param name="Frame">The frame, owned by the engine's cache; valid for the render.</param>
 /// <param name="Color">How to turn its samples into light.</param>
 /// <param name="Identity">What it is (media, stream, source time), for the layer cache.</param>
-public sealed record SourceFrame(FrameTexture Frame, YuvColorSpace Color, string Identity);
+public sealed record SourceFrame(FrameTexture Frame, YuvColorSpace Color, string Identity)
+{
+    /// <summary>
+    /// The width of the picture this frame stands for, when that is not the texture's: a proxy at
+    /// half size is placed as the source it replaces. Zero for the texture's own.
+    /// </summary>
+    public int Width { get; init; }
+
+    /// <summary>The height of the picture this frame stands for; zero for the texture's own.</summary>
+    public int Height { get; init; }
+}
 
 /// <summary>
 /// Where the builder gets decoded pictures. The engine implements it over its frame server; the
@@ -210,7 +220,11 @@ public static class RenderGraphBuilder
             }
 
             ConformPolicy policy = project.MediaItem(mediaId)?.Conform ?? ConformPolicy.Fit;
-            return (new FrameLayerSource(frame.Frame, frame.Color, frame.Identity), new Vector2(frame.Frame.Width, frame.Frame.Height), policy);
+            Vector2 size = frame.Width > 0 && frame.Height > 0
+                ? new Vector2(frame.Width, frame.Height)
+                : new Vector2(frame.Frame.Width, frame.Frame.Height);
+
+            return (new FrameLayerSource(frame.Frame, frame.Color, frame.Identity), size, policy);
         }
 
         if (clip.SequenceId is { } sequenceId)

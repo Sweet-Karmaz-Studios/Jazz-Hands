@@ -261,6 +261,16 @@ public sealed class FrameServer : IFrameProvider, IDisposable
     /// <summary>Forgets which files failed, so they are tried again. Call when the project changes.</summary>
     public void Retry() => _failed.Clear();
 
+    /// <summary>
+    /// What to decode in place of a media item, or null for the item itself: the proxy service's
+    /// <see cref="Caching.ProxyService.Substitute"/> for playback, nothing for export.
+    /// </summary>
+    public Func<MediaItem, MediaItem?>? Substitute
+    {
+        get => _sources.Substitute;
+        set => _sources.Substitute = value;
+    }
+
     /// <inheritdoc />
     SourceFrame? IFrameProvider.Frame(Project project, Clip clip, Flicks timelineTime, int lane)
     {
@@ -276,7 +286,23 @@ public sealed class FrameServer : IFrameProvider, IDisposable
                 return null;
             }
 
-            return new SourceFrame(frame, ColorSpaceFor(item, clip.SourceStreamIndex, frame.Layout), Identity(item, clip, frame));
+            (MediaItem decoded, int stream, bool proxy) = _sources.Decodable(item, clip.SourceStreamIndex);
+            if (!proxy)
+            {
+                return new SourceFrame(frame, ColorSpaceFor(item, clip.SourceStreamIndex, frame.Layout), Identity(item.Hash, stream, frame));
+            }
+
+            // A proxy is placed as the picture it stands for, at the source's size, and was
+            // written BT.709 limited range by the export that made it whatever the source was.
+            MediaStream? original = item.Info?.Streams.FirstOrDefault(candidate => candidate.Index == clip.SourceStreamIndex);
+            return new SourceFrame(
+                frame,
+                YuvColorSpace.From("bt709", "bt709", isFullRange: false, frame.Layout.BitDepth),
+                Identity(decoded.Hash, stream, frame))
+            {
+                Width = original?.Width ?? 0,
+                Height = original?.Height ?? 0,
+            };
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
@@ -330,8 +356,8 @@ public sealed class FrameServer : IFrameProvider, IDisposable
         _sources.Dispose();
     }
 
-    private static string Identity(MediaItem item, Clip clip, FrameTexture frame) =>
-        string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{item.Hash}:{clip.SourceStreamIndex}:{frame.Pts.Value}");
+    private static string Identity(string hash, int stream, FrameTexture frame) =>
+        string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{hash}:{stream}:{frame.Pts.Value}");
 
     /// <summary>Gets a clip's picture the way the current motion needs it.</summary>
     private FrameTexture? Fetch(Project project, Clip clip, MediaItem item, Flicks time, int lane)
@@ -351,7 +377,8 @@ public sealed class FrameServer : IFrameProvider, IDisposable
                 return cached;
             }
 
-            if (KeyframesFor(item, clip.SourceStreamIndex) is { } index)
+            (MediaItem decoded, int stream, _) = _sources.Decodable(item, clip.SourceStreamIndex);
+            if (KeyframesFor(decoded, stream) is { } index)
             {
                 _sources.PrimeGop(project, clip, time, index, _projectPath, lane);
             }

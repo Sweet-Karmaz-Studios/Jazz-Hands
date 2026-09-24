@@ -54,6 +54,7 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
     private readonly PlaybackOptions _options;
     private readonly DiagnosticsLog? _notices;
     private readonly CacheManager? _cacheManager;
+    private readonly Caching.ProxyService? _proxies;
     private readonly Thread _thread;
     private readonly AutoResetEvent _wake = new(false);
     private readonly Lock _targetsGate = new();
@@ -113,12 +114,14 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
     /// <param name="options">How to set up; defaults suit the editor.</param>
     /// <param name="notices">Where decoder fallbacks and missing media are reported.</param>
     /// <param name="cacheManager">Where keyframe indexes are kept between runs, for reverse play.</param>
+    /// <param name="proxies">Proxies to play in place of their sources when switched on, or null for never.</param>
     public PlaybackEngine(
         Transport transport,
         RenderDevice device,
         PlaybackOptions? options = null,
         DiagnosticsLog? notices = null,
-        CacheManager? cacheManager = null)
+        CacheManager? cacheManager = null,
+        Caching.ProxyService? proxies = null)
     {
         ArgumentNullException.ThrowIfNull(transport);
         ArgumentNullException.ThrowIfNull(device);
@@ -128,6 +131,12 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
         _options = options ?? new PlaybackOptions();
         _notices = notices;
         _cacheManager = cacheManager;
+        _proxies = proxies;
+
+        // A proxy that arrives or goes, or proxies switched on or off, changes what the picture is
+        // made from: a new snapshot renders the frame again and gives files that failed another
+        // chance.
+        proxies?.Changed += OnProxiesChanged;
         _interrupted = Interrupted;
 
         // Made once, so rendering a frame builds no options.
@@ -542,6 +551,7 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
         }
 
         Detach();
+        _proxies?.Changed -= OnProxiesChanged;
         _disposing = true;
         _wake.Set();
         _thread.Join();
@@ -564,6 +574,12 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
     }
 
     private static long Ticks(TimeSpan span) => (long)(span.TotalMilliseconds * TicksPerMillisecond);
+
+    private void OnProxiesChanged(object? sender, string? hash)
+    {
+        ProjectSnapshot current = _snapshot;
+        Load(current.Project, current.Path);
+    }
 
     private void OnProjectChanged(object? sender, ProjectChangedEventArgs e)
     {
@@ -603,7 +619,10 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
                 hardware = HardwareDeviceContext.CreateShared(_device.Device.NativePointer, _device.ImmediateContext.NativePointer);
             }
 
-            frames = new FrameServer(_device, hardware, _options.FrameCacheBytes, _notices, _cacheManager);
+            frames = new FrameServer(_device, hardware, _options.FrameCacheBytes, _notices, _cacheManager)
+            {
+                Substitute = _proxies is { } proxies ? proxies.Substitute : null,
+            };
 
             while (!_disposing)
             {

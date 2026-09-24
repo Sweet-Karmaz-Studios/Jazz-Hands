@@ -365,7 +365,7 @@ public sealed class DecoderPool : IDisposable
     }
 
     /// <summary>Demuxer options an image sequence needs so its run starts at the right number.</summary>
-    private static IReadOnlyDictionary<string, string>? SequenceOptions(MediaItem item)
+    public static IReadOnlyDictionary<string, string>? SequenceOptions(MediaItem item)
     {
         if (item.Sequence is not { } sequence)
         {

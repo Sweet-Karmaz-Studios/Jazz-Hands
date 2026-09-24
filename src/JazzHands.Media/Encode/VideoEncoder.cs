@@ -66,15 +66,38 @@ public sealed unsafe class VideoEncoder : IDisposable
     private readonly ILogger _log = Log.ForContext<VideoEncoder>();
     private readonly AvCodecContext _context;
     private readonly AvPacket _packet = new();
+    private readonly SwsContext* _widen;
+    private readonly AvFrame? _wide;
     private long _sent;
 
-    private VideoEncoder(AvCodecContext context, string name, VideoEncoderSettings settings, AVPixelFormat format, IReadOnlyList<string> skipped)
+    private VideoEncoder(AvCodecContext context, string name, VideoEncoderSettings settings, AVPixelFormat format, AVPixelFormat encoded, IReadOnlyList<string> skipped)
     {
         _context = context;
         Name = name;
         Settings = settings;
         InputFormat = format;
         Skipped = skipped;
+
+        if (encoded != format)
+        {
+            // DNxHR takes 4:2:2. Frames arrive 4:2:0 from the GPU like everyone else's, and the
+            // chroma is doubled vertically here rather than teaching the renderer a second layout
+            // for one intermediate codec.
+            _widen = Av.CheckAlloc(
+                ffmpeg.sws_getContext(settings.Width, settings.Height, format, settings.Width, settings.Height, encoded, (int)SwsFlags.SWS_BILINEAR, null, null, null),
+                $"sws_getContext ({format} to {encoded})");
+
+            _wide = new AvFrame();
+            AVFrame* wide = _wide.Handle;
+            wide->width = settings.Width;
+            wide->height = settings.Height;
+            wide->format = (int)encoded;
+            wide->color_primaries = AVColorPrimaries.AVCOL_PRI_BT709;
+            wide->color_trc = AVColorTransferCharacteristic.AVCOL_TRC_BT709;
+            wide->colorspace = AVColorSpace.AVCOL_SPC_BT709;
+            wide->color_range = AVColorRange.AVCOL_RANGE_MPEG;
+            Av.Check(ffmpeg.av_frame_get_buffer(wide, 0), "av_frame_get_buffer");
+        }
     }
 
     /// <summary>The encoder that opened, for example h264_nvenc.</summary>
@@ -117,14 +140,15 @@ public sealed unsafe class VideoEncoder : IDisposable
                 continue;
             }
 
-            AVPixelFormat format = name.StartsWith("libx265", StringComparison.Ordinal)
-                ? AVPixelFormat.AV_PIX_FMT_YUV420P
-                : AVPixelFormat.AV_PIX_FMT_NV12;
+            AVPixelFormat encoded = EncodedFormat(name);
+            AVPixelFormat format = encoded == AVPixelFormat.AV_PIX_FMT_NV12
+                ? AVPixelFormat.AV_PIX_FMT_NV12
+                : AVPixelFormat.AV_PIX_FMT_YUV420P;
 
             var context = new AvCodecContext(codec);
             try
             {
-                Configure(context.Handle, name, settings, format, globalHeader);
+                Configure(context.Handle, name, settings, encoded, globalHeader);
 
                 AVDictionary* options = ToDictionary(EncoderOptions(name, settings));
                 int result;
@@ -144,7 +168,7 @@ public sealed unsafe class VideoEncoder : IDisposable
                     continue;
                 }
 
-                var encoder = new VideoEncoder(context, name, settings, format, skipped);
+                var encoder = new VideoEncoder(context, name, settings, format, encoded, skipped);
                 if (skipped.Count > 0)
                 {
                     encoder._log.Warning("Encoding with {Encoder}; skipped {Skipped}", name, skipped);
@@ -171,8 +195,20 @@ public sealed unsafe class VideoEncoder : IDisposable
         ArgumentNullException.ThrowIfNull(frame);
         ArgumentNullException.ThrowIfNull(muxer);
 
-        frame.Handle->pts = index;
-        Av.Check(ffmpeg.avcodec_send_frame(_context.Handle, frame.Handle), "avcodec_send_frame", Name);
+        AVFrame* sent = frame.Handle;
+
+        if (_wide is not null)
+        {
+            AVFrame* wide = _wide.Handle;
+            Av.Check(ffmpeg.av_frame_make_writable(wide), "av_frame_make_writable");
+            Av.Check(
+                ffmpeg.sws_scale(_widen, sent->data, sent->linesize, 0, Settings.Height, wide->data, wide->linesize),
+                "sws_scale");
+            sent = wide;
+        }
+
+        sent->pts = index;
+        Av.Check(ffmpeg.avcodec_send_frame(_context.Handle, sent), "avcodec_send_frame", Name);
         _sent++;
         Drain(muxer, stream);
     }
@@ -197,7 +233,19 @@ public sealed unsafe class VideoEncoder : IDisposable
     {
         _packet.Dispose();
         _context.Dispose();
+        _wide?.Dispose();
+
+        if (_widen is not null)
+        {
+            ffmpeg.sws_freeContext(_widen);
+        }
     }
+
+    /// <summary>The pixel format an encoder is opened with: planar 4:2:0 for x265, 4:2:2 for DNxHR, NV12 for the rest.</summary>
+    private static AVPixelFormat EncodedFormat(string name) =>
+        name.StartsWith("libx265", StringComparison.Ordinal) ? AVPixelFormat.AV_PIX_FMT_YUV420P
+        : name.Equals("dnxhd", StringComparison.Ordinal) ? AVPixelFormat.AV_PIX_FMT_YUV422P
+        : AVPixelFormat.AV_PIX_FMT_NV12;
 
     private void Drain(Muxer muxer, int stream)
     {
@@ -366,6 +414,14 @@ public sealed unsafe class VideoEncoder : IDisposable
                 Set(options, "x265-params", "log-level=error");
             }
 
+            return options;
+        }
+
+        if (name.Equals("dnxhd", StringComparison.Ordinal))
+        {
+            // DNxHR's lightest profile, which is what an editing proxy wants: intra only, about
+            // 45 Mb/s at 1080p30, decoded on a CPU faster than anything long GOP.
+            Set(options, "profile", "dnxhr_lb");
             return options;
         }
 

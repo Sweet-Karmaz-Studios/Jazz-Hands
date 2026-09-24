@@ -22,8 +22,20 @@ public static class EngineServices
 
         // The media handlers need an importer, and the importer needs somewhere to cache probes.
         // Both are singletons: the cache holds a SQLite connection, and opening one per import
-        // would cost more than the probe it saves.
-        services.TryAddSingleton<Media.Import.CacheManager>();
+        // would cost more than the probe it saves. Where it lives and how big it may get are the
+        // editor's settings; a test registers its own store first to keep away from the real one.
+        services.TryAddSingleton(_ => new Caching.CacheSettingsStore());
+        services.TryAddSingleton(provider =>
+        {
+            Caching.CacheSettings settings = provider.GetRequiredService<Caching.CacheSettingsStore>().Current;
+            return new Media.Import.CacheManager(settings.Location) { CapBytes = settings.CapBytes };
+        });
+
+        // Thumbnails, waveforms and proxies. The first two start their worker threads when first
+        // asked for, which a headless command that never draws a timeline never does.
+        services.TryAddSingleton(provider => new Caching.ProxyService(provider.GetRequiredService<Media.Import.CacheManager>()));
+        services.TryAddSingleton(provider => new Caching.ThumbnailService(provider.GetRequiredService<Media.Import.CacheManager>()));
+        services.TryAddSingleton(provider => new Caching.WaveformService(provider.GetRequiredService<Media.Import.CacheManager>()));
 
         // What the editor is pointing at. One per host, like the session it belongs to; the
         // selection commands find it here, which is what lets a script select and then act.

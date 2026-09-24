@@ -86,6 +86,15 @@ public sealed class AddMediaHandler : ICommandHandler<AddMediaCommand>
                 {
                     _log.Information("{Name}: {Code}: {Message}", item.Name, warning.Code, warning.Message);
                 }
+
+                if (Core.Export.ProxyPresets.IsWorthAProxy(item))
+                {
+                    // The editor offers these from proxy.list's Suggested; a script reads it here.
+                    _log.Information(
+                        "{Name} is heavy to decode and would edit smoothly with a proxy: jazz proxy generate <project> --media {Id} (or --auto for all of them)",
+                        item.Name,
+                        item.Id);
+                }
             }
             catch (Exception error) when (error is FfmpegException or FileNotFoundException or IOException)
             {
@@ -311,9 +320,10 @@ public sealed class ReprobeMediaHandler : ICommandHandler<ReprobeMediaCommand>
 
             try
             {
-                // The old cache entry goes first. Everything computed from the old content,
-                // thumbnails included, is now about a different file.
-                importer.Cache?.Forget(item.Hash);
+                // The old probe goes first, or the import would hand it straight back. The rest of
+                // what is cached (thumbnails, waveforms, a proxy) goes only if the content turns
+                // out to have changed; reprobing a file nobody touched costs nothing.
+                importer.Cache?.Forget(item.Hash, CacheParts.Probes);
 
                 ImportedMedia imported = importer.Import(
                     new ImportSource(full, item.Kind == MediaKind.ImageSequence ? MediaKind.Movie : item.Kind),
@@ -329,6 +339,11 @@ public sealed class ReprobeMediaHandler : ICommandHandler<ReprobeMediaCommand>
                 if (refreshed == item)
                 {
                     continue;
+                }
+
+                if (refreshed.Hash != item.Hash)
+                {
+                    CacheHelp.ForgetContent(context.Services, importer.Cache, item.Hash);
                 }
 
                 updated = updated.WithMedia(refreshed);

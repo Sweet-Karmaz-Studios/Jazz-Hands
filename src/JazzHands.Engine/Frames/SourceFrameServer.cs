@@ -87,6 +87,13 @@ public sealed class SourceFrameServer : IDisposable
     /// </remarks>
     public int DecodeAhead { get; set; } = 4;
 
+    /// <summary>
+    /// What to decode in place of a media item: its proxy, or null for the item itself. Playback
+    /// sets it from the proxy service; export leaves it null, which is how export never reads a
+    /// proxy.
+    /// </summary>
+    public Func<MediaItem, MediaItem?>? Substitute { get; set; }
+
     /// <summary>The frame cache, for diagnostics and for pinning around the playhead.</summary>
     public FrameCache Cache => _cache;
 
@@ -183,9 +190,11 @@ public sealed class SourceFrameServer : IDisposable
             return null;
         }
 
-        Rational rate = RateOf(item, clip.SourceStreamIndex);
+        (item, int stream, _) = Decodable(item, clip.SourceStreamIndex);
+
+        Rational rate = RateOf(item, stream);
         Flicks sourceTime = SourceTimeFor(clip, timelineTime, rate);
-        var key = new FrameKey(item.Hash, clip.SourceStreamIndex, sourceTime);
+        var key = new FrameKey(item.Hash, stream, sourceTime);
 
         if (_cache.Get(key) is { } cached)
         {
@@ -198,17 +207,17 @@ public sealed class SourceFrameServer : IDisposable
         using DecoderLease lease = _decoders.Rent(
             item,
             path,
-            clip.SourceStreamIndex,
+            stream,
             role,
             project.Settings.FrameRate,
             lane);
 
-        int bitDepth = BitDepthOf(item, clip.SourceStreamIndex);
+        int bitDepth = BitDepthOf(item, stream);
         FrameTexture? served = DecodeTo(lease, item, key, sourceTime, rate, bitDepth, mode);
 
         if (served is not null && readAhead && direction != PlayDirection.Still)
         {
-            ReadAhead(lease, item, clip.SourceStreamIndex, rate, direction, bitDepth);
+            ReadAhead(lease, item, stream, rate, direction, bitDepth);
         }
 
         return served;
@@ -226,8 +235,9 @@ public sealed class SourceFrameServer : IDisposable
             return null;
         }
 
-        Rational rate = RateOf(item, clip.SourceStreamIndex);
-        return _cache.Get(new FrameKey(item.Hash, clip.SourceStreamIndex, SourceTimeFor(clip, timelineTime, rate)));
+        (item, int stream, _) = Decodable(item, clip.SourceStreamIndex);
+        Rational rate = RateOf(item, stream);
+        return _cache.Get(new FrameKey(item.Hash, stream, SourceTimeFor(clip, timelineTime, rate)));
     }
 
     /// <summary>
@@ -260,7 +270,9 @@ public sealed class SourceFrameServer : IDisposable
             return 0;
         }
 
-        Rational rate = RateOf(item, clip.SourceStreamIndex);
+        (item, int stream, _) = Decodable(item, clip.SourceStreamIndex);
+
+        Rational rate = RateOf(item, stream);
         Flicks sourceTime = SourceTimeFor(clip, timelineTime, rate);
         TimeRange gop = index.GopContaining(sourceTime);
 
@@ -268,12 +280,12 @@ public sealed class SourceFrameServer : IDisposable
         using DecoderLease lease = _decoders.Rent(
             item,
             path,
-            clip.SourceStreamIndex,
+            stream,
             DecoderRole.Playhead,
             project.Settings.FrameRate,
             lane);
 
-        int bitDepth = BitDepthOf(item, clip.SourceStreamIndex);
+        int bitDepth = BitDepthOf(item, stream);
         lease.Frames.Flush(gop.Start);
 
         int kept = 0;
@@ -285,7 +297,7 @@ public sealed class SourceFrameServer : IDisposable
                 break;
             }
 
-            var key = new FrameKey(item.Hash, clip.SourceStreamIndex, Snap(frame.Pts, rate));
+            var key = new FrameKey(item.Hash, stream, Snap(frame.Pts, rate));
             if (!_cache.Contains(key))
             {
                 _cache.Add(key, Store(frame, bitDepth));
@@ -295,7 +307,7 @@ public sealed class SourceFrameServer : IDisposable
 
         // The whole group has to stay put until it has been played through, or the frames at the
         // far end are evicted by the ones at this end before anyone sees them.
-        _cache.Pin(item.Hash, clip.SourceStreamIndex, gop);
+        _cache.Pin(item.Hash, stream, gop);
 
         _log.Debug("Primed {Frames} frames of the group at {Start} for reverse play", kept, gop.Start);
         return kept;
@@ -319,6 +331,20 @@ public sealed class SourceFrameServer : IDisposable
         }
 
         _cache.Dispose();
+    }
+
+    /// <summary>
+    /// The item actually decoded for a media item and one of its streams: a proxy's stand-in and
+    /// its only stream when there is a substitute, the item itself otherwise.
+    /// </summary>
+    public (MediaItem Item, int Stream, bool IsProxy) Decodable(MediaItem item, int streamIndex)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+
+        // A proxy's stand-in has one stream, index 0; see ProxyService.
+        return Substitute?.Invoke(item) is { } proxy
+            ? (proxy, 0, true)
+            : (item, streamIndex, false);
     }
 
     /// <summary>Turns a decoder falling back into something every surface can show.</summary>

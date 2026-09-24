@@ -17,6 +17,20 @@ public enum DecodePath
     Software,
 }
 
+/// <summary>What a decoder is for, which decides how it trades picture quality for latency.</summary>
+public enum DecodeTuning
+{
+    /// <summary>Every frame at full quality, with frame threads across the machine in software.</summary>
+    Playback,
+
+    /// <summary>
+    /// A picture a few hundred pixels wide, as soon as possible: one thread, so the first frame
+    /// out does not wait for a pipeline of frame threads to fill, and no loop filter, whose
+    /// smoothing nobody can see once the picture is scaled down twelve times.
+    /// </summary>
+    Thumbnail,
+}
+
 /// <summary>
 /// Decodes one video stream, preferring D3D11VA so frames land in GPU memory the compositor can
 /// sample without a copy, and falling back to software when the codec or profile is not supported.
@@ -58,7 +72,13 @@ public sealed unsafe class VideoDecoder : IVideoSource
     /// Decoder surfaces to keep in flight. Small for a seek decoder, larger for the one following
     /// the playhead; see the hw-decode skill.
     /// </param>
-    public VideoDecoder(Demuxer demuxer, int streamIndex, HardwareDeviceContext? hardware, int poolDepth = 8)
+    /// <param name="tuning">What the frames are for. Thumbnail decoding is software only.</param>
+    public VideoDecoder(
+        Demuxer demuxer,
+        int streamIndex,
+        HardwareDeviceContext? hardware,
+        int poolDepth = 8,
+        DecodeTuning tuning = DecodeTuning.Playback)
     {
         ArgumentNullException.ThrowIfNull(demuxer);
 
@@ -75,7 +95,7 @@ public sealed unsafe class VideoDecoder : IVideoSource
         _timeBase = new Rational(stream->time_base.num, stream->time_base.den);
         _frameRate = demuxer.GetFrameRate(streamIndex);
 
-        bool preferHardware = hardware is not null && !hardware.IsDisposed;
+        bool preferHardware = hardware is not null && !hardware.IsDisposed && tuning == DecodeTuning.Playback;
         AVCodec* codec = FindDecoder(stream->codecpar->codec_id, preferHardware);
         if (codec is null)
         {
@@ -105,6 +125,15 @@ public sealed unsafe class VideoDecoder : IVideoSource
             // The decoder needs its own surfaces plus whatever the caller holds on to.
             context->extra_hw_frames = poolDepth;
             context->thread_count = 1;
+        }
+        else if (tuning == DecodeTuning.Thumbnail)
+        {
+            // Frame threads hold a frame back per thread, so a keyframe asked for on its own
+            // comes out only after as many more have been decoded. Thumbnails run several
+            // decoders side by side instead, one thread each.
+            context->thread_count = 1;
+            context->skip_loop_filter = AVDiscard.AVDISCARD_ALL;
+            context->flags2 |= ffmpeg.AV_CODEC_FLAG2_FAST;
         }
         else
         {

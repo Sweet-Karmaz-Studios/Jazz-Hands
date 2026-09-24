@@ -17,10 +17,11 @@ namespace JazzHands.Media.Import;
 /// computed about it, and a file that is replaced in place loses it, which is exactly right both
 /// times.
 ///
-/// Phase 06 fills in the probe table. Thumbnails, waveforms and keyframe indexes arrive in Phase
-/// 14, and their tables are created now so that a cache written today is readable then.
+/// Phase 06 filled in the probe table and Phase 07 the keyframe indexes. Phase 14 adds thumbnails
+/// and waveforms, whose bytes are blob files, and the size cap that evicts them (see
+/// CacheManager.Blobs.cs).
 /// </remarks>
-public sealed class CacheManager : IDisposable
+public sealed partial class CacheManager : IDisposable
 {
     private readonly ILogger _log = Log.ForContext<CacheManager>();
     private readonly SqliteConnection _connection;
@@ -47,6 +48,7 @@ public sealed class CacheManager : IDisposable
         _connection.Open();
         Configure();
         CreateTables();
+        _blobBytes = SumBlobBytes();
     }
 
     /// <summary>The per-user cache folder.</summary>
@@ -171,14 +173,39 @@ public sealed class CacheManager : IDisposable
     }
 
     /// <summary>Forgets everything known about a hash, which is what a replaced file needs.</summary>
-    public void Forget(string hash)
+    public void Forget(string hash) => Forget(hash, CacheParts.All);
+
+    /// <summary>Forgets parts of what is known about a hash.</summary>
+    public void Forget(string hash, CacheParts parts)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(hash);
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         lock (_gate)
         {
-            foreach (string table in new[] { "probe", "thumbs", "waveform", "keyframes" })
+            // The blob files first, while the rows still say which they are.
+            if (parts.HasFlag(CacheParts.Thumbnails))
+            {
+                DropBlobsOf("thumbs", hash);
+            }
+
+            if (parts.HasFlag(CacheParts.Waveforms))
+            {
+                DropBlobsOf("waveform", hash);
+            }
+
+            var tables = new List<string>();
+            if (parts.HasFlag(CacheParts.Probes))
+            {
+                tables.Add("probe");
+            }
+
+            if (parts.HasFlag(CacheParts.Keyframes))
+            {
+                tables.Add("keyframes");
+            }
+
+            foreach (string table in tables)
             {
                 using SqliteCommand command = _connection.CreateCommand();
                 // A probe is kept under the hash and the version of the prober that made it
@@ -208,34 +235,7 @@ public sealed class CacheManager : IDisposable
     }
 
     /// <summary>Empties the cache.</summary>
-    public void Clear()
-    {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-
-        lock (_gate)
-        {
-            foreach (string table in new[] { "probe", "thumbs", "waveform", "keyframes", "blobs" })
-            {
-                using SqliteCommand command = _connection.CreateCommand();
-                command.CommandText = $"DELETE FROM {table}";
-                command.ExecuteNonQuery();
-            }
-        }
-
-        try
-        {
-            if (Directory.Exists(BlobFolder))
-            {
-                Directory.Delete(BlobFolder, recursive: true);
-            }
-
-            Directory.CreateDirectory(BlobFolder);
-        }
-        catch (IOException error)
-        {
-            _log.Warning(error, "Could not empty the blob folder {Folder}", BlobFolder);
-        }
-    }
+    public void Clear() => Clear(CacheParts.All);
 
     /// <inheritdoc />
     public void Dispose()
@@ -302,6 +302,8 @@ public sealed class CacheManager : IDisposable
             """;
 
         command.ExecuteNonQuery();
+
+        MigrateThumbs();
     }
 
     /// <summary>Marks an entry as used, so eviction takes the oldest rather than the unluckiest.</summary>
