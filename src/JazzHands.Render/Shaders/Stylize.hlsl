@@ -44,6 +44,10 @@ float4 PsPixelate(FullScreenVertex input) : SV_TARGET
     float size = max(Values.x, 1.0);
     float2 centre = Resolution * 0.5;
     float2 cell = (floor((input.Position.xy - centre) / size) + 0.5) * size + centre;
+
+    // Snapped to a texel centre: a cell centre on a texel boundary is read from one neighbour by
+    // one device and the other by another.
+    cell = floor(cell) + 0.5;
     return Input.SampleLevel(PointClamp, clamp(cell, 0.5, Resolution - 0.5) * TexelSize, 0);
 }
 
