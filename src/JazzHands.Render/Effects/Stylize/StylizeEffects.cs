@@ -72,9 +72,10 @@ public sealed class NoiseEffect() : SinglePassEffect("Stylize.hlsl", "PsNoise")
     protected override EffectValues Values(EffectContext context, ParameterSet parameters, RenderTarget input)
     {
         // The pattern changes sixty times a second of clip time when animated, whatever the frame
-        // rate, and never between two renders of the same moment.
-        float frame = parameters.Bool("animated") ? MathF.Floor((float)context.Time.ToSeconds() * 60.0f) : 0.0f;
-        float seed = ((context.Seed & 0x3FF) + (frame * 7.13f)) % 1024.0f;
+        // rate, and never between two renders of the same moment. The seed is a whole number under
+        // 2^24, which a float carries exactly to the shader's integer hash.
+        uint step = parameters.Bool("animated") ? (uint)Math.Max(0.0, Math.Floor(context.Time.ToSeconds() * 60.0)) : 0u;
+        float seed = ((uint)context.Seed + (step * 7919u)) & 0xFFFFFF;
         return new EffectValues
         {
             Values = new Vector4(parameters.Float("amount"), MathF.Max(1.0f, parameters.Float("size") * context.QualityScale), seed, 0),
