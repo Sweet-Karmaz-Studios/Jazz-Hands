@@ -951,6 +951,16 @@
               "type": "null"
             }
           ]
+        },
+        "transitions": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/transitionDefaults"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -1279,6 +1289,25 @@
         "rightClipId",
         "duration",
         "alignment"
+      ]
+    },
+    "transitionDefaults": {
+      "type": "object",
+      "properties": {
+        "video": {
+          "type": "string"
+        },
+        "audio": {
+          "type": "string"
+        },
+        "duration": {
+          "$ref": "#/$defs/flicks"
+        }
+      },
+      "required": [
+        "video",
+        "audio",
+        "duration"
       ]
     },
     "vector2": {

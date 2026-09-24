@@ -178,6 +178,24 @@ public static class ProjectRepair
                 continue;
             }
 
+            if (track.Clip(transition.LeftClipId)!.End != track.Clip(transition.RightClipId)!.Start)
+            {
+                actions.Add(new RepairAction(
+                    "transition-not-at-cut",
+                    $"{path}/transitions/{index}",
+                    $"Removed the transition '{transition.TypeId}': the clips it joins are not next to each other."));
+                continue;
+            }
+
+            if (kept.Any(other => other.LeftClipId == transition.LeftClipId && other.RightClipId == transition.RightClipId))
+            {
+                actions.Add(new RepairAction(
+                    "duplicate-transition",
+                    $"{path}/transitions/{index}",
+                    $"Removed the transition '{transition.TypeId}': the cut already has one."));
+                continue;
+            }
+
             kept.Add(transition);
         }
 

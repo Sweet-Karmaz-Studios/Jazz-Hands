@@ -11,6 +11,12 @@ public enum EffectKind
 
     /// <summary>Makes a picture from nothing. Its parameters live on the generator clip itself.</summary>
     Generator,
+
+    /// <summary>Mixes the pictures of two adjacent clips across the cut between them.</summary>
+    Transition,
+
+    /// <summary>Mixes the sound of two adjacent clips across the cut between them: a crossfade.</summary>
+    AudioTransition,
 }
 
 /// <summary>The kind of value a parameter holds, which decides how it is typed, stored and drawn.</summary>
@@ -108,6 +114,26 @@ public sealed class GeneratorAttribute(string typeId) : EffectAttribute(typeId)
 {
     /// <inheritdoc />
     public override EffectKind Kind => EffectKind.Generator;
+}
+
+/// <summary>
+/// Marks a picture transition, which reads the outgoing and the incoming clip's pictures and a
+/// progress from 0 to 1. Every transition also takes the easing parameters of
+/// <see cref="TransitionEasing"/>, which the registry adds after its own.
+/// </summary>
+/// <param name="typeId">The stable identifier, which starts <c>transition.</c>.</param>
+public sealed class TransitionAttribute(string typeId) : EffectAttribute(typeId)
+{
+    /// <inheritdoc />
+    public override EffectKind Kind => EffectKind.Transition;
+}
+
+/// <summary>Marks a sound transition: a crossfade between two adjacent audio clips.</summary>
+/// <param name="typeId">The stable identifier, which starts <c>transition.audio.</c>.</param>
+public sealed class AudioTransitionAttribute(string typeId) : EffectAttribute(typeId)
+{
+    /// <inheritdoc />
+    public override EffectKind Kind => EffectKind.AudioTransition;
 }
 
 /// <summary>

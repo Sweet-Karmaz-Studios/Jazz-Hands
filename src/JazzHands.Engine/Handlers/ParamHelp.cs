@@ -18,7 +18,7 @@ internal static class ParamHelp
         ParamTargets.Find(project, id)
         ?? throw new CommandException(
             "target-not-found",
-            $"Nothing in this project has id '{id}'. Parameters belong to clips, tracks, effects and masks; 'jazz clip list' and 'jazz effect get' show their ids.",
+            $"Nothing in this project has id '{id}'. Parameters belong to clips, tracks, effects, masks and transitions; 'jazz clip list', 'jazz effect get' and 'jazz transition list' show their ids.",
             "/sequences");
 
     /// <summary>An owner whose track is not locked.</summary>
@@ -200,6 +200,7 @@ internal static class ParamHelp
         ParamOwnerKind.Clip => $"clip '{owner.Clip!.Name}'",
         ParamOwnerKind.Track => $"track '{owner.Track.Name}'",
         ParamOwnerKind.Mask => $"a mask on clip '{owner.Clip!.Name}'",
+        ParamOwnerKind.Transition => $"transition '{EffectCatalog.Registry.Find(owner.Transition!.TypeId)?.Name ?? owner.Transition.TypeId}'",
         _ => $"effect '{EffectCatalog.Registry.Find(owner.Effect!.TypeId)?.Name ?? owner.Effect.TypeId}'",
     };
 

@@ -52,6 +52,12 @@ public sealed class EffectContext : IDisposable
     /// <summary>Target texels per sequence pixel: 1 at Full, 0.5 at Half.</summary>
     public float QualityScale { get; private set; } = 1.0f;
 
+    /// <summary>The width of the frame being drawn, in texels at the working resolution: what a point from the frame centre is measured in.</summary>
+    public int FrameWidth { get; private set; } = 1;
+
+    /// <summary>The height of the frame being drawn, in texels.</summary>
+    public int FrameHeight { get; private set; } = 1;
+
     /// <summary>The time the frame is at, relative to the effect's owner: clip time for a clip's effects.</summary>
     public Flicks Time => _node?.LocalTime ?? Flicks.Zero;
 
@@ -159,9 +165,9 @@ public sealed class EffectContext : IDisposable
 
         context.ClearState();
         context.IASetPrimitiveTopology(pass.IsStrip ? PrimitiveTopology.TriangleStrip : PrimitiveTopology.TriangleList);
-        context.VSSetShader(VertexShader(pass.File, pass.Vertex));
+        context.VSSetShader(VertexShader(pass));
         context.VSSetConstantBuffers(0, [_common, buffer]);
-        context.PSSetShader(PixelShader(pass.File, pass.Pixel));
+        context.PSSetShader(PixelShader(pass));
         context.PSSetConstantBuffers(0, [_common, buffer]);
         context.PSSetShaderResources(0, _views!);
         context.PSSetSamplers(0, _samplers);
@@ -187,11 +193,13 @@ public sealed class EffectContext : IDisposable
         _common.Dispose();
     }
 
-    /// <summary>Aims the context at the next effect.</summary>
-    internal void Begin(EffectNode node, float qualityScale)
+    /// <summary>Aims the context at the next effect, on a frame of a size.</summary>
+    internal void Begin(EffectNode node, float qualityScale, int frameWidth, int frameHeight)
     {
         _node = node;
         QualityScale = qualityScale;
+        FrameWidth = frameWidth;
+        FrameHeight = frameHeight;
     }
 
     /// <summary>Compiles every pass of an effect, so a shader that does not compile fails before the frame does.</summary>
@@ -200,13 +208,16 @@ public sealed class EffectContext : IDisposable
     /// <summary>Compiles every pass of a generator.</summary>
     internal void Prepare(VideoGenerator generator) => Prepare(generator.Passes);
 
+    /// <summary>Compiles every pass of a transition.</summary>
+    internal void Prepare(Effects.Transitions.VideoTransition transition) => Prepare(transition.Passes);
+
     private void Prepare(IEnumerable<PassDescriptor> passes)
     {
         Refresh();
         foreach (PassDescriptor pass in passes)
         {
-            VertexShader(pass.File, pass.Vertex);
-            PixelShader(pass.File, pass.Pixel);
+            VertexShader(pass);
+            PixelShader(pass);
         }
     }
 
@@ -220,23 +231,27 @@ public sealed class EffectContext : IDisposable
         }
     }
 
-    private ID3D11PixelShader PixelShader(string file, string entry)
+    private ID3D11PixelShader PixelShader(PassDescriptor pass)
     {
-        if (!_pixels.TryGetValue((file, entry), out ID3D11PixelShader? shader))
+        if (!_pixels.TryGetValue((pass.File, pass.Pixel), out ID3D11PixelShader? shader))
         {
-            shader = ShaderLibrary.PixelShader(Device, file, entry);
-            _pixels[(file, entry)] = shader;
+            shader = pass.Source is { } source
+                ? Device.Device.CreatePixelShader(ShaderLibrary.BytecodeFromSource(source, pass.File, pass.Pixel, "ps_5_0"))
+                : ShaderLibrary.PixelShader(Device, pass.File, pass.Pixel);
+            _pixels[(pass.File, pass.Pixel)] = shader;
         }
 
         return shader;
     }
 
-    private ID3D11VertexShader VertexShader(string file, string entry)
+    private ID3D11VertexShader VertexShader(PassDescriptor pass)
     {
-        if (!_vertices.TryGetValue((file, entry), out ID3D11VertexShader? shader))
+        if (!_vertices.TryGetValue((pass.File, pass.Vertex), out ID3D11VertexShader? shader))
         {
-            shader = ShaderLibrary.VertexShader(Device, file, entry);
-            _vertices[(file, entry)] = shader;
+            shader = pass.Source is { } source
+                ? Device.Device.CreateVertexShader(ShaderLibrary.BytecodeFromSource(source, pass.File, pass.Vertex, "vs_5_0"))
+                : ShaderLibrary.VertexShader(Device, pass.File, pass.Vertex);
+            _vertices[(pass.File, pass.Vertex)] = shader;
         }
 
         return shader;

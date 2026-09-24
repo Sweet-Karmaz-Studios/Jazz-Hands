@@ -16,6 +16,12 @@ public sealed record PassDescriptor(string File, string Pixel, string Vertex = "
 {
     /// <summary>True for a four-vertex strip rather than a triangle list.</summary>
     public bool IsStrip => Vertices == 4;
+
+    /// <summary>
+    /// The shader source, for a pass written outside the build (a user's transition): compiled
+    /// from here, <see cref="File"/> only naming it. Null for the embedded files.
+    /// </summary>
+    public string? Source { get; init; }
 }
 
 /// <summary>
@@ -62,9 +68,35 @@ public abstract class VideoEffect : IDisposable
     }
 }
 
-/// <summary>The picture effects, generators and their descriptors that this assembly defines.</summary>
+/// <summary>The picture effects, generators and transitions, and their descriptors.</summary>
+/// <remarks>
+/// The built-in types are every attributed class in this assembly. Transitions written outside
+/// the build (<see cref="Transitions.CustomTransitions"/>) join them when a host loads them, and
+/// again whenever one of their files changes, so <see cref="Registry"/> is read each time rather
+/// than kept.
+/// </remarks>
 public static class VideoEffects
 {
+    // The scan is declared first: static initializers run in the order they are written.
+    private static readonly EffectRegistry Scanned = EffectRegistry.FromAssemblies(typeof(VideoEffects).Assembly);
+    private static EffectRegistry _registry = Scanned;
+
+    /// <summary>Raised on any thread when <see cref="Registry"/> changes: a user's transition added, edited or removed.</summary>
+    public static event EventHandler? Changed;
+
     /// <summary>Every effect class in JazzHands.Render.</summary>
-    public static EffectRegistry Registry { get; } = EffectRegistry.FromAssemblies(typeof(VideoEffects).Assembly);
+    public static EffectRegistry BuiltIn => Scanned;
+
+    /// <summary>The built-in types and whatever has been loaded from outside the build.</summary>
+    public static EffectRegistry Registry => Volatile.Read(ref _registry);
+
+    /// <summary>Makes <see cref="Registry"/> the built-in types and these, replacing any loaded before.</summary>
+    /// <exception cref="InvalidOperationException">One of them has the id of a built-in type.</exception>
+    public static void Include(IEnumerable<EffectDescriptor> loaded)
+    {
+        ArgumentNullException.ThrowIfNull(loaded);
+
+        Volatile.Write(ref _registry, new EffectRegistry(BuiltIn.All.Concat(loaded)));
+        Changed?.Invoke(null, EventArgs.Empty);
+    }
 }

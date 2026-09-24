@@ -197,38 +197,61 @@ public sealed class FrameServer : IFrameProvider, IDisposable
 
             foreach (Track track in sequence.Tracks)
             {
-                // A reversed clip is primed a group at a time when it is rendered; decoding ahead
-                // of it a frame at a time would be a seek per frame.
-                if (track.Kind != TrackKind.Video || track.Muted
-                    || TimelineQueries.ClipAt(track, time) is not { Enabled: true, Reverse: false, MediaId: { } mediaId } clip
-                    || project.MediaItem(mediaId) is not { } item
-                    || _failed.ContainsKey(item.Id)
-                    || _sources.GetCachedFrame(project, clip, time) is not null)
+                if (track.Kind != TrackKind.Video || track.Muted)
                 {
                     continue;
                 }
 
-                if (!AwaitLastDecode(deadline, interrupted))
+                // Inside a transition both clips are on screen, each on its own lane, as the
+                // graph builder asks for them.
+                TrackMoment moment = TransitionTiming.At(track, time, fps);
+                if (!DecodeAhead(project, moment.Clip, track.Order, time, deadline, interrupted, projectPath)
+                    || !DecodeAhead(project, moment.Incoming, RenderGraphBuilder.IncomingLane(track.Order), time, deadline, interrupted, projectPath))
                 {
                     return false;
                 }
-
-                try
-                {
-                    _sources.GetSourceFrame(project, clip, time, projectPath, PlayDirection.Forward, SeekMode.Exact, track.Order, readAhead: false);
-                }
-                catch (Exception exception) when (exception is not OutOfMemoryException)
-                {
-                    // The render of that frame meets the same error and reports it properly.
-                    _log.Debug(exception, "Decoding ahead failed at {Time}", time);
-                }
-
-                _decodeFence ??= Device.Device.CreateQuery(new QueryDescription { QueryType = QueryType.Event });
-                Device.ImmediateContext.End(_decodeFence);
-                _decodePending = true;
             }
         }
 
+        return true;
+    }
+
+    /// <summary>Decodes one clip's frame at a time ahead, unless it is there already; false when the deadline or a request came first.</summary>
+    private bool DecodeAhead(Project project, Clip? candidate, int lane, Flicks time, long deadline, Func<bool> interrupted, string projectPath)
+    {
+        // A reversed clip is primed a group at a time when it is rendered; decoding ahead of it a
+        // frame at a time would be a seek per frame.
+        if (candidate is not { Enabled: true, Reverse: false, MediaId: { } mediaId } clip
+            || project.MediaItem(mediaId) is not { } item
+            || _failed.ContainsKey(item.Id))
+        {
+            return true;
+        }
+
+        time = TransitionTiming.ClampToSource(project, clip, time);
+        if (_sources.GetCachedFrame(project, clip, time) is not null)
+        {
+            return true;
+        }
+
+        if (!AwaitLastDecode(deadline, interrupted))
+        {
+            return false;
+        }
+
+        try
+        {
+            _sources.GetSourceFrame(project, clip, time, projectPath, PlayDirection.Forward, SeekMode.Exact, lane, readAhead: false);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            // The render of that frame meets the same error and reports it properly.
+            _log.Debug(exception, "Decoding ahead failed at {Time}", time);
+        }
+
+        _decodeFence ??= Device.Device.CreateQuery(new QueryDescription { QueryType = QueryType.Event });
+        Device.ImmediateContext.End(_decodeFence);
+        _decodePending = true;
         return true;
     }
 

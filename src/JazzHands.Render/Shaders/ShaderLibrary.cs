@@ -244,6 +244,13 @@ public static partial class ShaderLibrary
         return watcher;
     }
 
+    /// <summary>
+    /// Makes every renderer rebuild its shaders before its next frame: what a shader from outside
+    /// the build does when its file changes. The compiled cache is keyed on the source, so an
+    /// unchanged shader is not compiled again.
+    /// </summary>
+    public static void Invalidate() => Interlocked.Increment(ref _generation);
+
     private static void OnSourceChanged(object sender, FileSystemEventArgs e)
     {
         // The compiled cache is keyed on the source, so an edited file simply misses it.

@@ -85,6 +85,12 @@ public sealed record EffectDescriptor(
     /// <summary>True when it simulates procedural state from a seed.</summary>
     public bool Seeded { get; init; }
 
+    /// <summary>
+    /// The file that defines it, for a type written outside the build (a transition shader in
+    /// the user's folder), which the render layer compiles from there. Null for a built-in type.
+    /// </summary>
+    public string? SourceFile { get; init; }
+
     /// <summary>The parameter with a name, or null.</summary>
     public ParamDescriptor? Param(string name)
     {

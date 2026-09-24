@@ -236,7 +236,7 @@ public sealed class CommandDispatcher : IAsyncDisposable
         Project before = _project;
 
         var context = new HandlerContext(_services, _clock, ProjectPath);
-        Project after = Magnetize(before, Apply(before, command, context), context);
+        Project after = SettleTransitions(before, Magnetize(before, Apply(before, command, context), context), context);
 
         return Commit(command, metadata, before, after, context.ChangedIds, ChangeOrigin.Command);
     }
@@ -269,7 +269,7 @@ public sealed class CommandDispatcher : IAsyncDisposable
             };
         }
 
-        working = Magnetize(before, working, context);
+        working = SettleTransitions(before, Magnetize(before, working, context), context);
         CommandMetadata metadata = CommandRegistry.Describe(batch);
         return Commit(batch, metadata, before, working, context.ChangedIds, ChangeOrigin.Command);
     }
@@ -321,6 +321,50 @@ public sealed class CommandDispatcher : IAsyncDisposable
                 context.Changed(EditOps.Changed(sequence, closed));
                 result = result.ReplaceSequence(closed);
             }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Removes the transitions whose clips an edit separated, on every sequence it touched.
+    /// </summary>
+    /// <remarks>
+    /// Here rather than in each handler, like the magnetic timeline, so no edit can leave a
+    /// transition naming clips that no longer meet: a move, a delete, a trim that opens a gap. It
+    /// is part of the edit that caused it, so one undo brings the clips and the transition back.
+    /// </remarks>
+    private static Project SettleTransitions(Project before, Project after, HandlerContext context)
+    {
+        if (ReferenceEquals(before, after))
+        {
+            return after;
+        }
+
+        Project result = after;
+        foreach (Sequence sequence in after.Sequences)
+        {
+            if (ReferenceEquals(before.Sequence(sequence.Id), sequence))
+            {
+                continue;
+            }
+
+            (Sequence settled, ImmutableArray<string> removed) = TransitionOps.Settle(sequence);
+            if (removed.IsEmpty)
+            {
+                continue;
+            }
+
+            context.Changed(removed);
+            foreach (Track track in sequence.Tracks)
+            {
+                if (!ReferenceEquals(settled.Track(track.Id), track))
+                {
+                    context.Changed(track.Id);
+                }
+            }
+
+            result = result.ReplaceSequence(settled);
         }
 
         return result;

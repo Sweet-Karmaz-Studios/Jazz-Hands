@@ -35,7 +35,7 @@ public sealed class MixSnapshot
 
             foreach (ClipMix clip in track.ClipArray)
             {
-                EndSample = Math.Max(EndSample, clip.End);
+                EndSample = Math.Max(EndSample, clip.PlayEnd);
             }
         }
     }
@@ -52,7 +52,7 @@ public sealed class MixSnapshot
     /// <summary>True when any track is soloed, which silences every track that is not.</summary>
     public bool AnySolo { get; }
 
-    /// <summary>The first sample after the last clip.</summary>
+    /// <summary>The first sample after the last clip, and any tail it plays into a transition.</summary>
     public long EndSample { get; }
 
     /// <summary>An array rather than a list, so the audio thread iterates without an enumerator.</summary>
@@ -84,8 +84,8 @@ public sealed class MixSnapshot
 
             foreach (ClipMix clip in track.ClipArray)
             {
-                long from = Math.Max(startSample, clip.Start);
-                long to = Math.Min(end, clip.End);
+                long from = Math.Max(startSample, clip.PlayStart);
+                long to = Math.Min(end, clip.PlayEnd);
 
                 if (from < to)
                 {
@@ -188,7 +188,11 @@ public sealed class ClipMix
         ScalarCurve? volume = null,
         ScalarCurve? pan = null,
         AudioChannelMap channelMap = AudioChannelMap.Auto,
-        IReadOnlyList<AudioEffectSlot>? effects = null)
+        IReadOnlyList<AudioEffectSlot>? effects = null,
+        long leadIn = 0,
+        long tail = 0,
+        Crossfade? crossIn = null,
+        Crossfade? crossOut = null)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(source.Channels);
@@ -214,6 +218,56 @@ public sealed class ClipMix
         Pan = pan ?? ScalarCurve.Constant(0.0f);
         ChannelMap = channelMap;
         EffectArray = effects is null ? [] : [.. effects];
+        LeadIn = Math.Max(0, leadIn);
+        Tail = Math.Max(0, tail);
+        CrossIn = crossIn;
+        CrossOut = crossOut;
+    }
+
+    /// <summary>How many samples before <see cref="Start"/> it plays, into a transition from the clip before it.</summary>
+    public long LeadIn { get; }
+
+    /// <summary>How many samples after <see cref="End"/> it plays, into a transition to the clip after it.</summary>
+    public long Tail { get; }
+
+    /// <summary>The first sample it is heard at: its start, less its lead in.</summary>
+    public long PlayStart => Start - LeadIn;
+
+    /// <summary>The first sample after it is heard: its end, plus its tail.</summary>
+    public long PlayEnd => End + Tail;
+
+    /// <summary>The crossfade it comes in on, from the clip before it, or null for none.</summary>
+    public Crossfade? CrossIn { get; }
+
+    /// <summary>The crossfade it goes out on, into the clip after it, or null for none.</summary>
+    public Crossfade? CrossOut { get; }
+
+    /// <summary>True when any sample from <paramref name="clipSample"/> for <paramref name="frames"/> is in a crossfade.</summary>
+    public bool Crossfading(long clipSample, int frames)
+    {
+        long from = Start + clipSample;
+        long to = from + frames;
+        return (CrossIn is { } entering && from < entering.End && to > entering.Start)
+            || (CrossOut is { } leaving && from < leaving.End && to > leaving.Start);
+    }
+
+    /// <summary>The crossfade gain at a clip sample: rising through the crossfade in, falling through the one out, 1 elsewhere.</summary>
+    public float CrossfadeGain(long clipSample)
+    {
+        long sample = Start + clipSample;
+        float gain = 1.0f;
+
+        if (CrossIn is { } entering && sample < entering.End)
+        {
+            gain = JazzHands.Audio.Effects.Crossfades.Gain(entering.Curve, entering.Progress(sample));
+        }
+
+        if (CrossOut is { } leaving && sample >= leaving.Start)
+        {
+            gain *= JazzHands.Audio.Effects.Crossfades.Gain(leaving.Curve, 1.0f - leaving.Progress(sample));
+        }
+
+        return gain;
     }
 
     /// <summary>
@@ -302,10 +356,14 @@ public sealed class ClipMix
         return (first, last - first + 1);
     }
 
-    /// <summary>The fade gain at a clip sample, both ends multiplied.</summary>
+    /// <summary>The fade gain at a clip sample, both ends multiplied. A fade is the clip's own, so its lead in and tail are at full level.</summary>
     public float FadeGain(long clipSample)
     {
         float gain = 1.0f;
+        if (clipSample < 0 || clipSample >= Length)
+        {
+            return gain;
+        }
 
         if (clipSample < FadeInLength)
         {
@@ -320,4 +378,17 @@ public sealed class ClipMix
 
         return gain;
     }
+}
+
+/// <summary>A crossfade between two clips on a track, in samples on the timeline.</summary>
+/// <param name="Start">The first sample of it.</param>
+/// <param name="Length">How many samples it lasts.</param>
+/// <param name="Curve">The shape of its gains.</param>
+public readonly record struct Crossfade(long Start, long Length, Effects.CrossfadeCurve Curve)
+{
+    /// <summary>The first sample after it.</summary>
+    public long End => Start + Length;
+
+    /// <summary>How far through it a sample is, 0 to 1.</summary>
+    public float Progress(long sample) => Length <= 0 ? 1.0f : Math.Clamp((float)((double)(sample - Start) / Length), 0.0f, 1.0f);
 }

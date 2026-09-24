@@ -280,7 +280,21 @@ public sealed record Transition(
     string RightClipId,
     Flicks Duration,
     TransitionAlignment Alignment,
-    EquatableArray<EffectParameter> Parameters) : IEquatable<Transition>;
+    EquatableArray<EffectParameter> Parameters) : IEquatable<Transition>
+{
+    /// <summary>The value of a parameter, or null when it is not set and the default applies.</summary>
+    public AnimatedValue? Parameter(string name) => AsEffect().Parameter(name);
+
+    /// <summary>
+    /// The transition's type and parameters as an effect instance, which is what parameter
+    /// evaluation reads. Nothing stores it.
+    /// </summary>
+    public Effect AsEffect() => new(Id, TypeId, Enabled: true, Parameters);
+
+    /// <summary>True when it joins this clip to another, on either side.</summary>
+    public bool Touches(string clipId) =>
+        string.Equals(LeftClipId, clipId, StringComparison.Ordinal) || string.Equals(RightClipId, clipId, StringComparison.Ordinal);
+}
 
 /// <summary>A point or range of interest on a sequence, a clip or a piece of media.</summary>
 /// <param name="Id">The marker identifier.</param>
@@ -523,6 +537,7 @@ public sealed record Track(
 /// <param name="ChannelCount">Audio channel count; 2 for stereo, 6 for 5.1.</param>
 /// <param name="ColorSpace">Working colour space name, for example bt709.</param>
 /// <param name="ToneMap">How HDR sources are tone mapped unless a clip says otherwise. Null for BT.2390 at half desaturation.</param>
+/// <param name="Transitions">What the default transition shortcuts add. Null for a one second crossfade and an equal power sound crossfade.</param>
 public sealed record ProjectSettings(
     Rational FrameRate,
     int Width,
@@ -530,8 +545,12 @@ public sealed record ProjectSettings(
     int SampleRate = 48000,
     int ChannelCount = 2,
     string ColorSpace = "bt709",
-    ToneMapping? ToneMap = null) : IEquatable<ProjectSettings>
+    ToneMapping? ToneMap = null,
+    TransitionDefaults? Transitions = null) : IEquatable<ProjectSettings>
 {
+    /// <summary>The default transitions, with nothing set meaning the built-in ones.</summary>
+    public TransitionDefaults EffectiveTransitions => Transitions ?? TransitionDefaults.Standard;
+
     /// <summary>1080p at 30 fps, which is what a project gets when nothing else is said.</summary>
     public static ProjectSettings Default { get; } = new(Rational.Fps30, 1920, 1080);
 
@@ -540,6 +559,22 @@ public sealed record ProjectSettings(
 
     /// <summary>The frame size as a string, for display and the CLI.</summary>
     public string Size => $"{Width}x{Height}";
+}
+
+/// <summary>What the default transition shortcuts add, and how long it lasts.</summary>
+/// <param name="Video">The picture transition type.</param>
+/// <param name="Audio">The sound transition type.</param>
+/// <param name="Duration">How long both last.</param>
+public sealed record TransitionDefaults(string Video, string Audio, Flicks Duration) : IEquatable<TransitionDefaults>
+{
+    /// <summary>The picture crossfade.</summary>
+    public const string Crossfade = "transition.crossfade";
+
+    /// <summary>The equal power sound crossfade.</summary>
+    public const string EqualPower = "transition.audio.equal-power";
+
+    /// <summary>A one second crossfade of picture and sound, as Premiere and Resolve start with.</summary>
+    public static TransitionDefaults Standard { get; } = new(Crossfade, EqualPower, Flicks.OneSecond);
 }
 
 /// <summary>

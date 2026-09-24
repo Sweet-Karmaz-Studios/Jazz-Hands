@@ -6,6 +6,7 @@ using JazzHands.Core.Effects;
 using JazzHands.Core.Model;
 using JazzHands.Render.Color;
 using JazzHands.Render.Effects;
+using JazzHands.Render.Effects.Transitions;
 using JazzHands.Render.Frames;
 using JazzHands.Render.Shaders;
 using Serilog;
@@ -80,6 +81,7 @@ public sealed class Compositor : IDisposable
     private readonly EffectContext _effectContext;
     private readonly Dictionary<Type, VideoEffect?> _effects = [];
     private readonly Dictionary<Type, VideoGenerator?> _generators = [];
+    private readonly Dictionary<string, VideoTransition?> _transitions = new(StringComparer.Ordinal);
 
     private Shaders? _shaders;
     private int _shaderGeneration = -1;
@@ -238,6 +240,11 @@ public sealed class Compositor : IDisposable
             generator?.Dispose();
         }
 
+        foreach (VideoTransition? transition in _transitions.Values)
+        {
+            transition?.Dispose();
+        }
+
         _effectContext.Dispose();
 
         foreach (ID3D11Buffer buffer in _constants.Values)
@@ -300,7 +307,7 @@ public sealed class Compositor : IDisposable
         if (key is null && !hasEffects && layer.Masks.IsDefaultOrEmpty && layer.Blend == BlendMode.Normal && !fillsFrame)
         {
             stack ??= Empty(graph);
-            RenderTarget source = Linear(layer);
+            RenderTarget source = Linear(graph, layer);
             DrawQuad(graph, layer, source, stack.View, Math.Clamp(layer.Opacity, 0.0f, 1.0f), _over);
             Pool.Return(source);
             return stack;
@@ -413,7 +420,7 @@ public sealed class Compositor : IDisposable
             }
 
             RenderTarget output = Pool.Rent(graph.Width, graph.Height);
-            _effectContext.Begin(node, layer.Scale);
+            _effectContext.Begin(node, layer.Scale, graph.Width, graph.Height);
 
             if (custom is not null)
             {
@@ -498,7 +505,7 @@ public sealed class Compositor : IDisposable
             return target;
         }
 
-        _effectContext.Begin(node, layer.Scale);
+        _effectContext.Begin(node, layer.Scale, target.Width, target.Height);
         generator.Render(_effectContext, node.Parameters, target);
         return target;
     }
@@ -574,7 +581,7 @@ public sealed class Compositor : IDisposable
     /// <summary>The source in linear light, placed in a frame-sized transparent target.</summary>
     private RenderTarget Transform(RenderGraph graph, LayerNode layer)
     {
-        RenderTarget source = Linear(layer);
+        RenderTarget source = Linear(graph, layer);
 
         // A frame-sized source with nothing moved or cropped maps every texel onto itself, and
         // either filter sampled at texel centres gives the texel back: the pass would be a copy.
@@ -622,7 +629,7 @@ public sealed class Compositor : IDisposable
     }
 
     /// <summary>A layer's picture as premultiplied linear light at its own size.</summary>
-    private RenderTarget Linear(LayerNode layer)
+    private RenderTarget Linear(RenderGraph graph, LayerNode layer)
     {
         switch (layer.Source)
         {
@@ -640,9 +647,101 @@ public sealed class Compositor : IDisposable
             case GeneratorLayerSource generated:
                 return Generate(layer, generated.Node);
 
+            case TransitionLayerSource transition:
+                return Mix(graph, layer, transition);
+
             default:
                 throw new NotSupportedException($"{layer.Source.GetType().Name} is not a source the compositor knows.");
         }
+    }
+
+    /// <summary>
+    /// A track inside a transition: each clip drawn as a layer over nothing, with its own place,
+    /// effects, masks and opacity, then the two mixed by the transition into one frame.
+    /// </summary>
+    private RenderTarget Mix(RenderGraph graph, LayerNode layer, TransitionLayerSource source)
+    {
+        RenderTarget outgoing = Alone(graph, source.Outgoing);
+        RenderTarget incoming = Alone(graph, source.Incoming);
+        RenderTarget output = Pool.Rent(graph.Width, graph.Height);
+        TransitionNode node = source.Transition;
+
+        _effectContext.Begin(node.Effect, layer.Scale, graph.Width, graph.Height);
+        if (node.Custom is { } custom)
+        {
+            custom.Apply(_effectContext, node.Progress, outgoing, incoming, output);
+        }
+        else if (TransitionFor(node.Effect.Descriptor) is { } transition)
+        {
+            transition.Apply(_effectContext, node.Effect.Parameters, node.Progress, outgoing, incoming, output);
+        }
+        else
+        {
+            // A type this build does not have cuts in the middle rather than failing the frame.
+            _device.ImmediateContext.CopyResource(output.Texture, (node.Progress < 0.5f ? outgoing : incoming).Texture);
+        }
+
+        Pool.Return(outgoing);
+        Pool.Return(incoming);
+        return output;
+    }
+
+    /// <summary>One side of a transition drawn over nothing, frame sized; transparent when there is no picture.</summary>
+    private RenderTarget Alone(RenderGraph graph, LayerNode? layer) =>
+        layer is null || layer.IsAdjustment || layer.Opacity <= 0.0f ? Empty(graph) : Place(graph, layer, stack: null);
+
+    /// <summary>
+    /// The running instance of a transition type, made on first use: its class, or for one
+    /// written outside the build, a <see cref="ScriptedTransition"/> over its file. Null, logged
+    /// once, for a type with nothing to run.
+    /// </summary>
+    private VideoTransition? TransitionFor(EffectDescriptor descriptor)
+    {
+        if (_transitions.TryGetValue(descriptor.TypeId, out VideoTransition? known))
+        {
+            // A user's shader saved since it was compiled is compiled again, for the next frame.
+            if (known is not ScriptedTransition scripted || !scripted.IsStale(descriptor))
+            {
+                return known;
+            }
+
+            known.Dispose();
+        }
+
+        VideoTransition? transition = null;
+        if (descriptor.SourceFile is { Length: > 0 })
+        {
+            try
+            {
+                var scripted = new ScriptedTransition(descriptor);
+                transition = scripted;
+                try
+                {
+                    _effectContext.Prepare(scripted);
+                }
+                catch (RenderDeviceException exception)
+                {
+                    scripted.Broken = true;
+                    _log.Error("Transition {TypeId} did not compile, so it cuts in the middle: {Message}", descriptor.TypeId, exception.Message);
+                }
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                _log.Error(exception, "Transition {TypeId} could not be read from {File}", descriptor.TypeId, descriptor.SourceFile);
+            }
+        }
+        else if (descriptor.Implementation is { } type && typeof(VideoTransition).IsAssignableFrom(type))
+        {
+            transition = (VideoTransition)Activator.CreateInstance(type)!;
+            _effectContext.Prepare(transition);
+        }
+        else
+        {
+            _log.Warning("Transition {TypeId} has nothing to run; it cuts in the middle", descriptor.TypeId);
+        }
+
+        _transitions[descriptor.TypeId] = transition;
+        return transition;
     }
 
     /// <summary>The source pass: any decoded layout to premultiplied linear light.</summary>

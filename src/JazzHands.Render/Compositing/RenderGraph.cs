@@ -30,6 +30,35 @@ public sealed record GeneratorLayerSource(EffectNode Node) : LayerSource;
 /// <summary>Another sequence, rendered first and then placed like any other picture.</summary>
 public sealed record NestedLayerSource(RenderGraph Graph) : LayerSource;
 
+/// <summary>
+/// A track inside a transition: the outgoing and the incoming clip, each placed, effected and
+/// masked as a layer of its own over nothing, then mixed by the transition into one frame-sized
+/// picture, which is laid over the stack. Either may be null where a clip has no picture.
+/// </summary>
+/// <param name="Outgoing">The clip the transition leaves.</param>
+/// <param name="Incoming">The clip it arrives at.</param>
+/// <param name="Transition">Which transition, its parameters and how far through it the frame is.</param>
+public sealed record TransitionLayerSource(LayerNode? Outgoing, LayerNode? Incoming, TransitionNode Transition) : LayerSource;
+
+/// <summary>A transition at one frame, with its parameters evaluated and its progress eased.</summary>
+/// <param name="Effect">The transition's type and parameters, as an effect node: its time is from the start of its span, its owner length the span's.</param>
+/// <param name="Progress">How far through it the frame is, 0 to 1, after easing.</param>
+public sealed record TransitionNode(EffectNode Effect, float Progress)
+{
+    /// <summary>The progress before easing, which is how far through the span in time the frame is.</summary>
+    public float Linear { get; init; } = Progress;
+
+    /// <summary>A runner in place of the registered one, for a test's own transition.</summary>
+    public ITransitionRunner? Custom { get; init; }
+}
+
+/// <summary>A transition that is not a registered type: a test's, or one built in code.</summary>
+public interface ITransitionRunner
+{
+    /// <summary>Mixes <paramref name="outgoing"/> and <paramref name="incoming"/> at a progress into <paramref name="output"/>, all the same size.</summary>
+    void Apply(EffectContext context, float progress, RenderTarget outgoing, RenderTarget incoming, RenderTarget output);
+}
+
 /// <summary>One mask on a layer, resolved to numbers at the time being rendered.</summary>
 /// <param name="Shape">Rectangle, ellipse, polygon or bezier path.</param>
 /// <param name="Bounds">x, y, width, height of a rectangle or ellipse, in source pixels.</param>

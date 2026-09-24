@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using JazzHands.Core.Model;
+using JazzHands.Core.Queries;
 using JazzHands.Core.Time;
 
 namespace JazzHands.Core.Validation;
@@ -63,7 +64,7 @@ public static class Validator
 
         for (int sequenceIndex = 0; sequenceIndex < project.Sequences.Length; sequenceIndex++)
         {
-            CheckSequence(project.Sequences[sequenceIndex], sequenceIndex, mediaIds, sequenceIds, issues);
+            CheckSequence(project, project.Sequences[sequenceIndex], sequenceIndex, mediaIds, sequenceIds, issues);
         }
 
         CheckSequenceCycles(project, issues);
@@ -171,6 +172,7 @@ public static class Validator
     }
 
     private static void CheckSequence(
+        Project project,
         Sequence sequence,
         int sequenceIndex,
         HashSet<string> mediaIds,
@@ -206,6 +208,7 @@ public static class Validator
             }
 
             CheckTrack(track, trackPath, mediaIds, sequenceIds, clipIds, issues);
+            CheckTransitions(project, sequence, track, trackPath, issues);
         }
     }
 
@@ -249,8 +252,6 @@ public static class Validator
             previousEnd = clip.End;
             previousName = clip.Name;
         }
-
-        CheckTransitions(track, trackPath, issues);
     }
 
     private static void CheckClip(
@@ -434,10 +435,29 @@ public static class Validator
     }
 
     private static void CheckTransitions(
+        Project project,
+        Sequence sequence,
         Track track,
         string trackPath,
         ImmutableArray<ValidationIssue>.Builder issues)
     {
+        if (track.Transitions.IsEmpty)
+        {
+            return;
+        }
+
+        Rational frameRate = project.SettingsFor(sequence).FrameRate;
+        var joined = new HashSet<(string Left, string Right)>();
+
+        if (track.Kind is not (TrackKind.Video or TrackKind.Audio))
+        {
+            issues.Add(new ValidationIssue(
+                Severity.Warning,
+                "transition-wrong-track",
+                $"{trackPath}/transitions",
+                $"'{track.Name}' is not a picture or a sound track, so its transitions do nothing."));
+        }
+
         for (int index = 0; index < track.Transitions.Length; index++)
         {
             Transition transition = track.Transitions[index];
@@ -474,16 +494,56 @@ public static class Validator
                     $"{path}/duration",
                     "A transition with no duration does nothing."));
             }
-            else if (transition.Duration > left.Duration || transition.Duration > right.Duration)
+            else if (TransitionTiming.Span(track, transition, frameRate) is { } span)
+            {
+                if (span.IsClamped)
+                {
+                    issues.Add(new ValidationIssue(
+                        Severity.Warning,
+                        "transition-longer-than-clip",
+                        $"{path}/duration",
+                        $"The transition between '{left.Name}' and '{right.Name}' asks for {Timecode.FormatClock(transition.Duration)} "
+                        + $"but the clips leave room for {Timecode.FormatClock(span.Range.Duration)}, so it plays that long."));
+                }
+
+                (Flicks leftShort, Flicks rightShort) = TransitionTiming.Shortfall(project, span);
+                if (leftShort.Value > 0 || rightShort.Value > 0)
+                {
+                    issues.Add(new ValidationIssue(
+                        Severity.Warning,
+                        "insufficient-handles",
+                        path,
+                        ShortHandles(left, right, leftShort, rightShort)));
+                }
+            }
+
+            if (!joined.Add((transition.LeftClipId, transition.RightClipId)))
             {
                 issues.Add(new ValidationIssue(
-                    Severity.Warning,
-                    "transition-longer-than-clip",
-                    $"{path}/duration",
-                    $"The transition between '{left.Name}' and '{right.Name}' is longer than one of them "
-                    + "and will be clamped."));
+                    Severity.Error,
+                    "duplicate-transition",
+                    path,
+                    $"There are two transitions between '{left.Name}' and '{right.Name}'. A cut takes one."));
             }
         }
+    }
+
+    /// <summary>What an insufficient-handles warning says: which clip is short, by how much, and what happens.</summary>
+    public static string ShortHandles(Clip left, Clip right, Flicks leftShort, Flicks rightShort)
+    {
+        var parts = new List<string>(2);
+        if (leftShort.Value > 0)
+        {
+            parts.Add($"'{left.Name}' needs {Timecode.FormatClock(leftShort)} more source after its end");
+        }
+
+        if (rightShort.Value > 0)
+        {
+            parts.Add($"'{right.Name}' needs {Timecode.FormatClock(rightShort)} more source before its start");
+        }
+
+        return $"{string.Join(" and ", parts)} than the file has, so the transition holds a frame there. "
+            + "Shorten the transition, or add it again with --handles trim to trim the clips back.";
     }
 
     /// <summary>

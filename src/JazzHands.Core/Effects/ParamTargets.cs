@@ -19,6 +19,9 @@ public enum ParamOwnerKind
 
     /// <summary>A mask on a clip.</summary>
     Mask,
+
+    /// <summary>A transition between two clips.</summary>
+    Transition,
 }
 
 /// <summary>
@@ -31,6 +34,7 @@ public enum ParamOwnerKind
 /// <param name="Clip">The clip it is on, or that is it; null for a track or a track's effect.</param>
 /// <param name="Effect">The effect, for an effect.</param>
 /// <param name="Mask">The mask, for a mask.</param>
+/// <param name="Transition">The transition, for a transition.</param>
 public sealed record ParamOwner(
     ParamOwnerKind Kind,
     string Id,
@@ -38,7 +42,8 @@ public sealed record ParamOwner(
     Track Track,
     Clip? Clip = null,
     Effect? Effect = null,
-    Mask? Mask = null)
+    Mask? Mask = null,
+    Transition? Transition = null)
 {
     /// <summary>
     /// Where keyframe time zero is on the sequence: a clip's start for anything on a clip, the
@@ -47,7 +52,7 @@ public sealed record ParamOwner(
     public Flicks Origin => Clip?.Start ?? Flicks.Zero;
 
     /// <summary>How long the owner lasts from its origin, which keyframes are expected to stay inside.</summary>
-    public Flicks Length => Clip?.Duration ?? Sequence.Duration;
+    public Flicks Length => Transition?.Duration ?? Clip?.Duration ?? Sequence.Duration;
 
     /// <summary>True for an owner that carries sound rather than a picture.</summary>
     public bool IsAudio => Track.Kind == TrackKind.Audio;
@@ -116,6 +121,14 @@ public static class ParamTargets
                     return new ParamOwner(ParamOwnerKind.Track, id, sequence, track);
                 }
 
+                foreach (Transition transition in track.Transitions)
+                {
+                    if (Is(transition.Id, id))
+                    {
+                        return new ParamOwner(ParamOwnerKind.Transition, id, sequence, track, Transition: transition);
+                    }
+                }
+
                 foreach (Effect effect in track.Effects)
                 {
                     if (Is(effect.Id, id))
@@ -180,6 +193,7 @@ public static class ParamTargets
             ParamOwnerKind.Track when owner.Track.Kind == TrackKind.Audio => [Audio],
             ParamOwnerKind.Effect => registry.Find(owner.Effect!.TypeId) is { } descriptor ? [descriptor] : [],
             ParamOwnerKind.Mask => [MaskParams],
+            ParamOwnerKind.Transition => registry.Find(owner.Transition!.TypeId) is { } transition ? [transition] : [],
             _ => [],
         };
     }
@@ -210,6 +224,7 @@ public static class ParamTargets
         return owner.Kind switch
         {
             ParamOwnerKind.Effect => owner.Effect!.Parameter(name),
+            ParamOwnerKind.Transition => owner.Transition!.Parameter(name),
             ParamOwnerKind.Mask => name switch
             {
                 "bounds" => owner.Mask!.Bounds,
@@ -260,6 +275,13 @@ public static class ParamTargets
                     : effect.WithParameter(name, value);
                 return ReplaceEffect(project, owner, changed);
 
+            case ParamOwnerKind.Transition:
+                Transition transition = owner.Transition!;
+                EquatableArray<EffectParameter> parameters = value is null
+                    ? new EquatableArray<EffectParameter>(transition.Parameters.Where(parameter => !Is(parameter.Name, name)))
+                    : transition.AsEffect().WithParameter(name, value).Parameters;
+                return ReplaceTransition(project, owner, transition with { Parameters = parameters });
+
             case ParamOwnerKind.Mask:
                 Mask mask = owner.Mask!;
                 Mask edited = name switch
@@ -291,6 +313,17 @@ public static class ParamTargets
 
         Clip clip = owner.Clip!;
         return project.ReplaceTrack(owner.Track.ReplaceClip(clip with { Masks = clip.Masks.SetItem(clip.Masks.IndexOf(item => Is(item.Id, mask.Id)), mask) }));
+    }
+
+    /// <summary>A project with a transition replaced on its track.</summary>
+    public static Project ReplaceTransition(Project project, ParamOwner owner, Transition transition)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(owner);
+        ArgumentNullException.ThrowIfNull(transition);
+
+        int index = owner.Track.Transitions.IndexOf(item => Is(item.Id, transition.Id));
+        return project.ReplaceTrack(owner.Track with { Transitions = owner.Track.Transitions.SetItem(index, transition) });
     }
 
     /// <summary>A project with an effect instance replaced where it is, on its clip or its track.</summary>

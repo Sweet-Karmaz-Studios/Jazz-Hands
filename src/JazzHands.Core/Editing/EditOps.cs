@@ -67,7 +67,7 @@ public static partial class EditOps
             Markers = MarkersBefore(clip, leftDuration),
         };
 
-        return track.ReplaceClip(left).AddClip(right);
+        return TransitionOps.AfterSplit(track.ReplaceClip(left).AddClip(right), clip.Id, right.Id);
     }
 
     /// <summary>

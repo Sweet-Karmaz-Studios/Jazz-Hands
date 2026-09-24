@@ -190,7 +190,7 @@ public sealed class AudioGraph
             for (int index = FirstEndingAfter(clips, start); index < clips.Length; index++)
             {
                 ClipMix clip = clips[index];
-                if (clip.Start >= end)
+                if (clip.PlayStart >= end)
                 {
                     break;
                 }
@@ -201,8 +201,13 @@ public sealed class AudioGraph
                     any = true;
                 }
 
-                long from = Math.Max(start, clip.Start);
-                long to = Math.Min(end, clip.End);
+                long from = Math.Max(start, clip.PlayStart);
+                long to = Math.Min(end, clip.PlayEnd);
+                if (from >= to)
+                {
+                    continue;
+                }
+
                 starved |= !MixClip(clip, from - clip.Start, (int)(from - start), (int)(to - from));
             }
 
@@ -272,12 +277,14 @@ public sealed class AudioGraph
         float volumeFrom = Dsp.DbToGain(clip.Volume.Evaluate(clipSample));
         float volumeTo = clip.Volume.IsConstant ? volumeFrom : Dsp.DbToGain(clip.Volume.Evaluate(clipSample + frames));
         bool fading = clipSample < clip.FadeInLength || clip.Length - (clipSample + frames) < clip.FadeOutLength;
+        bool crossfading = clip.Crossfading(clipSample, frames);
         Span<float> gains = _gains.AsSpan(0, frames);
 
         for (int index = 0; index < frames; index++)
         {
             float gain = volumeFrom + ((volumeTo - volumeFrom) * index / frames);
-            gains[index] = fading ? gain * clip.FadeGain(clipSample + index) : gain;
+            gain = fading ? gain * clip.FadeGain(clipSample + index) : gain;
+            gains[index] = crossfading ? gain * clip.CrossfadeGain(clipSample + index) : gain;
         }
 
         Span<float> matrixFrom = stackalloc float[Dsp.MaxChannels * Dsp.MaxChannels];
@@ -392,7 +399,10 @@ public sealed class AudioGraph
         }
     }
 
-    /// <summary>The first clip that ends after a sample. Clips on a track do not overlap, so their ends are sorted too.</summary>
+    /// <summary>
+    /// The first clip heard after a sample. Clips on a track do not overlap, and a clip plays into
+    /// a transition no further than the next one ends, so where they stop being heard is sorted too.
+    /// </summary>
     private static int FirstEndingAfter(ClipMix[] clips, long sample)
     {
         int low = 0;
@@ -401,7 +411,7 @@ public sealed class AudioGraph
         while (low < high)
         {
             int middle = (low + high) / 2;
-            if (clips[middle].End <= sample)
+            if (clips[middle].PlayEnd <= sample)
             {
                 low = middle + 1;
             }

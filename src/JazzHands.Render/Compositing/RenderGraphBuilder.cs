@@ -177,7 +177,17 @@ public static class RenderGraphBuilder
                 continue;
             }
 
-            if (TimelineQueries.ClipAt(track, time) is not { Enabled: true } clip)
+            TrackMoment moment = track.Kind == TrackKind.Video
+                ? TransitionTiming.At(track, time, settings.FrameRate)
+                : new TrackMoment(TimelineQueries.ClipAt(track, time), null, null);
+
+            if (moment.Span is { } span)
+            {
+                layers.Add(Transition(project, sequence, track, span, time, frameSize, (width, height), frames, options, depth, settings.FrameRate));
+                continue;
+            }
+
+            if (moment.Clip is not { Enabled: true } clip)
             {
                 continue;
             }
@@ -206,6 +216,80 @@ public static class RenderGraphBuilder
             ProjectFolder = options.ProjectFolder,
             CacheLayers = options.CacheLayers,
         };
+    }
+
+    /// <summary>
+    /// The decoder lane the incoming clip of a transition asks on: its own, so a transition
+    /// between two parts of one file keeps two decoders rather than seeking one back and forth.
+    /// </summary>
+    public static int IncomingLane(int trackOrder) => trackOrder + (1 << 16);
+
+    /// <summary>
+    /// A track inside a transition: both clips as layers of their own, at this time, each with its
+    /// own place, effects and masks, mixed by the transition at its eased progress.
+    /// </summary>
+    /// <remarks>
+    /// The outgoing clip plays on past its end and the incoming one starts before its start. Where
+    /// a file has less source than that, the frame is held at the last there is. Keyframes are
+    /// read at the clip's own time, so they hold their end values beyond the clip.
+    /// </remarks>
+    private static LayerNode Transition(
+        Project project,
+        Sequence sequence,
+        Track track,
+        TransitionSpan span,
+        Flicks time,
+        Vector2 frameSize,
+        (int Width, int Height) output,
+        IFrameProvider frames,
+        RenderOptions options,
+        int depth,
+        Rational frameRate)
+    {
+        LayerNode? Side(Clip clip, int lane)
+        {
+            if (!clip.Enabled)
+            {
+                return null;
+            }
+
+            Flicks local = time - clip.Start;
+            Flicks shown = TransitionTiming.ClampToSource(project, clip, time);
+            if (Source(project, clip, shown, lane, frameSize, frames, options, depth, frameRate) is not { } source)
+            {
+                return null;
+            }
+
+            return Layer(clip, local, source, frameSize, options) with { Effects = Effects(clip, track, local, time, sequence, options) };
+        }
+
+        Transition transition = span.Transition;
+        EffectDescriptor descriptor = options.Effects.Find(transition.TypeId) is { Kind: EffectKind.Transition } known
+            ? known
+            : new EffectDescriptor(transition.TypeId, EffectKind.Transition, transition.TypeId, "Unknown", string.Empty, []);
+
+        Flicks into = time - span.Range.Start;
+        Effect model = transition.AsEffect();
+        ParameterSet parameters = ParameterSet.Evaluate(descriptor, model, into);
+        float linear = span.Progress(time);
+
+        var effect = new EffectNode(descriptor, parameters)
+        {
+            InstanceId = transition.Id,
+            LocalTime = into,
+            Seed = StableSeed(transition.Id),
+            Model = model,
+            OwnerLength = span.Range.Duration,
+            SequenceTime = time,
+            FrameRate = frameRate,
+        };
+
+        var source = new TransitionLayerSource(
+            Side(span.Left, track.Order),
+            Side(span.Right, IncomingLane(track.Order)),
+            new TransitionNode(effect, TransitionEasing.Apply(parameters, linear)) { Linear = linear });
+
+        return new LayerNode(source, output.Width, output.Height, Matrix3x2.Identity, LayerNode.NoCrop, 1.0f, BlendMode.Normal, [], options.Scale);
     }
 
     /// <summary>What a picture clip shows, and how big it is in its own pixels.</summary>

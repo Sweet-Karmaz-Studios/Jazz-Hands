@@ -1,5 +1,6 @@
 using JazzHands.Audio.Effects;
 using JazzHands.Core.Model;
+using JazzHands.Core.Queries;
 using JazzHands.Core.Time;
 
 namespace JazzHands.Audio;
@@ -53,9 +54,10 @@ public static class AudioGraphBuilder
             }
 
             var clips = new List<ClipMix>();
+            Dictionary<string, Joins> joins = Crossfades(project, track, settings.FrameRate, rate);
             foreach (Clip clip in track.Clips)
             {
-                if (BuildClip(project, clip, rate, effects, used) is { } built)
+                if (BuildClip(project, clip, rate, effects, used, joins.GetValueOrDefault(clip.Id)) is { } built)
                 {
                     clips.Add(built);
                 }
@@ -84,7 +86,7 @@ public static class AudioGraphBuilder
     /// found are all silent. The last is not an error here: a project whose drive is unplugged
     /// still opens, and validation is where a missing file is reported.
     /// </remarks>
-    internal static ClipMix? BuildClip(Project project, Clip clip, int rate, AudioEffectHost? effects = null, ISet<string>? used = null)
+    internal static ClipMix? BuildClip(Project project, Clip clip, int rate, AudioEffectHost? effects = null, ISet<string>? used = null, Joins joins = default)
     {
         if (!clip.Enabled || clip.IsHold || clip.MediaId is not { } mediaId || clip.Duration <= Flicks.Zero)
         {
@@ -124,6 +126,45 @@ public static class AudioGraphBuilder
             ScalarCurve.From(clip.Volume, 0.0f, rate),
             ScalarCurve.From(clip.Pan, 0.0f, rate),
             clip.ChannelMap ?? AudioChannelMap.Auto,
-            effects?.Chain(clip.Effects, rate, used ?? new HashSet<string>(StringComparer.Ordinal)));
+            effects?.Chain(clip.Effects, rate, used ?? new HashSet<string>(StringComparer.Ordinal)),
+            joins.LeadIn,
+            joins.Tail,
+            joins.CrossIn,
+            joins.CrossOut);
     }
+
+    /// <summary>
+    /// What each clip of a track plays into its neighbours: the crossfades of the track's
+    /// transitions, in samples, with the outgoing clip playing on past its end and the incoming one
+    /// starting before its start, as far as their files have sound. Past that the crossfade goes on
+    /// over silence.
+    /// </summary>
+    internal static Dictionary<string, Joins> Crossfades(Project project, Track track, Rational frameRate, int rate)
+    {
+        var joins = new Dictionary<string, Joins>(StringComparer.Ordinal);
+        foreach (TransitionSpan span in TransitionTiming.Spans(track, frameRate))
+        {
+            long start = span.Range.Start.ToSamples(rate, RoundingMode.Nearest);
+            long end = span.Range.End.ToSamples(rate, RoundingMode.Nearest);
+            var crossfade = new Crossfade(start, end - start, JazzHands.Audio.Effects.Crossfades.CurveOf(span.Transition.TypeId));
+
+            Flicks tail = Flicks.Min(span.After, TransitionTiming.HandleAfter(project, span.Left));
+            Flicks leadIn = Flicks.Min(span.Before, TransitionTiming.HandleBefore(project, span.Right));
+
+            Joins left = joins.GetValueOrDefault(span.Left.Id);
+            joins[span.Left.Id] = left with { Tail = tail.ToSamples(rate, RoundingMode.Nearest), CrossOut = crossfade };
+
+            Joins right = joins.GetValueOrDefault(span.Right.Id);
+            joins[span.Right.Id] = right with { LeadIn = leadIn.ToSamples(rate, RoundingMode.Nearest), CrossIn = crossfade };
+        }
+
+        return joins;
+    }
+
+    /// <summary>How a clip plays into the transitions at its ends.</summary>
+    /// <param name="LeadIn">Samples before its start it plays.</param>
+    /// <param name="Tail">Samples after its end it plays.</param>
+    /// <param name="CrossIn">The crossfade it comes in on.</param>
+    /// <param name="CrossOut">The crossfade it goes out on.</param>
+    internal readonly record struct Joins(long LeadIn, long Tail, Crossfade? CrossIn, Crossfade? CrossOut);
 }

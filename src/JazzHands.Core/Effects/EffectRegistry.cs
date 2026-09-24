@@ -86,6 +86,13 @@ public sealed class EffectRegistry
             parameters.Add(Describe(effect.Id, param));
         }
 
+        // Every picture transition eases the same way, so the registry gives them the parameters
+        // rather than each type declaring them.
+        if (effect.Kind == EffectKind.Transition)
+        {
+            parameters.AddRange(TransitionEasing.Params);
+        }
+
         if (parameters.Select(parameter => parameter.Name).Distinct(StringComparer.Ordinal).Count() != parameters.Count)
         {
             throw new InvalidOperationException($"Effect '{effect.Id}' declares a parameter name twice.");
@@ -131,7 +138,9 @@ public sealed class EffectRegistry
                 : $"There is no effect called '{typeId}'. Did you mean '{near}'? 'jazz effect list' shows them all.");
     }
 
-    private static ParamDescriptor Describe(string typeId, ParamAttribute param)
+    /// <summary>One parameter declaration read into a descriptor, its default parsed as the commands would.</summary>
+    /// <exception cref="InvalidOperationException">The default does not parse, or an enum lists no choices.</exception>
+    public static ParamDescriptor Describe(string typeId, ParamAttribute param)
     {
         EquatableArray<string> choices = param.Choices.Length == 0
             ? EquatableArray<string>.Empty
