@@ -13,6 +13,7 @@ using JazzHands.Render;
 using JazzHands.Render.Color;
 using JazzHands.Render.Frames;
 using JazzHands.Render.Compositing;
+using JazzHands.Render.Scopes;
 using Serilog;
 using Vortice.Direct3D11;
 
@@ -95,6 +96,10 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
     private int _programWidth;
     private int _programHeight;
     private PreviewFrame? _lastFrame;
+    private ScopeRenderer? _scopes;
+    private volatile bool _scopesWanted;
+    private volatile bool _scopesStale;
+    private long _scopesAt;
 
     private long _presented;
     private long _dropped;
@@ -161,6 +166,31 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
     /// is not flooded; every change while paused, because each one is somebody's deliberate step.
     /// </summary>
     public event EventHandler<PlayheadMovedEventArgs>? PlayheadMoved;
+
+    /// <summary>
+    /// Raised on the composition thread with the scopes of the frame on screen, while
+    /// <see cref="Scopes"/> is on: at most every 33 ms while playing, the latest frame's once it
+    /// is parked.
+    /// </summary>
+    public event EventHandler<ScopeReading>? ScopesMeasured;
+
+    /// <summary>
+    /// Measure the scopes on each frame shown. Off costs nothing; the Scopes panel turns it on
+    /// while it is visible and off when hidden.
+    /// </summary>
+    public bool Scopes
+    {
+        get => _scopesWanted;
+        set
+        {
+            _scopesWanted = value;
+            if (value)
+            {
+                _scopesStale = true;
+                _wake.Set();
+            }
+        }
+    }
 
     /// <summary>The transport this engine plays through.</summary>
     public Transport Transport => _transport;
@@ -655,6 +685,8 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
         {
             resolution?.Dispose();
             ReleaseProgram();
+            _scopes?.Dispose();
+            _scopes = null;
             frames?.Dispose();
             hardware?.Dispose();
         }
@@ -719,10 +751,16 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
             Render(frames, snapshot, sequence, settings, frame, time, effective, playing, rate);
             _lastKey = key;
             Present();
+            MeasureScopes(playing, force: false);
         }
         else if (refresh)
         {
             Present();
+        }
+        else if (_scopesStale)
+        {
+            // The scopes were just turned on over a frame already shown.
+            MeasureScopes(playing, force: true);
         }
 
         Report(time, frame, state, playing ? rate : _transport.Rate, now);
@@ -991,6 +1029,41 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
             _log.Error(exception, "A PlayheadMoved subscriber threw");
+        }
+    }
+
+    /// <summary>
+    /// The scopes of the frame just shown: playing, at most every 33 ms and collected a frame late
+    /// so nothing waits on the GPU; parked, every pending reading drained and the latest reported,
+    /// so a still frame shows its own scopes.
+    /// </summary>
+    private void MeasureScopes(bool playing, bool force)
+    {
+        _scopesStale = false;
+        if (!_scopesWanted || _program is null)
+        {
+            return;
+        }
+
+        long now = Stopwatch.GetTimestamp();
+        if (playing && !force && Stopwatch.GetElapsedTime(_scopesAt, now) < TimeSpan.FromMilliseconds(33))
+        {
+            return;
+        }
+
+        _scopesAt = now;
+        _scopes ??= new ScopeRenderer(_device);
+        _scopes.Submit(_program);
+
+        ScopeReading? latest = playing ? _scopes.Collect() : null;
+        while (!playing && _scopes.Collect(wait: true) is { } reading)
+        {
+            latest = reading;
+        }
+
+        if (latest is not null)
+        {
+            ScopesMeasured?.Invoke(this, latest);
         }
     }
 
