@@ -2,6 +2,8 @@ using System.CommandLine;
 using JazzHands.Audio.Output;
 using JazzHands.Cli;
 using JazzHands.Core.Commands;
+using JazzHands.Core.Effects;
+using JazzHands.Engine.Effects;
 using JazzHands.Engine.Logging;
 using Serilog.Events;
 
@@ -150,6 +152,10 @@ namespace JazzHands.Cli
                 Description = "Video tracks to stack, each scaled and turned into its own quadrant, on its own decoder.",
                 DefaultValueFactory = _ => 1,
             };
+            var effects = new Option<string>("--effects")
+            {
+                Description = "Picture effects to stack on every clip, by type id, comma separated, for example video.blur.gaussian,video.glow.",
+            };
 
             var command = new Command(
                 "playback",
@@ -161,6 +167,7 @@ namespace JazzHands.Cli
                 audible,
                 panel,
                 layers,
+                effects,
             };
 
             command.SetAction(parseResult =>
@@ -178,6 +185,13 @@ namespace JazzHands.Cli
                     return ExitCode.CommandError;
                 }
 
+                string[] stack = (parseResult.GetValue(effects) ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                if (stack.FirstOrDefault(typeId => EffectCatalog.Registry.Find(typeId) is not { Kind: EffectKind.Video }) is { } unknown)
+                {
+                    Console.Error.WriteLine($"jazz: '{unknown}' is not a picture effect. 'jazz effect list' names them.");
+                    return ExitCode.CommandError;
+                }
+
                 LogSetup.ConfigureForCli(parseResult.GetValue(VerboseOption) ? LogEventLevel.Debug : LogEventLevel.Warning);
 
                 try
@@ -190,6 +204,7 @@ namespace JazzHands.Cli
                         size.Width,
                         size.Height,
                         Math.Clamp(parseResult.GetValue(layers), 1, 16),
+                        stack,
                         Console.Error);
 
                     Console.Out.WriteLine(parseResult.GetValue(JsonOption)

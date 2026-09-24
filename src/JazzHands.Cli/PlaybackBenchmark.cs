@@ -22,6 +22,7 @@ namespace JazzHands.Cli;
 /// <param name="Device">The sound card whose clock it played to, or "silent".</param>
 /// <param name="Layers">How many video tracks played at once, each its own decoder lane.</param>
 /// <param name="Clips">How many clips the sequence had, over all its layers.</param>
+/// <param name="Effects">The picture effects stacked on every clip, first to last.</param>
 /// <param name="Seconds">How long it played, by the wall clock.</param>
 /// <param name="FramesDue">Frames the clock passed through while playing at normal speed.</param>
 /// <param name="Presented">Frames handed to the preview target.</param>
@@ -42,6 +43,7 @@ public sealed record PlaybackBenchmarkResult(
     string Device,
     int Layers,
     int Clips,
+    string[] Effects,
     double Seconds,
     long FramesDue,
     long Presented,
@@ -65,6 +67,8 @@ public sealed record PlaybackBenchmarkResult(
 /// With <c>--layers</c> the same is stacked on several video tracks, each transformed into a
 /// quadrant, which is the compositor's load: a decode per layer, the source, transform and
 /// composite passes for each, and one output pass.
+/// With <c>--effects</c> every clip carries the same stack of picture effects at their default
+/// settings, run in order at the working resolution each frame.
 ///
 /// Each frame is presented to a target that does what the preview panel's presenter does: a
 /// filtered blit of the program texture into a panel-sized surface and a wait for the GPU to
@@ -81,6 +85,7 @@ public static class PlaybackBenchmark
     /// <param name="panelWidth">The width of the surface the target presents into.</param>
     /// <param name="panelHeight">Its height.</param>
     /// <param name="layers">How many video tracks to stack, each transformed into its own quadrant.</param>
+    /// <param name="effects">Picture effects to stack on every clip, at their default settings, by type id.</param>
     /// <param name="progress">Where to report as it goes.</param>
     public static PlaybackBenchmarkResult Run(
         string path,
@@ -90,6 +95,7 @@ public static class PlaybackBenchmark
         int panelWidth = 2560,
         int panelHeight = 1440,
         int layers = 1,
+        IReadOnlyList<string>? effects = null,
         TextWriter? progress = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -98,7 +104,8 @@ public static class PlaybackBenchmark
         MediaStream video = item.Info?.VideoStreams.FirstOrDefault()
             ?? throw new InvalidOperationException($"'{path}' has no picture to play.");
 
-        (Project project, int clips) = Build(item, video, duration, Math.Max(1, layers));
+        string[] stacked = [.. effects ?? []];
+        (Project project, int clips) = Build(item, video, duration, Math.Max(1, layers), stacked);
         ProjectSettings settings = project.Settings;
 
         using RenderDevice device = RenderDevice.Create();
@@ -176,6 +183,7 @@ public static class PlaybackBenchmark
             output.DeviceName,
             Math.Max(1, layers),
             clips,
+            stacked,
             seconds,
             due,
             engine.PresentedFrames - presentedAtStart,
@@ -200,7 +208,7 @@ public static class PlaybackBenchmark
         return string.Create(
             CultureInfo.InvariantCulture,
             $"""
-            {result.File}: {result.Size} at {result.FrameRate} fps, {result.Layers} layer(s), {result.Clips} clips, on {result.Adapter}, clock from {result.Device}
+            {result.File}: {result.Size} at {result.FrameRate} fps, {result.Layers} layer(s), {result.Clips} clips, {(result.Effects.Length == 0 ? "no effects" : string.Join(" + ", result.Effects))}, on {result.Adapter}, clock from {result.Device}
               {result.Seconds:F1} s, {result.FramesDue} frames due, {result.Presented} presented
               dropped         {result.Dropped} ({result.DroppedPercent:F3}%)
               late            p50 {result.LateP50Milliseconds:F1} ms, p99 {result.LateP99Milliseconds:F1} ms after the frame was due
@@ -222,7 +230,7 @@ public static class PlaybackBenchmark
     /// showing the same frame would share one decode and the run would measure a quarter of the
     /// work it claims to.
     /// </remarks>
-    private static (Project Project, int Clips) Build(MediaItem item, MediaStream video, TimeSpan duration, int layers)
+    private static (Project Project, int Clips) Build(MediaItem item, MediaStream video, TimeSpan duration, int layers, string[] effects)
     {
         Rational rate = video.FrameRate ?? Rational.Fps30;
         long fileFrames = item.Duration.ToFrames(rate, RoundingMode.Floor);
@@ -232,6 +240,7 @@ public static class PlaybackBenchmark
         var settings = new ProjectSettings(rate, video.Width, video.Height);
         Project project = Project.CreateNew("perf playback", settings) with { Media = EquatableArray.Create(item) };
 
+        EquatableArray<Effect> chain = new([.. effects.Select(Effect.Create)]);
         var tracks = new List<Track>(layers);
         int total = 0;
 
@@ -253,6 +262,7 @@ public static class PlaybackBenchmark
                     MediaId: item.Id,
                     SourceStreamIndex: video.Index,
                     Transform: transform,
+                    Effects: chain,
                     Name: $"{item.Name} {layer + 1}.{laid.Count}"));
                 at += length - sourceIn;
             }
