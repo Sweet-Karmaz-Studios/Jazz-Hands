@@ -113,6 +113,23 @@ public sealed class AudioGraph
     {
         Limiter.Reset();
         Meter.Reset();
+
+        // A filter's memory of where the playhead was is wrong where it is now.
+        foreach (TrackMix track in Volatile.Read(ref _published).TrackArray)
+        {
+            foreach (Effects.AudioEffectSlot effect in track.EffectArray)
+            {
+                effect.Effect.Reset();
+            }
+
+            foreach (ClipMix clip in track.ClipArray)
+            {
+                foreach (Effects.AudioEffectSlot effect in clip.EffectArray)
+                {
+                    effect.Effect.Reset();
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -191,6 +208,13 @@ public sealed class AudioGraph
 
             if (any)
             {
+                // Track effects run on the bus, before its volume and pan. A bus with no clip
+                // under the block is not run, so a tail (a reverb, Phase 20) stops there for now.
+                foreach (Effects.AudioEffectSlot effect in track.EffectArray)
+                {
+                    effect.Process(_bus, 0, frames, Channels, SampleRate, start);
+                }
+
                 AddBus(track, start, frames);
             }
         }
@@ -236,6 +260,12 @@ public sealed class AudioGraph
     {
         int sourceChannels = clip.Source.Channels;
         bool ready = FetchSource(clip, clipSample, frames);
+
+        // Clip effects run on the source channels, before gain, fades and pan: ClipSource, ClipFx, then the rest.
+        foreach (Effects.AudioEffectSlot effect in clip.EffectArray)
+        {
+            effect.Process(_clipSource, 0, frames, sourceChannels, SampleRate, clipSample);
+        }
 
         // Clip gain is ramped across the block so an automated fader does not step every 10 ms,
         // and the fades are exact per sample because a short one would be audibly stepped.

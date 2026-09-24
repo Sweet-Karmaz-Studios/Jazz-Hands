@@ -691,6 +691,21 @@ public sealed record Sequence(
     }
 }
 
+/// <summary>
+/// A saved effect chain, applied to a clip or a track in one go.
+/// </summary>
+/// <remarks>
+/// The effects are stored whole, keyframes included, with keyframe times relative to whatever
+/// they were saved from. Applying one gives every effect a new identifier.
+/// </remarks>
+/// <param name="Id">The preset identifier.</param>
+/// <param name="Name">Its display name.</param>
+/// <param name="Effects">The chain, in application order.</param>
+public sealed record EffectPreset(
+    string Id,
+    string Name,
+    EquatableArray<Effect> Effects = default) : IEquatable<EffectPreset>;
+
 /// <summary>An export preset. Filled in by Phase 22; carried here so projects can store their own.</summary>
 /// <param name="Id">The preset identifier.</param>
 /// <param name="Name">Its display name.</param>
@@ -718,6 +733,7 @@ public sealed record ExportPreset(
 /// <param name="Presets">Export presets stored with the project.</param>
 /// <param name="Created">When the project was made.</param>
 /// <param name="Modified">When it was last changed.</param>
+/// <param name="EffectPresets">Effect chains saved with the project.</param>
 public sealed record Project(
     string Id,
     string Name,
@@ -728,7 +744,8 @@ public sealed record Project(
     string? ActiveSequenceId = null,
     EquatableArray<ExportPreset> Presets = default,
     DateTimeOffset Created = default,
-    DateTimeOffset Modified = default) : IEquatable<Project>
+    DateTimeOffset Modified = default,
+    EquatableArray<EffectPreset> EffectPresets = default) : IEquatable<Project>
 {
     /// <summary>The schema version this build writes.</summary>
     public const int CurrentSchemaVersion = 1;

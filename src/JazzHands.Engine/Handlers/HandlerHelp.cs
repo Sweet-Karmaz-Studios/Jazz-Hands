@@ -89,7 +89,9 @@ internal static class HandlerHelp
         if (project.Sequence(id) is not null
             || project.MediaItem(id) is not null
             || project.FindClip(id) is not null
-            || project.Sequences.Any(sequence => sequence.Track(id) is not null))
+            || project.Sequences.Any(sequence => sequence.Track(id) is not null)
+            || Core.Effects.ParamTargets.Find(project, id) is not null
+            || project.EffectPresets.Any(preset => string.Equals(preset.Id, id, StringComparison.Ordinal)))
         {
             throw new CommandException("duplicate-id", $"'{id}' is already used by something else in this project.");
         }

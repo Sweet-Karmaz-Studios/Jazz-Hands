@@ -1,3 +1,4 @@
+using JazzHands.Audio.Effects;
 using JazzHands.Core.Model;
 
 namespace JazzHands.Audio;
@@ -107,7 +108,8 @@ public sealed class TrackMix
     /// <param name="volume">Gain in decibels over sequence time.</param>
     /// <param name="pan">Balance from -1 to 1 over sequence time.</param>
     /// <param name="clips">Clips, sorted by start.</param>
-    public TrackMix(string id, string name, bool muted, bool solo, ScalarCurve volume, ScalarCurve pan, IReadOnlyList<ClipMix> clips)
+    /// <param name="effects">The track's effects, run on its bus before its volume and pan.</param>
+    public TrackMix(string id, string name, bool muted, bool solo, ScalarCurve volume, ScalarCurve pan, IReadOnlyList<ClipMix> clips, IReadOnlyList<AudioEffectSlot>? effects = null)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(volume);
@@ -121,6 +123,7 @@ public sealed class TrackMix
         Volume = volume;
         Pan = pan;
         ClipArray = [.. clips.OrderBy(clip => clip.Start)];
+        EffectArray = effects is null ? [] : [.. effects];
     }
 
     /// <summary>The track identifier.</summary>
@@ -145,6 +148,11 @@ public sealed class TrackMix
     public IReadOnlyList<ClipMix> Clips => ClipArray;
 
     internal ClipMix[] ClipArray { get; }
+
+    /// <summary>The track's effects, first to last, over sequence time in samples.</summary>
+    public IReadOnlyList<AudioEffectSlot> Effects => EffectArray;
+
+    internal AudioEffectSlot[] EffectArray { get; }
 
     /// <summary>Whether this track is heard, given whether anything is soloed.</summary>
     public bool IsAudible(bool anySolo) => !Muted && (!anySolo || Solo);
@@ -179,7 +187,8 @@ public sealed class ClipMix
         Interp fadeOutCurve = Interp.Linear,
         ScalarCurve? volume = null,
         ScalarCurve? pan = null,
-        AudioChannelMap channelMap = AudioChannelMap.Auto)
+        AudioChannelMap channelMap = AudioChannelMap.Auto,
+        IReadOnlyList<AudioEffectSlot>? effects = null)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(source.Channels);
@@ -204,7 +213,16 @@ public sealed class ClipMix
         Volume = volume ?? ScalarCurve.Constant(0.0f);
         Pan = pan ?? ScalarCurve.Constant(0.0f);
         ChannelMap = channelMap;
+        EffectArray = effects is null ? [] : [.. effects];
     }
+
+    /// <summary>
+    /// The clip's effects, first to last, run on its source channels before its gain, fades and
+    /// pan, over clip time in samples.
+    /// </summary>
+    public IReadOnlyList<AudioEffectSlot> Effects => EffectArray;
+
+    internal AudioEffectSlot[] EffectArray { get; }
 
     /// <summary>The clip identifier.</summary>
     public string Id { get; }

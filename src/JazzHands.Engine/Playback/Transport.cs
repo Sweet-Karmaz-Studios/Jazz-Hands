@@ -1,4 +1,5 @@
 using JazzHands.Audio;
+using JazzHands.Audio.Effects;
 using JazzHands.Audio.Output;
 using JazzHands.Core.Model;
 using JazzHands.Core.Time;
@@ -57,6 +58,8 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
     private readonly AudioBlockCache _cache;
     private readonly AudioSampleServer _server;
     private readonly AudioGraph _graph;
+    private readonly AudioEffectHost _effects = new();
+    private readonly AudioEffectHost _stretchEffects = new();
     private readonly Thread _decoder;
     private readonly AutoResetEvent _wake = new(false);
     private readonly Lock _post = new();
@@ -252,7 +255,7 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
     {
         ArgumentNullException.ThrowIfNull(project);
 
-        MixSnapshot snapshot = AudioGraphBuilder.Build(project);
+        MixSnapshot snapshot = AudioGraphBuilder.Build(project, effects: _effects);
         if (snapshot.SampleRate != _output.SampleRate || snapshot.Channels != _output.Channels)
         {
             throw new InvalidOperationException(
@@ -263,7 +266,9 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
         // Names first, so every media id in the new mix already resolves when the mix arrives.
         _server.Update(project, projectPath);
         _graph.Publish(snapshot);
-        _stretchGraph.Publish(snapshot);
+        // Its own build: the two graphs run on different threads, and an effect instance with
+        // state (a filter's memory) must only ever be run by one of them.
+        _stretchGraph.Publish(AudioGraphBuilder.Build(project, effects: _stretchEffects));
         _wake.Set();
     }
 

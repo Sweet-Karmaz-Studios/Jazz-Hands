@@ -1,10 +1,11 @@
 using System.Collections.Immutable;
 using System.Numerics;
-using JazzHands.Core.Animation;
+using JazzHands.Core.Effects;
 using JazzHands.Core.Model;
 using JazzHands.Core.Queries;
 using JazzHands.Core.Time;
 using JazzHands.Render.Color;
+using JazzHands.Render.Effects;
 using JazzHands.Render.Frames;
 
 namespace JazzHands.Render.Compositing;
@@ -55,10 +56,10 @@ public sealed record RenderOptions
     public bool CacheLayers { get; init; }
 
     /// <summary>
-    /// Turns an effect instance into something the compositor can run, or null for one it does
-    /// not know. Phase 15's registry plugs in here; without it adjustment layers pass through.
+    /// The effect types the builder knows. An effect whose type is not here, or is not a picture
+    /// effect, is left out of the frame rather than failing it.
     /// </summary>
-    public Func<Effect, ILayerEffect?>? Effects { get; init; }
+    public EffectRegistry Effects { get; init; } = VideoEffects.Registry;
 
     /// <summary>How deep nested sequences may go before the builder stops, whatever the validator allowed.</summary>
     public int MaxNesting { get; init; } = 16;
@@ -180,9 +181,11 @@ public static class RenderGraphBuilder
 
             Flicks local = time - clip.Start;
 
+            ImmutableArray<EffectNode> effects = Effects(clip, track, local, time, options);
+
             if (track.Kind == TrackKind.Adjustment)
             {
-                layers.Add(Adjustment(clip, local, frameSize, options));
+                layers.Add(Adjustment(clip, local, frameSize, options) with { Effects = effects });
                 continue;
             }
 
@@ -191,7 +194,7 @@ public static class RenderGraphBuilder
                 continue;
             }
 
-            layers.Add(Layer(clip, local, source, frameSize, options));
+            layers.Add(Layer(clip, local, source, frameSize, options) with { Effects = effects });
         }
 
         return new RenderGraph(width, height, layers.ToImmutable())
@@ -242,7 +245,7 @@ public static class RenderGraphBuilder
 
         if (string.Equals(clip.GeneratorId, SolidGenerator, StringComparison.Ordinal))
         {
-            Vector4 colour = GeneratorColour(clip, time - clip.Start);
+            Vector4 colour = GeneratorColour(clip, time - clip.Start, options);
 
             return (new SolidLayerSource(new Vector4(colour.X * colour.W, colour.Y * colour.W, colour.Z * colour.W, colour.W)), frameSize, ConformPolicy.Stretch);
         }
@@ -263,10 +266,10 @@ public static class RenderGraphBuilder
             source.Size,
             frameSize,
             source.Policy,
-            Float2(transform.Position, local, Vector2.Zero),
-            Float2(transform.Scale, local, Vector2.One),
-            Float(transform.Rotation, local, 0.0f),
-            Float2(transform.Anchor, local, Vector2.Zero),
+            Float2(transform.Position, Intrinsic.Position, local),
+            Float2(transform.Scale, Intrinsic.Scale, local),
+            Float(transform.Rotation, Intrinsic.Rotation, local),
+            Float2(transform.Anchor, Intrinsic.Anchor, local),
             options.Scale);
 
         return new LayerNode(
@@ -275,26 +278,78 @@ public static class RenderGraphBuilder
             (int)source.Size.Y,
             placement,
             CropRect(clip.Crop, local),
-            Math.Clamp(Float(clip.Opacity, local, 1.0f), 0.0f, 1.0f),
+            Float(clip.Opacity, Intrinsic.Opacity, local),
             clip.BlendMode,
             Mattes(clip, local),
             options.Scale);
     }
 
-    private static LayerNode Adjustment(Clip clip, Flicks local, Vector2 frameSize, RenderOptions options)
+    /// <summary>
+    /// A clip's effects then its track's, evaluated: the clip's at clip time, the track's at
+    /// sequence time. A generator's own parameters, disabled effects and types the registry does
+    /// not have as picture effects are left out.
+    /// </summary>
+    private static ImmutableArray<EffectNode> Effects(Clip clip, Track track, Flicks local, Flicks time, RenderOptions options)
     {
-        var effects = ImmutableArray.CreateBuilder<ILayerEffect>();
-        if (options.Effects is { } resolve)
+        if (clip.Effects.IsEmpty && track.Effects.IsEmpty)
         {
-            foreach (Effect effect in clip.Effects)
+            return [];
+        }
+
+        var nodes = ImmutableArray.CreateBuilder<EffectNode>();
+
+        foreach (Effect effect in clip.Effects)
+        {
+            if (!string.Equals(effect.TypeId, clip.GeneratorId, StringComparison.Ordinal) && Node(effect, local, options) is { } node)
             {
-                if (effect.Enabled && resolve(effect) is { } runnable)
-                {
-                    effects.Add(runnable);
-                }
+                nodes.Add(node);
             }
         }
 
+        foreach (Effect effect in track.Effects)
+        {
+            if (Node(effect, time, options) is { } node)
+            {
+                nodes.Add(node);
+            }
+        }
+
+        return nodes.ToImmutable();
+    }
+
+    private static EffectNode? Node(Effect effect, Flicks time, RenderOptions options)
+    {
+        if (!effect.Enabled || options.Effects.Find(effect.TypeId) is not { Kind: EffectKind.Video } descriptor)
+        {
+            return null;
+        }
+
+        return new EffectNode(descriptor, ParameterSet.Evaluate(descriptor, effect, time))
+        {
+            InstanceId = effect.Id,
+            LocalTime = time,
+            Seed = StableSeed(effect.Id),
+            Model = effect,
+        };
+    }
+
+    /// <summary>
+    /// FNV-1a over the identifier: the same seed on every run and every machine, which
+    /// <see cref="string.GetHashCode()"/> is not.
+    /// </summary>
+    internal static int StableSeed(string id)
+    {
+        uint hash = 2166136261;
+        foreach (char character in id)
+        {
+            hash = (hash ^ character) * 16777619;
+        }
+
+        return unchecked((int)hash);
+    }
+
+    private static LayerNode Adjustment(Clip clip, Flicks local, Vector2 frameSize, RenderOptions options)
+    {
         // An adjustment layer's masks are drawn in frame pixels, so its picture is the frame.
         Matrix3x2 frame = Matrix3x2.CreateScale(options.Scale);
 
@@ -304,12 +359,11 @@ public static class RenderGraphBuilder
             (int)frameSize.Y,
             frame,
             LayerNode.NoCrop,
-            Math.Clamp(Float(clip.Opacity, local, 1.0f), 0.0f, 1.0f),
+            Float(clip.Opacity, Intrinsic.Opacity, local),
             clip.BlendMode,
             Mattes(clip, local),
             options.Scale)
         {
-            Effects = effects.ToImmutable(),
             IsAdjustment = true,
         };
     }
@@ -331,10 +385,10 @@ public static class RenderGraphBuilder
 
             shapes.Add(new MatteShape(
                 mask.Shape,
-                Float4(mask.Bounds, local, Vector4.Zero),
-                mask.PathData is null ? string.Empty : Text(mask.PathData, local),
-                MathF.Max(0.0f, Float(mask.Feather, local, 0.0f)),
-                Math.Clamp(Float(mask.Opacity, local, 1.0f), 0.0f, 1.0f),
+                Float4(mask.Bounds, Intrinsic.MaskBounds, local),
+                Text(mask.PathData, Intrinsic.MaskPath, local),
+                Float(mask.Feather, Intrinsic.MaskFeather, local),
+                Float(mask.Opacity, Intrinsic.MaskOpacity, local),
                 mask.Mode,
                 mask.Invert));
         }
@@ -350,50 +404,66 @@ public static class RenderGraphBuilder
             return LayerNode.NoCrop;
         }
 
-        float left = Math.Clamp(Float(crop.Left, local, 0.0f), 0.0f, 100.0f) / 100.0f;
-        float top = Math.Clamp(Float(crop.Top, local, 0.0f), 0.0f, 100.0f) / 100.0f;
-        float right = Math.Clamp(Float(crop.Right, local, 0.0f), 0.0f, 100.0f) / 100.0f;
-        float bottom = Math.Clamp(Float(crop.Bottom, local, 0.0f), 0.0f, 100.0f) / 100.0f;
+        float left = Float(crop.Left, Intrinsic.CropLeft, local) / 100.0f;
+        float top = Float(crop.Top, Intrinsic.CropTop, local) / 100.0f;
+        float right = Float(crop.Right, Intrinsic.CropRight, local) / 100.0f;
+        float bottom = Float(crop.Bottom, Intrinsic.CropBottom, local) / 100.0f;
 
         return new Vector4(left, top, MathF.Max(left, 1.0f - right), MathF.Max(top, 1.0f - bottom));
     }
 
-    private static Vector4 GeneratorColour(Clip clip, Flicks local)
+    private static Vector4 GeneratorColour(Clip clip, Flicks local, RenderOptions options)
     {
+        EffectDescriptor? solid = options.Effects.Find(SolidGenerator);
+        Effect? parameters = null;
         foreach (Effect effect in clip.Effects)
         {
-            if (string.Equals(effect.TypeId, clip.GeneratorId, StringComparison.Ordinal)
-                && effect.Parameter("color") is { } colour
-                && AnimationEvaluator.Evaluate(colour, local) is ParamValue.Color value)
+            if (string.Equals(effect.TypeId, clip.GeneratorId, StringComparison.Ordinal))
             {
-                return value.Value;
+                parameters = effect;
+                break;
             }
         }
 
-        return new Vector4(0.5f, 0.5f, 0.5f, 1.0f);
+        return solid is null
+            ? new Vector4(0.5f, 0.5f, 0.5f, 1.0f)
+            : ParameterSet.Evaluate(solid, parameters, local).Color("color");
     }
 
-    private static float Float(AnimatedValue? value, Flicks time, float fallback) =>
-        value is not null && AnimationEvaluator.Evaluate(value, time) is ParamValue.Float result ? result.Value : fallback;
+    // Every intrinsic value goes through ParamEval, as effect parameters do: defaults, limits and
+    // hand-edited types are handled in one place, and so will Phase 29a's drivers be.
+    private static float Float(AnimatedValue? value, ParamDescriptor descriptor, Flicks time) =>
+        ParamEval.Eval(value, descriptor, time) is ParamValue.Float result ? result.Value : 0.0f;
 
-    private static Vector2 Float2(AnimatedValue? value, Flicks time, Vector2 fallback) =>
-        value is null
-            ? fallback
-            : AnimationEvaluator.Evaluate(value, time) switch
-            {
-                ParamValue.Float2 pair => pair.Value,
-                ParamValue.Float single => new Vector2(single.Value),
-                _ => fallback,
-            };
+    private static Vector2 Float2(AnimatedValue? value, ParamDescriptor descriptor, Flicks time) =>
+        ParamEval.Eval(value, descriptor, time) is ParamValue.Float2 result ? result.Value : Vector2.Zero;
 
-    private static Vector4 Float4(AnimatedValue? value, Flicks time, Vector4 fallback) =>
-        value is not null && AnimationEvaluator.Evaluate(value, time) is ParamValue.Float4 result ? result.Value : fallback;
+    private static Vector4 Float4(AnimatedValue? value, ParamDescriptor descriptor, Flicks time) =>
+        ParamEval.Eval(value, descriptor, time) is ParamValue.Float4 result ? result.Value : Vector4.Zero;
 
-    private static string Text(AnimatedValue value, Flicks time) =>
-        AnimationEvaluator.Evaluate(value, time) switch
+    private static string Text(AnimatedValue? value, ParamDescriptor descriptor, Flicks time) =>
+        ParamEval.Eval(value, descriptor, time) switch
         {
             ParamValue.Path path => path.Value,
             ParamValue.Text text => text.Value,
             _ => string.Empty,
         };
+
+    /// <summary>The descriptors of a clip's and a mask's own parameters, looked up once.</summary>
+    private static class Intrinsic
+    {
+        public static readonly ParamDescriptor Position = ParamTargets.Transform.Param("transform.position")!;
+        public static readonly ParamDescriptor Scale = ParamTargets.Transform.Param("transform.scale")!;
+        public static readonly ParamDescriptor Rotation = ParamTargets.Transform.Param("transform.rotation")!;
+        public static readonly ParamDescriptor Anchor = ParamTargets.Transform.Param("transform.anchor")!;
+        public static readonly ParamDescriptor Opacity = ParamTargets.Opacity.Param("opacity")!;
+        public static readonly ParamDescriptor CropLeft = ParamTargets.Crop.Param("crop.left")!;
+        public static readonly ParamDescriptor CropTop = ParamTargets.Crop.Param("crop.top")!;
+        public static readonly ParamDescriptor CropRight = ParamTargets.Crop.Param("crop.right")!;
+        public static readonly ParamDescriptor CropBottom = ParamTargets.Crop.Param("crop.bottom")!;
+        public static readonly ParamDescriptor MaskBounds = ParamTargets.MaskParams.Param("bounds")!;
+        public static readonly ParamDescriptor MaskPath = ParamTargets.MaskParams.Param("path")!;
+        public static readonly ParamDescriptor MaskFeather = ParamTargets.MaskParams.Param("feather")!;
+        public static readonly ParamDescriptor MaskOpacity = ParamTargets.MaskParams.Param("opacity")!;
+    }
 }

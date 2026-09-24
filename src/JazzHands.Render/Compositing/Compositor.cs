@@ -1,8 +1,10 @@
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using JazzHands.Core.Effects;
 using JazzHands.Core.Model;
 using JazzHands.Render.Color;
+using JazzHands.Render.Effects;
 using JazzHands.Render.Frames;
 using JazzHands.Render.Shaders;
 using Serilog;
@@ -74,7 +76,8 @@ public sealed class Compositor : IDisposable
     private readonly ID3D11ShaderResourceView?[] _planeViews = new ID3D11ShaderResourceView?[4];
     private readonly Dictionary<Type, ID3D11Buffer> _constants = [];
     private readonly MaskRasterizer _masks;
-    private readonly EffectContextFactory _effectContexts;
+    private readonly EffectContext _effectContext;
+    private readonly Dictionary<Type, VideoEffect?> _effects = [];
 
     private Shaders? _shaders;
     private int _shaderGeneration = -1;
@@ -93,14 +96,14 @@ public sealed class Compositor : IDisposable
         Pool = pool ?? new RenderTargetPool(device);
         Cache = new LayerCache(Pool, cacheCapacity);
         _masks = new MaskRasterizer(device);
-        _effectContexts = new EffectContextFactory(device, Pool);
-
         _samplers =
         [
             Sampler(Filter.MinMagMipLinear, TextureAddressMode.Clamp),
             Sampler(Filter.MinMagMipPoint, TextureAddressMode.Clamp),
             Sampler(Filter.MinMagMipLinear, TextureAddressMode.Wrap),
         ];
+
+        _effectContext = new EffectContext(device, Pool, _samplers);
 
         // Premultiplied over, colour and alpha alike: the Normal composite, done by the output merger.
         _over = device.Device.CreateBlendState(new BlendDescription(Blend.One, Blend.InverseSourceAlpha, Blend.One, Blend.InverseSourceAlpha));
@@ -222,6 +225,13 @@ public sealed class Compositor : IDisposable
         _masks.Dispose();
         _shaders?.Dispose();
 
+        foreach (VideoEffect? effect in _effects.Values)
+        {
+            effect?.Dispose();
+        }
+
+        _effectContext.Dispose();
+
         foreach (ID3D11Buffer buffer in _constants.Values)
         {
             buffer.Dispose();
@@ -278,7 +288,8 @@ public sealed class Compositor : IDisposable
         // four quarter-frame layers at 4K cost a fifth as much. The one exception is an opaque
         // untransformed layer over nothing, which below becomes the stack without any drawing.
         bool fillsFrame = stack is null && layer.Opacity >= 1.0f && IsInPlace(graph, layer);
-        if (key is null && layer.Masks.IsDefaultOrEmpty && layer.Blend == BlendMode.Normal && !fillsFrame)
+        bool hasEffects = !layer.Effects.IsDefaultOrEmpty;
+        if (key is null && !hasEffects && layer.Masks.IsDefaultOrEmpty && layer.Blend == BlendMode.Normal && !fillsFrame)
         {
             stack ??= Empty(graph);
             RenderTarget source = Linear(layer);
@@ -290,6 +301,18 @@ public sealed class Compositor : IDisposable
         RenderTarget? placed = null;
         bool cached = key is { } lookup && Cache.TryGet(lookup, out placed);
         placed ??= Transform(graph, layer);
+
+        // Effects run on the placed picture, in frame space. The cache keeps the picture before
+        // them, so scrubbing over a still with a keyframed blur redraws only the blur.
+        if (hasEffects)
+        {
+            RenderTarget effected = RunEffects(graph, layer, placed);
+            if (!ReferenceEquals(effected, placed))
+            {
+                Release(placed, key, cached);
+                return Finish(graph, layer, stack, effected, owned: true);
+            }
+        }
 
         // Normal at full opacity over nothing is the layer itself, so there is nothing to blend.
         // A layer the cache keeps is copied rather than handed over, because the stack is
@@ -345,20 +368,10 @@ public sealed class Compositor : IDisposable
             return stack;
         }
 
-        EffectContext context = _effectContexts.For(layer.Scale);
-        RenderTarget input = stack;
-
-        foreach (ILayerEffect effect in layer.Effects)
+        RenderTarget input = RunEffects(graph, layer, stack);
+        if (ReferenceEquals(input, stack))
         {
-            RenderTarget output = Pool.Rent(graph.Width, graph.Height);
-            effect.Apply(context, input, output);
-
-            if (!ReferenceEquals(input, stack))
-            {
-                Pool.Return(input);
-            }
-
-            input = output;
+            return stack;
         }
 
         RenderTarget? matte = layer.Masks.IsDefaultOrEmpty ? null : Matte(graph, layer);
@@ -370,6 +383,125 @@ public sealed class Compositor : IDisposable
         }
 
         Pool.Return(input);
+        Pool.Return(stack);
+        return result;
+    }
+
+    /// <summary>
+    /// Runs a layer's effects over a frame-sized picture, first to last. Returns a new target
+    /// the caller owns, or <paramref name="input"/> itself when no effect could run.
+    /// </summary>
+    private RenderTarget RunEffects(RenderGraph graph, LayerNode layer, RenderTarget input)
+    {
+        RenderTarget current = input;
+
+        foreach (EffectNode node in layer.Effects)
+        {
+            ILayerEffect? custom = node.Custom;
+            VideoEffect? effect = custom is null ? EffectFor(node.Descriptor) : null;
+            if (custom is null && effect is null)
+            {
+                continue;
+            }
+
+            RenderTarget output = Pool.Rent(graph.Width, graph.Height);
+            _effectContext.Begin(node, layer.Scale);
+
+            if (custom is not null)
+            {
+                custom.Apply(_effectContext, current, output);
+            }
+            else
+            {
+                effect!.Apply(_effectContext, node.Parameters, current, output);
+            }
+
+            if (!ReferenceEquals(current, input))
+            {
+                Pool.Return(current);
+            }
+
+            current = output;
+        }
+
+        return current;
+    }
+
+    /// <summary>
+    /// The running instance of an effect type, made on first use. Null, logged once, for a type
+    /// with nothing to run: a hand-edited file naming an effect this build does not have plays
+    /// the clip without it rather than failing every frame.
+    /// </summary>
+    private VideoEffect? EffectFor(EffectDescriptor descriptor)
+    {
+        if (descriptor.Implementation is not { } type)
+        {
+            return null;
+        }
+
+        if (_effects.TryGetValue(type, out VideoEffect? known))
+        {
+            return known;
+        }
+
+        VideoEffect? effect = null;
+        if (typeof(VideoEffect).IsAssignableFrom(type))
+        {
+            effect = (VideoEffect)Activator.CreateInstance(type)!;
+            _effectContext.Prepare(effect);
+        }
+        else
+        {
+            _log.Warning("Effect {TypeId} has no picture effect to run; it is skipped", descriptor.TypeId);
+        }
+
+        _effects[type] = effect;
+        return effect;
+    }
+
+    /// <summary>A placed picture the frame is done with: kept by the cache, or back to the pool.</summary>
+    private void Release(RenderTarget placed, LayerKey? key, bool cached)
+    {
+        if (cached)
+        {
+            return;
+        }
+
+        if (key is { } store)
+        {
+            Cache.Put(store, placed);
+        }
+        else
+        {
+            Pool.Return(placed);
+        }
+    }
+
+    /// <summary>
+    /// Blends a finished picture onto the stack with the layer's opacity, blend and masks, or makes
+    /// it the stack when it is Normal and opaque over nothing. Takes ownership of the picture.
+    /// </summary>
+    private RenderTarget Finish(RenderGraph graph, LayerNode layer, RenderTarget? stack, RenderTarget picture, bool owned)
+    {
+        if (owned && stack is null && layer.Masks.IsDefaultOrEmpty && layer.Blend == BlendMode.Normal && layer.Opacity >= 1.0f)
+        {
+            return picture;
+        }
+
+        stack ??= Empty(graph);
+        RenderTarget? matte = layer.Masks.IsDefaultOrEmpty ? null : Matte(graph, layer);
+        RenderTarget result = Composite(stack, picture, matte, layer.Opacity, layer.Blend);
+
+        if (matte is not null)
+        {
+            Pool.Return(matte);
+        }
+
+        if (owned)
+        {
+            Pool.Return(picture);
+        }
+
         Pool.Return(stack);
         return result;
     }
@@ -770,22 +902,6 @@ public sealed class Compositor : IDisposable
             TransformVertex.Dispose();
             SourcePixel.Dispose();
             FullScreenVertex.Dispose();
-        }
-    }
-
-    /// <summary>Hands effects a context, made once per quality rather than per frame.</summary>
-    private sealed class EffectContextFactory(RenderDevice device, RenderTargetPool pool)
-    {
-        private EffectContext? _last;
-
-        public EffectContext For(float qualityScale)
-        {
-            if (_last is null || _last.QualityScale != qualityScale)
-            {
-                _last = new EffectContext(device, pool, qualityScale);
-            }
-
-            return _last;
         }
     }
 

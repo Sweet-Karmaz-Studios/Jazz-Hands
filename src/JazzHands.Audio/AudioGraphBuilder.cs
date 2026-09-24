@@ -1,3 +1,4 @@
+using JazzHands.Audio.Effects;
 using JazzHands.Core.Model;
 using JazzHands.Core.Time;
 
@@ -15,13 +16,18 @@ namespace JazzHands.Audio;
 /// Only audio tracks are mixed. A movie's sound is on audio clips of its own, linked to the
 /// picture, so that muting the microphone is a track operation rather than a checkbox hidden
 /// inside a video clip.
+///
+/// Effects come from an <see cref="AudioEffectHost"/>, which keeps each effect's instance, and
+/// so its state, across builds. A caller that rebuilds (the transport, after every edit) passes
+/// the same host every time; one that builds once (an export) may pass none.
 /// </remarks>
 public static class AudioGraphBuilder
 {
     /// <summary>Builds the mix for a sequence.</summary>
     /// <param name="project">The project, for its media and settings.</param>
     /// <param name="sequence">The sequence, or null for the active one.</param>
-    public static MixSnapshot Build(Project project, Sequence? sequence = null)
+    /// <param name="effects">Where effect instances live between builds; a fresh one when null.</param>
+    public static MixSnapshot Build(Project project, Sequence? sequence = null, AudioEffectHost? effects = null)
     {
         ArgumentNullException.ThrowIfNull(project);
 
@@ -35,6 +41,8 @@ public static class AudioGraphBuilder
             return MixSnapshot.Silent(rate, channels);
         }
 
+        effects ??= new AudioEffectHost();
+        var used = new HashSet<string>(StringComparer.Ordinal);
         var tracks = new List<TrackMix>();
 
         foreach (Track track in sequence.Tracks.OrderBy(track => track.Order))
@@ -47,7 +55,7 @@ public static class AudioGraphBuilder
             var clips = new List<ClipMix>();
             foreach (Clip clip in track.Clips)
             {
-                if (BuildClip(project, clip, rate) is { } built)
+                if (BuildClip(project, clip, rate, effects, used) is { } built)
                 {
                     clips.Add(built);
                 }
@@ -60,9 +68,11 @@ public static class AudioGraphBuilder
                 track.Solo,
                 ScalarCurve.From(track.Volume, 0.0f, rate),
                 ScalarCurve.From(track.Pan, 0.0f, rate),
-                clips));
+                clips,
+                effects.Chain(track.Effects, rate, used)));
         }
 
+        effects.Retain(used);
         return new MixSnapshot(rate, channels, tracks);
     }
 
@@ -74,7 +84,7 @@ public static class AudioGraphBuilder
     /// found are all silent. The last is not an error here: a project whose drive is unplugged
     /// still opens, and validation is where a missing file is reported.
     /// </remarks>
-    internal static ClipMix? BuildClip(Project project, Clip clip, int rate)
+    internal static ClipMix? BuildClip(Project project, Clip clip, int rate, AudioEffectHost? effects = null, ISet<string>? used = null)
     {
         if (!clip.Enabled || clip.IsHold || clip.MediaId is not { } mediaId || clip.Duration <= Flicks.Zero)
         {
@@ -113,6 +123,7 @@ public static class AudioGraphBuilder
             fadeOut.Curve,
             ScalarCurve.From(clip.Volume, 0.0f, rate),
             ScalarCurve.From(clip.Pan, 0.0f, rate),
-            clip.ChannelMap ?? AudioChannelMap.Auto);
+            clip.ChannelMap ?? AudioChannelMap.Auto,
+            effects?.Chain(clip.Effects, rate, used ?? new HashSet<string>(StringComparer.Ordinal)));
     }
 }

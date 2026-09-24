@@ -1,6 +1,8 @@
 using System.Collections.Immutable;
 using System.Numerics;
+using JazzHands.Core.Effects;
 using JazzHands.Core.Model;
+using JazzHands.Core.Time;
 using JazzHands.Render.Color;
 using JazzHands.Render.Frames;
 
@@ -60,10 +62,12 @@ public sealed record LayerNode(
     float Scale = 1.0f)
 {
     /// <summary>
-    /// For an adjustment layer: the effects applied to everything underneath, whose result is
-    /// then composited back over it with this layer's opacity, blend and masks. Empty otherwise.
+    /// The effects, first to last: the clip's, then its track's. A picture layer runs them over
+    /// its placed picture, in frame space, before masks and blending. An adjustment layer runs
+    /// them over everything underneath and composites the result back over it with its opacity,
+    /// blend and masks.
     /// </summary>
-    public ImmutableArray<ILayerEffect> Effects { get; init; } = [];
+    public ImmutableArray<EffectNode> Effects { get; init; } = [];
 
     /// <summary>True for an adjustment layer, which has no picture of its own.</summary>
     public bool IsAdjustment { get; init; }
@@ -93,18 +97,44 @@ public sealed record RenderGraph(int Width, int Height, ImmutableArray<LayerNode
     public static RenderGraph Empty(int width, int height) => new(width, height, []);
 }
 
-/// <summary>What an effect is given to work with.</summary>
-/// <param name="Device">The device.</param>
-/// <param name="Pool">Where intermediate targets come from.</param>
-/// <param name="QualityScale">Output pixels per sequence pixel, which pixel-sized parameters are multiplied by.</param>
-public sealed record EffectContext(RenderDevice Device, RenderTargetPool Pool, float QualityScale);
-
 /// <summary>
-/// An effect that turns one picture into another. Phase 15 builds the registry and the real
-/// effects on this; Phase 10 uses it for adjustment layers.
+/// An effect that turns one picture into another without being a registered type: a test's, or
+/// one built in code. Registered effects are <see cref="Effects.VideoEffect"/>s.
 /// </summary>
 public interface ILayerEffect
 {
     /// <summary>Reads <paramref name="input"/> and writes the result into <paramref name="output"/>, the same size.</summary>
     void Apply(EffectContext context, RenderTarget input, RenderTarget output);
+}
+
+/// <summary>
+/// One effect in a layer's chain, with its parameters already evaluated for the frame.
+/// </summary>
+/// <param name="Descriptor">Which effect, and the class the compositor runs for it.</param>
+/// <param name="Parameters">Its parameters at this frame.</param>
+public sealed record EffectNode(EffectDescriptor Descriptor, ParameterSet Parameters)
+{
+    private static readonly EffectDescriptor CustomDescriptor = new("custom", EffectKind.Video, "Custom", "Custom", string.Empty, []);
+
+    /// <summary>The effect instance's identifier.</summary>
+    public string InstanceId { get; init; } = string.Empty;
+
+    /// <summary>The frame's time relative to the effect's owner.</summary>
+    public Flicks LocalTime { get; init; }
+
+    /// <summary>A seed stable for the instance, from its identifier.</summary>
+    public int Seed { get; init; }
+
+    /// <summary>The instance as the project holds it, for an effect that evaluates itself at other times.</summary>
+    public Effect? Model { get; init; }
+
+    /// <summary>A runner in place of the descriptor's class, for effects that are not registered.</summary>
+    public ILayerEffect? Custom { get; init; }
+
+    /// <summary>Wraps an unregistered effect.</summary>
+    public static EffectNode From(ILayerEffect effect)
+    {
+        ArgumentNullException.ThrowIfNull(effect);
+        return new EffectNode(CustomDescriptor, ParameterSet.Defaults(CustomDescriptor)) { Custom = effect };
+    }
 }

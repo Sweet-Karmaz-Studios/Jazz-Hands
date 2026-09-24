@@ -52,6 +52,12 @@
     "modified": {
       "type": "string",
       "format": "date-time"
+    },
+    "effectPresets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/effectPreset"
+      }
     }
   },
   "required": [
@@ -374,6 +380,27 @@
       "required": [
         "name",
         "value"
+      ]
+    },
+    "effectPreset": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "effects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/effect"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "name"
       ]
     },
     "exportPreset": {
