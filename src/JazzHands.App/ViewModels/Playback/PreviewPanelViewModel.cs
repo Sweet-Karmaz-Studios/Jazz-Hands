@@ -72,6 +72,10 @@ public sealed partial class PreviewPanelViewModel : ToolViewModel
     [ObservableProperty]
     private PreviewQuality _quality = PreviewQuality.Auto;
 
+    /// <summary>True when proxies play in place of their sources; see proxy.set-enabled.</summary>
+    [ObservableProperty]
+    private bool _useProxies;
+
     [ObservableProperty]
     private PreviewZoom _zoom = PreviewZoom.Fit;
 
@@ -228,6 +232,7 @@ public sealed partial class PreviewPanelViewModel : ToolViewModel
             RateText = playing && state.Rate != 1.0 ? $"{state.Rate:0.##}x" : string.Empty;
             Loop = state.Loop;
             Quality = state.Quality;
+            UseProxies = state.ProxiesEnabled;
             DroppedFrames = _engine.DroppedFrames;
             RenderStats = DescribeRender(state.Render);
 
@@ -274,6 +279,14 @@ public sealed partial class PreviewPanelViewModel : ToolViewModel
         if (!_applyingState)
         {
             Send(new SetQualityCommand(value));
+        }
+    }
+
+    partial void OnUseProxiesChanged(bool value)
+    {
+        if (!_applyingState)
+        {
+            Send(new SetProxiesEnabledCommand(value));
         }
     }
 

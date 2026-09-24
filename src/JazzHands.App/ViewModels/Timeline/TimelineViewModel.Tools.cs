@@ -94,6 +94,9 @@ public sealed partial class TimelineViewModel
     /// <summary>Opens another sequence's tab, from a compound clip: set by the tabs.</summary>
     public Action<string, string?>? OpenSequence { get; set; }
 
+    /// <summary>Where thumbnails and waveforms come from: the engine's caches in the app, nothing in a test.</summary>
+    public Controls.Timeline.ITimelineImagery Imagery { get; set; } = Controls.Timeline.NoImagery.Instance;
+
     /// <summary>
     /// A key the timeline wants before the keymap: typing a number to nudge or trim, and the
     /// keys that trim an edit point picked with the ripple or roll tool.

@@ -531,7 +531,8 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
             PresentedFrames,
             DroppedFrames,
             _transport.CanStretch,
-            RenderStats);
+            RenderStats,
+            _proxies?.Enabled ?? false);
     }
 
     /// <summary>Waits until the engine has presented a frame after this call, for tests and scripts.</summary>

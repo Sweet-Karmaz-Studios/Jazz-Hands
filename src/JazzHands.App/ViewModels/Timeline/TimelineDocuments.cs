@@ -25,6 +25,7 @@ public sealed partial class TimelineDocuments : ObservableObject
     private readonly IPreviewEngine? _preview;
     private readonly IDialogService? _dialogs;
     private readonly IClipboardService? _clipboard;
+    private readonly Controls.Timeline.ITimelineImagery _imagery;
     private TimelineViewModel? _active;
     private bool _syncQueued;
     private ImmutableArray<string> _trail = [];
@@ -36,7 +37,8 @@ public sealed partial class TimelineDocuments : ObservableObject
         IUiDispatcher ui,
         IPreviewEngine? preview = null,
         IDialogService? dialogs = null,
-        IClipboardService? clipboard = null)
+        IClipboardService? clipboard = null,
+        Controls.Timeline.ITimelineImagery? imagery = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(selection);
@@ -48,6 +50,7 @@ public sealed partial class TimelineDocuments : ObservableObject
         _preview = preview;
         _dialogs = dialogs;
         _clipboard = clipboard;
+        _imagery = imagery ?? Controls.Timeline.NoImagery.Instance;
 
         _session.ProjectChanged += (_, _) => QueueSync();
         Sync();
@@ -176,6 +179,7 @@ public sealed partial class TimelineDocuments : ObservableObject
                 Documents.Insert(index, new TimelineViewModel(_session, id, _selection, _ui, _preview, _dialogs, Tools)
                 {
                     Clipboard = _clipboard,
+                    Imagery = _imagery,
                     OpenSequence = Open,
                 });
             }

@@ -124,8 +124,12 @@
                             </DataTemplate>
                         </ComboBox.ItemTemplate>
                     </ComboBox>
-                    <ToggleButton Style="{StaticResource Button.Text}" Content="Safe"
+                    <ToggleButton Style="{StaticResource Button.Text}" Content="Proxy"
                                   Margin="4,0,0,0"
+                                  IsChecked="{Binding UseProxies, Mode=TwoWay}"
+                                  ToolTip="Play proxies in place of their sources where there are any. Export always uses the sources."
+                                  AutomationProperties.Name="Play proxies" />
+                    <ToggleButton Style="{StaticResource Button.Text}" Content="Safe"
                                   IsChecked="{Binding ShowSafeAreas, Mode=TwoWay}"
                                   ToolTip="Show the action and title safe areas" AutomationProperties.Name="Safe areas" />
                     <ToggleButton Style="{StaticResource Button.Text}" Content="Grid"

@@ -70,8 +70,8 @@ public sealed class TimelineControl : FrameworkElement
     }
 
     /// <summary>
-    /// Where thumbnails and waveforms come from. <see cref="NoImagery"/> until Phase 14's caches
-    /// are there, which draws placeholders.
+    /// Where thumbnails and waveforms come from: the attached view model's, which in the editor are
+    /// the engine's caches. <see cref="NoImagery"/> until one is attached, which draws placeholders.
     /// </summary>
     public ITimelineImagery Imagery
     {
@@ -400,6 +400,7 @@ public sealed class TimelineControl : FrameworkElement
         {
             _model.Invalidated += OnInvalidated;
             _model.PropertyChanged += OnModelPropertyChanged;
+            Imagery = _model.Imagery;
 
             if (ActualWidth > 0 && ActualHeight > 0)
             {
@@ -524,23 +525,39 @@ public sealed class TimelineControl : FrameworkElement
             return;
         }
 
-        if (Imagery.TryGetThumbnails(clip, from, to, pixelsPerSecond, out IReadOnlyList<ThumbnailTile> tiles) && tiles.Count > 0)
+        double top = body.Top + ClipFontSize + 6;
+        double height = body.Bottom - top - 2;
+        if (height < 8)
         {
-            double top = body.Top + ClipFontSize + 6;
-            double height = body.Bottom - top - 2;
-            if (height < 8)
-            {
-                return;
-            }
+            return;
+        }
 
-            double width = height * 16.0 / 9.0;
+        // A continuous filmstrip, the way every editor draws one: slots edge to edge from the
+        // clip's start, each showing the picture taken nearest before its middle. The grid the
+        // pictures are on is coarser than a slot at most zooms, so a picture can fill two or
+        // three slots; while the strip is still filling, a slot shows the nearest one there is.
+        if (Imagery.TryGetThumbnails(clip, from, to, pixelsPerSecond, height * 16.0 / 9.0, out IReadOnlyList<ThumbnailTile> tiles) && tiles.Count > 0)
+        {
+            TimelineGeometry geometry = _model!.Geometry;
+            ThumbnailTile[] ordered = [.. tiles.OrderBy(tile => tile.TimelineTime)];
+            ImageSource first = ordered[0].Image;
+            double slot = first.Height > 0 ? height * first.Width / first.Height : height * 16.0 / 9.0;
+
             dc.PushClip(new RectangleGeometry(body));
 
-            foreach (ThumbnailTile tile in tiles)
+            double clipLeft = geometry.XOf(clip.Start);
+            double x = clipLeft + (Math.Floor((body.Left - clipLeft) / slot) * slot);
+            int index = 0;
+
+            for (; x < body.Right; x += slot)
             {
-                Flicks at = clip.Start + ((tile.SourceTime - clip.Clip.SourceIn) * clip.Clip.EffectiveSpeed.Den / clip.Clip.EffectiveSpeed.Num);
-                double x = _model!.Geometry.XOf(at);
-                dc.DrawImage(tile.Image, new Rect(x, top, width, height));
+                Flicks middle = geometry.TimeAt(x + (slot / 2), snapToFrame: false);
+                while (index + 1 < ordered.Length && ordered[index + 1].TimelineTime <= middle)
+                {
+                    index++;
+                }
+
+                dc.DrawImage(ordered[index].Image, new Rect(x, top, slot, height));
             }
 
             dc.Pop();

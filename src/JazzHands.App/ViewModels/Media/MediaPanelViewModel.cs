@@ -19,7 +19,7 @@ public enum MediaViewMode
     /// <summary>A table with columns.</summary>
     List,
 
-    /// <summary>Tiles with a thumbnail. The thumbnail itself arrives in Phase 14.</summary>
+    /// <summary>Tiles with a thumbnail that scrubs through the file under the mouse.</summary>
     Grid,
 }
 
@@ -62,8 +62,21 @@ public sealed partial class MediaPanelViewModel : ToolViewModel
     [ObservableProperty]
     private string _status = string.Empty;
 
+    /// <summary>What the proxy suggestion bar says, or empty when it is hidden.</summary>
+    [ObservableProperty]
+    private string _proxySuggestion = string.Empty;
+
+    private readonly IMediaImagery? _imagery;
+    private readonly HashSet<string> _known = new(StringComparer.Ordinal);
+    private List<string> _suggested = [];
+
     /// <summary>Creates the panel.</summary>
-    public MediaPanelViewModel(ISession session, IDialogService dialogs, IFileDialogService files, IUiDispatcher ui)
+    /// <param name="session">The session every action goes through.</param>
+    /// <param name="dialogs">The import dialog.</param>
+    /// <param name="files">The file picker.</param>
+    /// <param name="ui">The UI thread.</param>
+    /// <param name="imagery">Where tile pictures come from; none in a test that does not care.</param>
+    public MediaPanelViewModel(ISession session, IDialogService dialogs, IFileDialogService files, IUiDispatcher ui, IMediaImagery? imagery = null)
         : base(PanelContentId, "Media")
     {
         ArgumentNullException.ThrowIfNull(session);
@@ -72,13 +85,68 @@ public sealed partial class MediaPanelViewModel : ToolViewModel
         _dialogs = dialogs;
         _files = files;
         _ui = ui;
+        _imagery = imagery;
 
         Root = new MediaFolderViewModel(string.Empty, "All media");
         Folders = [Root];
 
+        // What is in the project when it opens has been seen; only new arrivals are suggested for proxies.
+        _known.UnionWith(session.Project.Media.Select(item => item.Id));
+
         _session.ProjectChanged += OnProjectChanged;
+        _imagery?.Changed += (_, _) => UpdateThumbnails();
+
         Refresh();
     }
+
+    /// <summary>True when the proxy suggestion bar is showing.</summary>
+    public bool HasProxySuggestion => ProxySuggestion.Length > 0;
+
+    /// <summary>The mouse is over a tile, this far across it: show the frame there.</summary>
+    public void ScrubTo(MediaItemViewModel row, double fraction)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+
+        row.ScrubFraction = Math.Clamp(fraction, 0.0, 1.0);
+        if (_imagery?.At(row.Item, row.ScrubFraction.Value) is { } picture)
+        {
+            row.Thumbnail = picture;
+        }
+    }
+
+    /// <summary>The mouse left a tile: back to its poster.</summary>
+    public void EndScrub(MediaItemViewModel row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+
+        row.ScrubFraction = null;
+        row.Thumbnail = _imagery?.Poster(row.Item) ?? row.Thumbnail;
+    }
+
+    /// <summary>Asks for every shown tile's picture, and puts up what is ready.</summary>
+    /// <remarks>Only in the grid; the list has no pictures and asks for none.</remarks>
+    public void UpdateThumbnails()
+    {
+        if (_imagery is null || !IsGridMode)
+        {
+            return;
+        }
+
+        foreach (MediaItemViewModel row in Items)
+        {
+            System.Windows.Media.ImageSource? picture = row.ScrubFraction is { } fraction
+                ? _imagery.At(row.Item, fraction)
+                : _imagery.Poster(row.Item);
+
+            if (picture is not null && !ReferenceEquals(picture, row.Thumbnail))
+            {
+                row.Thumbnail = picture;
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    partial void OnProxySuggestionChanged(string value) => OnPropertyChanged(nameof(HasProxySuggestion));
 
     /// <summary>The rows the list is showing, after the folder and the search have had their say.</summary>
     public ObservableList<MediaItemViewModel> Items { get; } = [];
@@ -144,6 +212,7 @@ public sealed partial class MediaPanelViewModel : ToolViewModel
         BuildFolders();
         ApplyFilter();
         OnPropertyChanged(nameof(TotalCount));
+        SuggestProxies();
     }
 
     /// <summary>The ids a drag out of the panel should carry.</summary>
@@ -177,6 +246,7 @@ public sealed partial class MediaPanelViewModel : ToolViewModel
     {
         OnPropertyChanged(nameof(IsListMode));
         OnPropertyChanged(nameof(IsGridMode));
+        UpdateThumbnails();
     }
 
     /// <inheritdoc />
@@ -268,11 +338,71 @@ public sealed partial class MediaPanelViewModel : ToolViewModel
     }
 
     [RelayCommand(CanExecute = nameof(HasSelection))]
-    private void GenerateProxy()
+    private async Task GenerateProxyAsync()
     {
-        // Phase 14 owns the proxy cache. The menu item exists now so the panel's shape does not
-        // change when it arrives, and it says what it is rather than doing nothing quietly.
-        Status = "Proxies arrive in the caching phase.";
+        if (SelectedItem is not { } row)
+        {
+            return;
+        }
+
+        await RunAsync(new GenerateProxyCommand(row.Id), $"Making a proxy of {row.Name} on the export queue.").ConfigureAwait(true);
+    }
+
+    [RelayCommand]
+    private async Task MakeSuggestedProxiesAsync()
+    {
+        List<string> ids = _suggested;
+        _suggested = [];
+        ProxySuggestion = string.Empty;
+
+        foreach (string id in ids)
+        {
+            await RunAsync(new GenerateProxyCommand(id), $"Making {ids.Count} {(ids.Count == 1 ? "proxy" : "proxies")} on the export queue.").ConfigureAwait(true);
+        }
+    }
+
+    [RelayCommand]
+    private void DismissProxySuggestion()
+    {
+        _suggested = [];
+        ProxySuggestion = string.Empty;
+    }
+
+    /// <summary>
+    /// New media heavy enough to want a proxy, and without one: put the suggestion bar up. The
+    /// command line gets the same advice in its log; see the media.add handler.
+    /// </summary>
+    private void SuggestProxies()
+    {
+        List<string> arrivals = [.. _session.Project.Media.Select(item => item.Id).Where(id => !_known.Contains(id))];
+        if (arrivals.Count == 0)
+        {
+            return;
+        }
+
+        _known.UnionWith(arrivals);
+
+        ProxyInfo[] proxies;
+        try
+        {
+            proxies = _session.Query(new ListProxiesQuery());
+        }
+        catch (Exception error) when (error is CommandException or InvalidOperationException)
+        {
+            _log.Debug(error, "Could not ask which new media wants a proxy");
+            return;
+        }
+
+        List<ProxyInfo> wanted = [.. proxies.Where(proxy => proxy.Suggested && proxy.State == ProxyState.None && arrivals.Contains(proxy.MediaId))];
+        if (wanted.Count == 0)
+        {
+            return;
+        }
+
+        _suggested = [.. _suggested.Union(wanted.Select(proxy => proxy.MediaId))];
+        ProxySuggestion = _suggested.Count == 1
+            ? $"{wanted[0].Name} is heavy to decode (4K, AV1 or 10-bit HEVC). A proxy would make it edit smoothly."
+            : $"{_suggested.Count} new files are heavy to decode (4K, AV1 or 10-bit HEVC). Proxies would make them edit smoothly.";
     }
 
     [RelayCommand]
@@ -333,6 +463,7 @@ public sealed partial class MediaPanelViewModel : ToolViewModel
 
         Items.Reset(shown);
         OnPropertyChanged(nameof(CountSummary));
+        UpdateThumbnails();
     }
 
     private static bool InFolder(string itemFolder, string selected) =>

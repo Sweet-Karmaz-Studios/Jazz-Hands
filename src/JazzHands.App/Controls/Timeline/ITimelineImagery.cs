@@ -4,10 +4,11 @@ using JazzHands.Core.Time;
 
 namespace JazzHands.App.Controls.Timeline;
 
-/// <summary>One thumbnail of a clip's picture, at a source time.</summary>
-/// <param name="SourceTime">The source time the image was taken at.</param>
+/// <summary>One thumbnail of a clip's picture.</summary>
+/// <param name="SourceTime">The source time it stands for, on its grid.</param>
+/// <param name="TimelineTime">Where its left edge goes on the timeline, with the clip's speed and direction applied.</param>
 /// <param name="Image">The picture, frozen.</param>
-public sealed record ThumbnailTile(Flicks SourceTime, ImageSource Image);
+public sealed record ThumbnailTile(Flicks SourceTime, Flicks TimelineTime, ImageSource Image);
 
 /// <summary>
 /// A clip's sound as peaks: for each pixel column, the lowest and highest sample, -1 to 1.
@@ -21,19 +22,26 @@ public sealed record WaveformPeaks(float[] Minimum, float[] Maximum);
 /// </summary>
 /// <remarks>
 /// Asked while drawing, so it must answer at once: what it has cached, or nothing, in which case
-/// the timeline draws a placeholder and asks again on the next frame. Filling the cache is the
-/// implementer's business, on its own threads and at visible-first priority; Phase 14's
-/// thumbnail and waveform services implement this. Until then <see cref="NoImagery"/> has
-/// nothing, and every clip draws its placeholder.
+/// the timeline draws a placeholder and asks again when <see cref="Changed"/> says there is more.
+/// Filling the cache is the implementer's business, on its own threads and at visible-first
+/// priority; <see cref="Services.TimelineImagery"/> is the one the editor uses, over the engine's
+/// thumbnail and waveform services. <see cref="NoImagery"/> has nothing, and every clip draws its
+/// placeholder.
 /// </remarks>
 public interface ITimelineImagery
 {
-    /// <summary>Raised when something new is cached, so the clips are drawn again.</summary>
+    /// <summary>Raised on the UI thread when something new is cached, so the clips are drawn again.</summary>
     event EventHandler? Changed;
 
     /// <summary>Thumbnails for the part of a clip between two timeline times, at a zoom.</summary>
+    /// <param name="clip">The clip.</param>
+    /// <param name="from">The first timeline time on screen.</param>
+    /// <param name="to">The last.</param>
+    /// <param name="pixelsPerSecond">The zoom.</param>
+    /// <param name="tileWidth">How wide a thumbnail is drawn, so neighbours can be spaced not to overlap.</param>
+    /// <param name="tiles">The thumbnails ready, in no particular order.</param>
     /// <returns>False when none are ready yet.</returns>
-    bool TryGetThumbnails(ClipView clip, Flicks from, Flicks to, double pixelsPerSecond, out IReadOnlyList<ThumbnailTile> tiles);
+    bool TryGetThumbnails(ClipView clip, Flicks from, Flicks to, double pixelsPerSecond, double tileWidth, out IReadOnlyList<ThumbnailTile> tiles);
 
     /// <summary>A clip's waveform between two timeline times, one column per pixel.</summary>
     /// <returns>False when it is not ready yet.</returns>
@@ -54,7 +62,7 @@ public sealed class NoImagery : ITimelineImagery
     }
 
     /// <inheritdoc />
-    public bool TryGetThumbnails(ClipView clip, Flicks from, Flicks to, double pixelsPerSecond, out IReadOnlyList<ThumbnailTile> tiles)
+    public bool TryGetThumbnails(ClipView clip, Flicks from, Flicks to, double pixelsPerSecond, double tileWidth, out IReadOnlyList<ThumbnailTile> tiles)
     {
         tiles = [];
         return false;

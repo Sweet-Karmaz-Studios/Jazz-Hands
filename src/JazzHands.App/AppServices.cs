@@ -93,7 +93,8 @@ public static class AppServices
                 provider.GetRequiredService<Transport>(),
                 provider.GetRequiredService<RenderDevice>(),
                 notices: session.Notices,
-                cacheManager: provider.GetService<Media.Import.CacheManager>());
+                cacheManager: provider.GetService<Media.Import.CacheManager>(),
+                proxies: provider.GetService<Engine.Caching.ProxyService>());
             engine.Attach(session);
             return engine;
         });
@@ -110,13 +111,26 @@ public static class AppServices
             provider.GetRequiredService<IUiDispatcher>(),
             provider.GetRequiredService<IFullScreenPreview>()));
 
+        // Thumbnails and waveforms: the engine's caches, turned into bitmaps and peaks for the
+        // timeline and the media panel, with their ready events folded onto the UI thread.
+        services.AddSingleton(provider => new CachedThumbnails(
+            provider.GetRequiredService<ISession>(),
+            provider.GetRequiredService<Engine.Caching.ThumbnailService>(),
+            provider.GetRequiredService<Engine.Caching.WaveformService>(),
+            provider.GetRequiredService<IUiDispatcher>()));
+        services.AddSingleton<IMediaImagery>(provider => provider.GetRequiredService<CachedThumbnails>());
+        services.AddSingleton<Controls.Timeline.ITimelineImagery>(provider => new TimelineImagery(
+            provider.GetRequiredService<ISession>(),
+            provider.GetRequiredService<CachedThumbnails>()));
+
         services.AddSingleton(provider => new TimelineDocuments(
             provider.GetRequiredService<ISession>(),
             provider.GetRequiredService<SelectionService>(),
             provider.GetRequiredService<IUiDispatcher>(),
             provider.GetRequiredService<IPreviewEngine>(),
             provider.GetRequiredService<IDialogService>(),
-            new WindowsClipboardService()));
+            new WindowsClipboardService(),
+            provider.GetRequiredService<Controls.Timeline.ITimelineImagery>()));
 
         // The keymap: embedded defaults under %APPDATA%\JazzHands\keymap.json if there is one.
         services.AddSingleton(provider =>

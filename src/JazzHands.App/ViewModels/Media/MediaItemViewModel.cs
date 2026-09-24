@@ -19,6 +19,13 @@ public sealed partial class MediaItemViewModel : ObservableObject
     [ObservableProperty]
     private bool _isStreamListOpen;
 
+    /// <summary>The picture on the tile: the poster, or the frame under the mouse while scrubbing across it.</summary>
+    [ObservableProperty]
+    private System.Windows.Media.ImageSource? _thumbnail;
+
+    /// <summary>How far across the tile the mouse is, 0 to 1, while it is over it; null otherwise.</summary>
+    public double? ScrubFraction { get; set; }
+
     /// <summary>Wraps a media item.</summary>
     public MediaItemViewModel(MediaItem item)
     {

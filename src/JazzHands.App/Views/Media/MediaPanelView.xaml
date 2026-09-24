@@ -18,9 +18,33 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
+
+        <!-- Heavy footage just imported: offer proxies, once, and get out of the way. -->
+        <Border Grid.Row="1"
+                Margin="6,0,6,6"
+                Padding="8,6"
+                Background="{DynamicResource Brush.Background.Raised}"
+                BorderBrush="{DynamicResource Brush.Accent}"
+                BorderThickness="2,0,0,0"
+                Visibility="{Binding HasProxySuggestion, Mode=OneWay, Converter={StaticResource BoolToVisible}}">
+            <DockPanel LastChildFill="True">
+                <Button DockPanel.Dock="Right"
+                        Margin="6,0,0,0"
+                        Content="Not now"
+                        Command="{Binding DismissProxySuggestionCommand, Mode=OneWay}" />
+                <Button DockPanel.Dock="Right"
+                        Margin="6,0,0,0"
+                        Content="Make proxies"
+                        Command="{Binding MakeSuggestedProxiesCommand, Mode=OneWay}" />
+                <TextBlock Text="{Binding ProxySuggestion, Mode=OneWay}"
+                           VerticalAlignment="Center"
+                           TextWrapping="Wrap" />
+            </DockPanel>
+        </Border>
 
         <!-- Toolbar: import, view mode, and the search box the exit criteria are about. -->
         <Grid Grid.Row="0" Margin="6">
@@ -54,7 +78,7 @@
             </StackPanel>
         </Grid>
 
-        <Grid Grid.Row="1">
+        <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="180" MinWidth="120" />
                 <ColumnDefinition Width="4" />
@@ -175,7 +199,7 @@
                 </ListView.View>
             </ListView>
 
-            <!-- Grid mode: tiles, with a placeholder where Phase 14 puts the thumbnail. -->
+            <!-- Grid mode: tiles with a thumbnail, which scrubs through the file under the mouse. -->
             <ListBox Grid.Column="2"
                      Background="{DynamicResource Brush.Background.Base}"
                      BorderBrush="{DynamicResource Brush.Border}"
@@ -195,14 +219,22 @@
                 <ListBox.ItemTemplate>
                     <DataTemplate DataType="{x:Type vm:MediaItemViewModel}">
                         <StackPanel Width="140" Margin="4">
+                            <!-- The poster, and the frame under the mouse while it moves across. -->
                             <Border Height="79"
                                     Background="{DynamicResource Brush.Background.Raised}"
                                     BorderBrush="{Binding Color, Mode=OneWay, Converter={StaticResource ColorLabel}}"
-                                    BorderThickness="0,0,0,3">
-                                <TextBlock Text="{Binding Kind, Mode=OneWay}"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center"
-                                           Foreground="{DynamicResource Brush.Text.Disabled}" />
+                                    BorderThickness="0,0,0,3"
+                                    MouseMove="OnTileMouseMove"
+                                    MouseLeave="OnTileMouseLeave">
+                                <Grid>
+                                    <TextBlock Text="{Binding Kind, Mode=OneWay}"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               Foreground="{DynamicResource Brush.Text.Disabled}" />
+                                    <Image Source="{Binding Thumbnail, Mode=OneWay}"
+                                           Stretch="Uniform"
+                                           RenderOptions.BitmapScalingMode="HighQuality" />
+                                </Grid>
                             </Border>
                             <TextBlock Text="{Binding Name, Mode=OneWay}" TextTrimming="CharacterEllipsis" />
                             <TextBlock Text="{Binding Summary, Mode=OneWay}"
@@ -215,7 +247,7 @@
             </ListBox>
         </Grid>
 
-        <StatusBar Grid.Row="2"
+        <StatusBar Grid.Row="3"
                    Background="{DynamicResource Brush.Background.Raised}"
                    Foreground="{DynamicResource Brush.Text.Secondary}">
             <TextBlock Text="{Binding CountSummary, Mode=OneWay}" />

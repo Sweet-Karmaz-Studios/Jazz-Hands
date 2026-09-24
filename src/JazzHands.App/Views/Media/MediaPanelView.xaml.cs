@@ -10,9 +10,10 @@ namespace JazzHands.App.Views.Media;
 /// The media panel.
 /// </summary>
 /// <remarks>
-/// The code-behind is the mouse gesture that starts a drag and the tree selection that has no
-/// bindable property, and nothing else. Both are view concerns that WPF gives no declarative
-/// way to express; everything they decide is handed to the viewmodel.
+/// The code-behind is the mouse gesture that starts a drag, the tree selection that has no
+/// bindable property, and where the mouse is across a tile for the hover scrub. All three are
+/// view concerns that WPF gives no declarative way to express; everything they decide is handed
+/// to the viewmodel.
 /// </remarks>
 public partial class MediaPanelView : UserControl
 {
@@ -75,6 +76,23 @@ public partial class MediaPanelView : UserControl
             this,
             MediaDragData.Create(model.DragIds(selection), model.DragPaths(selection)),
             DragDropEffects.Copy | DragDropEffects.Link);
+    }
+
+    /// <summary>Hover scrub: how far across the tile the mouse is picks the frame shown.</summary>
+    private void OnTileMouseMove(object sender, MouseEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: MediaItemViewModel row, ActualWidth: > 0 } tile && Model is { } model)
+        {
+            model.ScrubTo(row, e.GetPosition(tile).X / tile.ActualWidth);
+        }
+    }
+
+    private void OnTileMouseLeave(object sender, MouseEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: MediaItemViewModel row } && Model is { } model)
+        {
+            model.EndScrub(row);
+        }
     }
 
     private static ListBoxItem? FindRow(DependencyObject? from)
