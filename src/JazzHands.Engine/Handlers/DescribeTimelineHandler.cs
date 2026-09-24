@@ -72,7 +72,7 @@ public sealed class DescribeTimelineHandler : IQueryHandler<DescribeTimelineQuer
 
         if (full)
         {
-            AppendProblems(text, project, sequence);
+            AppendProblems(text, project, sequence, context.Session?.ProjectPath ?? string.Empty);
         }
 
         return text.ToString();
@@ -253,11 +253,11 @@ public sealed class DescribeTimelineHandler : IQueryHandler<DescribeTimelineQuer
         }
     }
 
-    private static void AppendProblems(StringBuilder text, Project project, Sequence sequence)
+    private static void AppendProblems(StringBuilder text, Project project, Sequence sequence, string projectPath)
     {
         ImmutableArray<ValidationIssue> issues =
         [
-            .. Validator.Semantic(project)
+            .. Validator.Semantic(project).Concat(Titles.TitleFonts.Missing(project, projectPath))
                 .Where(issue => issue.Path.Contains($"/sequences/{IndexOf(project, sequence)}/", StringComparison.Ordinal)
                     || issue.Path == "/"),
         ];

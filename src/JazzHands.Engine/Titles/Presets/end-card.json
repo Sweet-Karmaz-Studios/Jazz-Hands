@@ -1,0 +1,19 @@
+{
+  "name": "end-card",
+  "label": "End card",
+  "description": "A closing line and a call to action above the middle, leaving room below for store buttons or a logo.",
+  "text": "Thanks for watching\n[size=52][color=#FFD24D]Wishlist now[/color][/size]",
+  "duration": "6s",
+  "animation": { "in": "fade", "inDuration": "0.8s", "out": "fade", "outDuration": "0.8s" },
+  "params": {
+    "font": "Bahnschrift",
+    "weight": "semibold",
+    "size": "96",
+    "colour": "#FFFFFF",
+    "position": "0, -90",
+    "line-spacing": "1.15",
+    "shadow": "#00000099",
+    "shadow-offset": "0, 4",
+    "shadow-blur": "14"
+  }
+}

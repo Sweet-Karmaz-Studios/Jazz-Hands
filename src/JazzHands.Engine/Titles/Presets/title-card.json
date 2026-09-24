@@ -1,0 +1,18 @@
+{
+  "name": "title-card",
+  "label": "Title card",
+  "description": "A big centred title over the picture, coming into focus: the name of the game or a chapter.",
+  "text": "Title",
+  "duration": "4s",
+  "animation": { "in": "blur", "inDuration": "0.6s", "out": "fade", "outDuration": "0.5s" },
+  "params": {
+    "font": "Bahnschrift",
+    "weight": "bold",
+    "size": "132",
+    "colour": "#FFFFFF",
+    "tracking": "4",
+    "shadow": "#000000A6",
+    "shadow-offset": "0, 6",
+    "shadow-blur": "18"
+  }
+}

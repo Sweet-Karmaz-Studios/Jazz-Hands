@@ -1,0 +1,19 @@
+{
+  "name": "subtitle",
+  "label": "Subtitle",
+  "description": "Dialogue at the bottom centre on a translucent box, as burned in subtitles look.",
+  "text": "Subtitle text",
+  "duration": "3s",
+  "params": {
+    "font": "Segoe UI",
+    "weight": "regular",
+    "size": "44",
+    "colour": "#FFFFFF",
+    "valign": "bottom",
+    "position": "0, 470",
+    "width": "1600",
+    "box": "#000000A6",
+    "box-padding": "10",
+    "box-radius": "4"
+  }
+}

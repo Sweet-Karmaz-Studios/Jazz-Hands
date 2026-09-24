@@ -1,0 +1,22 @@
+{
+  "name": "caption",
+  "label": "Caption",
+  "description": "A line of what is being said near the bottom, outlined so it reads over anything without a box.",
+  "text": "A caption for what is being said",
+  "duration": "3s",
+  "animation": { "in": "fade", "inDuration": "0.15s", "out": "fade", "outDuration": "0.15s" },
+  "params": {
+    "font": "Segoe UI",
+    "weight": "semibold",
+    "size": "46",
+    "colour": "#FFFFFF",
+    "valign": "bottom",
+    "position": "0, 440",
+    "width": "1500",
+    "stroke": "#000000",
+    "stroke-width": "3",
+    "shadow": "#00000080",
+    "shadow-offset": "0, 3",
+    "shadow-blur": "6"
+  }
+}

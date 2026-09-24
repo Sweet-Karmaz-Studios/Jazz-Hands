@@ -1,0 +1,21 @@
+{
+  "name": "lower-third",
+  "label": "Lower third",
+  "description": "A name over a role at the bottom left, in a subtle dark box that keeps it readable over busy footage.",
+  "text": "Name Surname\n[size=34][color=#C9D1D9]Role or title[/color][/size]",
+  "duration": "5s",
+  "animation": { "in": "slide-right", "inDuration": "0.4s", "out": "fade", "outDuration": "0.4s" },
+  "params": {
+    "font": "Segoe UI",
+    "weight": "semibold",
+    "size": "54",
+    "colour": "#FFFFFF",
+    "align": "left",
+    "valign": "bottom",
+    "position": "-816, 400",
+    "line-spacing": "1.05",
+    "box": "#0D1117CC",
+    "box-padding": "22",
+    "box-radius": "6"
+  }
+}

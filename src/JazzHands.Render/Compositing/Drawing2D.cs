@@ -30,6 +30,12 @@ public sealed class Drawing2D : IDisposable
         _device = _factory.CreateDevice(dxgi);
         Context = _device.CreateDeviceContext(DeviceContextOptions.None);
         Context.TextAntialiasMode = Vortice.Direct2D1.TextAntialiasMode.Grayscale;
+
+        // Effects (a title's shadow and blur) keep half floats between steps, as the targets do:
+        // eight bits of linear light would band a soft shadow's falloff.
+        RenderingControls controls = Context.RenderingControls;
+        controls.BufferPrecision = BufferPrecision.PerChannel16Float;
+        Context.RenderingControls = controls;
         Text = DWrite.DWriteCreateFactory<IDWriteFactory>(Vortice.DirectWrite.FactoryType.Shared);
     }
 
@@ -74,6 +80,17 @@ public sealed class Drawing2D : IDisposable
             Context.EndDraw();
             Context.Target = null;
         }
+    }
+
+    /// <summary>A target as a bitmap Direct2D can draw from, which the caller disposes.</summary>
+    public ID2D1Bitmap1 Source(RenderTarget target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+
+        using IDXGISurface surface = target.Texture.QueryInterface<IDXGISurface>();
+        return Context.CreateBitmapFromDxgiSurface(
+            surface,
+            new BitmapProperties1(new PixelFormat(target.Format, Vortice.DCommon.AlphaMode.Premultiplied), 96.0f, 96.0f, BitmapOptions.None));
     }
 
     /// <summary>A brush of a linear premultiplied colour, which the caller disposes.</summary>

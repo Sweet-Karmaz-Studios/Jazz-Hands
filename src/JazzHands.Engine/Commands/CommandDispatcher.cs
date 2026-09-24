@@ -236,7 +236,7 @@ public sealed class CommandDispatcher : IAsyncDisposable
         Project before = _project;
 
         var context = new HandlerContext(_services, _clock, ProjectPath);
-        Project after = SettleTransitions(before, Magnetize(before, Apply(before, command, context), context), context);
+        Project after = SettleTitles(before, SettleTransitions(before, Magnetize(before, Apply(before, command, context), context), context), context);
 
         return Commit(command, metadata, before, after, context.ChangedIds, ChangeOrigin.Command);
     }
@@ -269,7 +269,7 @@ public sealed class CommandDispatcher : IAsyncDisposable
             };
         }
 
-        working = SettleTransitions(before, Magnetize(before, working, context), context);
+        working = SettleTitles(before, SettleTransitions(before, Magnetize(before, working, context), context), context);
         CommandMetadata metadata = CommandRegistry.Describe(batch);
         return Commit(batch, metadata, before, working, context.ChangedIds, ChangeOrigin.Command);
     }
@@ -320,6 +320,60 @@ public sealed class CommandDispatcher : IAsyncDisposable
             {
                 context.Changed(EditOps.Changed(sequence, closed));
                 result = result.ReplaceSequence(closed);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Moves the out animation of every title an edit made longer or shorter to its new end.
+    /// </summary>
+    /// <remarks>
+    /// A title's animations are keyframes from its start (decision 198), so a trim at its end
+    /// would otherwise leave it fading out early or not at all. Like the transitions, this is part
+    /// of the edit that caused it, whatever the edit was.
+    /// </remarks>
+    private static Project SettleTitles(Project before, Project after, HandlerContext context)
+    {
+        if (ReferenceEquals(before, after))
+        {
+            return after;
+        }
+
+        Project result = after;
+        foreach (Sequence sequence in after.Sequences)
+        {
+            if (ReferenceEquals(before.Sequence(sequence.Id), sequence))
+            {
+                continue;
+            }
+
+            foreach (Track track in sequence.Tracks)
+            {
+                Track settled = track;
+                foreach (Clip clip in track.Clips)
+                {
+                    if (!string.Equals(clip.GeneratorId, Core.Titles.TitleParams.GeneratorId, StringComparison.Ordinal)
+                        || before.FindClip(clip.Id)?.Clip is not { } was
+                        || was.Duration == clip.Duration
+                        || clip.Effects.FirstOrDefault(effect => Core.Effects.EffectChains.IsOwnParameters(clip, effect)) is not { } own)
+                    {
+                        continue;
+                    }
+
+                    Effect moved = Core.Titles.TitleAnimations.Retime(own, was.Duration, clip.Duration);
+                    if (!ReferenceEquals(moved, own))
+                    {
+                        settled = settled.ReplaceClip(clip with { Effects = clip.Effects.SetItem(clip.Effects.IndexOf(effect => ReferenceEquals(effect, own)), moved) });
+                        context.Changed(clip.Id);
+                    }
+                }
+
+                if (!ReferenceEquals(settled, track))
+                {
+                    result = result.ReplaceTrack(settled);
+                }
             }
         }
 

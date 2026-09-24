@@ -122,7 +122,7 @@ public static class ProjectCommands
         command.SetAction(parse => WithProject(parse, parse.GetValue(file)!, checkSchema: true, (load, json) =>
         {
             bool strictly = parse.GetValue(strict);
-            ImmutableArray<ValidationIssue> issues = load.Issues;
+            ImmutableArray<ValidationIssue> issues = [.. load.Issues, .. JazzHands.Engine.Titles.TitleFonts.Missing(load.Project, load.Path)];
 
             if (json)
             {

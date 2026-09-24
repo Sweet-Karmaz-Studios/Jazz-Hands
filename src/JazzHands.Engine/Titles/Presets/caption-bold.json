@@ -1,0 +1,20 @@
+{
+  "name": "caption-bold",
+  "label": "Bold caption",
+  "description": "A short punchy line in heavy yellow with a thick outline that pops in, for a highlight or a reaction.",
+  "text": "BIG MOMENT",
+  "duration": "2s",
+  "animation": { "in": "scale", "inDuration": "0.25s", "out": "fade", "outDuration": "0.2s" },
+  "params": {
+    "font": "Bahnschrift",
+    "weight": "black",
+    "size": "96",
+    "colour": "#FFE14D",
+    "position": "0, 300",
+    "stroke": "#000000",
+    "stroke-width": "7",
+    "shadow": "#000000A0",
+    "shadow-offset": "0, 6",
+    "shadow-blur": "10"
+  }
+}
