@@ -77,11 +77,11 @@ public sealed class EffectPreviews : IDisposable
         _registry = registry ?? EffectCatalog.Registry;
     }
 
-    /// <summary>True for the types that have a preview: picture effects and generators.</summary>
+    /// <summary>True for the types that have a preview: picture effects, generators and picture transitions.</summary>
     public static bool HasPreview(EffectDescriptor descriptor)
     {
         ArgumentNullException.ThrowIfNull(descriptor);
-        return descriptor.Kind is EffectKind.Video or EffectKind.Generator;
+        return descriptor.Kind is EffectKind.Video or EffectKind.Generator or EffectKind.Transition;
     }
 
     /// <summary>
@@ -123,6 +123,11 @@ public sealed class EffectPreviews : IDisposable
     {
         ArgumentNullException.ThrowIfNull(descriptor);
 
+        if (descriptor.Kind == EffectKind.Transition)
+        {
+            return TransitionScene(descriptor);
+        }
+
         // Generators are drawn at 720p, so their default sizes (a 400 pixel ellipse, a 96 point
         // digit) fit as they would in a real frame; effects at 360p, where their default sizes
         // show up at 160 pixels across.
@@ -147,6 +152,35 @@ public sealed class EffectPreviews : IDisposable
             var adjustment = new Clip(Id.New(), new TimeRange(Flicks.Zero, Length), Flicks.Zero, Name: descriptor.Name, Effects: EquatableArray.Create(Configured(descriptor)));
             sequence = sequence.AddTrack(new Track(Id.New(), TrackKind.Adjustment, "Adjustment", sequence.NextTrackOrder(), EquatableArray.Create(adjustment)));
         }
+
+        return (project.ReplaceSequence(sequence), sequence, divisor);
+    }
+
+    /// <summary>
+    /// A transition's scene: a blue to orange sky cutting to a teal to yellow one, with the
+    /// transition on the cut at its defaults, a second long and caught 40 percent of the way
+    /// through, where every one of them shows both pictures.
+    /// </summary>
+    private static (Project Project, Sequence Sequence, int Divisor) TransitionScene(EffectDescriptor descriptor)
+    {
+        const int divisor = 4;
+        Project project = Project.CreateNew("preview", new ProjectSettings(Rational.Fps30, Width * divisor, Height * divisor));
+        Sequence sequence = project.ActiveSequence!;
+        Flicks cut = At + Flicks.FromMilliseconds(100);
+
+        Clip outgoing = Generated("gen.gradient", ("start-colour", "#1D3557"), ("end-colour", "#F4A261"), ("start", "0, -180"), ("end", "0, 180")) with
+        {
+            Range = new TimeRange(Flicks.Zero, cut),
+        };
+        Clip incoming = Generated("gen.gradient", ("start-colour", "#2A9D8F"), ("end-colour", "#E9C46A"), ("start", "-320, 0"), ("end", "320, 0")) with
+        {
+            Range = TimeRange.FromBounds(cut, Length),
+        };
+
+        var transition = new Transition(Id.New(), descriptor.TypeId, outgoing.Id, incoming.Id, Flicks.OneSecond, TransitionAlignment.Centered, EquatableArray<EffectParameter>.Empty);
+        Track first = sequence.Tracks.First(track => track.Kind == TrackKind.Video);
+        first = first.AddClip(outgoing).AddClip(incoming) with { Transitions = EquatableArray.Create(transition) };
+        sequence = sequence.ReplaceTrack(first);
 
         return (project.ReplaceSequence(sequence), sequence, divisor);
     }
