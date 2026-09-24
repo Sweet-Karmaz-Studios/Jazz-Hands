@@ -62,7 +62,8 @@ public sealed class ListSequencesHandler : IQueryHandler<ListSequencesQuery, Seq
             settings.FrameRate,
             settings.Width,
             settings.Height,
-            sequence.Settings is not null);
+            sequence.Settings is not null,
+            sequence.IsMagnetic);
     }
 }
 
@@ -92,7 +93,8 @@ public sealed class ListTracksHandler : IQueryHandler<ListTracksQuery, TrackInfo
         track.Solo,
         TimelineQueries.IsAudible(sequence, track),
         track.Height,
-        track.Color);
+        track.Color,
+        track.IsSyncLocked);
 }
 
 /// <summary>Lists clips, in timeline order.</summary>
@@ -139,7 +141,8 @@ public sealed class ListClipsHandler : IQueryHandler<ListClipsQuery, ClipInfo[]>
         clip.LinkGroupId,
         clip.GroupId,
         clip.Effects.Length,
-        clip.Markers.Length);
+        clip.Markers.Length,
+        clip.IsHold);
 }
 
 /// <summary>Describes one clip.</summary>

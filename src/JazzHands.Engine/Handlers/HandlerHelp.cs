@@ -67,8 +67,11 @@ internal static class HandlerHelp
     /// A path someone typed, as a full path: against the project's folder, or the working folder
     /// for a project that has never been saved.
     /// </summary>
-    internal static string Resolve(HandlerContext context, string path) =>
-        context.ProjectPath.Length == 0 ? Path.GetFullPath(path) : ProjectPaths.Resolve(context.ProjectPath, path);
+    internal static string Resolve(HandlerContext context, string path) => Resolve(context.ProjectPath, path);
+
+    /// <summary>The same, for a query, which knows the project path from its session.</summary>
+    internal static string Resolve(string projectPath, string path) =>
+        projectPath.Length == 0 ? Path.GetFullPath(path) : ProjectPaths.Resolve(projectPath, path);
 
     /// <summary>
     /// A media path as the project keeps it: relative to the project file, or absolute for a

@@ -1,5 +1,6 @@
-using System.Collections.Immutable;
+using System.Text.Json;
 using JazzHands.Core.Model;
+using JazzHands.Core.Serialization;
 using JazzHands.Core.Time;
 
 namespace JazzHands.Core.Editing;
@@ -219,6 +220,33 @@ public static class ClipboardOps
             : EditOps.Overwrite(sequence, at, placements);
 
         return pasted.IsOk ? result.ReplaceSequence(pasted.Value) : pasted.Error!;
+    }
+
+    /// <summary>What goes on the Windows clipboard and into <c>clip.paste --data</c>.</summary>
+    public static string ToJson(ClipboardContent content)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        return JsonSerializer.Serialize(content, JazzJson.Options);
+    }
+
+    /// <summary>Reads what <see cref="ToJson"/> wrote, refusing anything else.</summary>
+    public static EditResult<ClipboardContent> FromJson(string json)
+    {
+        ArgumentNullException.ThrowIfNull(json);
+
+        try
+        {
+            if (JsonSerializer.Deserialize<ClipboardContent>(json, JazzJson.Options) is { } content)
+            {
+                return content;
+            }
+        }
+        catch (JsonException)
+        {
+            // Said below, the same as for a document that parsed into something else.
+        }
+
+        return new EditError("invalid-clipboard", "That is not clips copied from Jazz Hands.");
     }
 
     private static string? Regroup(string? group, Dictionary<string, string> map, Func<string> newId)

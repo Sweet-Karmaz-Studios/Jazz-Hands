@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.Threading.Channels;
 using JazzHands.Core.Commands;
+using JazzHands.Core.Editing;
 using JazzHands.Core.Model;
 using Serilog;
 
@@ -235,7 +236,7 @@ public sealed class CommandDispatcher : IAsyncDisposable
         Project before = _project;
 
         var context = new HandlerContext(_services, _clock, ProjectPath);
-        Project after = Apply(before, command, context);
+        Project after = Magnetize(before, Apply(before, command, context), context);
 
         return Commit(command, metadata, before, after, context.ChangedIds, ChangeOrigin.Command);
     }
@@ -268,6 +269,7 @@ public sealed class CommandDispatcher : IAsyncDisposable
             };
         }
 
+        working = Magnetize(before, working, context);
         CommandMetadata metadata = CommandRegistry.Describe(batch);
         return Commit(batch, metadata, before, working, context.ChangedIds, ChangeOrigin.Command);
     }
@@ -286,6 +288,42 @@ public sealed class CommandDispatcher : IAsyncDisposable
                 typeof(HandlerAdapter<>).MakeGenericType(type))!);
 
         return adapter.Handle(handler, project, command, context);
+    }
+
+    /// <summary>
+    /// Closes the gaps an edit left on the primary track of every magnetic sequence it touched.
+    /// </summary>
+    /// <remarks>
+    /// Here rather than in each handler, so no edit can forget it, and once per command or batch,
+    /// so a batch that opens a gap and fills it again does not ripple twice. A sequence the command
+    /// did not touch is left alone: it was settled when it was last edited. When the gaps cannot
+    /// close, because a sync-locked clip is in the way, the command is refused rather than leaving
+    /// a magnetic storyline with a hole in it.
+    /// </remarks>
+    private static Project Magnetize(Project before, Project after, HandlerContext context)
+    {
+        if (ReferenceEquals(before, after))
+        {
+            return after;
+        }
+
+        Project result = after;
+        foreach (Sequence sequence in after.Sequences)
+        {
+            if (!sequence.IsMagnetic || ReferenceEquals(before.Sequence(sequence.Id), sequence))
+            {
+                continue;
+            }
+
+            Sequence closed = HandlerContext.Require(EditOps.Magnetize(sequence));
+            if (!ReferenceEquals(closed, sequence))
+            {
+                context.Changed(EditOps.Changed(sequence, closed));
+                result = result.ReplaceSequence(closed);
+            }
+        }
+
+        return result;
     }
 
     private CommandResult Commit(

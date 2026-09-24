@@ -47,7 +47,7 @@ public sealed class AddClipHandler : ICommandHandler<AddClipCommand>
             }
         }
 
-        Flicks duration = command.Duration ?? DefaultDuration(project, command);
+        Flicks duration = DurationOf(project, command);
         if (duration <= Flicks.Zero)
         {
             throw new CommandException("empty-clip", "A clip needs a duration greater than zero.");
@@ -156,6 +156,35 @@ public sealed class AddClipHandler : ICommandHandler<AddClipCommand>
         return project.ReplaceTrack(target.AddClip(audio));
     }
 
+    /// <summary>How long the clip a command adds runs: what it says, or the rest of its source.</summary>
+    internal static Flicks DurationOf(Project project, AddClipCommand command) =>
+        command.Duration ?? DefaultDuration(project, command);
+
+    /// <summary>
+    /// The existing, unlocked audio tracks a movie's linked sound would be put on by name, which is
+    /// where an overwrite has to make room.
+    /// </summary>
+    internal static IEnumerable<string> LinkedAudioTracks(Project project, Sequence sequence, AddClipCommand command, Track track)
+    {
+        if (!command.WithAudio || track.Kind != TrackKind.Video || command.MediaId is not { } mediaId || project.MediaItem(mediaId)?.Info is not { } info)
+        {
+            yield break;
+        }
+
+        int index = 0;
+        foreach (MediaStream stream in info.AudioStreams)
+        {
+            string name = stream.Title is { Length: > 0 } title ? title : $"A{index + 1}";
+            index++;
+
+            if (sequence.Tracks.FirstOrDefault(candidate =>
+                candidate.Kind == TrackKind.Audio && !candidate.Locked && string.Equals(candidate.Name, name, StringComparison.OrdinalIgnoreCase)) is { } found)
+            {
+                yield return found.Id;
+            }
+        }
+    }
+
     /// <summary>True for A1, A2 and so on: a name nobody chose.</summary>
     private static bool IsDefaultAudioName(string name) =>
         name.Length > 1 && (name[0] == 'A' || name[0] == 'a') && name.AsSpan(1).IndexOfAnyExceptInRange('0', '9') < 0;
@@ -203,18 +232,17 @@ public sealed class RemoveClipHandler : ICommandHandler<RemoveClipCommand>
         ClipLocation found = HandlerHelp.Clip(project, command.ClipId);
         HandlerHelp.RequireUnlocked(found.Track);
 
-        Track updated = command.Ripple
-            ? HandlerContext.Require(EditOps.RippleDelete(found.Track, command.ClipId))
-            : HandlerContext.Require(EditOps.Lift(found.Track, command.ClipId));
+        if (command.Ripple)
+        {
+            // The same edit as clip.ripple-delete: every sync-locked track closes up too.
+            Sequence rippled = HandlerContext.Require(EditOps.RippleDelete(found.Sequence, [command.ClipId]));
+            return SequenceEdit.Commit(project, found.Sequence, rippled, context);
+        }
+
+        Track updated = HandlerContext.Require(EditOps.Lift(found.Track, command.ClipId));
 
         context.Changed(command.ClipId);
         context.Changed(found.Track.Id);
-
-        if (command.Ripple)
-        {
-            context.Changed(updated.Clips.Select(clip => clip.Id));
-        }
-
         return project.ReplaceTrack(updated);
     }
 }
@@ -261,26 +289,40 @@ public sealed class TrimClipHandler : ICommandHandler<TrimClipCommand>
             throw new CommandException("nothing-to-do", "A trim needs --in, --out, or both.");
         }
 
+        if (command.Ripple)
+        {
+            // The same edit as clip.ripple-trim, one edge after the other: every sync-locked
+            // track moves too.
+            Sequence sequence = found.Sequence;
+            Func<Clip, Flicks?> sourceLength = SequenceEdit.SourceLength(project);
+
+            if (command.In is { } rippleIn)
+            {
+                sequence = HandlerContext.Require(EditOps.RippleTrim(sequence, [command.ClipId], ClipEdge.Start, rippleIn, sourceLength));
+            }
+
+            if (command.Out is { } rippleOut)
+            {
+                sequence = HandlerContext.Require(EditOps.RippleTrim(sequence, [command.ClipId], ClipEdge.End, rippleOut, sourceLength));
+            }
+
+            return SequenceEdit.Commit(project, found.Sequence, sequence, context);
+        }
+
         Track track = found.Track;
 
         if (command.In is { } inPoint)
         {
-            track = HandlerContext.Require(EditOps.TrimIn(track, command.ClipId, inPoint, command.Ripple));
+            track = HandlerContext.Require(EditOps.TrimIn(track, command.ClipId, inPoint, ripple: false));
         }
 
         if (command.Out is { } outPoint)
         {
-            track = HandlerContext.Require(EditOps.TrimOut(track, command.ClipId, outPoint, command.Ripple));
+            track = HandlerContext.Require(EditOps.TrimOut(track, command.ClipId, outPoint, ripple: false));
         }
 
         context.Changed(command.ClipId);
         context.Changed(found.Track.Id);
-
-        if (command.Ripple)
-        {
-            context.Changed(track.Clips.Select(clip => clip.Id));
-        }
-
         return project.ReplaceTrack(track);
     }
 }
@@ -390,6 +432,13 @@ public sealed class MoveClipHandler : ICommandHandler<MoveClipCommand>
 
         Sequence sequence = found.Sequence;
 
+        if (sequence.IsMagnetic
+            && sequence.PrimaryTrack is { Locked: false } primary
+            && string.Equals(command.ToTrackId ?? found.Track.Id, primary.Id, StringComparison.Ordinal))
+        {
+            return OntoStoryline(project, sequence, primary, found, command.To, context);
+        }
+
         if (command.ToTrackId is { } toTrackId)
         {
             Track destination = sequence.Track(toTrackId)
@@ -407,6 +456,23 @@ public sealed class MoveClipHandler : ICommandHandler<MoveClipCommand>
         context.Changed(command.ClipId);
         context.Changed(found.Track.Id);
         return project.ReplaceSequence(updated);
+    }
+
+    /// <summary>
+    /// A move that ends on a magnetic primary track: along it, the clip comes out and goes back in
+    /// at the nearest cut; from another track, it goes in where it was dropped, pushing the rest on.
+    /// Either way nothing lands on top of anything and no gap is left.
+    /// </summary>
+    private static Project OntoStoryline(Project project, Sequence sequence, Track primary, ClipLocation found, Flicks to, HandlerContext context)
+    {
+        Sequence updated = string.Equals(found.Track.Id, primary.Id, StringComparison.Ordinal)
+            ? HandlerContext.Require(EditOps.MoveOnStoryline(sequence, [found.Clip.Id], to))
+            : HandlerContext.Require(EditOps.Insert(
+                sequence.ReplaceTrack(HandlerContext.Require(EditOps.Lift(found.Track, found.Clip.Id))),
+                to,
+                [new Placement(primary.Id, found.Clip)]));
+
+        return SequenceEdit.Commit(project, sequence, updated, context);
     }
 }
 

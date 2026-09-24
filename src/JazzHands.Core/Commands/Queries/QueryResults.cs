@@ -48,6 +48,7 @@ public sealed record ProjectInfo(
 /// <param name="Width">The frame width it renders at.</param>
 /// <param name="Height">The frame height it renders at.</param>
 /// <param name="HasOwnSettings">True when it overrides the project's settings.</param>
+/// <param name="Magnetic">True when its primary picture track closes its gaps after every edit.</param>
 public sealed record SequenceInfo(
     string Id,
     string Name,
@@ -58,7 +59,8 @@ public sealed record SequenceInfo(
     Rational Fps,
     int Width,
     int Height,
-    bool HasOwnSettings);
+    bool HasOwnSettings,
+    bool Magnetic = false);
 
 /// <summary>What a query says about one track.</summary>
 /// <param name="Id">The track identifier.</param>
@@ -74,6 +76,7 @@ public sealed record SequenceInfo(
 /// <param name="Audible">True when it will actually be heard or seen, given mute and solo.</param>
 /// <param name="Height">How tall it is drawn.</param>
 /// <param name="Color">Its colour on the timeline.</param>
+/// <param name="SyncLocked">True when it moves with ripple edits on other tracks.</param>
 public sealed record TrackInfo(
     string Id,
     string SequenceId,
@@ -87,7 +90,8 @@ public sealed record TrackInfo(
     bool Solo,
     bool Audible,
     double Height,
-    string Color);
+    string Color,
+    bool SyncLocked = true);
 
 /// <summary>What a query says about one clip.</summary>
 /// <param name="Id">The clip identifier.</param>
@@ -110,6 +114,7 @@ public sealed record TrackInfo(
 /// <param name="GroupId">Clips sharing this are selected together.</param>
 /// <param name="EffectCount">How many effects it carries.</param>
 /// <param name="MarkerCount">How many markers it carries.</param>
+/// <param name="Hold">True for a freeze frame, which shows one frame of its source for its whole length.</param>
 public sealed record ClipInfo(
     string Id,
     string TrackId,
@@ -130,7 +135,8 @@ public sealed record ClipInfo(
     string? LinkGroupId,
     string? GroupId,
     int EffectCount,
-    int MarkerCount);
+    int MarkerCount,
+    bool Hold = false);
 
 /// <summary>What a marker is attached to.</summary>
 public enum MarkerOwner

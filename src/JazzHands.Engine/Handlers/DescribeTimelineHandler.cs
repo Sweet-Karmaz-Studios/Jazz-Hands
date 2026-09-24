@@ -43,7 +43,8 @@ public sealed class DescribeTimelineHandler : IQueryHandler<DescribeTimelineQuer
         text.Append(sequence.Settings is null ? " (from the project)\n" : " (its own)\n");
         text.Append(CultureInfo.InvariantCulture, $"  {Timecode.Format(sequence.Duration, fps)} long");
         text.Append(CultureInfo.InvariantCulture, $", {sequence.Tracks.Length} tracks");
-        text.Append(CultureInfo.InvariantCulture, $", {sequence.Tracks.Sum(track => track.Clips.Length)} clips\n");
+        text.Append(CultureInfo.InvariantCulture, $", {sequence.Tracks.Sum(track => track.Clips.Length)} clips");
+        text.Append(sequence.IsMagnetic ? ", magnetic\n" : "\n");
 
         if (sequence.InOut is { } range)
         {
@@ -95,6 +96,7 @@ public sealed class DescribeTimelineHandler : IQueryHandler<DescribeTimelineQuer
                 track.Locked ? "locked" : null,
                 track.Muted ? "muted" : null,
                 track.Solo ? "solo" : null,
+                track.IsSyncLocked ? null : "sync lock off",
                 TimelineQueries.IsAudible(sequence, track) ? null : "silent",
             }.Where(flag => flag is not null).Select(flag => flag!),
         ];
@@ -144,6 +146,7 @@ public sealed class DescribeTimelineHandler : IQueryHandler<DescribeTimelineQuer
             .. new[]
             {
                 clip.Enabled ? null : "disabled",
+                clip.IsHold ? "freeze frame" : null,
                 clip.Reverse ? "reversed" : null,
                 clip.EffectiveSpeed == Rational.One ? null : $"{clip.EffectiveSpeed}x",
                 clip.LinkGroupId is null ? null : "linked",
