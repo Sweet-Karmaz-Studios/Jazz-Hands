@@ -28,14 +28,14 @@ public sealed class WaveformService : IDisposable
     private readonly MemoryLru<(string Hash, int Stream), AudioPeaks> _memory =
         new(MemoryBudgetBytes, peaks => Math.Max(1, peaks.Windows * 2L));
 
-    /// <summary>A service over a cache, doing its work on a queue.</summary>
-    public WaveformService(CacheManager cache, WorkQueue? work = null)
+    /// <summary>A service over a cache, doing its work on a queue, its own when <paramref name="work"/> is null.</summary>
+    public WaveformService(CacheManager cache, WorkQueue? work = null, ThreadPriority priority = ThreadPriority.BelowNormal)
     {
         ArgumentNullException.ThrowIfNull(cache);
 
         _cache = cache;
         _ownsWork = work is null;
-        _work = work ?? new WorkQueue(2, "Waveforms");
+        _work = work ?? new WorkQueue(2, "Waveforms", priority);
     }
 
     /// <summary>Raised on a worker thread when more of a waveform is ready, with its media's hash.</summary>

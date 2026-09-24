@@ -65,13 +65,14 @@ public sealed class ThumbnailService : IDisposable
     /// <summary>A service over a cache, doing its work on a queue.</summary>
     /// <param name="cache">Where thumbnails are kept between sessions.</param>
     /// <param name="work">Where decoding happens; a queue of its own when null.</param>
-    public ThumbnailService(CacheManager cache, WorkQueue? work = null)
+    /// <param name="priority">The priority of a queue of its own; tests raise it, see <see cref="WorkQueue"/>.</param>
+    public ThumbnailService(CacheManager cache, WorkQueue? work = null, ThreadPriority priority = ThreadPriority.BelowNormal)
     {
         ArgumentNullException.ThrowIfNull(cache);
 
         _cache = cache;
         _ownsWork = work is null;
-        _work = work ?? new WorkQueue(WorkQueue.DefaultWorkers, "Thumbnails");
+        _work = work ?? new WorkQueue(WorkQueue.DefaultWorkers, "Thumbnails", priority);
     }
 
     /// <summary>Raised on a worker thread when a thumbnail is ready, with its media's hash.</summary>

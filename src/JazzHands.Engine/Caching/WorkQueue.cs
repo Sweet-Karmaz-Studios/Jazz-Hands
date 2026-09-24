@@ -55,7 +55,11 @@ public sealed class WorkQueue : IDisposable
     /// <summary>Starts the workers.</summary>
     /// <param name="workers">How many threads.</param>
     /// <param name="name">What the threads are called in a debugger.</param>
-    public WorkQueue(int workers, string name)
+    /// <param name="priority">
+    /// Below normal in the editor, so playback and the UI always come first. A test that waits on
+    /// the workers while the rest of its process renders on WARP runs them at normal, or they starve.
+    /// </param>
+    public WorkQueue(int workers, string name, ThreadPriority priority = ThreadPriority.BelowNormal)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(workers, 1);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -67,7 +71,7 @@ public sealed class WorkQueue : IDisposable
             {
                 IsBackground = true,
                 Name = $"{name} {index + 1}",
-                Priority = ThreadPriority.BelowNormal,
+                Priority = priority,
             };
             _threads[index].Start();
         }
