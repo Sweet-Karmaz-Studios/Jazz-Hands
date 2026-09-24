@@ -41,6 +41,9 @@ public sealed class EffectPreviews : IDisposable
 
     private static readonly Flicks Length = Flicks.FromSeconds(3);
 
+    /// <summary>A warm, crushed look as a 17 point cube, written once into the temp folder for the LUT's preview.</summary>
+    private static readonly Lazy<string> DemoLut = new(WriteDemoLut);
+
     /// <summary>Settings for effects whose defaults leave the picture as it is, or too nearly so to see.</summary>
     private static readonly Dictionary<string, (string Name, string Value)[]> Showcase = new(StringComparer.Ordinal)
     {
@@ -50,6 +53,12 @@ public sealed class EffectPreviews : IDisposable
         ["video.blur.gaussian"] = [("radius", "16")],
         ["video.sharpen"] = [("amount", "400"), ("radius", "6")],
         ["video.key.luma"] = [("threshold", "0.35"), ("softness", "0.1")],
+        ["color.basic"] = [("temperature", "45"), ("contrast", "1.2"), ("saturation", "1.3")],
+        ["color.wheels"] = [("lift", "0, 0.02, 0.06, 0"), ("gain", "0.12, 0.04, -0.06, 0")],
+        ["color.curves"] = [("master", "0,0 0.25,0.12 0.75,0.9 1,1")],
+        ["color.hsl"] = [("hue", "355"), ("hue-width", "25"), ("hue-shift", "150")],
+        ["color.lut"] = [("file", DemoLut.Value)],
+        ["color.white-balance"] = [("neutral", "#FFD8A8")],
     };
 
     private readonly Lock _gate = new();
@@ -228,6 +237,31 @@ public sealed class EffectPreviews : IDisposable
         }
 
         return effect;
+    }
+
+    private static string WriteDemoLut()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "JazzHands", "preview-look.cube");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+
+        var text = new System.Text.StringBuilder("LUT_3D_SIZE 17").AppendLine();
+        for (int b = 0; b < 17; b++)
+        {
+            for (int g = 0; g < 17; g++)
+            {
+                for (int r = 0; r < 17; r++)
+                {
+                    // Warm highlights, teal shadows, the blacks lifted a little.
+                    float red = 0.04f + (0.96f * MathF.Pow(r / 16.0f, 0.9f));
+                    float green = 0.03f + (0.95f * (g / 16.0f));
+                    float blue = 0.08f + (0.80f * MathF.Pow(b / 16.0f, 1.1f));
+                    text.Append(System.Globalization.CultureInfo.InvariantCulture, $"{red:0.####} {green:0.####} {blue:0.####}").AppendLine();
+                }
+            }
+        }
+
+        File.WriteAllText(path, text.ToString());
+        return path;
     }
 
     private unsafe byte[] ReadBack(ID3D11Texture2D texture)
