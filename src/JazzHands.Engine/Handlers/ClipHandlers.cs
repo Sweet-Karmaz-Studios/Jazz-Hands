@@ -235,6 +235,7 @@ public sealed class RemoveClipHandler : ICommandHandler<RemoveClipCommand>
         if (command.Ripple)
         {
             // The same edit as clip.ripple-delete: every sync-locked track closes up too.
+            SequenceEdit.RefuseQuickTrim(found.Sequence);
             Sequence rippled = HandlerContext.Require(EditOps.RippleDelete(found.Sequence, [command.ClipId]));
             return SequenceEdit.Commit(project, found.Sequence, rippled, context);
         }
@@ -294,6 +295,7 @@ public sealed class TrimClipHandler : ICommandHandler<TrimClipCommand>
             // The same edit as clip.ripple-trim, one edge after the other: every sync-locked
             // track moves too.
             Sequence sequence = found.Sequence;
+            SequenceEdit.RefuseQuickTrim(sequence);
             Func<Clip, Flicks?> sourceLength = SequenceEdit.SourceLength(project);
 
             if (command.In is { } rippleIn)

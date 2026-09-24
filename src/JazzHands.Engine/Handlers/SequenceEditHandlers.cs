@@ -18,7 +18,9 @@ internal static class SequenceEdit
             throw new CommandException("nothing-selected", $"{what} needs a clip.");
         }
 
-        return HandlerHelp.Clip(project, clipIds[0]).Sequence;
+        Sequence sequence = HandlerHelp.Clip(project, clipIds[0]).Sequence;
+        RefuseQuickTrim(sequence);
+        return sequence;
     }
 
     /// <summary>Puts the edited sequence in the project and reports every clip and track that changed.</summary>
@@ -29,8 +31,24 @@ internal static class SequenceEdit
             return project;
         }
 
+        RefuseQuickTrim(before);
         context.Changed(EditOps.Changed(before, after));
         return project.ReplaceSequence(after);
+    }
+
+    /// <summary>
+    /// Refuses a sequence-wide edit of a Quick Trim, whose clips sit at their own source times:
+    /// a ripple, an insert or a paste would move them off, and it would stop being a trim of its
+    /// file without saying so.
+    /// </summary>
+    internal static void RefuseQuickTrim(Sequence sequence)
+    {
+        if (sequence.QuickTrim is not null)
+        {
+            throw new CommandException(
+                "quick-trim",
+                $"'{sequence.Name}' is a Quick Trim, which keeps every clip at its place in the file. Cut it with trim.remove-range, or nest it in another sequence to edit it freely.");
+        }
     }
 
     /// <summary>How much source each clip has, so a trim cannot run off the end of it.</summary>
@@ -104,6 +122,7 @@ public sealed class CloseGapHandler : ICommandHandler<CloseGapCommand>
         ArgumentNullException.ThrowIfNull(context);
 
         (Sequence sequence, Track track) = HandlerHelp.Track(project, command.TrackId);
+        SequenceEdit.RefuseQuickTrim(sequence);
         Sequence after = HandlerContext.Require(EditOps.CloseGap(sequence, track.Id, command.At));
         return SequenceEdit.Commit(project, sequence, after, context);
     }
@@ -120,6 +139,7 @@ public sealed class LiftRangeHandler : ICommandHandler<LiftRangeCommand>
         ArgumentNullException.ThrowIfNull(context);
 
         Sequence sequence = HandlerHelp.Sequence(project, command.SequenceId);
+        SequenceEdit.RefuseQuickTrim(sequence);
         Sequence after = HandlerContext.Require(EditOps.LiftRange(
             sequence,
             TimeRange.FromBounds(command.From, Flicks.Max(command.From, command.To)),
@@ -140,6 +160,7 @@ public sealed class ExtractRangeHandler : ICommandHandler<ExtractRangeCommand>
         ArgumentNullException.ThrowIfNull(context);
 
         Sequence sequence = HandlerHelp.Sequence(project, command.SequenceId);
+        SequenceEdit.RefuseQuickTrim(sequence);
         Sequence after = HandlerContext.Require(EditOps.ExtractRange(
             sequence,
             TimeRange.FromBounds(command.From, Flicks.Max(command.From, command.To)),
@@ -160,6 +181,7 @@ public sealed class InsertClipHandler : ICommandHandler<InsertClipCommand>
         ArgumentNullException.ThrowIfNull(context);
 
         (Sequence sequence, Track track) = HandlerHelp.Track(project, command.TrackId);
+        SequenceEdit.RefuseQuickTrim(sequence);
         HandlerHelp.RequireUnlocked(track);
 
         AddClipCommand add = command.ToAdd();
@@ -187,6 +209,7 @@ public sealed class OverwriteClipHandler : ICommandHandler<OverwriteClipCommand>
         ArgumentNullException.ThrowIfNull(context);
 
         (Sequence sequence, Track track) = HandlerHelp.Track(project, command.TrackId);
+        SequenceEdit.RefuseQuickTrim(sequence);
         HandlerHelp.RequireUnlocked(track);
 
         AddClipCommand add = command.ToAdd();
@@ -218,6 +241,7 @@ public sealed class FreezeFrameHandler : ICommandHandler<FreezeFrameCommand>
 
         ClipLocation found = HandlerHelp.Clip(project, command.ClipId);
         HandlerHelp.RequireUnlocked(found.Track);
+        SequenceEdit.RefuseQuickTrim(found.Sequence);
 
         string holdId = HandlerHelp.IdOr(command.NewClipId);
         HandlerHelp.RequireUnused(project, holdId);
@@ -244,6 +268,7 @@ public sealed class PasteClipsHandler : ICommandHandler<PasteClipsCommand>
         ArgumentNullException.ThrowIfNull(context);
 
         Sequence sequence = HandlerHelp.Sequence(project, command.SequenceId);
+        SequenceEdit.RefuseQuickTrim(sequence);
         ClipboardContent content = HandlerContext.Require(ClipboardOps.FromJson(command.Data));
 
         Project after = HandlerContext.Require(ClipboardOps.Paste(
@@ -278,6 +303,8 @@ public sealed class SetTimelineMagneticHandler : ICommandHandler<SetTimelineMagn
         {
             return project;
         }
+
+        SequenceEdit.RefuseQuickTrim(sequence);
 
         context.Changed(sequence.Id);
         return project.ReplaceSequence(sequence with { Magnetic = command.Magnetic ? true : null });

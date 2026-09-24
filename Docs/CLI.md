@@ -573,6 +573,45 @@ jazz clip nudge trailer.jazz <clip-id>,<clip-id> --frames -2
 Ids are taken literally. It is the timeline that widens a click to a clip's linked sound; a
 script that wants both names both.
 
+### Editing
+
+The editing toolset (Phase 13). Everything that moves time ripples along every sync-locked track
+as well as the clips' own, so sound stays under its picture; a sync-locked clip that would have to
+move into something refuses the edit with `sync-lock-blocked` and its name. Locked tracks never
+move. A Quick Trim refuses these with `quick-trim`.
+
+```bash
+jazz clip ripple-trim trailer.jazz <shot>,<its-sound> --edge end --to 00:00:07:12
+jazz clip insert trailer.jazz <track-id> --at 00:00:04:00 --media <media-id> --in 00:01:10:00 --dur 2s
+jazz clip freeze-frame trailer.jazz <clip-id> --at 00:00:12:03 --dur 1s
+jazz track set-sync-lock trailer.jazz <music-track-id> false
+jazz timeline set-magnetic trailer.jazz true
+jazz clipboard copy trailer.jazz <clip-id>,<clip-id> > clips.json
+jazz clip paste other.jazz --data "$(cat clips.json)" --at 00:00:30:00 --insert
+```
+
+| Verb | Does |
+|---|---|
+| `clip ripple-trim <ids> --edge start\|end --to <t>` | Moves one edge of clips that share it and ripples everything after. A start edge keeps the clip where it begins and takes source off its front. |
+| `clip ripple-delete <ids>` | Removes clips and closes the time they took. `clip remove --ripple` is the same for one clip. |
+| `clip close-gap <track-id> --at <t>` | Closes the empty space on a track at a time. `not-a-gap` when nothing follows. |
+| `clip lift --from <t> --to <t> [--tracks ids]` | Takes a range out and leaves a gap; clips across the ends are cut there. Every unlocked track unless named. |
+| `clip extract --from <t> --to <t> [--tracks ids]` | Takes a range out and closes it. |
+| `clip insert <track-id> --at <t> ...` | `clip add`'s options; cuts what is there and pushes it on. A movie brings its sound. |
+| `clip overwrite <track-id> --at <t> ...` | `clip add`'s options; over what is there, on its sound tracks too. Nothing moves. |
+| `clip freeze-frame <id> --at <t> [--dur d] [--id new]` | Holds the frame at a time (two seconds unless told), pushing the rest on. The hold plays no sound and trimming it never changes its frame. |
+| `clip storyline-move <ids> --to <t>` | Moves clips on the lowest picture track to the nearest cut, closing up behind them; clips on other tracks that start over them ride along. |
+| `clip paste --data <json> --at <t> [--track id] [--insert] [--sequence id]` | Pastes what `clipboard copy` returned: same track numbers (or from `--track`), new ids, links and groups kept, media reused by hash or path or added. |
+| `clipboard copy <ids>` | The clips and their media as JSON, full paths, for `clip paste`. Changes nothing. |
+| `clip match-frame <id> --at <t>` | `{"clipId", "mediaId", "sequenceId", "sourceTime", "path"}`: which frame of which source the clip shows there. |
+| `track set-sync-lock <track-id> true\|false` | Sync lock is on unless turned off; off, ripples on other tracks leave the track alone. |
+| `timeline set-magnetic true\|false [--sequence id]` | Keeps the lowest picture track gapless after every edit, and makes `clip move` along it a storyline move. |
+
+Range markers and chapters are `marker add --dur` and `--chapter`; nesting is `clip nest` and
+`clip unnest`; selecting is `selection set`. In a script, times may be written as text
+(`"90f"`, `"00:00:04.000"`) and are read at the project's rate; `tests/scripts/trailer-edit.json`
+is a worked example.
+
 ### Quick Trim
 
 A Quick Trim is a sequence over one file laid out at its source times: the kept stretches are
@@ -602,7 +641,9 @@ The editor's editing keys are bindings to these same commands, kept in a keymap.
 
 | Keys | Sends |
 |---|---|
-| Delete, Shift+Delete | `clip.remove` for each selected clip, as one undo step; Shift closes the gap |
+| Delete | `clip.remove` for each selected clip, as one undo step |
+| Shift+Delete | `clip.ripple-delete` of the selection, closing the gap on every sync-locked track |
+| Q, W | `clip.ripple-trim` of the clips under the playhead, start or end edge, to the playhead |
 | Ctrl+Z, Ctrl+Y (or Ctrl+Shift+Z) | `undo`, `redo` |
 | Ctrl+D | `clip.duplicate` for each selected clip |
 | `,` `.` (Shift for ten) | `clip.nudge` the selection by a frame |
@@ -610,6 +651,13 @@ The editor's editing keys are bindings to these same commands, kept in a keymap.
 | Ctrl+K | `clip.split` at the playhead: the selected clips under it, or every clip under it when none is selected there |
 | Ctrl+A | `selection.set` to every clip |
 | Enter, Backspace | `trim.add-segment`, `trim.remove-range` between the in and out points, in a Quick Trim |
+
+Some keys are the editor's own rather than commands, bound to `ui.` actions: V C B N Y U R H pick
+the select, razor, ripple, roll, slip, slide, rate stretch and hand tools (`ui.tool.select` and
+so on), S toggles snapping (`ui.snap`), F is match frame (`ui.match-frame`), and Ctrl+C, Ctrl+X,
+Ctrl+V and Ctrl+Shift+V copy, cut, paste over and paste pushing on (`ui.copy`, `ui.cut`,
+`ui.paste`, `ui.paste-insert`) through the Windows clipboard, which they fill with
+`clipboard.copy` and empty with `clip.paste`.
 
 A `keymap.json` in `%APPDATA%\JazzHands` changes them a key at a time. Each binding names a
 command and its arguments as JSON-RPC would send them, with `$selection`, `$playhead`, `$in`, `$out`,
