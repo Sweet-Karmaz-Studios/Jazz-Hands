@@ -6,8 +6,9 @@ namespace JazzHands.Core.Editing;
 
 /// <summary>A new clip to put on a track, for <see cref="EditOps.Insert"/> and <see cref="EditOps.Overwrite"/>.</summary>
 /// <param name="TrackId">The track it goes on.</param>
-/// <param name="Clip">The clip. Its start is ignored: every placement goes at the edit's time.</param>
-public sealed record Placement(string TrackId, Clip Clip);
+/// <param name="Clip">The clip. Its start is ignored: it goes at the edit's time plus <paramref name="Offset"/>.</param>
+/// <param name="Offset">How far after the edit's time it goes, for several clips placed as a group.</param>
+public sealed record Placement(string TrackId, Clip Clip, Flicks Offset = default);
 
 /// <summary>
 /// The editing operations that work across a whole sequence: ripples that keep sync-locked tracks
@@ -327,7 +328,7 @@ public static partial class EditOps
             return checkedPlacements.Error!;
         }
 
-        Flicks length = placements.Max(placement => placement.Clip.Duration);
+        Flicks length = placements.Max(placement => placement.Offset + placement.Clip.Duration);
         string[] tracks = [.. placements.Select(placement => placement.TrackId).Distinct(StringComparer.Ordinal)];
 
         // The tracks were checked unlocked above, and opening space fails for nothing else.
@@ -493,25 +494,17 @@ public static partial class EditOps
             }
         }
 
+        // One insert of the whole run, end to end in their order.
         Flicks offset = Flicks.Zero;
         var placements = new List<Placement>(moving.Length);
         foreach (Clip clip in moving)
         {
-            placements.Add(new Placement(primary.Id, clip with { Range = new TimeRange(cut + offset, clip.Duration) }));
+            placements.Add(new Placement(primary.Id, clip, offset));
             offset += clip.Duration;
         }
 
-        // One insert of the whole run, so the clips keep their order and sit end to end.
-        Clip run = moving[0] with { Range = new TimeRange(cut, offset) };
-        // The primary track was unlocked for the delete and the run has a length, so this holds.
-        Sequence opened = Insert(removed.Value, cut, [new Placement(primary.Id, run)]).Value;
-        Track withRun = opened.Track(primary.Id)!.RemoveClip(run.Id);
-        foreach (Placement placement in placements)
-        {
-            withRun = withRun.AddClip(placement.Clip);
-        }
-
-        return opened.ReplaceTrack(withRun);
+        // The primary track was unlocked for the delete and every clip has a length, so this holds.
+        return Insert(removed.Value, cut, placements).Value;
     }
 
     /// <summary>
@@ -733,7 +726,12 @@ public static partial class EditOps
                 return EditError.EmptyResult($"'{placement.Clip.Name}' has no length.");
             }
 
-            placed.Add((track, placement.Clip with { Range = new TimeRange(at, placement.Clip.Duration) }));
+            if (placement.Offset.IsNegative)
+            {
+                return EditError.TimeOutOfRange($"'{placement.Clip.Name}' is placed before the edit's time.");
+            }
+
+            placed.Add((track, placement.Clip with { Range = new TimeRange(at + placement.Offset, placement.Clip.Duration) }));
         }
 
         return placed;
