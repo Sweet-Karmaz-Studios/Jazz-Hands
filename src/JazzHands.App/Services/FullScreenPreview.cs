@@ -40,7 +40,8 @@ public sealed class FullScreenPreview(IPreviewEngine engine, Func<PreviewPanelVi
             engine,
             monitor,
             (key, modifiers, repeat) => panel().KeyDown(key, modifiers, repeat),
-            key => panel().KeyUp(key));
+            key => panel().KeyUp(key),
+            () => panel().Display);
 
         _window.Closed += (_, _) =>
         {

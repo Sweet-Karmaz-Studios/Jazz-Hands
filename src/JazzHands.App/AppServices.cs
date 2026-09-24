@@ -110,7 +110,9 @@ public static class AppServices
             provider.GetRequiredService<IPreviewEngine>(),
             provider.GetRequiredService<IUiDispatcher>(),
             provider.GetRequiredService<IFullScreenPreview>(),
-            provider.GetRequiredService<PointPicker>()));
+            provider.GetRequiredService<PointPicker>(),
+            provider.GetRequiredService<IDisplaySettings>()));
+        services.AddSingleton<IDisplaySettings>(_ => new FileDisplaySettings());
 
         // Thumbnails and waveforms: the engine's caches, turned into bitmaps and peaks for the
         // timeline and the media panel, with their ready events folded onto the UI thread.
@@ -175,6 +177,15 @@ public static class AppServices
             provider.GetRequiredService<IEffectFavorites>(),
             provider.GetRequiredService<IEffectPreviewImages>(),
             provider.GetRequiredService<IPreviewEngine>()));
+
+        services.AddSingleton(provider => new ViewModels.Grading.ColorPanelViewModel(
+            provider.GetRequiredService<ISession>(),
+            provider.GetRequiredService<SelectionService>(),
+            provider.GetRequiredService<IUiDispatcher>(),
+            provider.GetRequiredService<IPreviewEngine>()));
+        services.AddSingleton(provider => new ViewModels.Grading.ScopesPanelViewModel(
+            provider.GetRequiredService<IPreviewEngine>(),
+            provider.GetRequiredService<IUiDispatcher>()));
 
         services.AddSingleton<MediaPanelViewModel>();
         services.AddSingleton<MetersPanelViewModel>(provider => new MetersPanelViewModel(

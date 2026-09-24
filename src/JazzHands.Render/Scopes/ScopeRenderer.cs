@@ -154,9 +154,11 @@ public sealed class ScopeRenderer : IDisposable
             VectorBase = VectorBase,
             Step = (uint)step,
 
-            // A column of the waveform gets height x (width / columns) samples; a bin holding about
-            // a fiftieth of them glows most of the way. The vectorscope spreads the whole frame.
-            WaveGain = 50.0f / Math.Max(1.0f, sampledHeight * (sampledWidth / (float)WaveWidth)),
+            // A column of the waveform gets height x (width / columns) samples; a bin holding about a
+            // hundred and fiftieth of them glows most of the way, so a channel spread over the whole
+            // range still reads. The vectorscope spreads the whole frame.
+            WaveGain = 150.0f / Math.Max(1.0f, sampledHeight * (sampledWidth / (float)WaveWidth)),
+            ParadeGain = 150.0f / Math.Max(1.0f, sampledHeight * (sampledWidth / (float)ParadeWidth)),
             VectorGain = 4000.0f / Math.Max(1.0f, sampledWidth * (float)sampledHeight),
         };
         context.UpdateSubresource(in constants, _constants);
@@ -285,7 +287,7 @@ public sealed class ScopeRenderer : IDisposable
         public uint Step;
         public float WaveGain;
         public float VectorGain;
-        public float Padding2;
+        public float ParadeGain;
         public float Padding3;
     }
 

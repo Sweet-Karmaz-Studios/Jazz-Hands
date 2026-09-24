@@ -47,7 +47,9 @@ public sealed partial class MainViewModel : ObservableObject
         IDialogService? dialogs = null,
         ExportQueuePanelViewModel? exports = null,
         Inspector.InspectorPanelViewModel? inspector = null,
-        Effects.EffectsPanelViewModel? effects = null)
+        Effects.EffectsPanelViewModel? effects = null,
+        Grading.ScopesPanelViewModel? scopes = null,
+        Grading.ColorPanelViewModel? color = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(media);
@@ -62,6 +64,8 @@ public sealed partial class MainViewModel : ObservableObject
         Exports = exports;
         Inspector = inspector;
         Effects = effects;
+        Scopes = scopes;
+        Color = color;
         _files = files;
         _dialogs = dialogs;
 
@@ -97,6 +101,16 @@ public sealed partial class MainViewModel : ObservableObject
             Panels.Add(exports);
         }
 
+        if (scopes is not null)
+        {
+            Panels.Add(scopes);
+        }
+
+        if (color is not null)
+        {
+            Panels.Add(color);
+        }
+
         _session.ProjectChanged += (_, _) => ui.Post(UpdateTitle);
         UpdateTitle();
     }
@@ -125,8 +139,25 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>The effects browser, when the editor has one.</summary>
     public Effects.EffectsPanelViewModel? Effects { get; }
 
+    /// <summary>The scopes panel, when the host made one.</summary>
+    public Grading.ScopesPanelViewModel? Scopes { get; }
+
+    /// <summary>The colour wheels and curves panel, when the host made one.</summary>
+    public Grading.ColorPanelViewModel? Color { get; }
+
+    /// <summary>
+    /// Raised with the content ids of panels to bring to the front: a workspace, until Phase 27's
+    /// layout service saves and restores whole layouts. The window, which owns the docking
+    /// manager, shows them.
+    /// </summary>
+    public event EventHandler<IReadOnlyList<string>>? PanelsRequested;
+
     /// <summary>Every dockable panel, in the order they were registered.</summary>
     public ObservableCollection<ToolViewModel> Panels { get; }
+
+    /// <summary>The colour workspace: the Color panel and the scopes in front, beside the preview.</summary>
+    [RelayCommand]
+    private void ShowColorWorkspace() => PanelsRequested?.Invoke(this, [Grading.ColorPanelViewModel.PanelId, Grading.ScopesPanelViewModel.PanelId]);
 
     [RelayCommand]
     private static void Exit() => Application.Current?.Shutdown();

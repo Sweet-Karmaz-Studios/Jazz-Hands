@@ -43,6 +43,12 @@ public interface IPreviewEngine
     /// full <see cref="Describe"/> would build a record sixty times a second.
     /// </summary>
     Flicks Position { get; }
+
+    /// <summary>Raised on the composition thread with the scopes of the frame on screen while <see cref="Scopes"/> is on.</summary>
+    event EventHandler<Render.Scopes.ScopeReading>? ScopesMeasured;
+
+    /// <summary>Measure the scopes on each frame shown; the Scopes panel turns this on only while it is visible.</summary>
+    bool Scopes { get; set; }
 }
 
 /// <summary>The playback engine, presented to the preview panel.</summary>
@@ -77,6 +83,20 @@ public sealed class EnginePreview(PlaybackEngine engine, RenderDevice device) : 
 
     /// <inheritdoc />
     public Flicks Position => engine.Position;
+
+    /// <inheritdoc />
+    public event EventHandler<Render.Scopes.ScopeReading>? ScopesMeasured
+    {
+        add => engine.ScopesMeasured += value;
+        remove => engine.ScopesMeasured -= value;
+    }
+
+    /// <inheritdoc />
+    public bool Scopes
+    {
+        get => engine.Scopes;
+        set => engine.Scopes = value;
+    }
 }
 
 /// <summary>Opens and closes the full screen preview.</summary>

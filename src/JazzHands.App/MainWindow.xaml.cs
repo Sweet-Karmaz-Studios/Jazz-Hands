@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using AvalonDock.Layout;
 using JazzHands.App.ViewModels;
 
 namespace JazzHands.App;
@@ -28,6 +29,20 @@ public partial class MainWindow : Window
         InitializeComponent();
         _model = model;
         DataContext = model;
+        model.PanelsRequested += (_, ids) => BringForward(ids);
+    }
+
+    /// <summary>Shows panels and puts each in front of its pane: a workspace, until Phase 27's layouts.</summary>
+    private void BringForward(IReadOnlyList<string> ids)
+    {
+        foreach (LayoutAnchorable panel in Dock.Layout.Descendents().OfType<LayoutAnchorable>())
+        {
+            if (ids.Contains(panel.ContentId))
+            {
+                panel.Show();
+                panel.IsSelected = true;
+            }
+        }
     }
 
     /// <inheritdoc />

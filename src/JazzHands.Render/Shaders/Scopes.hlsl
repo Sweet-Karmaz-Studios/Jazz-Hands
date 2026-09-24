@@ -25,7 +25,8 @@ cbuffer ScopeConstants : register(b0)
     uint Step;           // 1 for every pixel, 2 for every other pixel each way on large frames
     float WaveGain;      // how quickly a bin brightens, from the samples a column gets
     float VectorGain;
-    float2 Padding;
+    float ParadeGain;    // the parade's own: its columns are fewer, so each gets more samples
+    float Padding;
 };
 
 Texture2D<float4> Frame : register(t0);
@@ -36,6 +37,24 @@ void Count(uint index)
 {
     uint ignored;
     Counts.InterlockedAdd(index * 4, 1, ignored);
+}
+
+// Waveform and parade columns are fewer than the frame's, and not a whole number of pixels
+// each, so some columns are fed by one more frame column than their neighbours. Counted as they
+// are, that would draw stripes; the draw passes scale each column by how many it was fed.
+uint Fed(uint column, uint columns)
+{
+    // Frame columns x with floor(x * columns / Width) == column, of those sampled every Step.
+    uint first = ((column * Width) + columns - 1) / columns;
+    uint next = (((column + 1) * Width) + columns - 1) / columns;
+    return ((next + Step - 1) / Step) - ((first + Step - 1) / Step);
+}
+
+// How much brighter a column's counts are drawn for being fed less than the average.
+float Evened(uint column, uint columns)
+{
+    float average = ((Width + Step - 1) / Step) / (float)columns;
+    return average / max(Fed(column, columns), 1u);
 }
 
 uint Bin(float value)
@@ -105,7 +124,7 @@ void CsWaveform(uint3 id : SV_DispatchThreadID)
         return;
     }
 
-    float glow = Glow(Read(WaveBase + (id.y * WaveWidth) + id.x), WaveGain);
+    float glow = Glow(Read(WaveBase + (id.y * WaveWidth) + id.x), WaveGain * Evened(id.x, WaveWidth));
     Picture[id.xy] = Bgra(float3(0.55, 1.0, 0.65) * glow, glow);
 }
 
@@ -120,7 +139,7 @@ void CsParade(uint3 id : SV_DispatchThreadID)
 
     uint channel = id.x / ParadeWidth;
     float3 tint = channel == 0 ? float3(1.0, 0.3, 0.3) : channel == 1 ? float3(0.35, 1.0, 0.4) : float3(0.4, 0.55, 1.0);
-    float glow = Glow(Read(ParadeBase + (id.y * row) + id.x), WaveGain);
+    float glow = Glow(Read(ParadeBase + (id.y * row) + id.x), ParadeGain * Evened(id.x % ParadeWidth, ParadeWidth));
     Picture[id.xy] = Bgra(tint * glow, glow);
 }
 

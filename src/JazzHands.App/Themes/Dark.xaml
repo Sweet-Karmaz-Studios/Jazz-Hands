@@ -34,6 +34,17 @@
     <SolidColorBrush x:Key="Brush.Preview.Guide" Color="#B0FFFFFF" />
     <SolidColorBrush x:Key="Brush.Preview.TitleSafe" Color="#B0E0A33C" />
 
+    <!-- Scopes: a near black ground so faint traces show, graticules that stay behind them. -->
+    <SolidColorBrush x:Key="Brush.Scope.Background" Color="#FF0C0C0C" />
+    <SolidColorBrush x:Key="Brush.Scope.Graticule" Color="#55FFFFFF" />
+    <SolidColorBrush x:Key="Brush.Scope.Label" Color="#99FFFFFF" />
+    <SolidColorBrush x:Key="Brush.Scope.Target" Color="#CCE0A33C" />
+    <SolidColorBrush x:Key="Brush.Scope.Skin" Color="#99E0A080" />
+    <SolidColorBrush x:Key="Brush.Scope.Red" Color="#FFE05050" />
+    <SolidColorBrush x:Key="Brush.Scope.Green" Color="#FF50D060" />
+    <SolidColorBrush x:Key="Brush.Scope.Blue" Color="#FF5080F0" />
+    <SolidColorBrush x:Key="Brush.Scope.Luma" Color="#40FFFFFF" />
+
     <!--
         The bin's colour labels. The names are what media.set takes on the command line, so the
         palette here and CommandValues.ParseColor have to agree.

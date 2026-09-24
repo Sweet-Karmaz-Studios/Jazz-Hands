@@ -182,3 +182,22 @@ public sealed record YuvColorSpace(Matrix4x4 Matrix, bool IsFullRange, TransferF
 /// <param name="ChromaOffset">Subtracted from each chroma sample.</param>
 /// <param name="ChromaRange">Multiplies chroma after the offset.</param>
 public readonly record struct SampleRange(float LumaOffset, float LumaRange, float ChromaOffset, float ChromaRange);
+
+/// <summary>What the monitor the preview is shown on expects, so it looks as a reference display would.</summary>
+/// <remarks>
+/// The program is the delivered signal, BT.1886 as exports carry it. A reference monitor shows
+/// that at gamma 2.4; a desktop monitor is sRGB, which shows it lighter in the shadows. The preview
+/// converts from the one to the other on the way to the screen, so a grade judged on a desktop
+/// looks right on a television. Scopes and exports read the signal, not this.
+/// </remarks>
+public enum DisplayTransfer
+{
+    /// <summary>An ordinary desktop monitor: the default.</summary>
+    Srgb = 0,
+
+    /// <summary>A monitor set to a pure 2.2 gamma.</summary>
+    Gamma22 = 1,
+
+    /// <summary>A calibrated BT.1886 reference display: the signal goes out as it is.</summary>
+    Bt1886 = 2,
+}

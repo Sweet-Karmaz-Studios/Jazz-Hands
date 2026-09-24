@@ -124,6 +124,11 @@
                                  Text="{Binding ColorText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                                  KeyDown="OnFieldKeyDown"
                                  AutomationProperties.Name="{Binding Label, Mode=OneWay}" />
+                        <Button Style="{StaticResource Button.Small}"
+                                Content="&#xEF3C;"
+                                Command="{Binding PickCommand, Mode=OneWay}"
+                                ToolTip="Pick this colour from the preview"
+                                AutomationProperties.Name="Pick the colour from the preview" />
                     </StackPanel>
 
                     <CheckBox Style="{StaticResource CheckBox.Dark}"

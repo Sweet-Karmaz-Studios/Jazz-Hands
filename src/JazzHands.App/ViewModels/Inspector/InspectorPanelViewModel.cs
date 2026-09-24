@@ -215,6 +215,32 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
     public void Pick(ParamRowViewModel row)
     {
         ArgumentNullException.ThrowIfNull(row);
+
+        if (row.IsColor)
+        {
+            // An eyedropper: the colour under the click, read as the picture is before this
+            // effect (a white balance picks from what it will correct, not from its result), off
+            // the UI thread because it draws a frame.
+            string? before = _session.Project.Sequences.SelectMany(sequence => sequence.Tracks)
+                .SelectMany(track => track.Effects.Concat(track.Clips.SelectMany(clip => clip.Effects)))
+                .Any(effect => effect.Id == row.OwnerId) ? row.OwnerId : null;
+            Flicks at = Playhead;
+
+            _picker?.Begin($"{row.Label}: click the colour in the picture", point => _ = Task.Run(() =>
+            {
+                try
+                {
+                    ColorSample sample = _session.Query(new SampleColorQuery(at, point.X, point.Y, before));
+                    _ui.Post(() => Send(row, sample.Hex));
+                }
+                catch (CommandException refusal)
+                {
+                    _ui.Post(() => Status = refusal.Message);
+                }
+            }));
+            return;
+        }
+
         _picker?.Begin(row.Label, point => Send(row, ParamRowViewModel.PointText(point)));
         UpdateMarkers();
     }

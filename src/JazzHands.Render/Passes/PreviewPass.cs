@@ -1,6 +1,7 @@
 using System.Numerics;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using JazzHands.Render.Color;
 using Vortice.D3DCompiler;
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
@@ -136,6 +137,9 @@ public sealed class PreviewPass : IDisposable
             });
     }
 
+    /// <summary>What the screen the preview is shown on expects; sRGB unless the person says otherwise.</summary>
+    public DisplayTransfer Display { get; set; } = DisplayTransfer.Srgb;
+
     /// <summary>Clears a target to opaque black.</summary>
     public void Clear(ID3D11RenderTargetView target)
     {
@@ -166,6 +170,7 @@ public sealed class PreviewPass : IDisposable
         {
             DestRect = ToVector(destination),
             SourceRect = ToVector(QuadRect.Full),
+            Display = (uint)Display,
         };
 
         try
@@ -294,5 +299,7 @@ public sealed class PreviewPass : IDisposable
     {
         public Vector4 DestRect;
         public Vector4 SourceRect;
+        public uint Display;
+        public Vector3 Padding;
     }
 }

@@ -19,6 +19,9 @@
         xmlns:inspectorvm="clr-namespace:JazzHands.App.ViewModels.Inspector"
         xmlns:effects="clr-namespace:JazzHands.App.Views.Effects"
         xmlns:effectsvm="clr-namespace:JazzHands.App.ViewModels.Effects"
+        xmlns:grading="clr-namespace:JazzHands.App.Views.Grading"
+        xmlns:gradingvm="clr-namespace:JazzHands.App.ViewModels.Grading"
+        xmlns:color="clr-namespace:JazzHands.Render.Color;assembly=JazzHands.Render"
         xmlns:vm="clr-namespace:JazzHands.App.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -31,6 +34,7 @@
         Foreground="{DynamicResource Brush.Text.Primary}">
 
     <Window.Resources>
+        <media:EnumMatchConverter x:Key="EnumMatch" />
         <!-- Which view draws which panel. Implicit, keyed by viewmodel type, so adding a panel in
              Phase 27 is a template here and a registration in AppServices. -->
         <DataTemplate DataType="{x:Type mediavm:MediaPanelViewModel}">
@@ -50,6 +54,12 @@
         </DataTemplate>
         <DataTemplate DataType="{x:Type effectsvm:EffectsPanelViewModel}">
             <effects:EffectsPanelView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type gradingvm:ScopesPanelViewModel}">
+            <grading:ScopesPanelView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type gradingvm:ColorPanelViewModel}">
+            <grading:ColorPanelView />
         </DataTemplate>
         <DataTemplate DataType="{x:Type exportvm:ExportQueuePanelViewModel}">
             <export:ExportQueuePanelView />
@@ -87,6 +97,24 @@
                 <MenuItem Header="_Loop" InputGestureText="Ctrl+L" IsCheckable="True" IsChecked="{Binding Preview.Loop, Mode=TwoWay}" />
                 <Separator />
                 <MenuItem Header="F_ull screen" InputGestureText="F11" Command="{Binding Preview.ToggleFullScreenCommand, Mode=OneWay}" />
+            </MenuItem>
+            <MenuItem Header="_Window">
+                <MenuItem Header="_Color workspace" Command="{Binding ShowColorWorkspaceCommand, Mode=OneWay}" />
+                <Separator />
+                <MenuItem Header="Preview _display">
+                    <MenuItem Header="_sRGB monitor"
+                              Command="{Binding Preview.SetDisplayCommand, Mode=OneWay}"
+                              CommandParameter="{x:Static color:DisplayTransfer.Srgb}"
+                              IsChecked="{Binding Preview.Display, Mode=OneWay, Converter={StaticResource EnumMatch}, ConverterParameter=Srgb}" />
+                    <MenuItem Header="Gamma _2.2 monitor"
+                              Command="{Binding Preview.SetDisplayCommand, Mode=OneWay}"
+                              CommandParameter="{x:Static color:DisplayTransfer.Gamma22}"
+                              IsChecked="{Binding Preview.Display, Mode=OneWay, Converter={StaticResource EnumMatch}, ConverterParameter=Gamma22}" />
+                    <MenuItem Header="BT.1886 _reference display"
+                              Command="{Binding Preview.SetDisplayCommand, Mode=OneWay}"
+                              CommandParameter="{x:Static color:DisplayTransfer.Bt1886}"
+                              IsChecked="{Binding Preview.Display, Mode=OneWay, Converter={StaticResource EnumMatch}, ConverterParameter=Bt1886}" />
+                </MenuItem>
             </MenuItem>
         </Menu>
 

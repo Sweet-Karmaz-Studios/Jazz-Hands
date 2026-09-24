@@ -1,6 +1,7 @@
 using System.Windows.Threading;
 using JazzHands.Engine.Playback;
 using JazzHands.Render;
+using JazzHands.Render.Color;
 using JazzHands.Render.Passes;
 using Serilog;
 using Vortice.Direct3D11;
@@ -40,13 +41,17 @@ public sealed class PreviewPresenter : IPreviewTarget, IDisposable
     private double _magnification;
     private double _panX;
     private double _panY;
+    private readonly Func<DisplayTransfer>? _display;
 
     /// <summary>Creates a presenter on the UI thread.</summary>
-    public PreviewPresenter(RenderDevice device)
+    /// <param name="device">The device frames are drawn on.</param>
+    /// <param name="display">What the monitor expects, read at each present; sRGB when not given.</param>
+    public PreviewPresenter(RenderDevice device, Func<DisplayTransfer>? display = null)
     {
         ArgumentNullException.ThrowIfNull(device);
 
         _device = device;
+        _display = display;
         _dispatcher = Dispatcher.CurrentDispatcher;
         _surface = new PreviewSurface(device);
         _pass = new PreviewPass(device);
@@ -120,6 +125,7 @@ public sealed class PreviewPresenter : IPreviewTarget, IDisposable
                 ? QuadRect.Fit(frame.SequenceWidth, frame.SequenceHeight, width, height)
                 : QuadRect.Zoom(frame.SequenceWidth, frame.SequenceHeight, width, height, _magnification, _panX, _panY);
 
+            _pass.Display = _display?.Invoke() ?? DisplayTransfer.Srgb;
             _pass.Clear(_view!);
             _pass.Blit(frame.Texture, _view!, width, height, placement);
             _surface.WaitForRenderCompletion();

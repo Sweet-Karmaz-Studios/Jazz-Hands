@@ -1,0 +1,239 @@
+<UserControl x:Class="JazzHands.App.Views.Grading.ColorPanelView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:JazzHands.App.ViewModels.Grading"
+             xmlns:controls="clr-namespace:JazzHands.App.Controls"
+             xmlns:local="clr-namespace:JazzHands.App.Views.Grading"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:ColorPanelViewModel}"
+             d:DesignWidth="720"
+             d:DesignHeight="640"
+             Background="{DynamicResource Brush.Background.Panel}">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="Visible" />
+
+        <Style x:Key="Button.Small" TargetType="ButtonBase" BasedOn="{StaticResource Button.Icon}">
+            <Setter Property="Width" Value="20" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
+        </Style>
+
+        <Style x:Key="Heading" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="{DynamicResource Text.Caption}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="Label" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="{DynamicResource Text.Caption}" />
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="CurveTab" TargetType="RadioButton">
+            <Setter Property="Margin" Value="0,0,2,0" />
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Tab" Padding="{TemplateBinding Padding}" CornerRadius="3" Background="Transparent">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Tab" Property="Background" Value="{DynamicResource Brush.Background.Selected}" />
+                                <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Tab" Property="Background" Value="{DynamicResource Brush.Background.Hover}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="10">
+            <TextBlock Style="{StaticResource Heading}" FontSize="{DynamicResource Text.Body}" Text="{Binding Heading, Mode=OneWay}" />
+            <TextBlock Margin="0,2,0,0"
+                       Text="{Binding Status, Mode=OneWay}"
+                       TextWrapping="Wrap"
+                       FontSize="{DynamicResource Text.Caption}"
+                       Foreground="{DynamicResource Brush.Warning}" />
+
+            <!-- The wheels. -->
+            <StackPanel Margin="0,10,0,0" Visibility="{Binding HasClip, Mode=OneWay, Converter={StaticResource Visible}}">
+                <TextBlock Style="{StaticResource Heading}" Text="Color wheels" />
+
+                <Button Margin="0,6,0,0"
+                        HorizontalAlignment="Left"
+                        Style="{StaticResource Button.Text}"
+                        Content="Add Color Wheels to this clip"
+                        Command="{Binding AddWheelsCommand, Mode=OneWay}"
+                        AutomationProperties.Name="Add Color Wheels to this clip">
+                    <Button.Visibility>
+                        <Binding Path="HasWheels" Mode="OneWay">
+                            <Binding.Converter>
+                                <local:InverseVisibility />
+                            </Binding.Converter>
+                        </Binding>
+                    </Button.Visibility>
+                </Button>
+
+                <StackPanel Visibility="{Binding HasWheels, Mode=OneWay, Converter={StaticResource Visible}}">
+                    <ItemsControl ItemsSource="{Binding Wheels, Mode=OneWay}" Focusable="False" Margin="0,6,0,0">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <UniformGrid Columns="4" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:WheelViewModel}">
+                                <StackPanel Margin="4">
+                                    <Grid>
+                                        <TextBlock Style="{StaticResource Label}" Text="{Binding Label, Mode=OneWay}" HorizontalAlignment="Center" />
+                                        <Button HorizontalAlignment="Right"
+                                                Style="{StaticResource Button.Small}"
+                                                Content="&#xE72C;"
+                                                Command="{Binding ResetCommand, Mode=OneWay}"
+                                                ToolTip="Reset this wheel"
+                                                AutomationProperties.Name="Reset" />
+                                    </Grid>
+                                    <controls:ColorWheel Height="120"
+                                                         Margin="0,2,0,4"
+                                                         Puck="{Binding Puck, Mode=TwoWay}"
+                                                         IsDragging="{Binding DataContext.IsEditing, RelativeSource={RelativeSource AncestorType=UserControl}, Mode=TwoWay}"
+                                                         ToolTip="Drag towards a colour; Shift for fine, Alt for coarse; double-click or Backspace to reset"
+                                                         AutomationProperties.Name="{Binding Label, Mode=OneWay}" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Slider VerticalAlignment="Center"
+                                                Minimum="{Binding MasterRange, Mode=OneWay, Converter={x:Static local:Negate.Instance}}"
+                                                Maximum="{Binding MasterRange, Mode=OneWay}"
+                                                Value="{Binding Master, Mode=TwoWay}"
+                                                IsTabStop="False"
+                                                AutomationProperties.Name="Master" />
+                                        <controls:NumberBox Grid.Column="1"
+                                                            Width="52"
+                                                            Margin="4,0,0,0"
+                                                            Value="{Binding Master, Mode=TwoWay}"
+                                                            Step="0.01"
+                                                            Decimals="3"
+                                                            AutomationProperties.Name="Master" />
+                                    </Grid>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- Saturation, contrast and the pivot contrast turns on. -->
+                    <Grid Margin="4,8,4,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="72" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Style="{StaticResource Label}" Text="Saturation" />
+                        <Slider Grid.Row="0" Grid.Column="1" VerticalAlignment="Center" Minimum="0" Maximum="2" Value="{Binding Saturation, Mode=TwoWay}" IsTabStop="False" AutomationProperties.Name="Saturation" />
+                        <controls:NumberBox Grid.Row="0" Grid.Column="2" Width="60" Margin="6,2,0,2" Value="{Binding Saturation, Mode=TwoWay}" Minimum="0" Maximum="4" Step="0.01" Decimals="2" AutomationProperties.Name="Saturation" />
+                        <Button Grid.Row="0" Grid.Column="3" Style="{StaticResource Button.Small}" Content="&#xE72C;" Command="{Binding ResetSaturationCommand, Mode=OneWay}" ToolTip="Reset saturation" AutomationProperties.Name="Reset saturation" />
+
+                        <TextBlock Grid.Row="1" Style="{StaticResource Label}" Text="Contrast" />
+                        <Slider Grid.Row="1" Grid.Column="1" VerticalAlignment="Center" Minimum="0" Maximum="2" Value="{Binding Contrast, Mode=TwoWay}" IsTabStop="False" AutomationProperties.Name="Contrast" />
+                        <controls:NumberBox Grid.Row="1" Grid.Column="2" Width="60" Margin="6,2,0,2" Value="{Binding Contrast, Mode=TwoWay}" Minimum="0" Maximum="4" Step="0.01" Decimals="2" AutomationProperties.Name="Contrast" />
+                        <Button Grid.Row="1" Grid.Column="3" Style="{StaticResource Button.Small}" Content="&#xE72C;" Command="{Binding ResetContrastCommand, Mode=OneWay}" ToolTip="Reset contrast" AutomationProperties.Name="Reset contrast" />
+
+                        <TextBlock Grid.Row="2" Style="{StaticResource Label}" Text="Pivot" />
+                        <Slider Grid.Row="2" Grid.Column="1" VerticalAlignment="Center" Minimum="0" Maximum="1" Value="{Binding Pivot, Mode=TwoWay}" IsTabStop="False" AutomationProperties.Name="Pivot" />
+                        <controls:NumberBox Grid.Row="2" Grid.Column="2" Width="60" Margin="6,2,0,2" Value="{Binding Pivot, Mode=TwoWay}" Minimum="0" Maximum="1" Step="0.005" Decimals="3" AutomationProperties.Name="Pivot" />
+                        <Button Grid.Row="2" Grid.Column="3" Style="{StaticResource Button.Small}" Content="&#xE72C;" Command="{Binding ResetPivotCommand, Mode=OneWay}" ToolTip="Reset the pivot" AutomationProperties.Name="Reset the pivot" />
+                    </Grid>
+                </StackPanel>
+            </StackPanel>
+
+            <!-- The curves. -->
+            <StackPanel Margin="0,14,0,0" Visibility="{Binding HasClip, Mode=OneWay, Converter={StaticResource Visible}}">
+                <TextBlock Style="{StaticResource Heading}" Text="Curves" />
+
+                <Button Margin="0,6,0,0"
+                        HorizontalAlignment="Left"
+                        Style="{StaticResource Button.Text}"
+                        Content="Add Curves to this clip"
+                        Command="{Binding AddCurvesCommand, Mode=OneWay}"
+                        AutomationProperties.Name="Add Curves to this clip">
+                    <Button.Visibility>
+                        <Binding Path="HasCurves" Mode="OneWay">
+                            <Binding.Converter>
+                                <local:InverseVisibility />
+                            </Binding.Converter>
+                        </Binding>
+                    </Button.Visibility>
+                </Button>
+
+                <StackPanel Visibility="{Binding HasCurves, Mode=OneWay, Converter={StaticResource Visible}}">
+                    <Grid Margin="0,6,0,4">
+                        <ItemsControl ItemsSource="{Binding Curves, Mode=OneWay}" Focusable="False">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:CurveChoice}">
+                                    <RadioButton Style="{StaticResource CurveTab}"
+                                                 GroupName="Curve"
+                                                 Content="{Binding Label, Mode=OneWay}"
+                                                 Command="{Binding DataContext.ShowCurveCommand, RelativeSource={RelativeSource AncestorType=UserControl}, Mode=OneWay}"
+                                                 CommandParameter="{Binding}">
+                                        <RadioButton.IsChecked>
+                                            <MultiBinding Mode="OneWay" Converter="{x:Static local:SameItem.Instance}">
+                                                <Binding Mode="OneWay" />
+                                                <Binding Path="DataContext.Curve" RelativeSource="{RelativeSource AncestorType=UserControl}" Mode="OneWay" />
+                                            </MultiBinding>
+                                        </RadioButton.IsChecked>
+                                    </RadioButton>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Button HorizontalAlignment="Right"
+                                Style="{StaticResource Button.Small}"
+                                Content="&#xE72C;"
+                                Command="{Binding ResetCurveCommand, Mode=OneWay}"
+                                ToolTip="Reset this curve"
+                                AutomationProperties.Name="Reset this curve" />
+                    </Grid>
+
+                    <controls:CurveEditor Height="256"
+                                          MaxWidth="360"
+                                          HorizontalAlignment="Left"
+                                          Width="256"
+                                          Points="{Binding CurveText, Mode=TwoWay}"
+                                          IsPeriodic="{Binding Curve.Periodic, Mode=OneWay}"
+                                          Neutral="{Binding Curve.Neutral, Mode=OneWay}"
+                                          Stroke="{Binding Curve.Name, Mode=OneWay, Converter={x:Static local:CurveStroke.Instance}}"
+                                          IsDragging="{Binding IsEditing, Mode=TwoWay}"
+                                          ToolTip="Click to add a point, drag to move one, double-click to remove it; Backspace resets"
+                                          AutomationProperties.Name="Curve" />
+                </StackPanel>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

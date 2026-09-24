@@ -8,6 +8,7 @@ using JazzHands.Core.Model;
 using JazzHands.Core.Time;
 using JazzHands.Engine.Commands;
 using JazzHands.Engine.Playback;
+using JazzHands.Render.Color;
 using Serilog;
 using ICommand = JazzHands.Core.Commands.ICommand;
 
@@ -50,6 +51,11 @@ public sealed partial class PreviewPanelViewModel : ToolViewModel
     private readonly IPreviewEngine _engine;
     private readonly IUiDispatcher _ui;
     private readonly IFullScreenPreview? _fullScreen;
+    private readonly IDisplaySettings? _displaySettings;
+
+    /// <summary>What the monitor expects; the presenters convert the delivered signal for it.</summary>
+    [ObservableProperty]
+    private DisplayTransfer _display;
     private readonly PointPicker? _picker;
     private readonly JklShuttle _shuttle = new();
     private bool _applyingState;
@@ -110,7 +116,7 @@ public sealed partial class PreviewPanelViewModel : ToolViewModel
     private bool _isFullScreen;
 
     /// <summary>Creates the panel.</summary>
-    public PreviewPanelViewModel(ISession session, IPreviewEngine engine, IUiDispatcher ui, IFullScreenPreview? fullScreen = null, PointPicker? picker = null)
+    public PreviewPanelViewModel(ISession session, IPreviewEngine engine, IUiDispatcher ui, IFullScreenPreview? fullScreen = null, PointPicker? picker = null, IDisplaySettings? display = null)
         : base(PanelId, "Preview")
     {
         ArgumentNullException.ThrowIfNull(session);
@@ -122,6 +128,8 @@ public sealed partial class PreviewPanelViewModel : ToolViewModel
         _ui = ui;
         _fullScreen = fullScreen;
         _picker = picker;
+        _displaySettings = display;
+        _display = display?.Transfer ?? DisplayTransfer.Srgb;
 
         // The inspector's points and picks show on the picture.
         _picker?.PropertyChanged += (_, _) => _ui.Post(() =>
@@ -389,4 +397,16 @@ public sealed partial class PreviewPanelViewModel : ToolViewModel
             _log.Error(exception, "{Command} failed", CommandRegistry.NameOf(command));
         }
     }
+
+    partial void OnDisplayChanged(DisplayTransfer value)
+    {
+        _displaySettings?.Transfer = value;
+
+        // The frame on screen is presented again, converted the new way.
+        _engine.Refresh();
+    }
+
+    /// <summary>Chooses what the monitor expects, from the Window menu.</summary>
+    [RelayCommand]
+    private void SetDisplay(DisplayTransfer transfer) => Display = transfer;
 }

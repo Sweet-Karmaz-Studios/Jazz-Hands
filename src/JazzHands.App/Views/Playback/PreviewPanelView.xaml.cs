@@ -104,7 +104,7 @@ public partial class PreviewPanelView : UserControl
             return;
         }
 
-        _presenter = new PreviewPresenter(device);
+        _presenter = new PreviewPresenter(device, () => _model?.Display ?? JazzHands.Render.Color.DisplayTransfer.Srgb);
         _presenter.Surface.SurfaceRecreated += OnSurfaceRecreated;
         Picture.Source = _presenter.Surface.Image;
 

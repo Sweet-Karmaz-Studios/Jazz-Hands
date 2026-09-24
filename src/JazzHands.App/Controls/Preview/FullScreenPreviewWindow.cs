@@ -5,6 +5,7 @@ using System.Windows.Media;
 using JazzHands.App.Services;
 using JazzHands.Engine.Playback;
 using JazzHands.Render;
+using JazzHands.Render.Color;
 using JazzHands.Render.Passes;
 using Vortice.Direct3D11;
 
@@ -35,7 +36,8 @@ internal sealed class FullScreenPreviewWindow : Window
         IPreviewEngine engine,
         Int32Rect monitor,
         Func<Key, ModifierKeys, bool, bool> keyDown,
-        Func<Key, bool> keyUp)
+        Func<Key, bool> keyUp,
+        Func<DisplayTransfer>? display = null)
     {
         _engine = engine;
         _keyDown = keyDown;
@@ -70,7 +72,7 @@ internal sealed class FullScreenPreviewWindow : Window
 
         Loaded += (_, _) =>
         {
-            _presenter = new SwapChainPresenter(device, _host);
+            _presenter = new SwapChainPresenter(device, _host, display);
             _engine.AddTarget(_presenter);
         };
 
@@ -131,13 +133,15 @@ internal sealed class SwapChainPresenter : IPreviewTarget, IDisposable
     private readonly SwapChainPreview _host;
     private readonly PreviewPass _pass;
     private readonly Action<ID3D11Texture2D, int, int> _draw;
+    private readonly Func<DisplayTransfer>? _display;
     private readonly Lock _sync = new();
     private PreviewFrame _frame;
     private bool _disposed;
 
-    public SwapChainPresenter(RenderDevice device, SwapChainPreview host)
+    public SwapChainPresenter(RenderDevice device, SwapChainPreview host, Func<DisplayTransfer>? display = null)
     {
         _device = device;
+        _display = display;
         _host = host;
         _pass = new PreviewPass(device);
         _draw = Draw;
@@ -183,6 +187,7 @@ internal sealed class SwapChainPresenter : IPreviewTarget, IDisposable
     {
         using ID3D11RenderTargetView view = _device.Device.CreateRenderTargetView(target);
         _pass.Clear(view);
+        _pass.Display = _display?.Invoke() ?? DisplayTransfer.Srgb;
         _pass.Blit(_frame.Texture, view, width, height, QuadRect.Fit(_frame.SequenceWidth, _frame.SequenceHeight, width, height));
     }
 }
