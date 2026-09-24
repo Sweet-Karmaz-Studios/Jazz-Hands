@@ -55,6 +55,9 @@ public sealed class EffectContext : IDisposable
     /// <summary>The time the frame is at, relative to the effect's owner: clip time for a clip's effects.</summary>
     public Flicks Time => _node?.LocalTime ?? Flicks.Zero;
 
+    /// <summary>The folder the project file is in, which relative paths in parameters are from; empty for none.</summary>
+    public string ProjectFolder { get; internal set; } = string.Empty;
+
     /// <summary>Direct2D and DirectWrite on this device, for shapes and text; made on first use.</summary>
     public Drawing2D Drawing => _drawing ??= new Drawing2D(Device);
 
@@ -116,12 +119,20 @@ public sealed class EffectContext : IDisposable
     /// </summary>
     public void Draw<T>(PassDescriptor pass, RenderTarget output, in T constants, params ReadOnlySpan<RenderTarget> inputs)
         where T : unmanaged
+        => Draw(pass, output, in constants, inputs, []);
+
+    /// <summary>
+    /// Runs one pass with textures of the effect's own after the inputs: a baked curve, a 3D LUT.
+    /// The inputs take t0 up and <paramref name="resources"/> the slots after them.
+    /// </summary>
+    public void Draw<T>(PassDescriptor pass, RenderTarget output, in T constants, ReadOnlySpan<RenderTarget> inputs, ReadOnlySpan<ID3D11ShaderResourceView> resources)
+        where T : unmanaged
     {
         ArgumentNullException.ThrowIfNull(pass);
         ArgumentNullException.ThrowIfNull(output);
-        if (inputs.Length > _views.Length)
+        if (inputs.Length + resources.Length > _views.Length)
         {
-            throw new ArgumentException($"A pass reads at most {_views.Length} inputs.", nameof(inputs));
+            throw new ArgumentException($"A pass reads at most {_views.Length} textures.", nameof(inputs));
         }
 
         Refresh();
@@ -141,7 +152,9 @@ public sealed class EffectContext : IDisposable
 
         for (int slot = 0; slot < _views.Length; slot++)
         {
-            _views[slot] = slot < inputs.Length ? inputs[slot].Resource : null;
+            _views[slot] = slot < inputs.Length ? inputs[slot].Resource
+                : slot < inputs.Length + resources.Length ? resources[slot - inputs.Length]
+                : null;
         }
 
         context.ClearState();

@@ -129,6 +129,7 @@ public sealed class Compositor : IDisposable
         ArgumentNullException.ThrowIfNull(graph);
         ObjectDisposedException.ThrowIf(_disposed, this);
         EnsureShaders();
+        _effectContext.ProjectFolder = graph.ProjectFolder;
 
         // No stack until something needs one underneath it: the bottom layer of most frames is
         // opaque and untransformed, and then it simply is the stack.

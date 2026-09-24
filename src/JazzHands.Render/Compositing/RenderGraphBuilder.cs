@@ -55,6 +55,9 @@ public sealed record RenderOptions
     /// <summary>Keep placed layers between frames: on while scrubbing, off while playing.</summary>
     public bool CacheLayers { get; init; }
 
+    /// <summary>The folder the project file is in, which relative paths in effect parameters (a LUT) are from. Empty for none.</summary>
+    public string ProjectFolder { get; init; } = string.Empty;
+
     /// <summary>
     /// The effect types the builder knows. An effect whose type is not here, or is not a picture
     /// effect, is left out of the frame rather than failing it.
@@ -200,6 +203,7 @@ public static class RenderGraphBuilder
         return new RenderGraph(width, height, layers.ToImmutable())
         {
             Bicubic = options.Bicubic,
+            ProjectFolder = options.ProjectFolder,
             CacheLayers = options.CacheLayers,
         };
     }

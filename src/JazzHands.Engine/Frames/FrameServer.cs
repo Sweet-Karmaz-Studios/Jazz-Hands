@@ -110,6 +110,11 @@ public sealed class FrameServer : IFrameProvider, IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         _projectPath = projectPath;
+        if (options.ProjectFolder.Length == 0 && projectPath.Length > 0)
+        {
+            options = options with { ProjectFolder = Path.GetDirectoryName(Path.GetFullPath(projectPath)) ?? string.Empty };
+        }
+
         RenderGraph graph = RenderGraphBuilder.Build(project, sequence, time, this, options);
         return Compositor.Render(graph);
     }

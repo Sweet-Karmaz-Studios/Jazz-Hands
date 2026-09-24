@@ -93,6 +93,9 @@ public sealed record LayerNode(
 /// <param name="Layers">The stack, bottom first.</param>
 public sealed record RenderGraph(int Width, int Height, ImmutableArray<LayerNode> Layers)
 {
+    /// <summary>The folder the project file is in, for effects that read files named relative to it (a LUT). Empty for none.</summary>
+    public string ProjectFolder { get; init; } = string.Empty;
+
     /// <summary>Sample transformed layers with a bicubic filter rather than a bilinear one.</summary>
     public bool Bicubic { get; init; } = true;
 
