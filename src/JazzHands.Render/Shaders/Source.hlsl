@@ -24,7 +24,16 @@ cbuffer SourceConstants : register(b0)
     float ChromaRange;
     uint Transfer;
     uint Layout;
+    uint Primaries;         // PRIMARIES_*: BT.2020 is brought into BT.709 here
+    uint ToneOperator;      // TONEMAP_*, for PQ and HLG
+    float PeakNits;         // the source's peak, which the tone map brings down to SDR white
+    float Desaturate;       // how much compressed highlights lose their colour
 };
+
+float3 Decode(float3 encoded)
+{
+    return ToLinear(encoded, Transfer, Primaries, ToneOperator, PeakNits, Desaturate);
+}
 
 Texture2D<float4> Plane0 : register(t0);
 Texture2D<float4> Plane1 : register(t1);
@@ -43,7 +52,7 @@ float4 PsMain(FullScreenVertex input) : SV_TARGET
     if (Layout == LAYOUT_RGBA)
     {
         float4 straight = Plane0.SampleLevel(LinearClamp, uv, 0);
-        return Premultiply(float4(ToLinear(straight.rgb, Transfer), straight.a));
+        return Premultiply(float4(Decode(straight.rgb), straight.a));
     }
 
     if (Layout == LAYOUT_GBRA_PLANAR)
@@ -52,7 +61,7 @@ float4 PsMain(FullScreenVertex input) : SV_TARGET
         float b = Plane1.SampleLevel(LinearClamp, uv, 0).r;
         float r = Plane2.SampleLevel(LinearClamp, uv, 0).r;
         float a = Plane3.SampleLevel(LinearClamp, uv, 0).r;
-        return Premultiply(float4(ToLinear(float3(r, g, b), Transfer), saturate(a)));
+        return Premultiply(float4(Decode(float3(r, g, b)), saturate(a)));
     }
 
     float luma = Plane0.SampleLevel(LinearClamp, uv, 0).r * SampleScale;
@@ -69,5 +78,5 @@ float4 PsMain(FullScreenVertex input) : SV_TARGET
     yuv.z = (chroma.y - ChromaOffset) * ChromaRange;
 
     float3 encoded = saturate(float3(dot(MatrixRow0, yuv), dot(MatrixRow1, yuv), dot(MatrixRow2, yuv)));
-    return float4(ToLinear(encoded, Transfer), 1.0);
+    return float4(Decode(encoded), 1.0);
 }

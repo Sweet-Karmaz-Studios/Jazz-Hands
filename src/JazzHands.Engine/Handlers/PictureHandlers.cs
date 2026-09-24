@@ -396,3 +396,54 @@ public sealed class SetMaskHandler : ICommandHandler<SetMaskCommand>
         return PictureHelp.WithMasks(project, found, masks.SetItem(masks.IndexOf(mask => mask.Id == command.MaskId), changed), context);
     }
 }
+
+/// <summary>Sets or clears a clip's own tone mapping.</summary>
+public sealed class SetClipToneMapHandler : ICommandHandler<SetClipToneMapCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, SetClipToneMapCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        ClipLocation found = PictureHelp.PictureClip(project, command.ClipId);
+
+        if (command.Reset)
+        {
+            if (command.Operator is not null || command.PeakNits is not null || command.Desaturate is not null)
+            {
+                throw new CommandException("invalid-value", "--reset puts the clip back on the project's setting; give it alone.");
+            }
+
+            return PictureHelp.Replace(project, found, found.Clip with { ToneMap = null }, context);
+        }
+
+        ToneMapping current = ToneMapping.Resolve(found.Clip.ToneMap, project.Settings.ToneMap);
+        var mapping = new ToneMapping(
+            ToneMapHelp.Operator(command.Operator) ?? current.Operator,
+            command.PeakNits is { } peak ? ToneMapHelp.Peak(peak) : current.PeakNits,
+            command.Desaturate is { } desaturate ? ToneMapHelp.Desaturate(desaturate) : current.Desaturate);
+
+        return PictureHelp.Replace(project, found, found.Clip with { ToneMap = mapping }, context);
+    }
+}
+
+/// <summary>The checks the tone map commands share.</summary>
+internal static class ToneMapHelp
+{
+    internal static ToneMapOperator? Operator(ToneMapOperator? value) =>
+        value is { } chosen && !Enum.IsDefined(chosen)
+            ? throw new CommandException("invalid-value", $"{(int)chosen} is not a tone map operator; bt2390, hable, mobius or clip.")
+            : value;
+
+    internal static double Peak(double nits) =>
+        double.IsFinite(nits) && nits is >= 100 and <= 10000
+            ? nits
+            : throw new CommandException("value-out-of-range", $"A peak is from 100 to 10000 nits, what HDR can encode; {nits} is not.");
+
+    internal static double Desaturate(double amount) =>
+        double.IsFinite(amount) && amount is >= 0 and <= 1
+            ? amount
+            : throw new CommandException("value-out-of-range", $"Desaturation runs from 0 to 1; {amount} is outside that.");
+}

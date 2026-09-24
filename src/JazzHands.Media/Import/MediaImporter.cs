@@ -225,9 +225,9 @@ public sealed class MediaImporter(CacheManager? cache = null, Prober? prober = n
     /// <remarks>
     /// Bumped whenever the prober learns something new about files it has already seen, so a
     /// probe cached before is taken again rather than trusted. Version 2 reads Matroska's per
-    /// stream DURATION tag.
+    /// stream DURATION tag; version 3 keeps each picture stream's colour signalling (Phase 17).
     /// </remarks>
-    internal static string ProbeKey(string hash) => $"{hash}#probe2";
+    internal static string ProbeKey(string hash) => $"{hash}#probe3";
 
     /// <summary>Probes a file, using the cache when it has seen this content before.</summary>
     private (MediaInfo Info, bool FromCache) ProbeWithCache(string path, string hash)
@@ -257,6 +257,22 @@ public sealed class MediaImporter(CacheManager? cache = null, Prober? prober = n
 
         return (info, false);
     }
+
+    /// <summary>A picture stream's colour signalling for the project; null for anything else.</summary>
+    /// <remarks>
+    /// MaxCLL is kept only when it is plausible: some encoders write zero or a placeholder there,
+    /// and a MaxCLL of a few nits would make the tone mapper blow the picture out.
+    /// </remarks>
+    internal static StreamColor? Color(VideoStreamInfo? video) =>
+        video is null
+            ? null
+            : new StreamColor(
+                video.Color.Primaries,
+                video.Color.Transfer,
+                video.Color.Matrix,
+                video.Color.IsFullRange,
+                video.Hdr?.MaxLuminanceNits ?? 0,
+                video.Hdr is { MaxContentLightLevel: >= 100 and <= 10000 } hdr ? hdr.MaxContentLightLevel : 0);
 
     /// <summary>
     /// Flattens a prober result into the summary the project stores.
@@ -297,7 +313,8 @@ public sealed class MediaImporter(CacheManager? cache = null, Prober? prober = n
                 stream.Video?.HasAlpha ?? false,
                 stream.Audio?.SampleRate ?? 0,
                 stream.Audio?.Channels ?? 0,
-                stream.Audio?.ChannelLayout ?? string.Empty));
+                stream.Audio?.ChannelLayout ?? string.Empty,
+                Color(stream.Video)));
         }
 
         return new MediaInfo(

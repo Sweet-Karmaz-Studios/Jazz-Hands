@@ -289,7 +289,10 @@ public sealed class FrameServer : IFrameProvider, IDisposable
             (MediaItem decoded, int stream, bool proxy) = _sources.Decodable(item, clip.SourceStreamIndex);
             if (!proxy)
             {
-                return new SourceFrame(frame, ColorSpaceFor(item, clip.SourceStreamIndex, frame.Layout), Identity(item.Hash, stream, frame));
+                return new SourceFrame(
+                    frame,
+                    ColorSpaceFor(item, clip.SourceStreamIndex, frame.Layout, ToneMapping.Resolve(clip.ToneMap, project.Settings.ToneMap)),
+                    Identity(item.Hash, stream, frame));
             }
 
             // A proxy is placed as the picture it stands for, at the source's size, and was
@@ -320,11 +323,13 @@ public sealed class FrameServer : IFrameProvider, IDisposable
 
     /// <summary>The colour signalling of a picture, from what import recorded and what the frame is.</summary>
     /// <remarks>
-    /// The probe records whether a stream is HDR but not its matrix, so video falls back on the
-    /// convention every player uses: BT.2020 with PQ for HDR, BT.601 up to 576 lines, BT.709
-    /// otherwise, limited range. Stills are RGB: sRGB, or linear for float EXR.
+    /// The stream's own matrix, transfer, primaries and range when import recorded them (Phase
+    /// 17). What a file leaves unspecified, and every stream in a project saved before then, falls
+    /// back on the convention every player uses: BT.2020 with PQ for HDR, BT.601 up to 576 lines,
+    /// BT.709 otherwise, limited range. Stills are RGB: sRGB, or linear for float EXR. HDR is tone
+    /// mapped as the clip says, else the project, with the file's own peak unless the clip gives one.
     /// </remarks>
-    internal static YuvColorSpace ColorSpaceFor(MediaItem item, int streamIndex, PixelLayout layout)
+    internal static YuvColorSpace ColorSpaceFor(MediaItem item, int streamIndex, PixelLayout layout, ToneMapping? mapping = null)
     {
         if (layout.IsRgb)
         {
@@ -332,15 +337,23 @@ public sealed class FrameServer : IFrameProvider, IDisposable
         }
 
         MediaStream? stream = item.Info?.Streams.FirstOrDefault(candidate => candidate.Index == streamIndex);
+        StreamColor? color = stream?.Color;
+        bool hdr = color?.IsHdr ?? stream?.IsHdr ?? false;
 
-        if (stream?.IsHdr == true)
-        {
-            return YuvColorSpace.From("bt2020nc", "smpte2084", isFullRange: false, layout.BitDepth);
-        }
+        string matrix = Stated(color?.Matrix)
+            ?? (hdr ? "bt2020nc" : stream is { Height: > 0 and <= 576 } ? "bt601" : "bt709");
+        string transfer = Stated(color?.Transfer) ?? (hdr ? "smpte2084" : "bt709");
 
-        string matrix = stream is { Height: > 0 and <= 576 } ? "bt601" : "bt709";
-        return YuvColorSpace.From(matrix, "bt709", isFullRange: false, layout.BitDepth);
+        YuvColorSpace space = YuvColorSpace.From(matrix, transfer, color?.IsFullRange ?? false, layout.BitDepth, Stated(color?.Primaries) ?? string.Empty);
+
+        ToneMapping tone = mapping ?? ToneMapping.Default;
+        double peak = tone.PeakNits ?? color?.PeakNits ?? 1000.0;
+        return space with { ToneMap = new ToneMapParameters(tone.Operator, (float)peak, (float)tone.Desaturate) };
     }
+
+    /// <summary>A signalling name, or null when the file did not really say.</summary>
+    private static string? Stated(string? name) =>
+        name is null or "" or "unknown" or "unspecified" or "reserved" ? null : name;
 
     /// <inheritdoc />
     public void Dispose()

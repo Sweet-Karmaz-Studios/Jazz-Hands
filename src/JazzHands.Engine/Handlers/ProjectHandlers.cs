@@ -140,3 +140,32 @@ public sealed class SetProjectSettingsHandler : ICommandHandler<SetProjectSettin
         return project with { Settings = settings };
     }
 }
+
+/// <summary>Sets how HDR clips are tone mapped by default.</summary>
+public sealed class SetProjectToneMapHandler : ICommandHandler<SetProjectToneMapCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, SetProjectToneMapCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        ToneMapping current = project.Settings.ToneMap ?? ToneMapping.Default;
+        var mapping = current with
+        {
+            Operator = ToneMapHelp.Operator(command.Operator) ?? current.Operator,
+            Desaturate = command.Desaturate is { } desaturate ? ToneMapHelp.Desaturate(desaturate) : current.Desaturate,
+        };
+
+        // The default stores nothing, so a project that never touched it reads the same as before.
+        ToneMapping? stored = mapping == ToneMapping.Default ? null : mapping;
+        if (stored == project.Settings.ToneMap)
+        {
+            return project;
+        }
+
+        context.Changed(project.Id);
+        return project with { Settings = project.Settings with { ToneMap = stored } };
+    }
+}

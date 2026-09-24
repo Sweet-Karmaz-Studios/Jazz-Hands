@@ -94,6 +94,7 @@ public enum AutoSetting
 /// <param name="SampleRate">Audio samples per second, zero for a stream with no sound.</param>
 /// <param name="Channels">Audio channel count.</param>
 /// <param name="ChannelLayout">The layout name, for example stereo.</param>
+/// <param name="Color">The colour signalling of a picture stream, as the file states it. Null for sound, and for projects saved before Phase 17.</param>
 public sealed record MediaStream(
     int Index,
     MediaStreamKind Kind,
@@ -111,7 +112,8 @@ public sealed record MediaStream(
     bool HasAlpha = false,
     int SampleRate = 0,
     int Channels = 0,
-    string ChannelLayout = "") : IEquatable<MediaStream>
+    string ChannelLayout = "",
+    StreamColor? Color = null) : IEquatable<MediaStream>
 {
     /// <summary>A short label for the media panel: "1920x1080 hevc" or "stereo 48 kHz aac".</summary>
     public string Describe() => Kind switch

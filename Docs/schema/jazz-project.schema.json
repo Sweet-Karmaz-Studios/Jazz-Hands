@@ -301,6 +301,16 @@
               "type": "null"
             }
           ]
+        },
+        "toneMap": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/toneMapping"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -847,6 +857,16 @@
         },
         "channelLayout": {
           "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/streamColor"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -921,6 +941,16 @@
         },
         "colorSpace": {
           "type": "string"
+        },
+        "toneMap": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/toneMapping"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -1024,6 +1054,34 @@
         "name"
       ]
     },
+    "streamColor": {
+      "type": "object",
+      "properties": {
+        "primaries": {
+          "type": "string"
+        },
+        "transfer": {
+          "type": "string"
+        },
+        "matrix": {
+          "type": "string"
+        },
+        "isFullRange": {
+          "type": "boolean"
+        },
+        "masteringMaxNits": {
+          "type": "number"
+        },
+        "maxContentLightLevel": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "primaries",
+        "transfer",
+        "matrix"
+      ]
+    },
     "timeRange": {
       "type": "object",
       "required": [
@@ -1036,6 +1094,33 @@
         },
         "duration": {
           "$ref": "#/$defs/flicks"
+        }
+      }
+    },
+    "toneMapping": {
+      "type": "object",
+      "properties": {
+        "operator": {
+          "type": "string",
+          "enum": [
+            "bt2390",
+            "hable",
+            "mobius",
+            "clip"
+          ]
+        },
+        "peakNits": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "desaturate": {
+          "type": "number"
         }
       }
     },

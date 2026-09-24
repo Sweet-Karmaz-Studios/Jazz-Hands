@@ -1,4 +1,5 @@
 using System.Numerics;
+using JazzHands.Core.Model;
 
 namespace JazzHands.Render.Color;
 
@@ -21,6 +22,26 @@ public enum TransferFunction
     Srgb = 4,
 }
 
+/// <summary>The primaries a source's RGB is in, before it is brought into the BT.709 working space.</summary>
+public enum ColorPrimaries
+{
+    /// <summary>BT.709 and sRGB: the working space itself.</summary>
+    Bt709 = 0,
+
+    /// <summary>BT.2020: HDR, and some SDR from phones.</summary>
+    Bt2020 = 1,
+}
+
+/// <summary>How a source's HDR is tone mapped: the curve, the source's peak and the highlight desaturation.</summary>
+/// <param name="Operator">The curve.</param>
+/// <param name="PeakNits">The brightest the source gets, in nits; mapped to the top of SDR.</param>
+/// <param name="Desaturate">How much compressed highlights lose their colour, 0 to 1.</param>
+public readonly record struct ToneMapParameters(ToneMapOperator Operator, float PeakNits, float Desaturate)
+{
+    /// <summary>BT.2390 from a 1000 nit grade, half desaturation.</summary>
+    public static readonly ToneMapParameters Default = new(ToneMapOperator.Bt2390, 1000.0f, 0.5f);
+}
+
 /// <summary>
 /// The YUV to RGB conversion for one source: matrix, range and transfer function.
 /// </summary>
@@ -31,6 +52,12 @@ public enum TransferFunction
 /// </remarks>
 public sealed record YuvColorSpace(Matrix4x4 Matrix, bool IsFullRange, TransferFunction Transfer, int BitDepth)
 {
+    /// <summary>The primaries the decoded RGB is in; BT.2020 is converted to BT.709 in the source pass.</summary>
+    public ColorPrimaries Primaries { get; init; }
+
+    /// <summary>How PQ and HLG are tone mapped. Ignored for SDR transfers.</summary>
+    public ToneMapParameters ToneMap { get; init; } = ToneMapParameters.Default;
+
     /// <summary>BT.709 limited range, 8-bit. The default for HD video.</summary>
     public static readonly YuvColorSpace Bt709Limited = new(BuildMatrix(0.2126, 0.0722), false, TransferFunction.Bt709, 8);
 
@@ -92,7 +119,8 @@ public sealed record YuvColorSpace(Matrix4x4 Matrix, bool IsFullRange, TransferF
     /// <param name="transferName">FFmpeg's transfer name, for example bt709 or smpte2084.</param>
     /// <param name="isFullRange">True for full-swing luma.</param>
     /// <param name="bitDepth">Bits per component of the decoded frame.</param>
-    public static YuvColorSpace From(string matrixName, string transferName, bool isFullRange, int bitDepth)
+    /// <param name="primariesName">FFmpeg's primaries name, for example bt709 or bt2020; when empty or unknown, BT.2020 goes with a BT.2020 matrix and BT.709 with anything else.</param>
+    public static YuvColorSpace From(string matrixName, string transferName, bool isFullRange, int bitDepth, string primariesName = "")
     {
         ArgumentNullException.ThrowIfNull(matrixName);
         ArgumentNullException.ThrowIfNull(transferName);
@@ -114,7 +142,14 @@ public sealed record YuvColorSpace(Matrix4x4 Matrix, bool IsFullRange, TransferF
             _ => TransferFunction.Bt709,
         };
 
-        return new YuvColorSpace(matrix, isFullRange, transfer, bitDepth);
+        ColorPrimaries primaries = primariesName.ToLowerInvariant() switch
+        {
+            "bt2020" => ColorPrimaries.Bt2020,
+            "bt709" or "bt470bg" or "smpte170m" or "smpte240m" => ColorPrimaries.Bt709,
+            _ => matrixName.StartsWith("bt2020", StringComparison.OrdinalIgnoreCase) ? ColorPrimaries.Bt2020 : ColorPrimaries.Bt709,
+        };
+
+        return new YuvColorSpace(matrix, isFullRange, transfer, bitDepth) { Primaries = primaries };
     }
 
     /// <summary>

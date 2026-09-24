@@ -666,6 +666,10 @@ public sealed class Compositor : IDisposable
             Layout = layout.IsRgb
                 ? (layout.PlaneCount == 1 ? 2u : 3u)
                 : layout.IsSemiPlanar ? 0u : 1u,
+            Primaries = (uint)color.Primaries,
+            ToneOperator = (uint)color.ToneMap.Operator,
+            PeakNits = color.ToneMap.PeakNits,
+            Desaturate = color.ToneMap.Desaturate,
         };
 
         try
@@ -997,6 +1001,10 @@ public sealed class Compositor : IDisposable
         public float ChromaRange;
         public uint Transfer;
         public uint Layout;
+        public uint Primaries;
+        public uint ToneOperator;
+        public float PeakNits;
+        public float Desaturate;
     }
 
     [StructLayout(LayoutKind.Sequential)]

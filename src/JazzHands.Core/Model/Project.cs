@@ -341,6 +341,7 @@ public sealed record Marker(
 /// <param name="Crop">How much of each side of the picture is cut away. Null for none.</param>
 /// <param name="Masks">Shapes limiting what of the picture is seen, in the order they combine.</param>
 /// <param name="Hold">True for a freeze frame: the clip shows the frame at <c>SourceIn</c> for its whole length, and is silent.</param>
+/// <param name="ToneMap">How an HDR source is tone mapped for this clip, over the project's default. Null for the project's.</param>
 public sealed record Clip(
     string Id,
     TimeRange Range,
@@ -367,7 +368,8 @@ public sealed record Clip(
     AudioChannelMap? ChannelMap = null,
     Crop? Crop = null,
     EquatableArray<Mask> Masks = default,
-    bool? Hold = null) : IEquatable<Clip>
+    bool? Hold = null,
+    ToneMapping? ToneMap = null) : IEquatable<Clip>
 {
     /// <summary>Playback rate, defaulting to normal speed.</summary>
     public Rational EffectiveSpeed => Speed ?? Rational.One;
@@ -520,13 +522,15 @@ public sealed record Track(
 /// <param name="SampleRate">Audio sample rate.</param>
 /// <param name="ChannelCount">Audio channel count; 2 for stereo, 6 for 5.1.</param>
 /// <param name="ColorSpace">Working colour space name, for example bt709.</param>
+/// <param name="ToneMap">How HDR sources are tone mapped unless a clip says otherwise. Null for BT.2390 at half desaturation.</param>
 public sealed record ProjectSettings(
     Rational FrameRate,
     int Width,
     int Height,
     int SampleRate = 48000,
     int ChannelCount = 2,
-    string ColorSpace = "bt709") : IEquatable<ProjectSettings>
+    string ColorSpace = "bt709",
+    ToneMapping? ToneMap = null) : IEquatable<ProjectSettings>
 {
     /// <summary>1080p at 30 fps, which is what a project gets when nothing else is said.</summary>
     public static ProjectSettings Default { get; } = new(Rational.Fps30, 1920, 1080);
