@@ -279,6 +279,9 @@ public static class GeneratedCommands
         WriteIndented = true,
         IndentSize = 2,
         NewLine = "\n",
+
+        // As in the project file: an apostrophe in a description reads as one, not as '.
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
     /// <summary>Calls the session's generic Query from a place that only has a Type.</summary>
