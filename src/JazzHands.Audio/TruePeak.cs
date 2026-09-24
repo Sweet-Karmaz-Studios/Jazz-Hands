@@ -1,23 +1,35 @@
+using System.Numerics;
+
 namespace JazzHands.Audio;
 
 /// <summary>
-/// Finds the peaks between samples, four times oversampled, as ITU-R BS.1770 measures true peak.
+/// Finds the peaks between samples, oversampled eight times, as a true peak meter does.
 /// </summary>
 /// <remarks>
+/// <para>
 /// A sample can sit below full scale while the waveform it describes swings above it between two
 /// samples, and a converter or a lossy codec reconstructs that swing. So a ceiling in dBTP is on
-/// the reconstructed signal: each sample and the three points a quarter, a half and three quarters
-/// of the way to the next, interpolated by a windowed sinc twelve taps a phase. The interpolation
-/// needs six samples after the point, so a reading is six samples late: <see cref="Push"/> answers
-/// for the sample <see cref="Delay"/> behind the one pushed.
+/// the reconstructed signal: each sample and the seven points an eighth of the way apart to the
+/// next, interpolated by a Kaiser windowed sinc 96 taps long. ITU-R BS.1770 asks for at least four
+/// times; eight, with a long filter, is what keeps a square wave's aliased harmonics near half the
+/// sample rate from slipping between the points (four times and twelve taps read a 5 kHz full
+/// scale square 1.4 dB low, and 48 taps still let a naive square's 23 kHz alias through).
+/// </para>
+/// <para>
+/// The interpolation needs half its taps after the point, so a reading is <see cref="Delay"/>
+/// samples late: <see cref="Push"/> answers for the sample that far behind the one pushed.
+/// </para>
 /// </remarks>
 public sealed class TruePeak
 {
     /// <summary>Samples each interpolated phase reads.</summary>
-    public const int Taps = 12;
+    public const int Taps = 96;
 
     /// <summary>How far behind the newest sample a reading is.</summary>
     public const int Delay = Taps / 2;
+
+    /// <summary>Points per sample, the sample itself included.</summary>
+    public const int Factor = 8;
 
     private static readonly float[][] Phases = Design();
 
@@ -33,7 +45,7 @@ public sealed class TruePeak
     /// </summary>
     public float Push(float sample)
     {
-        // Written twice, a ring's length apart, so the last twelve are always one run in memory.
+        // Written twice, a ring's length apart, so the last Taps samples are always one run.
         _history[_at] = sample;
         _history[_at + Taps] = sample;
         _at = (_at + 1) % Taps;
@@ -41,15 +53,17 @@ public sealed class TruePeak
         ReadOnlySpan<float> window = _history.AsSpan(_at, Taps);
         float peak = Math.Abs(window[Delay - 1]);
 
+        int width = Vector<float>.Count;
         foreach (float[] phase in Phases)
         {
-            float sum = 0.0f;
-            for (int tap = 0; tap < Taps; tap++)
+            // Taps is a multiple of every vector width, so there is no remainder.
+            Vector<float> sum = Vector<float>.Zero;
+            for (int tap = 0; tap < Taps; tap += width)
             {
-                sum += phase[tap] * window[tap];
+                sum += new Vector<float>(phase, tap) * new Vector<float>(window[tap..]);
             }
 
-            peak = Math.Max(peak, Math.Abs(sum));
+            peak = Math.Max(peak, Math.Abs(Vector.Sum(sum)));
         }
 
         return peak;
@@ -81,22 +95,25 @@ public sealed class TruePeak
     }
 
     /// <summary>
-    /// The three fractional phases: the point p/4 of the way from window[5] to window[6], from
-    /// window[0] to window[11]. A Hann window over plus and minus six and a half samples.
+    /// The seven fractional phases: the point p/8 of the way from window[Delay - 1] to
+    /// window[Delay]. A Kaiser window (beta 8) over the filter's length.
     /// </summary>
     private static float[][] Design()
     {
-        var phases = new float[3][];
-        for (int p = 1; p <= 3; p++)
+        const double Beta = 8.0;
+        double norm = BesselI0(Beta);
+        var phases = new float[Factor - 1][];
+        for (int p = 1; p < Factor; p++)
         {
-            double fraction = p / 4.0;
+            double fraction = (double)p / Factor;
             var taps = new float[Taps];
             double sum = 0.0;
             for (int tap = 0; tap < Taps; tap++)
             {
                 double t = (tap - (Delay - 1)) - fraction;
                 double sinc = Math.Abs(t) < 1e-12 ? 1.0 : Math.Sin(Math.PI * t) / (Math.PI * t);
-                double window = Math.Abs(t) >= 6.5 ? 0.0 : 0.5 * (1.0 + Math.Cos(Math.PI * t / 6.5));
+                double x = t / (Delay + 0.5);
+                double window = Math.Abs(x) >= 1.0 ? 0.0 : BesselI0(Beta * Math.Sqrt(1.0 - (x * x))) / norm;
                 taps[tap] = (float)(sinc * window);
                 sum += sinc * window;
             }
@@ -111,5 +128,23 @@ public sealed class TruePeak
         }
 
         return phases;
+    }
+
+    /// <summary>The zeroth order modified Bessel function of the first kind, by its series.</summary>
+    private static double BesselI0(double x)
+    {
+        double sum = 1.0;
+        double term = 1.0;
+        for (int k = 1; k < 50; k++)
+        {
+            term *= (x / (2.0 * k)) * (x / (2.0 * k));
+            sum += term;
+            if (term < 1e-12 * sum)
+            {
+                break;
+            }
+        }
+
+        return sum;
     }
 }

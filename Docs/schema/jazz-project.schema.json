@@ -642,6 +642,41 @@
         "shape"
       ]
     },
+    "masterBus": {
+      "type": "object",
+      "properties": {
+        "volume": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/animatedValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "limiter": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ceiling": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
     "mediaInfo": {
       "type": "object",
       "properties": {
@@ -1052,6 +1087,16 @@
           "anyOf": [
             {
               "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "master": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/masterBus"
             },
             {
               "type": "null"

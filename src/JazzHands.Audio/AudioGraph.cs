@@ -281,6 +281,12 @@ public sealed class AudioGraph
             // is silent it is skipped, keeping its silence so an unmute ramps up from nothing.
             if (!audible && (strip is null || !strip.Valid || Silent(strip.Last, Channels)))
             {
+                if (strip is not null)
+                {
+                    Array.Clear(strip.Last);
+                    strip.Valid = true;
+                }
+
                 continue;
             }
 

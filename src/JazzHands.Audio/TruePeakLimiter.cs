@@ -15,7 +15,7 @@ namespace JazzHands.Audio;
 /// picture.
 /// </para>
 /// <para>
-/// The true peak estimate is four times oversampled, and a peak between those points can be a
+/// The true peak estimate is eight times oversampled, and a peak between those points can be a
 /// fraction of a decibel higher; the gain also moves, which spreads a peak a little. So the gain
 /// aims 0.2 dB under the ceiling, and the square wave test measures the result eight times
 /// oversampled. Off, it passes everything through with the same delay, so turning it on or off

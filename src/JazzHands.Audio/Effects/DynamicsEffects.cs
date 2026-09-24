@@ -55,7 +55,8 @@ public sealed class CompressorEffect : AudioEffect
         int frames = block.Frames;
         int channels = block.Channels;
         int rate = block.SampleRate;
-        bool rms = block.From[6] >= 0.5f;
+        // The choices are rms then peak, so rms is the first, 0.
+        bool rms = block.From[6] < 0.5f;
         float average = Coefficient(10.0f, rate);
 
         for (int index = 0; index < frames; index++)
@@ -199,11 +200,11 @@ public sealed class GateEffect : AudioEffect
 /// </summary>
 /// <remarks>
 /// A band pass around the frequency listens for sibilance (a Q of 1.5, the loudest channel's,
-/// released over 60 ms). Over the threshold, the part of the voice above the frequency, less a
-/// quarter, is turned down: by three quarters of how far the band is over, at most the range.
+/// released over 60 ms). Over the threshold, a high shelf from two thirds of the frequency up
+/// turns the voice's top down: by three quarters of how far the band is over, at most the range.
 /// The rest of the voice is untouched, so a de-esser does not duck the whole word the way a
-/// compressor would. The high part is split off with a 12 dB an octave high pass and turned down
-/// in place, so with nothing to do it passes the voice exactly.
+/// compressor would. The shelf is designed again every 32 samples as the reduction moves, and
+/// with nothing to do it is no filter at all, so the voice passes exactly.
 /// </remarks>
 [AudioEffect("audio.de-esser", Name = "De-esser", Category = "Dynamics", Description = "Turns down harsh s and sh sounds in a voice without dulling the rest of it.")]
 [Param("frequency", ParamType.Float, Default = "6500", Min = 2000, Max = 12000, Unit = "Hz", Description = "Where the sibilance is: 5 to 8 kHz for most voices.")]
@@ -211,9 +212,12 @@ public sealed class GateEffect : AudioEffect
 [Param("range", ParamType.Float, Default = "10", Min = 0, Max = 24, Unit = "dB", Description = "The most it turns the sibilance down.")]
 public sealed class DeEsserEffect : AudioEffect
 {
+    private const int Chunk = 32;
+
     private Biquad[] _listen = [];
-    private Biquad[] _split = [];
+    private Biquad[] _shelf = [];
     private float _builtFrequency = float.NaN;
+    private float _builtReductionDb;
     private float _level;
     private float _reductionDb;
 
@@ -233,37 +237,54 @@ public sealed class DeEsserEffect : AudioEffect
         if (frequency != _builtFrequency)
         {
             _builtFrequency = frequency;
+            _builtReductionDb = float.NaN;
             Biquad listen = Biquad.BandPass(rate, frequency, 1.5);
-            Biquad split = Biquad.HighPass(rate, frequency * 0.75);
             for (int channel = 0; channel < _listen.Length; channel++)
             {
                 _listen[channel].Take(listen);
-                _split[channel].Take(split);
             }
         }
 
-        for (int index = 0; index < frames; index++)
+        for (int start = 0; start < frames; start += Chunk)
         {
-            float t = (float)index / frames;
+            int end = Math.Min(start + Chunk, frames);
+            float t = (float)start / frames;
             float threshold = CompressorEffect.Lerp(block.From[1], block.To[1], t);
             float range = CompressorEffect.Lerp(block.From[2], block.To[2], t);
 
-            float band = 0.0f;
-            for (int channel = 0; channel < channels; channel++)
+            // Listen over the chunk first, then turn the chunk down by what was heard.
+            for (int index = start; index < end; index++)
             {
-                band = Math.Max(band, Math.Abs(_listen[channel].Process(block.Plane(channel)[index])));
+                float band = 0.0f;
+                for (int channel = 0; channel < channels; channel++)
+                {
+                    band = Math.Max(band, Math.Abs(_listen[channel].Process(block.Plane(channel)[index])));
+                }
+
+                _level += (band - _level) * (band > _level ? attack : fall);
             }
 
-            _level = band > _level ? _level + ((band - _level) * attack) : _level + ((band - _level) * fall);
             float over = Dsp.GainToDb(_level) - threshold;
             _reductionDb = over > 0.0f ? -Math.Min(range, over * 0.75f) : 0.0f;
-            float gain = Dsp.DbToGain(_reductionDb);
+            if (_reductionDb != _builtReductionDb)
+            {
+                _builtReductionDb = _reductionDb;
+                Biquad shelf = _reductionDb > -0.01f
+                    ? Biquad.Identity
+                    : Biquad.HighShelf(rate, frequency * 2.0 / 3.0, _reductionDb);
+                for (int channel = 0; channel < _shelf.Length; channel++)
+                {
+                    _shelf[channel].Take(shelf);
+                }
+            }
 
             for (int channel = 0; channel < channels; channel++)
             {
                 Span<float> plane = block.Plane(channel);
-                float high = _split[channel].Process(plane[index]);
-                plane[index] += (gain - 1.0f) * high;
+                for (int index = start; index < end; index++)
+                {
+                    plane[index] = _shelf[channel].Process(plane[index]);
+                }
             }
         }
     }
@@ -274,9 +295,11 @@ public sealed class DeEsserEffect : AudioEffect
         for (int channel = 0; channel < _listen.Length; channel++)
         {
             _listen[channel].Reset();
-            _split[channel].Reset();
+            _shelf[channel].Reset();
+            _shelf[channel].Take(Biquad.Identity);
         }
 
+        _builtReductionDb = 0.0f;
         _level = 0.0f;
         _reductionDb = 0.0f;
     }
@@ -285,8 +308,14 @@ public sealed class DeEsserEffect : AudioEffect
     protected override void OnPrepare(int sampleRate, int channels)
     {
         _listen = new Biquad[channels];
-        _split = new Biquad[channels];
+        _shelf = new Biquad[channels];
+        for (int channel = 0; channel < channels; channel++)
+        {
+            _shelf[channel].Take(Biquad.Identity);
+        }
+
         _builtFrequency = float.NaN;
+        _builtReductionDb = 0.0f;
     }
 }
 

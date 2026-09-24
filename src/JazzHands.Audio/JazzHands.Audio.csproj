@@ -9,6 +9,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The tests set an effect's ramp state and read a graph's internals directly. -->
+    <InternalsVisibleTo Include="JazzHands.Audio.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="NAudio" />
     <PackageReference Include="Serilog" />
   </ItemGroup>
