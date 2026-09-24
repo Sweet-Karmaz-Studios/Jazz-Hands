@@ -807,6 +807,66 @@ HDR sources (PQ and HLG) are tone mapped on the way in, from the file's peak (Ma
 mastering display's, else 1000 nits) to SDR white at 203 nits, and BT.2020 is brought into BT.709.
 Exports are BT.709 SDR and tagged so.
 
+### Transitions (Phase 18)
+
+A transition sits on a cut: two clips on one track, the first ending where the second starts.
+Inside it the outgoing clip plays on past its end and the incoming one starts early, so each
+needs source beyond the cut. Centred, half is before the cut; `end-of-left` is all before it,
+`start-of-right` all after. The type and duration default to the project's (a one second
+crossfade, and an equal power crossfade for sound). A picture transition also crossfades the
+clips' linked sound at the same cut unless `--audio false`, and changing or removing one changes
+or removes the other unless `--linked false`.
+
+```bash
+jazz transition add trailer.jazz <outgoing-clip> <incoming-clip> --type transition.wipe.iris --dur 20f
+jazz transition set-param trailer.jazz <transition-id> centre "300, -100"
+jazz transition set trailer.jazz <transition-id> --dur 1s --alignment end-of-left
+jazz transition add-all trailer.jazz --track <track-id> --type transition.crossfade --dur 12f
+jazz transition set-default trailer.jazz transition.push --dur 15f
+jazz transition apply-default trailer.jazz --at-cut 00:00:12.000 --kind video
+jazz transition list trailer.jazz
+jazz transition remove trailer.jazz <transition-id>
+```
+
+| Verb | Does |
+|---|---|
+| `transition add <left> <right> [--type] [--dur] [--alignment] [--handles] [--audio] [--id]` | Puts a transition on a cut, fitted to what the clips have room for. `--handles refuse` (the default) refuses when a clip is short of source past the cut and says by how much; `trim` trims the clips back from the cut until they have it, rippling what follows; `hold` adds it anyway and the missing frames hold. |
+| `transition set <id> [--type] [--dur] [--alignment] [--linked]` | Changes the type (keeping the parameters the two share), the duration or the alignment. Consecutive duration changes merge into one undo step, as a drag's do. |
+| `transition set-param <id> <param> <value>` | One parameter; the same as `param set` with the transition's id. |
+| `transition remove <id> [--linked]` | Takes it off, and the one at the linked cut. |
+| `transition apply-default --at-cut t [--track] [--kind video\|audio\|both] [--handles]` | The default transition on the cut nearest `t` (within a second), on every track of that kind with a cut there, as Ctrl+D does at the playhead. `--handles hold` by default. |
+| `transition add-all --track <id> [--type] [--dur] [--alignment] [--handles] [--audio]` | One on every bare cut of a track, as one undo step. With `--handles refuse` a short cut refuses the lot and names every one. |
+| `transition set-default [type] [--dur]` | The picture or sound type the shortcuts add, and their duration. |
+| `transition list [--track] [--sequence]` | Each transition with its cut, where it plays, whether it was fitted, how short of source each clip is, and its parameters. |
+
+| Type | Parameters, besides `easing` (`linear`, `ease-in`, `ease-out`, `ease-in-out`, `custom`) and `curve` (the custom bezier, `x1, y1, x2, y2`) |
+|---|---|
+| `transition.crossfade` | `style`: `cross` (even to the eye) or `film` (in linear light). |
+| `transition.dip` | `colour`, `hold` (the share spent on the colour). |
+| `transition.wipe.linear` | `angle`, `softness`, `border`, `border-colour`. |
+| `transition.wipe.clock` | `start-angle`, `direction`, `softness`, `border`, `border-colour`. |
+| `transition.wipe.radial` | `corner`, `direction`, `softness`, `border`, `border-colour`. |
+| `transition.wipe.iris` | `shape` (`circle`, `diamond`, `box`), `centre`, `direction` (`open`, `close`), `softness`, `border`, `border-colour`. |
+| `transition.push` | `direction`: the way the pictures move. |
+| `transition.slide` | `direction`, `mode` (`in`, `out`). |
+| `transition.zoom` | `amount`, `centre`. |
+| `transition.blur-dissolve` | `radius`. |
+| `transition.glitch` | `intensity`, `block-size`, `seed`. |
+| `transition.audio.equal-power` | Sound only: sine and cosine gains, level held through the middle. |
+| `transition.audio.linear` | Sound only: straight gains, for two takes of one sound. |
+
+Your own: a `name.hlsl` in `%APPDATA%\JazzHands\transitions` that includes `Transition.hlsli`
+and defines `PsMain`, with an optional `name.json` manifest (`id`, `name`, `category`,
+`description`, `entry`, `params`), is the type `transition.user.name`. Its parameters reach the
+shader in order through `Values` and `More`, a colour through `Tint`. A saved edit is compiled
+before the next frame; one that does not compile cuts in the middle and says why in the log.
+
+Errors: `not-adjacent`, `transition-exists`, `transition-not-found`, `wrong-transition-kind`,
+`transition-wrong-track`, `insufficient-handles`, `no-room`, `no-cut`, `invalid-duration`,
+`not-a-transition`, `not-an-effect` (a transition given to `effect add`), `track-locked`.
+Validation warns `insufficient-handles` and `transition-longer-than-clip`, and `timeline
+describe` says where each transition plays and what is wrong with it.
+
 ### Keys
 
 The editor's editing keys are bindings to these same commands, kept in a keymap. The defaults:
@@ -817,7 +877,8 @@ The editor's editing keys are bindings to these same commands, kept in a keymap.
 | Shift+Delete | `clip.ripple-delete` of the selection, closing the gap on every sync-locked track |
 | Q, W | `clip.ripple-trim` of the clips under the playhead, start or end edge, to the playhead |
 | Ctrl+Z, Ctrl+Y (or Ctrl+Shift+Z) | `undo`, `redo` |
-| Ctrl+D | `clip.duplicate` for each selected clip |
+| Ctrl+Alt+D | `clip.duplicate` for each selected clip |
+| Ctrl+D, Ctrl+Shift+D, Shift+D | `transition.apply-default` on the cut nearest the playhead: picture, sound, or both |
 | `,` `.` (Shift for ten) | `clip.nudge` the selection by a frame |
 | I, O | `playback.set-in`, `playback.set-out` at the playhead |
 | Ctrl+K | `clip.split` at the playhead: the selected clips under it, or every clip under it when none is selected there |
