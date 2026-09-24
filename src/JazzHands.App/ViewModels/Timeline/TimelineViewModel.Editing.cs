@@ -444,7 +444,7 @@ public sealed partial class TimelineViewModel
 
     /// <summary>
     /// An effect or a preset was dropped: it goes on the clip under the pointer, or on the track
-    /// when there is no clip there.
+    /// when there is no clip there. A generator becomes a clip on the track, at the pointer.
     /// </summary>
     public async Task DropEffectAsync(string? typeId, string? presetId, Point point)
     {
@@ -455,9 +455,14 @@ public sealed partial class TimelineViewModel
             return;
         }
 
-        await RunAsync(typeId is not null
-            ? new AddEffectCommand(ownerId, typeId)
-            : new ApplyEffectPresetCommand(ownerId, presetId!)).ConfigureAwait(true);
+        bool generator = typeId is not null && Engine.Effects.EffectCatalog.Registry.Find(typeId) is { Kind: Core.Effects.EffectKind.Generator };
+        ICommand command = generator
+            ? new AddClipCommand(ownerId, Geometry.TimeAt(point.X), GeneratorId: typeId, Name: Engine.Effects.EffectCatalog.Registry.Find(typeId!)!.Name)
+            : typeId is not null
+                ? new AddEffectCommand(ownerId, typeId)
+                : new ApplyEffectPresetCommand(ownerId, presetId!);
+
+        await RunAsync(command).ConfigureAwait(true);
     }
 
     /// <summary>What an effect dropped at a point would go on, or why it cannot.</summary>
@@ -480,6 +485,16 @@ public sealed partial class TimelineViewModel
         if (typeId is null || Engine.Effects.EffectCatalog.Registry.Find(typeId) is not { } descriptor)
         {
             return (null, "That is not an effect this editor has.");
+        }
+
+        // A generator is a clip of its own: it goes on the video track under the pointer, at the
+        // pointer, whatever clip is there (the command refuses an overlap).
+        if (descriptor.Kind == Core.Effects.EffectKind.Generator)
+        {
+            string track = Content.Track(row.TrackId)?.Track.Name ?? string.Empty;
+            return row.Kind == TrackKind.Video
+                ? (row.TrackId, $"Add a {descriptor.Name} clip to {track} here.")
+                : (null, $"{descriptor.Name} makes a picture of its own; drop it on a video track.");
         }
 
         bool picture = row.Kind is TrackKind.Video or TrackKind.Adjustment;

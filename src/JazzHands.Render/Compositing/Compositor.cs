@@ -382,7 +382,7 @@ public sealed class Compositor : IDisposable
         }
 
         RenderTarget? matte = layer.Masks.IsDefaultOrEmpty ? null : Matte(graph, layer);
-        RenderTarget result = Composite(stack, input, matte, layer.Opacity, layer.Blend);
+        RenderTarget result = Composite(stack, input, matte, layer.Opacity, layer.Blend, replace: true);
 
         if (matte is not null)
         {
@@ -694,8 +694,12 @@ public sealed class Compositor : IDisposable
         return linear;
     }
 
-    /// <summary>Blends a placed layer onto the stack, into a new target.</summary>
-    private RenderTarget Composite(RenderTarget stack, RenderTarget layer, RenderTarget? matte, float opacity, BlendMode blend)
+    /// <summary>
+    /// Blends a placed layer onto the stack, into a new target. With <paramref name="replace"/>, for
+    /// an adjustment layer, the layer is the stack after its effects and takes its place where the
+    /// opacity and the matte say, rather than being laid over it.
+    /// </summary>
+    private RenderTarget Composite(RenderTarget stack, RenderTarget layer, RenderTarget? matte, float opacity, BlendMode blend, bool replace = false)
     {
         RenderTarget result = Pool.Rent(stack.Width, stack.Height);
 
@@ -704,6 +708,7 @@ public sealed class Compositor : IDisposable
             Opacity = Math.Clamp(opacity, 0.0f, 1.0f),
             Mode = (uint)blend,
             HasMatte = matte is null ? 0u : 1u,
+            Replace = replace ? 1u : 0u,
         };
 
         _views[0] = stack.Resource;
@@ -1013,7 +1018,7 @@ public sealed class Compositor : IDisposable
         public float Opacity;
         public uint Mode;
         public uint HasMatte;
-        public float Padding;
+        public uint Replace;
     }
 
     [StructLayout(LayoutKind.Sequential)]

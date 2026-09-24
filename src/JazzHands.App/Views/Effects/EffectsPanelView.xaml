@@ -86,26 +86,48 @@
                                                     MouseLeftButtonDown="OnEffectMouseDown">
                                                 <Grid>
                                                     <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
                                                         <ColumnDefinition Width="*" />
                                                         <ColumnDefinition Width="Auto" />
                                                         <ColumnDefinition Width="Auto" />
                                                     </Grid.ColumnDefinitions>
-                                                    <TextBlock VerticalAlignment="Center"
+                                                    <!-- The effect on a sample scene; sound has none, and a picture arrives a moment after the panel. -->
+                                                    <Border Width="64"
+                                                            Height="36"
+                                                            Margin="0,2,8,2"
+                                                            CornerRadius="2"
+                                                            ClipToBounds="True"
+                                                            Background="{DynamicResource Brush.Background.Base}"
+                                                            Visibility="{Binding HasPicture, Mode=OneWay, Converter={StaticResource Visible}}">
+                                                        <Image Source="{Binding Preview, Mode=OneWay}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality" />
+                                                    </Border>
+                                                    <TextBlock Grid.Column="1"
+                                                               VerticalAlignment="Center"
                                                                Text="{Binding Name, Mode=OneWay}"
                                                                TextTrimming="CharacterEllipsis"
                                                                Foreground="{DynamicResource Brush.Text.Primary}" />
-                                                    <ToggleButton Grid.Column="1"
+                                                    <ToggleButton Grid.Column="2"
                                                                   Style="{StaticResource Button.Small}"
                                                                   Content="&#xE734;"
                                                                   IsChecked="{Binding IsFavorite, Mode=TwoWay}"
                                                                   ToolTip="Favorite"
                                                                   AutomationProperties.Name="Favorite" />
-                                                    <Button Grid.Column="2"
-                                                            Style="{StaticResource Button.Small}"
+                                                    <Button Grid.Column="3"
                                                             Content="&#xE710;"
-                                                            Command="{Binding ApplyCommand, Mode=OneWay}"
-                                                            ToolTip="Add to the selected clips"
-                                                            AutomationProperties.Name="Add to the selected clips" />
+                                                            Command="{Binding ApplyCommand, Mode=OneWay}">
+                                                        <Button.Style>
+                                                            <Style TargetType="Button" BasedOn="{StaticResource Button.Small}">
+                                                                <Setter Property="ToolTip" Value="Add to the selected clips" />
+                                                                <Setter Property="AutomationProperties.Name" Value="Add to the selected clips" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsGenerator, Mode=OneWay}" Value="True">
+                                                                        <Setter Property="ToolTip" Value="Add a clip at the playhead" />
+                                                                        <Setter Property="AutomationProperties.Name" Value="Add a clip at the playhead" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Button.Style>
+                                                    </Button>
                                                 </Grid>
                                                 <Border.Style>
                                                     <Style TargetType="Border">

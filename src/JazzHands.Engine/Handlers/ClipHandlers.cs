@@ -3,6 +3,7 @@ using JazzHands.Core.Editing;
 using JazzHands.Core.Model;
 using JazzHands.Core.Time;
 using JazzHands.Engine.Commands;
+using JazzHands.Engine.Effects;
 
 namespace JazzHands.Engine.Handlers;
 
@@ -217,7 +218,8 @@ public sealed class AddClipHandler : ICommandHandler<AddClipCommand>
     private static string DefaultName(Project project, AddClipCommand command) =>
         command.MediaId is { } mediaId && project.MediaItem(mediaId) is { } media ? media.Name
         : command.SequenceId is { } nestedId && project.Sequence(nestedId) is { } nested ? nested.Name
-        : command.GeneratorId ?? string.Empty;
+        : command.GeneratorId is { } generatorId ? EffectCatalog.Registry.Find(generatorId)?.Name ?? generatorId
+        : string.Empty;
 }
 
 /// <summary>Takes a clip off its track.</summary>

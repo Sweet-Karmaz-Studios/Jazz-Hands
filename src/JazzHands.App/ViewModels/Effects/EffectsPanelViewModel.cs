@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using JazzHands.App.Services;
@@ -6,6 +7,7 @@ using JazzHands.App.Shell;
 using JazzHands.Core.Commands;
 using JazzHands.Core.Effects;
 using JazzHands.Core.Model;
+using JazzHands.Core.Time;
 using JazzHands.Engine.Commands;
 using JazzHands.Engine.Effects;
 using JazzHands.Engine.Selection;
@@ -21,6 +23,9 @@ public sealed partial class EffectTypeItemViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _isFavorite;
+
+    [ObservableProperty]
+    private ImageSource? _preview;
 
     /// <summary>Creates an item.</summary>
     public EffectTypeItemViewModel(EffectsPanelViewModel panel, EffectDescriptor descriptor, bool favorite)
@@ -48,6 +53,12 @@ public sealed partial class EffectTypeItemViewModel : ObservableObject
 
     /// <summary>True for a sound effect.</summary>
     public bool IsAudio => Descriptor.Kind == EffectKind.Audio;
+
+    /// <summary>True for a generator, which makes a clip rather than changing one.</summary>
+    public bool IsGenerator => Descriptor.Kind == EffectKind.Generator;
+
+    /// <summary>True for the types with a preview: everything but sound.</summary>
+    public bool HasPicture => !IsAudio;
 
     partial void OnIsFavoriteChanged(bool value)
     {
@@ -95,12 +106,13 @@ public sealed partial class EffectPresetItemViewModel(EffectsPanelViewModel pane
 }
 
 /// <summary>
-/// The effects browser: every picture and sound effect by folder, a search, favorites, and the
-/// project's presets.
+/// The effects browser: every picture effect, generator and sound effect by folder, each with a
+/// picture of what it does, a search, favorites, and the project's presets.
 /// </summary>
 /// <remarks>
 /// Applying an effect adds it to every selected clip it suits, in one undo step; dragging one
-/// onto a clip, a track or the inspector does the same for that one. Presets save the first
+/// onto a clip, a track or the inspector does the same for that one. A generator makes a clip
+/// instead: + puts one at the playhead, and dragging one onto a video track puts it there. Presets save the first
 /// selected clip's chain under a name and apply it anywhere. All of it goes through the same
 /// <c>effect.*</c> commands the CLI has; only the favorites are the editor's own, a preference of
 /// the person rather than a part of the project.
@@ -110,11 +122,16 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
     /// <summary>The docking content id.</summary>
     public const string PanelId = "effects";
 
+    /// <summary>How long a generator clip added from the panel runs, as a title dropped on a timeline does.</summary>
+    public static readonly Flicks GeneratorLength = Flicks.FromSeconds(5);
+
     private readonly ILogger _log = Log.ForContext<EffectsPanelViewModel>();
     private readonly ISession _session;
     private readonly SelectionService _selection;
     private readonly IUiDispatcher _ui;
     private readonly IEffectFavorites _favorites;
+    private readonly IEffectPreviewImages? _previews;
+    private readonly IPreviewEngine? _playback;
     private readonly EffectRegistry _registry;
 
     [ObservableProperty]
@@ -127,7 +144,21 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
     private string _status = string.Empty;
 
     /// <summary>Creates the panel.</summary>
-    public EffectsPanelViewModel(ISession session, SelectionService selection, IUiDispatcher ui, IEffectFavorites favorites, EffectRegistry? registry = null)
+    /// <param name="session">The session commands go through.</param>
+    /// <param name="selection">The selected clips, which the + buttons add to.</param>
+    /// <param name="ui">The UI thread.</param>
+    /// <param name="favorites">The person's starred types.</param>
+    /// <param name="previews">Pictures of the types, or null for names only.</param>
+    /// <param name="playback">Where the playhead is, for placing a generator; the start when null.</param>
+    /// <param name="registry">The types, or the editor's own.</param>
+    public EffectsPanelViewModel(
+        ISession session,
+        SelectionService selection,
+        IUiDispatcher ui,
+        IEffectFavorites favorites,
+        IEffectPreviewImages? previews = null,
+        IPreviewEngine? playback = null,
+        EffectRegistry? registry = null)
         : base(PanelId, "Effects")
     {
         ArgumentNullException.ThrowIfNull(session);
@@ -139,14 +170,18 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
         _selection = selection;
         _ui = ui;
         _favorites = favorites;
+        _previews = previews;
+        _playback = playback;
         _registry = registry ?? EffectCatalog.Registry;
+
+        _previews?.Ready += OnPreviewReady;
 
         _session.ProjectChanged += (_, _) => _ui.Post(LoadPresets);
         Refilter();
         LoadPresets();
     }
 
-    /// <summary>The folders, favorites first, then picture effects, then sound.</summary>
+    /// <summary>The folders, favorites first, then picture effects, then generators, then sound.</summary>
     public ObservableCollection<EffectCategoryViewModel> Categories { get; } = [];
 
     /// <summary>The project's presets.</summary>
@@ -165,6 +200,11 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
             return Task.CompletedTask;
         }
 
+        if (descriptor.Kind == EffectKind.Generator)
+        {
+            return AddGeneratorAsync(descriptor);
+        }
+
         Project project = _session.Project;
         string[] suited =
         [
@@ -181,6 +221,41 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
 
         ICommand[] adds = [.. suited.Select(id => (ICommand)new AddEffectCommand(id, typeId))];
         return RunAsync(adds.Length == 1 ? adds[0] : new BatchCommand([.. adds], $"Add {descriptor.Name}"));
+    }
+
+    /// <summary>
+    /// Puts a generator on the timeline at the playhead: on the highest video track with five
+    /// free seconds there, or on a new track above the rest when none has.
+    /// </summary>
+    public Task AddGeneratorAsync(EffectDescriptor descriptor)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+
+        if (_session.Project.ActiveSequence is not { } sequence)
+        {
+            Status = "Open a sequence to add a generator to.";
+            return Task.CompletedTask;
+        }
+
+        Flicks at = _playback?.Position ?? Flicks.Zero;
+        Flicks end = at + GeneratorLength;
+        Track? free = sequence.Tracks
+            .Where(track => track.Kind == TrackKind.Video && !track.Locked)
+            .OrderByDescending(track => track.Order)
+            .FirstOrDefault(track => !track.Clips.Any(clip => clip.Start < end && at < clip.Start + clip.Duration));
+
+        if (free is not null)
+        {
+            return RunAsync(new AddClipCommand(free.Id, at, GeneratorId: descriptor.TypeId, Duration: GeneratorLength, Name: descriptor.Name));
+        }
+
+        string trackId = Id.New();
+        return RunAsync(new BatchCommand(
+            [
+                new AddTrackCommand(TrackKind.Video, TrackId: trackId),
+                new AddClipCommand(trackId, at, GeneratorId: descriptor.TypeId, Duration: GeneratorLength, Name: descriptor.Name),
+            ],
+            $"Add {descriptor.Name}"));
     }
 
     /// <summary>Applies a preset to every selected clip, as one undo step.</summary>
@@ -244,7 +319,7 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
     {
         string search = Search.Trim();
         IEnumerable<EffectDescriptor> matching = _registry.All
-            .Where(descriptor => descriptor.Kind is EffectKind.Video or EffectKind.Audio)
+            .Where(descriptor => descriptor.Kind is EffectKind.Video or EffectKind.Audio or EffectKind.Generator)
             .Where(descriptor => search.Length == 0
                 || descriptor.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
                 || descriptor.Category.Contains(search, StringComparison.OrdinalIgnoreCase)
@@ -259,18 +334,25 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
             bool favorite = _favorites.Ids.Contains(descriptor.TypeId);
             if (favorite)
             {
-                favorites.Items.Add(new EffectTypeItemViewModel(this, descriptor, favorite: true));
+                favorites.Items.Add(Item(descriptor, favorite: true));
             }
 
-            // Picture folders first, then sound: the sort key carries the kind, the title does not repeat it for pictures.
-            string key = $"{(int)descriptor.Kind}:{descriptor.Category}";
+            // Picture folders first, then generators, then sound: the sort key carries the kind,
+            // the title does not repeat it for pictures.
+            int rank = descriptor.Kind switch
+            {
+                EffectKind.Video => 0,
+                EffectKind.Generator => 1,
+                _ => 2,
+            };
+            string key = $"{rank}:{descriptor.Category}";
             if (!folders.TryGetValue(key, out EffectCategoryViewModel? folder))
             {
                 folder = new EffectCategoryViewModel(descriptor.Kind == EffectKind.Audio ? $"Audio: {descriptor.Category}" : descriptor.Category);
                 folders[key] = folder;
             }
 
-            folder.Items.Add(new EffectTypeItemViewModel(this, descriptor, favorite));
+            folder.Items.Add(Item(descriptor, favorite));
         }
 
         Categories.Clear();
@@ -282,6 +364,18 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
         foreach (EffectCategoryViewModel folder in folders.Values)
         {
             Categories.Add(folder);
+        }
+    }
+
+    private EffectTypeItemViewModel Item(EffectDescriptor descriptor, bool favorite) =>
+        new(this, descriptor, favorite) { Preview = _previews?.Find(descriptor.TypeId) };
+
+    private void OnPreviewReady(object? sender, string typeId)
+    {
+        ImageSource? image = _previews?.Find(typeId);
+        foreach (EffectTypeItemViewModel item in Categories.SelectMany(category => category.Items).Where(item => item.TypeId == typeId))
+        {
+            item.Preview = image;
         }
     }
 

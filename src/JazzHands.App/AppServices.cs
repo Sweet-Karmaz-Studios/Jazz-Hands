@@ -161,11 +161,20 @@ public static class AppServices
             provider.GetRequiredService<IUiDispatcher>(),
             provider.GetRequiredService<IPreviewEngine>(),
             provider.GetRequiredService<PointPicker>()));
+        services.AddSingleton(provider =>
+        {
+            var previews = new EffectPreviewImages(provider.GetRequiredService<IUiDispatcher>());
+            previews.Start();
+            return previews;
+        });
+        services.AddSingleton<IEffectPreviewImages>(provider => provider.GetRequiredService<EffectPreviewImages>());
         services.AddSingleton(provider => new ViewModels.Effects.EffectsPanelViewModel(
             provider.GetRequiredService<ISession>(),
             provider.GetRequiredService<SelectionService>(),
             provider.GetRequiredService<IUiDispatcher>(),
-            provider.GetRequiredService<IEffectFavorites>()));
+            provider.GetRequiredService<IEffectFavorites>(),
+            provider.GetRequiredService<IEffectPreviewImages>(),
+            provider.GetRequiredService<IPreviewEngine>()));
 
         services.AddSingleton<MediaPanelViewModel>();
         services.AddSingleton<MetersPanelViewModel>(provider => new MetersPanelViewModel(

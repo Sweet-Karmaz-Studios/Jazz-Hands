@@ -5,6 +5,11 @@
 // the result is weighted by the two alphas, so a mode never affects pixels where either side is
 // transparent. Add is the one exception, a plain sum, because that is what a flare over black is
 // expected to do. The matte (t2), when there is one, scales the layer's coverage.
+//
+// An adjustment layer replaces rather than covers: its layer is the stack after its effects, so
+// the result is that picture blended with the stack by the mode, then mixed with the stack by the
+// opacity and the matte. A transform that shrinks the frame leaves transparency round it, as in
+// every editor; covering the old stack with it would leave the old stack showing.
 
 #include "Common.hlsli"
 
@@ -24,7 +29,7 @@ cbuffer CompositeConstants : register(b0)
     float Opacity;
     uint Mode;
     uint HasMatte;
-    float Padding;
+    uint Replace;       // 1 for an adjustment layer
 };
 
 Texture2D<float4> Destination : register(t0);
@@ -77,17 +82,8 @@ float3 Blend(float3 cb, float3 cs)
     }
 }
 
-float4 PsMain(FullScreenVertex input) : SV_TARGET
+float4 Mix(float4 destination, float4 layer)
 {
-    int3 texel = int3(input.Position.xy, 0);
-    float4 destination = Destination.Load(texel);
-    float4 layer = Layer.Load(texel) * Opacity;
-
-    if (HasMatte != 0)
-    {
-        layer *= Matte.Load(texel).a;
-    }
-
     if (Mode == BLEND_NORMAL)
     {
         return layer + destination * (1.0 - layer.a);
@@ -105,4 +101,19 @@ float4 PsMain(FullScreenVertex input) : SV_TARGET
 
     float3 rgb = (1.0 - da) * layer.rgb + (1.0 - sa) * destination.rgb + sa * da * Blend(cb, cs);
     return float4(rgb, sa + da - sa * da);
+}
+
+float4 PsMain(FullScreenVertex input) : SV_TARGET
+{
+    int3 texel = int3(input.Position.xy, 0);
+    float4 destination = Destination.Load(texel);
+    float coverage = Opacity * (HasMatte != 0 ? Matte.Load(texel).a : 1.0);
+
+    if (Replace != 0)
+    {
+        float4 adjusted = Layer.Load(texel);
+        return lerp(destination, Mode == BLEND_NORMAL ? adjusted : Mix(destination, adjusted), coverage);
+    }
+
+    return Mix(destination, Layer.Load(texel) * coverage);
 }
