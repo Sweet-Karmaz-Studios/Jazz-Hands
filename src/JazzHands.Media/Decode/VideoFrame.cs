@@ -64,6 +64,9 @@ public sealed unsafe class VideoFrame : IDisposable
     /// <summary>Colour signalling, carried from the stream so the compositor converts correctly.</summary>
     public ColorInfo Color { get; }
 
+    /// <summary>True when the decoder says this picture was coded on its own, needing no other.</summary>
+    public bool IsKeyframe => _frame is not null && (_frame.Handle->flags & ffmpeg.AV_FRAME_FLAG_KEY) != 0;
+
     /// <summary>True when this frame is still usable.</summary>
     public bool IsValid => _frame is not null;
 

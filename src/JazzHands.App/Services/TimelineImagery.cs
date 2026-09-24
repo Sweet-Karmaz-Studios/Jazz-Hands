@@ -30,13 +30,26 @@ public sealed class TimelineImagery : ITimelineImagery
     private readonly HashSet<(string Clip, string Hash, long Spacing)> _prefetched = [];
 
     /// <summary>Imagery over the editor's caches.</summary>
-    public TimelineImagery(ISession session, CachedThumbnails media)
+    public TimelineImagery(ISession session, CachedThumbnails media, IUiDispatcher? ui = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(media);
 
         _session = session;
         _media = media;
+
+        // A clip named in a change may have been trimmed out over source that was never
+        // prefetched: its whole range is asked for again the next time it is drawn.
+        _session.ProjectChanged += (_, e) =>
+        {
+            if (e.ChangedIds.IsDefaultOrEmpty)
+            {
+                return;
+            }
+
+            HashSet<string> changed = [.. e.ChangedIds];
+            (ui ?? new InlineDispatcher()).Post(() => _prefetched.RemoveWhere(key => changed.Contains(key.Clip)));
+        };
     }
 
     /// <inheritdoc />

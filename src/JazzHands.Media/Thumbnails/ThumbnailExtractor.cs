@@ -40,6 +40,9 @@ public sealed unsafe class ThumbnailExtractor : IDisposable
     /// <summary>The height thumbnails are taken at: sharp on a 2x display in a 80 pixel track.</summary>
     public const int DefaultHeight = 160;
 
+    /// <summary>Frames ahead of the last picture that are decoded to rather than looked for at a keyframe.</summary>
+    private const int NearlyThere = 4;
+
     private readonly Demuxer _demuxer;
     private readonly VideoDecoder _decoder;
     private readonly Seeker _seeker;
@@ -50,6 +53,8 @@ public sealed unsafe class ThumbnailExtractor : IDisposable
     private ScalerKey _scalerFor;
     private JpegWriter? _writer;
     private Flicks? _last;
+    private Flicks? _keyframe;
+    private Flicks _group;
     private bool _disposed;
 
     /// <summary>Opens a stream to take thumbnails of.</summary>
@@ -146,19 +151,34 @@ public sealed unsafe class ThumbnailExtractor : IDisposable
 
     private VideoFrame? Decode(Flicks time, Flicks tolerance)
     {
-        // Just ahead of the last one: decoding on is cheaper than any seek, and the seeker does
-        // that by itself for an exact request inside its forward window.
-        bool ahead = _last is { } last
-            && time > last
-            && (time - last).ToFrames(_frameRate, RoundingMode.Ceiling) <= _seeker.MaxForwardDecodeFrames;
+        long framesAhead = _last is { } last && time > last
+            ? (time - last).ToFrames(_frameRate, RoundingMode.Ceiling)
+            : long.MaxValue;
+
+        // Just ahead of the last one, decoding on is cheaper than a seek, and the seeker does that
+        // by itself for an exact request inside its forward window. With a tolerance it is only
+        // worth it a few frames ahead, or when no keyframe can lie between here and the time (the
+        // group the last picture came from runs past it): otherwise a keyframe within the
+        // tolerance is one decode where decoding on can be forty.
+        bool sameGroup = _keyframe is { } keyframe
+            && _group > Flicks.Zero
+            && time < keyframe + _group
+            && time - keyframe > tolerance;
+
+        bool ahead = tolerance > Flicks.Zero
+            ? framesAhead <= NearlyThere || (sameGroup && framesAhead <= _seeker.MaxForwardDecodeFrames)
+            : framesAhead <= _seeker.MaxForwardDecodeFrames;
 
         if (!ahead && tolerance > Flicks.Zero)
         {
             VideoFrame? nearest = _seeker.Seek(time, SeekMode.Nearest);
             if (nearest is null)
             {
+                _keyframe = null;
                 return _seeker.Seek(time);
             }
+
+            Learn(nearest.Pts);
 
             // A keyframe can present a frame or two after the time asked for when the stream
             // reorders, which is as good as before it.
@@ -170,8 +190,28 @@ public sealed unsafe class ThumbnailExtractor : IDisposable
 
             nearest.Dispose();
         }
+        else if (!ahead)
+        {
+            // An exact seek lands on a keyframe this does not see.
+            _keyframe = null;
+        }
 
         return _seeker.Seek(time);
+    }
+
+    /// <summary>
+    /// Notes a keyframe the seeker landed on, and the shortest distance seen between two, which is
+    /// the file's group length as far as anyone can tell without scanning it.
+    /// </summary>
+    private void Learn(Flicks keyframe)
+    {
+        if (_keyframe is { } previous && previous != keyframe)
+        {
+            Flicks apart = keyframe > previous ? keyframe - previous : previous - keyframe;
+            _group = _group > Flicks.Zero ? Flicks.Min(_group, apart) : apart;
+        }
+
+        _keyframe = keyframe;
     }
 
     private Thumbnail Encode(VideoFrame frame)

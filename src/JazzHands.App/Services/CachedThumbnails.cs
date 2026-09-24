@@ -72,6 +72,7 @@ public sealed class CachedThumbnails : IMediaImagery, IDisposable
 
         _thumbnails.Ready += OnReady;
         _waveforms.Ready += OnReady;
+        _session.ProjectChanged += OnProjectChanged;
     }
 
     /// <inheritdoc />
@@ -161,6 +162,29 @@ public sealed class CachedThumbnails : IMediaImagery, IDisposable
     {
         _thumbnails.Ready -= OnReady;
         _waveforms.Ready -= OnReady;
+        _session.ProjectChanged -= OnProjectChanged;
+    }
+
+    /// <summary>
+    /// A media item named in a change may have moved (a relink keeps the content and so the hash,
+    /// but not the path): its sources are worked out again. What was cached under its hash is
+    /// still right and stays.
+    /// </summary>
+    private void OnProjectChanged(object? sender, Engine.Commands.ProjectChangedEventArgs e)
+    {
+        if (e.ChangedIds.IsDefaultOrEmpty)
+        {
+            return;
+        }
+
+        HashSet<string> changed = [.. e.ChangedIds];
+        _ui.Post(() =>
+        {
+            foreach (var key in _sources.Keys.Where(key => changed.Contains(key.Id)).ToList())
+            {
+                _sources.Remove(key);
+            }
+        });
     }
 
     private CacheSource? Video(MediaItem item, int streamIndex) => Source(item, streamIndex, audio: false);

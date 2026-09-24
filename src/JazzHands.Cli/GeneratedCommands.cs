@@ -115,6 +115,9 @@ public static class GeneratedCommands
             {
                 Description = parameter.Description,
                 Required = parameter.IsRequired,
+
+                // A switch on its own means true: --auto rather than --auto true, which still works.
+                Arity = IsSwitch(parameter) ? ArgumentArity.ZeroOrOne : ArgumentArity.ExactlyOne,
             };
 
             options[parameter.CliName] = option;
@@ -130,6 +133,14 @@ public static class GeneratedCommands
 
         return verb;
     }
+
+    /// <summary>A true or false option, which may be given on its own.</summary>
+    private static bool IsSwitch(ParameterMetadata parameter) =>
+        (Nullable.GetUnderlyingType(parameter.Type) ?? parameter.Type) == typeof(bool);
+
+    /// <summary>An option's text: what was typed after it, "true" for a switch given alone, or null when it was not given.</summary>
+    private static string? ValueOf(System.CommandLine.ParseResult parse, Option<string> option) =>
+        parse.GetValue(option) ?? (parse.GetResult(option) is not null && option.Arity.MinimumNumberOfValues == 0 ? "true" : null);
 
     private static int Run(
         CommandMetadata metadata,
@@ -162,7 +173,7 @@ public static class GeneratedCommands
             object built = CommandRegistry.FromCommandLine(
                 metadata.Name,
                 [.. arguments.Select(argument => parse.GetValue(argument)).Where(value => value is not null)!],
-                options.ToDictionary(pair => pair.Key, pair => parse.GetValue(pair.Value), StringComparer.Ordinal),
+                options.ToDictionary(pair => pair.Key, pair => ValueOf(parse, pair.Value), StringComparer.Ordinal),
                 frameRate);
 
             using ServiceProvider services = new ServiceCollection().AddJazzHandsEngine().BuildServiceProvider();

@@ -81,6 +81,7 @@ public static class ScrubBenchmark
     /// <param name="useHardware">False to force the software decoder.</param>
     /// <param name="seed">The random seed, so a run is repeatable.</param>
     /// <param name="cacheBudgetBytes">What the frame cache may hold.</param>
+    /// <param name="proxy">Scrub the file's half size proxy instead, making it first if the cache has none.</param>
     public static ScrubBenchmarkResult Run(
         string path,
         int requests = 200,
@@ -88,7 +89,8 @@ public static class ScrubBenchmark
         int seed = 20260923,
         ScrubPattern pattern = ScrubPattern.Random,
         SeekMode mode = SeekMode.Exact,
-        long cacheBudgetBytes = FrameCache.DefaultBudgetBytes)
+        long cacheBudgetBytes = FrameCache.DefaultBudgetBytes,
+        bool proxy = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(requests);
@@ -124,6 +126,19 @@ public static class ScrubBenchmark
         var times = new List<double>(requests);
         int served = 0;
         string decodePath = "software";
+
+        using CacheManager? cache = proxy ? new CacheManager() : null;
+        if (cache is not null)
+        {
+            // The proxy lives in the per-user cache like any other, so a second run reuses it.
+            var proxies = new Engine.Caching.ProxyService(cache) { Enabled = true };
+            if (proxies.Find(item.Hash) is null)
+            {
+                proxies.Generate(item, System.IO.Path.GetFullPath(path), Core.Export.ProxyPresets.Find(Core.Export.ProxyPresets.Default)!, Core.Export.ProxyPresets.DefaultScale, queue: null);
+            }
+
+            server.Substitute = proxies.Substitute;
+        }
 
         // One warm-up so the first measurement is not paying for the decoder being opened.
         server.GetSourceFrame(project, clip, Flicks.Zero);
@@ -184,7 +199,7 @@ public static class ScrubBenchmark
         times.Sort();
 
         return new ScrubBenchmarkResult(
-            System.IO.Path.GetFileName(path),
+            proxy ? System.IO.Path.GetFileName(path) + " (proxy)" : System.IO.Path.GetFileName(path),
             decodePath,
             $"{pattern.ToString().ToLowerInvariant()}, {mode.ToString().ToLowerInvariant()}",
             device.AdapterName,

@@ -67,7 +67,61 @@ namespace JazzHands.Cli
             perf.Subcommands.Add(BuildScrubBenchmarkCommand());
             perf.Subcommands.Add(BuildAudioBenchmarkCommand());
             perf.Subcommands.Add(BuildPlaybackBenchmarkCommand());
+            perf.Subcommands.Add(BuildThumbnailBenchmarkCommand());
             return perf;
+        }
+
+        private static Command BuildThumbnailBenchmarkCommand()
+        {
+            var file = new Argument<FileInfo>("file") { Description = "A media file with a picture." };
+            var zoom = new Option<double[]>("--zoom")
+            {
+                Description = "Pixels per second to measure at, repeatable. The fit zoom and 40 when left out.",
+                AllowMultipleArgumentsPerToken = true,
+            };
+
+            var command = new Command(
+                "thumbs",
+                "Time a clip's thumbnails and waveform from a cold cache: visible, whole strip, and sound.")
+            {
+                file,
+                zoom,
+            };
+
+            command.SetAction(parseResult =>
+            {
+                FileInfo target = parseResult.GetValue(file)!;
+                if (!target.Exists)
+                {
+                    Console.Error.WriteLine($"jazz: '{target.FullName}' does not exist.");
+                    return ExitCode.CommandError;
+                }
+
+                LogSetup.ConfigureForCli(parseResult.GetValue(VerboseOption) ? LogEventLevel.Debug : LogEventLevel.Warning);
+
+                try
+                {
+                    ThumbnailBenchmarkResult result = ThumbnailBenchmark.Run(target.FullName, parseResult.GetValue(zoom));
+
+                    Console.Out.WriteLine(parseResult.GetValue(JsonOption)
+                        ? System.Text.Json.JsonSerializer.Serialize(result, JazzHands.Core.Serialization.JazzJson.Options)
+                        : ThumbnailBenchmark.Describe(result));
+
+                    return ExitCode.Ok;
+                }
+                catch (JazzHands.Media.Interop.FfmpegException ex)
+                {
+                    Console.Error.WriteLine($"jazz: {ex.Message}");
+                    return ExitCode.MediaError;
+                }
+                catch (InvalidOperationException ex)
+                {
+                    Console.Error.WriteLine($"jazz: {ex.Message}");
+                    return ExitCode.CommandError;
+                }
+            });
+
+            return command;
         }
 
         private static Command BuildPlaybackBenchmarkCommand()
@@ -334,6 +388,10 @@ namespace JazzHands.Cli
             {
                 Description = "Take the nearest keyframe instead of the exact frame, the way shuttling does.",
             };
+            var proxy = new Option<bool>("--proxy")
+            {
+                Description = "Scrub the file's half size proxy, making it first (in the cache) if there is none.",
+            };
 
             var command = new Command(
                 "scrub",
@@ -346,6 +404,7 @@ namespace JazzHands.Cli
                 drag,
                 reverse,
                 nearest,
+                proxy,
             };
 
             command.SetAction(parseResult =>
@@ -374,7 +433,8 @@ namespace JazzHands.Cli
                             : parseResult.GetValue(drag) ? ScrubPattern.Drag : ScrubPattern.Random,
                         mode: parseResult.GetValue(nearest)
                             ? JazzHands.Media.Decode.SeekMode.Nearest
-                            : JazzHands.Media.Decode.SeekMode.Exact);
+                            : JazzHands.Media.Decode.SeekMode.Exact,
+                        proxy: parseResult.GetValue(proxy));
 
                     Console.Out.WriteLine(parseResult.GetValue(JsonOption)
                         ? System.Text.Json.JsonSerializer.Serialize(result, JazzHands.Core.Serialization.JazzJson.Options)

@@ -47,6 +47,12 @@ public sealed class ThumbnailService : IDisposable
     public const int MemoryCapacity = 4000;
 
     private static readonly Flicks ChunkLength = Flicks.FromSeconds(4);
+
+    /// <summary>
+    /// How far before its time a first, rough picture may be: longer than the keyframe interval
+    /// of almost anything recorded (OBS two seconds, phones one, cameras up to five).
+    /// </summary>
+    private static readonly Flicks CoarseTolerance = Flicks.FromSeconds(5);
     private static readonly long WantedFor = Stopwatch.Frequency / 2;
 
     private readonly CacheManager _cache;
@@ -128,7 +134,8 @@ public sealed class ThumbnailService : IDisposable
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(spacing.Value, 0L);
 
         var found = new List<ThumbnailImage>();
-        List<Flicks>? wanted = null;
+        List<Flicks>? missing = null;
+        List<Flicks>? rough = null;
         Flicks tolerance = ToleranceFor(spacing);
 
         foreach (Flicks time in Grid(source, spacing, from, to))
@@ -141,15 +148,32 @@ public sealed class ThumbnailService : IDisposable
 
             if (image is not null)
             {
+                // A picture from a coarser pass is shown while the exact one is made.
                 found.Add(image);
+                (rough ??= []).Add(time);
             }
-
-            (wanted ??= []).Add(time);
+            else
+            {
+                (missing ??= []).Add(time);
+            }
         }
 
-        if (wanted is not null)
+        if (missing is not null && tolerance < CoarseTolerance)
         {
-            Queue(source, spacing, tolerance, wanted, priority);
+            // Nothing at all yet: a keyframe first, at the priority asked for, so the strip fills
+            // in at keyframe speed; the exact frames follow a step down. At a fine zoom on long
+            // groups of pictures the exact frame is dozens of decodes and the keyframe is one.
+            Queue(source, spacing, CoarseTolerance, missing, priority);
+            Queue(source, spacing, tolerance, missing, Later(priority));
+        }
+        else if (missing is not null)
+        {
+            Queue(source, spacing, tolerance, missing, priority);
+        }
+
+        if (rough is not null)
+        {
+            Queue(source, spacing, tolerance, rough, priority);
         }
 
         return found;
@@ -248,6 +272,9 @@ public sealed class ThumbnailService : IDisposable
 
         return null;
     }
+
+    private static WorkPriority Later(WorkPriority priority) =>
+        priority == WorkPriority.Visible ? WorkPriority.Near : WorkPriority.Idle;
 
     private static bool Within(ThumbnailImage image, Flicks time, Flicks tolerance) =>
         (image.FrameTime <= time ? time - image.FrameTime : image.FrameTime - time) <= tolerance;

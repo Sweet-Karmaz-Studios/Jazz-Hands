@@ -38,7 +38,7 @@ public enum WorkPriority
 /// </remarks>
 public sealed class WorkQueue : IDisposable
 {
-    private static readonly TimeSpan IdleClose = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan IdleClose = TimeSpan.FromSeconds(2);
 
     private readonly ILogger _log = Log.ForContext<WorkQueue>();
     private readonly object _gate = new();
@@ -48,6 +48,8 @@ public sealed class WorkQueue : IDisposable
     private readonly Thread[] _threads;
     private readonly CancellationTokenSource _stop = new();
     private long _order;
+    private long _release;
+    private int _released;
     private bool _disposed;
 
     /// <summary>Starts the workers.</summary>
@@ -179,6 +181,41 @@ public sealed class WorkQueue : IDisposable
         }
     }
 
+    /// <summary>
+    /// Has every worker close what it holds open (the files its decoders have open, above all)
+    /// and waits until they have. A busy worker closes when its current item is done.
+    /// </summary>
+    /// <remarks>
+    /// Windows will not move, rename or delete a file FFmpeg has open, and a worker keeps its
+    /// decoders for a couple of seconds after its last item so a burst of work opens each file
+    /// once. Anything about to move a media file, and the tests that do, call this first.
+    /// </remarks>
+    /// <returns>False when a worker was still busy at the timeout.</returns>
+    public bool Release(TimeSpan timeout)
+    {
+        DateTime deadline = DateTime.UtcNow + timeout;
+
+        lock (_gate)
+        {
+            _release++;
+            _released = 0;
+            Monitor.PulseAll(_gate);
+
+            while (_released < _threads.Length)
+            {
+                TimeSpan left = deadline - DateTime.UtcNow;
+                if (left <= TimeSpan.Zero || _disposed)
+                {
+                    return false;
+                }
+
+                Monitor.Wait(_gate, left);
+            }
+
+            return true;
+        }
+    }
+
     /// <summary>Waits until nothing is waiting or running, for tests and benchmarks.</summary>
     /// <returns>False on timeout.</returns>
     public bool WaitIdle(TimeSpan timeout)
@@ -228,11 +265,12 @@ public sealed class WorkQueue : IDisposable
     private void Run()
     {
         using var context = new WorkerContext();
+        long released = 0;
         CancellationToken stopping = _stop.Token;
 
         while (true)
         {
-            Item? item = Take(context);
+            Item? item = Take(context, ref released);
             if (item is null)
             {
                 return;
@@ -274,7 +312,7 @@ public sealed class WorkQueue : IDisposable
     }
 
     /// <summary>The next item worth doing, waiting for one; null on shutdown.</summary>
-    private Item? Take(WorkerContext context)
+    private Item? Take(WorkerContext context, ref long released)
     {
         lock (_gate)
         {
@@ -283,6 +321,14 @@ public sealed class WorkQueue : IDisposable
                 if (_disposed)
                 {
                     return null;
+                }
+
+                if (released != _release)
+                {
+                    context.Clear();
+                    released = _release;
+                    _released++;
+                    Monitor.PulseAll(_gate);
                 }
 
                 while (_queue.TryDequeue(out Item? item, out _))

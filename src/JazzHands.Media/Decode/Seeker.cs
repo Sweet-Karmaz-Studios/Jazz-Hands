@@ -38,6 +38,9 @@ public sealed class Seeker : IVideoSource
     /// </summary>
     private const int InitialBackoffFrames = 8;
 
+    /// <summary>Keyframes in a row that mark a stream as intra only.</summary>
+    private const int IntraOnlyAfter = 8;
+
     private readonly ILogger _log = Log.ForContext<Seeker>();
     private readonly Demuxer _demuxer;
     private readonly VideoDecoder _decoder;
@@ -47,6 +50,7 @@ public sealed class Seeker : IVideoSource
 
     private VideoFrame? _pending;
     private long _currentFrameIndex = -1;
+    private int _keyframeRun;
     private bool _disposed;
 
     /// <summary>Wraps an existing demuxer and decoder. Neither is owned.</summary>
@@ -78,6 +82,12 @@ public sealed class Seeker : IVideoSource
 
     /// <summary>Seeks performed. Compare with <see cref="FramesDiscarded"/> when tuning.</summary>
     public long Seeks { get; private set; }
+
+    /// <summary>
+    /// True once the last several pictures decoded were all keyframes, which is how an intra-only
+    /// stream shows itself without a scan.
+    /// </summary>
+    public bool IsIntraOnly => _keyframeRun >= IntraOnlyAfter;
 
     /// <summary>Opens a file and builds a seeker over its best video stream.</summary>
     public static Seeker Open(string path, HardwareDeviceContext? hardware = null, int poolDepth = 4)
@@ -126,10 +136,13 @@ public sealed class Seeker : IVideoSource
         }
 
         // Decoding forward is cheaper than a seek when the target is just ahead, which is what
-        // playback and single-frame stepping look like.
+        // playback and single-frame stepping look like. Not when every picture is a keyframe (a
+        // proxy, ProRes, DNxHR, an image run): then a seek is one decode and decoding on is as
+        // many as the frames skipped.
+        int window = IsIntraOnly ? 1 : MaxForwardDecodeFrames;
         bool canDecodeForward = _currentFrameIndex >= 0
             && targetFrame > _currentFrameIndex
-            && targetFrame - _currentFrameIndex <= MaxForwardDecodeFrames;
+            && targetFrame - _currentFrameIndex <= window;
 
         return canDecodeForward ? ScanForwardTo(targetFrame) : SeekBackThenScan(target, targetFrame);
     }
@@ -177,6 +190,7 @@ public sealed class Seeker : IVideoSource
         if (frame is not null)
         {
             _currentFrameIndex = frame.Pts.ToFrames(_frameRate, RoundingMode.Nearest);
+            _keyframeRun = frame.IsKeyframe ? Math.Min(_keyframeRun + 1, IntraOnlyAfter) : 0;
         }
 
         return frame;

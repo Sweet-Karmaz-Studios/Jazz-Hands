@@ -121,7 +121,8 @@ public static class AppServices
         services.AddSingleton<IMediaImagery>(provider => provider.GetRequiredService<CachedThumbnails>());
         services.AddSingleton<Controls.Timeline.ITimelineImagery>(provider => new TimelineImagery(
             provider.GetRequiredService<ISession>(),
-            provider.GetRequiredService<CachedThumbnails>()));
+            provider.GetRequiredService<CachedThumbnails>(),
+            provider.GetRequiredService<IUiDispatcher>()));
 
         services.AddSingleton(provider => new TimelineDocuments(
             provider.GetRequiredService<ISession>(),

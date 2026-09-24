@@ -53,6 +53,7 @@ public sealed class ExportQueue : IExportService, IDisposable
     private readonly ExportEnvironment _environment;
     private readonly TimeProvider _clock;
     private readonly Lock _gate = new();
+    private bool _busy;
     private readonly List<Job> _jobs = [];
     private readonly SemaphoreSlim _wake = new(0);
     private readonly CancellationTokenSource _shutdown = new();
@@ -223,7 +224,7 @@ public sealed class ExportQueue : IExportService, IDisposable
         {
             lock (_gate)
             {
-                if (_jobs.All(job => job.IsFinished))
+                if (!_busy && _jobs.All(job => job.IsFinished))
                 {
                     return true;
                 }
@@ -272,6 +273,7 @@ public sealed class ExportQueue : IExportService, IDisposable
                 if (next is not null)
                 {
                     next.State = ExportJobState.Running;
+                    _busy = true;
                     Update(next);
                 }
             }
@@ -292,6 +294,13 @@ public sealed class ExportQueue : IExportService, IDisposable
 
             Raise(next);
             RunOne(next);
+
+            // Only now, with the last Changed delivered, is the queue idle: a listener that
+            // waited for idle and then read its own state would otherwise still see Running.
+            lock (_gate)
+            {
+                _busy = false;
+            }
         }
     }
 
