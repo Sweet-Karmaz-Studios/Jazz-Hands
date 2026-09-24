@@ -164,6 +164,7 @@ public static class ProjectRepair
 
         var clipIds = new HashSet<string>(track.Clips.Select(clip => clip.Id), StringComparer.Ordinal);
         var kept = ImmutableArray.CreateBuilder<Transition>(track.Transitions.Length);
+        var cuts = new HashSet<(string Left, string Right)>();
 
         for (int index = 0; index < track.Transitions.Length; index++)
         {
@@ -187,7 +188,7 @@ public static class ProjectRepair
                 continue;
             }
 
-            if (kept.Any(other => other.LeftClipId == transition.LeftClipId && other.RightClipId == transition.RightClipId))
+            if (!cuts.Add((transition.LeftClipId, transition.RightClipId)))
             {
                 actions.Add(new RepairAction(
                     "duplicate-transition",
