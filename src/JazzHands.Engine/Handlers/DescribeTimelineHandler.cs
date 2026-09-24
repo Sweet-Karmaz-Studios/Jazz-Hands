@@ -2,9 +2,11 @@ using System.Collections.Immutable;
 using System.Globalization;
 using System.Text;
 using JazzHands.Core.Commands;
+using JazzHands.Core.Effects;
 using JazzHands.Core.Model;
 using JazzHands.Core.Queries;
 using JazzHands.Core.Time;
+using JazzHands.Core.Titles;
 using JazzHands.Core.Validation;
 using JazzHands.Engine.Commands;
 using JazzHands.Engine.Effects;
@@ -178,6 +180,22 @@ public sealed class DescribeTimelineHandler : IQueryHandler<DescribeTimelineQuer
         }
     }
 
+    /// <summary>What a title says, in what, and how it comes and goes: what somebody reading the edit wants of one.</summary>
+    private static void AppendTitle(StringBuilder text, Clip clip)
+    {
+        Effect? own = clip.Effects.FirstOrDefault(effect => EffectChains.IsOwnParameters(clip, effect));
+        string Constant(string name, string fallback) => own?.Parameter(name) is StaticValue { Value: var value } ? value.ToString() ?? fallback : fallback;
+
+        string words = own?.Parameter(TitleParams.Text) is KeyframedValue
+            ? "(keyframed)"
+            : string.Join(" / ", TitleMarkup.PlainText(Constant(TitleParams.Text, "Title")).Split('\n', StringSplitOptions.TrimEntries));
+        TitleAnimation animation = TitleAnimations.Read(own, clip.Duration);
+        string Moves(string name, Flicks length) => name == TitleAnimations.None ? "none" : string.Create(CultureInfo.InvariantCulture, $"{name} {length.ToSeconds():0.##}s");
+
+        text.Append(CultureInfo.InvariantCulture,
+            $"         title \"{words}\", {Constant(TitleParams.Font, "Segoe UI")} {Constant(TitleParams.Weight, "bold")} {Constant(TitleParams.Size, "96")}px, in {Moves(animation.In, animation.InDuration)}, out {Moves(animation.Out, animation.OutDuration)}\n");
+    }
+
     private static void AppendClip(StringBuilder text, Project project, Clip clip, Rational fps, bool full, bool audio)
     {
         text.Append(CultureInfo.InvariantCulture,
@@ -213,7 +231,13 @@ public sealed class DescribeTimelineHandler : IQueryHandler<DescribeTimelineQuer
         text.Append(CultureInfo.InvariantCulture,
             $", in {Timecode.Format(clip.SourceIn, fps)} out {Timecode.Format(clip.SourceOut, fps)}\n");
 
-        foreach (Effect effect in clip.Effects)
+        if (string.Equals(clip.GeneratorId, TitleParams.GeneratorId, StringComparison.Ordinal))
+        {
+            AppendTitle(text, clip);
+        }
+
+        // A generator's own parameters are what it is, not an effect on it.
+        foreach (Effect effect in EffectChains.Visible(clip, clip.Effects))
         {
             text.Append(CultureInfo.InvariantCulture,
                 $"         effect {effect.TypeId}{(effect.Enabled ? string.Empty : " (bypassed)")}\n");

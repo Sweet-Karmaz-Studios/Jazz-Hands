@@ -867,6 +867,54 @@ Errors: `not-adjacent`, `transition-exists`, `transition-not-found`, `wrong-tran
 Validation warns `insufficient-handles` and `transition-longer-than-clip`, and `timeline
 describe` says where each transition plays and what is wrong with it.
 
+### Titles and fonts (Phase 19)
+
+A title is a `gen.title` generator clip. `title add` makes one from a preset (its look, place,
+length and animations, written for 1080 lines and scaled to the sequence), and any option changes
+what it names. Without `--track` it goes on the highest video track free for its length, or on a
+new track on top. Every option is a parameter of `gen.title`, which `title set-style`,
+`param set` and keyframes reach later; `jazz effect list --search gen.title` lists them all.
+
+The text is markup: `[b]`, `[i]`, `[u]`, `[color=#FFCC00]`, `[size=48]` (sequence pixels) and
+`[font=Bahnschrift]`, each closed by `[/b]` and so on; `\n` is a new line, `\[` a bracket.
+
+```bash
+jazz title add trailer.jazz --at 00:00:04.000 --preset lower-third --text "Alex Rivera\n[size=34]Lead designer[/size]"
+jazz title add trailer.jazz --at 20s --text "Wishlist [color=#FFD24D]now[/color]" --preset end-card --dur 4s
+jazz title add trailer.jazz --at 1s --text "BIG MOMENT" --preset caption-bold --stroke "8 #000000" --anim-in scale
+jazz title set-text trailer.jazz <clip> "Press [E] to start" --plain
+jazz title set-style trailer.jazz <clip> --font Bahnschrift --weight black --align left --position "-816, 400"
+jazz title set-animation trailer.jazz <clip> --in typewriter --in-dur 1.2s --out fade
+jazz title measure trailer.jazz <clip>
+jazz title list-presets trailer.jazz
+jazz fonts list trailer.jazz --search bahn
+```
+
+| Verb | Does |
+|---|---|
+| `title add --at t [--text] [--preset] [--dur] [--track] [--font] [--size] [--color] [--align] [--box] [--shadow] [--stroke] [--anim-in] [--anim-out] [--name] [--id] [--sequence]` | A title from a preset (`title-card` when left out). `--stroke` is a width, then optionally a colour: `4` or `4 #000000`. `--align` takes `centre` or `center`. The clip is named after the first line of its text unless `--name` says otherwise. |
+| `title set-text <clip> <text> [--plain]` | What it says. `--plain` takes the text exactly as typed, a bracket being a bracket. A title still named after its text is renamed with it. Consecutive changes to one title merge into one undo step. |
+| `title set-style <clip> [--preset] [--font] [--weight] [--italic] [--size] [--color] [--align] [--valign] [--position] [--width] [--line-spacing] [--tracking] [--stroke] [--box] [--box-padding] [--box-radius] [--shadow] [--shadow-offset] [--shadow-blur]` | Its look. A preset restyles it first (look and place, not text or animation), the options over that. A keyframed parameter is refused, as `param set` refuses it. |
+| `title set-animation <clip> [--in] [--in-dur] [--out] [--out-dur]` | How it comes in and goes out: `none`, `fade`, `slide-left`, `slide-right`, `slide-up`, `slide-down`, `scale`, `typewriter`, `word-reveal`, `blur` or `wipe`. The animation becomes keyframes on the title's own channels (`fade`, `offset`, `zoom`, `blur`, `reveal`), replacing what was there; what is left out stays. |
+| `title measure <clip> [--at]` | Where its text sits on the frame, laid out as it is drawn: the block, the lines, the box, the box's corners after every transform, and whether it stays inside title safe (the middle 90%). At the clip's middle when `--at` is left out. |
+| `title list-presets` | Every preset, built in or your own, with what it sets. |
+| `fonts list [--search]` | The families a title can use: the project's `fonts` folder first, then those installed. |
+
+Presets: `title-card`, `lower-third`, `end-card`, `caption`, `caption-bold` and `subtitle`. Your
+own are `.json` files in `%APPDATA%\JazzHands\titles` in the same format (`name`, `label`,
+`description`, `text`, `duration`, `animation { in, inDuration, out, outDuration }`, `params`
+as command-line text for a 1080 line frame); one with a built-in's name replaces it.
+
+Fonts: a `fonts` folder beside the project file (`.ttf`, `.otf`, `.ttc`, `.otc`) is read before
+the installed fonts, so a project takes its look to another machine. A family that is in neither
+is drawn in Segoe UI, and `jazz validate` and `timeline describe` warn `missing-font` with the
+clip.
+
+Errors: `unknown-preset`, `not-a-title`, `param-animated`, `invalid-value`, `would-overlap`,
+`wrong-track-kind`, `empty-clip`, `empty-title` (measuring a title with no text),
+`time-out-of-range`, `track-locked`. `timeline describe --detail full` shows each title's text,
+font, size and animations.
+
 ### Keys
 
 The editor's editing keys are bindings to these same commands, kept in a keymap. The defaults:
