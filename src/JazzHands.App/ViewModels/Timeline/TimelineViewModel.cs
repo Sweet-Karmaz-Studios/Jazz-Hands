@@ -350,7 +350,7 @@ public sealed partial class TimelineViewModel : DocumentViewModel
 
     private void ApplySelection()
     {
-        ImmutableHashSet<string> selected = [.. _selection.Ids.Where(id => Content.Clip(id) is not null || IsMarker(id))];
+        ImmutableHashSet<string> selected = [.. _selection.Ids.Where(id => Content.Clip(id) is not null || Content.Transition(id) is not null || IsMarker(id))];
         selected = selected.WithComparer(StringComparer.Ordinal);
 
         if (selected.SetEquals(Selected))

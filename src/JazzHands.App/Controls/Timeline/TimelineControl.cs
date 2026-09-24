@@ -750,9 +750,42 @@ public sealed class TimelineControl : FrameworkElement
                     }
                 }
             }
+
+            foreach (TransitionView bar in track.Transitions)
+            {
+                if (bar.End >= visibleStart && bar.Start <= visibleEnd)
+                {
+                    DrawTransition(dc, geometry.TransitionBand(row, bar.Start, bar.End), bar);
+                }
+            }
         }
 
         dc.Pop();
+    }
+
+    /// <summary>
+    /// A transition's bar: a pale band with the diagonal every editor marks one with, its name when
+    /// it fits, and a warning stripe along the top when a clip is short of source for it.
+    /// </summary>
+    private void DrawTransition(DrawingContext dc, Rect band, TransitionView bar)
+    {
+        Palette palette = _palette!;
+        dc.DrawRoundedRectangle(palette.Transition, palette.TransitionEdge, band, 2.0, 2.0);
+        dc.DrawLine(palette.TransitionLine, band.BottomLeft, band.TopRight);
+
+        if (bar.Holds)
+        {
+            dc.DrawRectangle(palette.Warning, null, new Rect(band.Left, band.Top, band.Width, 2.0));
+        }
+
+        if (band.Width > 48 && band.Height >= 12)
+        {
+            TextDrawing label = ClipLabel(bar.Name, palette.ClipText);
+            double room = band.Width - (LabelPadding * 2);
+            dc.PushClip(new RectangleGeometry(new Rect(band.Left + LabelPadding, band.Top, Math.Max(0, room), band.Height)));
+            DrawTextAt(dc, label, band.Left + LabelPadding, band.Top + ((band.Height - ClipFontSize) / 2.0) - 2.0);
+            dc.Pop();
+        }
     }
 
     private static IEnumerable<ClipView> Visible(TrackView track, Flicks start, Flicks end)
@@ -890,6 +923,13 @@ public sealed class TimelineControl : FrameworkElement
 
         foreach (string id in model.Selected)
         {
+            if (model.Content.Transition(id) is { } bar && geometry.Row(bar.TrackId) is { } barRow)
+            {
+                Rect band = geometry.TransitionBand(barRow, bar.Start, bar.End);
+                dc.DrawRoundedRectangle(null, palette.SelectionPen, band, 2.0, 2.0);
+                continue;
+            }
+
             if (model.Content.Clip(id) is not { } clip || geometry.Row(clip.TrackId) is not { } row)
             {
                 continue;
@@ -1036,6 +1076,10 @@ public sealed class TimelineControl : FrameworkElement
             PlayheadPen = Frozen(new Pen(Playhead, 1.0));
             GuidePen = Frozen(new Pen(Find("Brush.Warning", Color.FromRgb(0xF2, 0xC1, 0x4E)), 1.0));
             EditPen = Frozen(new Pen(Find("Brush.Accent", Color.FromRgb(0x4C, 0x9A, 0xFF)), 4.0));
+            Transition = Faded(Find("Brush.Timeline.Transition", Color.FromRgb(0xD8, 0xD8, 0xE8)), 0.55);
+            TransitionEdge = Frozen(new Pen(Faded(Find("Brush.Text.Primary", Color.FromRgb(0xE6, 0xE6, 0xE6)), 0.8), 1.0));
+            TransitionLine = Frozen(new Pen(Faded(Find("Brush.Background.Base", Color.FromRgb(0x1B, 0x1B, 0x1B)), 0.45), 1.0));
+            Warning = Find("Brush.Warning", Color.FromRgb(0xF2, 0xC1, 0x4E));
         }
 
         public Brush Background { get; }
@@ -1063,6 +1107,14 @@ public sealed class TimelineControl : FrameworkElement
         public Pen GuidePen { get; }
 
         public Pen EditPen { get; }
+
+        public Brush Transition { get; }
+
+        public Pen TransitionEdge { get; }
+
+        public Pen TransitionLine { get; }
+
+        public Brush Warning { get; }
 
         public Brush ClipText { get; }
 

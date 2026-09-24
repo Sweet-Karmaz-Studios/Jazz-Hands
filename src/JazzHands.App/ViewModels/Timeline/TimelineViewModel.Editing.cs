@@ -55,12 +55,14 @@ public sealed record TimelineGhost(ImmutableArray<GhostClip> Clips, string? Refu
 /// <param name="Edge">Which edge of that clip is near enough to trim, if any.</param>
 /// <param name="MarkerId">The marker under it, in the marker lane.</param>
 /// <param name="Row">The track row under it.</param>
+/// <param name="Transition">The transition bar under it, if any; <paramref name="Edge"/> is then that bar's.</param>
 public readonly record struct TimelineHit(
     TimelineRegion Region,
     ClipView? Clip = null,
     ClipEdge Edge = ClipEdge.None,
     string? MarkerId = null,
-    TrackRow? Row = null);
+    TrackRow? Row = null,
+    TransitionView? Transition = null);
 
 /// <summary>The bands of the timeline, top to bottom.</summary>
 public enum TimelineRegion
@@ -119,6 +121,7 @@ public sealed partial class TimelineViewModel
         Slide,
         Stretch,
         Hand,
+        TransitionEdge,
     }
 
     /// <summary>What a gesture in progress would do, or null.</summary>
@@ -154,6 +157,19 @@ public sealed partial class TimelineViewModel
         }
 
         Flicks time = Geometry.TimeAt(point.X, snapToFrame: false);
+
+        // A transition's bar sits over the bottom of the clips it joins and takes the pointer there.
+        if (TransitionAt(track, row, point) is { } bar)
+        {
+            double barLeft = Geometry.XOf(bar.Start);
+            double barRight = Geometry.XOf(bar.End);
+            double barZone = Math.Min(EdgeZone, (barRight - barLeft) / 3.0);
+            ClipEdge barEdge = point.X - barLeft <= barZone ? ClipEdge.Start
+                : barRight - point.X <= barZone ? ClipEdge.End
+                : ClipEdge.None;
+            return new TimelineHit(TimelineRegion.Track, ClipAt(track, time), barEdge, Row: row, Transition: bar);
+        }
+
         ClipView? clip = ClipAt(track, time);
 
         if (clip is null)
@@ -210,6 +226,12 @@ public sealed partial class TimelineViewModel
                 Select([marker], ModeFor(modifiers));
             }
 
+            return;
+        }
+
+        if (hit.Transition is { } bar && Tools.Tool is TimelineTool.Select)
+        {
+            TransitionDown(hit, bar, modifiers);
             return;
         }
 
@@ -323,6 +345,10 @@ public sealed partial class TimelineViewModel
                 PreviewMove(point);
                 return;
 
+            case Gesture.TransitionEdge:
+                PreviewTransitionEdge(point);
+                return;
+
             case Gesture.TrimStart:
             case Gesture.TrimEnd:
                 PreviewTrim(point);
@@ -365,6 +391,11 @@ public sealed partial class TimelineViewModel
 
             case Gesture.Box:
                 FinishBox(point);
+                break;
+
+            case Gesture.TransitionEdge:
+                PreviewTransitionEdge(point);
+                CommitTransitionEdge();
                 break;
 
             case Gesture.Razor:
@@ -437,6 +468,13 @@ public sealed partial class TimelineViewModel
     /// <returns>True when it can be dropped here.</returns>
     public bool EffectDragOver(string? typeId, string? presetId, Point point)
     {
+        if (TransitionType(typeId) is { } transition)
+        {
+            (ICommand? onCut, string where) = TransitionDrop(transition, HitAt(point), point);
+            Status = where;
+            return onCut is not null;
+        }
+
         (string? ownerId, string message) = EffectTarget(typeId, presetId, point);
         Status = message;
         return ownerId is not null;
@@ -448,6 +486,23 @@ public sealed partial class TimelineViewModel
     /// </summary>
     public async Task DropEffectAsync(string? typeId, string? presetId, Point point)
     {
+        if (TransitionType(typeId) is { } transition)
+        {
+            (ICommand? onCut, string where) = TransitionDrop(transition, HitAt(point), point);
+            if (onCut is null)
+            {
+                Status = where;
+                return;
+            }
+
+            if (await RunAsync(onCut).ConfigureAwait(true))
+            {
+                ReportHolds(onCut);
+            }
+
+            return;
+        }
+
         (string? ownerId, string message) = EffectTarget(typeId, presetId, point);
         if (ownerId is null)
         {
@@ -464,6 +519,10 @@ public sealed partial class TimelineViewModel
 
         await RunAsync(command).ConfigureAwait(true);
     }
+
+    /// <summary>The transition type being dragged, or null for anything else.</summary>
+    private static Core.Effects.EffectDescriptor? TransitionType(string? typeId) =>
+        typeId is not null && Engine.Effects.EffectCatalog.Registry.Find(typeId) is { Kind: Core.Effects.EffectKind.Transition or Core.Effects.EffectKind.AudioTransition } descriptor ? descriptor : null;
 
     /// <summary>What an effect dropped at a point would go on, or why it cannot.</summary>
     private (string? OwnerId, string Message) EffectTarget(string? typeId, string? presetId, Point point)
@@ -579,6 +638,7 @@ public sealed partial class TimelineViewModel
     {
         (TimelineTool.Hand, _) => TimelineCursor.Hand,
         (_, { Region: TimelineRegion.Ruler }) => TimelineCursor.Scrub,
+        (TimelineTool.Select, { Transition: { } bar }) => Movable(bar, hit.Edge) ? hit.Edge == ClipEdge.Start ? TimelineCursor.TrimStart : TimelineCursor.TrimEnd : TimelineCursor.Arrow,
         (TimelineTool.Razor, { Clip: not null }) => TimelineCursor.Razor,
         (TimelineTool.Slip or TimelineTool.Slide, { Clip: not null }) => TimelineCursor.Slip,
         (TimelineTool.RateStretch, { Edge: ClipEdge.Start }) => TimelineCursor.Arrow,

@@ -45,6 +45,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
 
     private string _shape = string.Empty;
     private string? _clipId;
+    private string? _transitionId;
     private IReadOnlyList<string> _targets = [];
     private bool _loading;
 
@@ -112,6 +113,21 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
 
     /// <summary>The clip being shown, or null.</summary>
     public string? ClipId => _clipId;
+
+    /// <summary>The transition being shown, when one is selected and no clip is; null otherwise.</summary>
+    public string? TransitionId => _transitionId;
+
+    /// <summary>A transition's duration, as the inspector shows it: seconds, sent as <c>transition.set --dur</c>.</summary>
+    internal static ParamDescriptor TransitionDuration { get; } = new(
+        "duration", ParamType.Float, new ParamValue.Float(1), "Duration",
+        "How long it runs, in seconds. It is fitted to what the clips have room for.",
+        Min: 0.01, Max: 600, SliderMax: 5, Unit: "s", Animatable: false);
+
+    /// <summary>A transition's place on its cut, sent as <c>transition.set --alignment</c>.</summary>
+    internal static ParamDescriptor TransitionAlignmentParam { get; } = new(
+        "alignment", ParamType.Enum, new ParamValue.Enum("centered"), "Alignment",
+        "Centred on the cut, ending at it, or starting at it.",
+        Animatable: false, Choices: new EquatableArray<string>(["centered", "end-of-left", "start-of-right"]));
 
     private Flicks Playhead => _preview?.Position ?? Flicks.Zero;
 
@@ -190,6 +206,12 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
     public void Reset(ParamRowViewModel row)
     {
         ArgumentNullException.ThrowIfNull(row);
+
+        if (string.Equals(row.OwnerId, _transitionId, StringComparison.Ordinal))
+        {
+            Send(row, ParamValues.Format(row.Descriptor.Default));
+            return;
+        }
 
         if (!string.Equals(row.OwnerId, _clipId, StringComparison.Ordinal))
         {
@@ -288,6 +310,21 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
     private void Changed()
     {
         Project project = _session.Project;
+        if (_transitionId is { } transitionId)
+        {
+            // A new type has other parameters; anything else reloads in place.
+            if (ParamTargets.Find(project, transitionId) is { Transition: { } transition } && $"transition|{transition.Id}|{transition.TypeId}" == _shape)
+            {
+                RefreshValues();
+            }
+            else
+            {
+                Rebuild();
+            }
+
+            return;
+        }
+
         if (_clipId is null || project.FindClip(_clipId) is not { } found || Shape(found) != _shape)
         {
             Rebuild();
@@ -306,6 +343,13 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         Sections.Clear();
         Effects.Clear();
         _pending.Clear();
+
+        _transitionId = null;
+        if (_targets.Count == 0 && _selection.Ids.Select(id => ParamTargets.Find(project, id)).FirstOrDefault(owner => owner?.Kind == ParamOwnerKind.Transition) is { } transition)
+        {
+            BuildTransition(transition);
+            return;
+        }
 
         if (_targets.Count == 0 || project.FindClip(_targets[0]) is not { } found)
         {
@@ -356,10 +400,132 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         RefreshValues();
     }
 
+    /// <summary>
+    /// The panel for a selected transition: its duration and alignment, then its own parameters,
+    /// every one sent as the command the CLI would send.
+    /// </summary>
+    private void BuildTransition(ParamOwner owner)
+    {
+        Transition transition = owner.Transition!;
+        _clipId = null;
+        _transitionId = transition.Id;
+        _shape = $"transition|{transition.Id}|{transition.TypeId}";
+
+        var timing = new InspectorSectionViewModel("Timing");
+        timing.Rows.Add(new ParamRowViewModel(this, transition.Id, TransitionDuration, timing.Title));
+        timing.Rows.Add(new ParamRowViewModel(this, transition.Id, TransitionAlignmentParam, timing.Title));
+        Sections.Add(timing);
+
+        foreach (EffectDescriptor section in ParamTargets.Sections(owner, EffectCatalog.Registry))
+        {
+            var view = new InspectorSectionViewModel(section.Name);
+            foreach (ParamDescriptor parameter in section.Params)
+            {
+                view.Rows.Add(new ParamRowViewModel(this, transition.Id, parameter, section.Name));
+            }
+
+            Sections.Add(view);
+        }
+
+        HasTarget = true;
+        IsPicture = false;
+        Status = string.Empty;
+        RefreshValues();
+    }
+
+    /// <summary>A selected transition's values, from the snapshot.</summary>
+    private void RefreshTransition(Project project, string transitionId)
+    {
+        if (ParamTargets.Find(project, transitionId) is not { Kind: ParamOwnerKind.Transition } owner)
+        {
+            Rebuild();
+            return;
+        }
+
+        Transition transition = owner.Transition!;
+        Rational rate = project.SettingsFor(owner.Sequence).FrameRate;
+        Clip? left = owner.Track.Clip(transition.LeftClipId);
+        Clip? right = owner.Track.Clip(transition.RightClipId);
+        Core.Queries.TransitionSpan? span = Core.Queries.TransitionTiming.Span(owner.Track, transition, rate);
+
+        _loading = true;
+        try
+        {
+            Heading = EffectCatalog.Registry.Find(transition.TypeId)?.Name ?? transition.TypeId;
+            Source = $"Between '{left?.Name}' and '{right?.Name}'";
+            Range = span is { } playing
+                ? $"{Timecode.FormatClock(playing.Range.Start)} to {Timecode.FormatClock(playing.Range.End)}, {Timecode.FormatClock(playing.Range.Duration)} long"
+                : "Its clips do not meet, so it does not play.";
+            Speed = SelectionNote = string.Empty;
+        }
+        finally
+        {
+            _loading = false;
+        }
+
+        Flicks tolerance = Tolerance();
+        string alignment = transition.Alignment switch
+        {
+            TransitionAlignment.EndOfLeft => "end-of-left",
+            TransitionAlignment.StartOfRight => "start-of-right",
+            _ => "centered",
+        };
+
+        foreach (ParamRowViewModel row in Sections.SelectMany(section => section.Rows))
+        {
+            if (ReferenceEquals(row.Descriptor, TransitionDuration))
+            {
+                var seconds = new ParamValue.Float((float)transition.Duration.ToSeconds());
+                row.Load(seconds, AnimatedValue.Constant(seconds), Flicks.Zero, transition.Duration, Playhead, tolerance);
+            }
+            else if (ReferenceEquals(row.Descriptor, TransitionAlignmentParam))
+            {
+                var choice = new ParamValue.Enum(alignment);
+                row.Load(choice, AnimatedValue.Constant(choice), Flicks.Zero, transition.Duration, Playhead, tolerance);
+            }
+            else
+            {
+                AnimatedValue? stored = transition.Parameter(row.Name);
+                row.Load(ParamEval.Eval(stored, row.Descriptor, Flicks.Zero), stored, Flicks.Zero, transition.Duration, Playhead, tolerance);
+            }
+        }
+
+        UpdateMarkers();
+    }
+
+    /// <summary>What one of a transition's rows sends: its duration and alignment through <c>transition.set</c>, the rest through <c>param.set</c>.</summary>
+    private static ICommand TransitionEdit(ParamRowViewModel row, string text)
+    {
+        if (ReferenceEquals(row.Descriptor, TransitionDuration))
+        {
+            ParamValue.Float seconds = (ParamValue.Float)ParamValues.Parse(TransitionDuration, text);
+            return new SetTransitionCommand(row.OwnerId, Duration: Flicks.FromSeconds(seconds.Value));
+        }
+
+        if (ReferenceEquals(row.Descriptor, TransitionAlignmentParam))
+        {
+            TransitionAlignment alignment = text switch
+            {
+                "end-of-left" => TransitionAlignment.EndOfLeft,
+                "start-of-right" => TransitionAlignment.StartOfRight,
+                _ => TransitionAlignment.Centered,
+            };
+            return new SetTransitionCommand(row.OwnerId, Alignment: alignment);
+        }
+
+        return new SetParamCommand(row.OwnerId, row.Name, text);
+    }
+
     /// <summary>Loads every value from the snapshot, at the playhead, without sending anything.</summary>
     private void RefreshValues()
     {
         Project project = _session.Project;
+        if (_transitionId is { } transitionId)
+        {
+            RefreshTransition(project, transitionId);
+            return;
+        }
+
         if (_clipId is null)
         {
             return;
@@ -440,6 +606,12 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         {
             while (_pending.Remove(row, out string? text))
             {
+                if (string.Equals(row.OwnerId, _transitionId, StringComparison.Ordinal))
+                {
+                    await RunAsync(TransitionEdit(row, text)).ConfigureAwait(true);
+                    continue;
+                }
+
                 ICommand[] commands = [.. TargetsFor(row).Select(target => (ICommand)new SetParamCommand(target, row.Name, text, AtFor(target, row)))];
                 await RunAsync(commands.Length == 1 ? commands[0] : new BatchCommand([.. commands], $"Set {row.Label}")).ConfigureAwait(true);
             }

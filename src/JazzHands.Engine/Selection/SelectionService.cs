@@ -81,7 +81,7 @@ public sealed class SelectionService
         session.ProjectChanged += OnProjectChanged;
     }
 
-    /// <summary>The ids a selection may name: clips and markers of the active sequence.</summary>
+    /// <summary>The ids a selection may name: clips, transitions and markers of the active sequence.</summary>
     internal static HashSet<string> Present(Project project)
     {
         var present = new HashSet<string>(StringComparer.Ordinal);
@@ -96,6 +96,11 @@ public sealed class SelectionService
             foreach (Clip clip in track.Clips)
             {
                 present.Add(clip.Id);
+            }
+
+            foreach (Transition transition in track.Transitions)
+            {
+                present.Add(transition.Id);
             }
         }
 

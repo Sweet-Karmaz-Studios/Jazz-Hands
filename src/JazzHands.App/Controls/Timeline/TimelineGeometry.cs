@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Windows;
 using JazzHands.Core.Model;
 using JazzHands.Core.Time;
 
@@ -86,6 +87,19 @@ public sealed record TimelineGeometry(
 
     /// <summary>The y on the control of a row's top edge.</summary>
     public double TopOf(TrackRow row) => TracksTop + row.Top - VerticalOffset;
+
+    /// <summary>
+    /// The band a transition's bar is drawn in on a row: along the bottom of the clips, clear of
+    /// their names, and where the pointer picks the bar rather than a clip.
+    /// </summary>
+    public Rect TransitionBand(TrackRow row, Flicks start, Flicks end)
+    {
+        double height = Math.Clamp(row.Height * 0.4, 10.0, 26.0);
+        double top = TopOf(row) + row.Height - height - 4.0;
+        double left = XOf(start);
+        double width = Math.Max(6.0, XOf(end) - left);
+        return new Rect(left, top, width, height);
+    }
 
     /// <summary>The track under a y on the control, or null over the ruler, markers or empty space.</summary>
     public TrackRow? RowAt(double y)

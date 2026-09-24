@@ -72,6 +72,7 @@
     <SolidColorBrush x:Key="Brush.Timeline.Box" Color="#334C9AFF" />
     <SolidColorBrush x:Key="Brush.Timeline.Ghost" Color="#664C9AFF" />
     <SolidColorBrush x:Key="Brush.Timeline.Refused" Color="#66E05C5C" />
+    <SolidColorBrush x:Key="Brush.Timeline.Transition" Color="#FFD8D8E8" />
     <SolidColorBrush x:Key="Brush.Timeline.ClipText" Color="#FFF2F2F2" />
 
     <!-- Typography. Three sizes and two families is the whole vocabulary. -->

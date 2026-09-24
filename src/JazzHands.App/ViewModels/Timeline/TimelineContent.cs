@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using JazzHands.App.Controls.Timeline;
 using JazzHands.Core.Model;
+using JazzHands.Core.Queries;
 using JazzHands.Core.Time;
 
 namespace JazzHands.App.ViewModels.Timeline;
@@ -32,11 +33,33 @@ public sealed record ClipView(Clip Clip, string TrackId, TrackKind Kind, bool Me
         : $"{Clip.Name}  {Clip.EffectiveSpeed.ToDouble() * 100:0.#}%{(Clip.Reverse ? " reversed" : string.Empty)}";
 }
 
-/// <summary>One track and its clips, as the timeline draws them.</summary>
+/// <summary>One transition as the timeline draws it: where it plays, not only where its cut is.</summary>
+/// <param name="Transition">The transition.</param>
+/// <param name="TrackId">The track it is on.</param>
+/// <param name="Range">Where it plays, fitted to its clips.</param>
+/// <param name="Cut">The cut it sits on.</param>
+/// <param name="Name">What the bar says: the type's name.</param>
+/// <param name="Holds">True when a clip is short of source for it, so it holds a frame: drawn with a warning.</param>
+public sealed record TransitionView(Transition Transition, string TrackId, TimeRange Range, Flicks Cut, string Name, bool Holds)
+{
+    /// <summary>The transition's id.</summary>
+    public string Id => Transition.Id;
+
+    /// <summary>Where it starts.</summary>
+    public Flicks Start => Range.Start;
+
+    /// <summary>Where it ends, exclusive.</summary>
+    public Flicks End => Range.End;
+}
+
+/// <summary>One track, its clips and its transitions, as the timeline draws them.</summary>
 /// <param name="Track">The track.</param>
 /// <param name="Clips">Its clips, in time order.</param>
 public sealed record TrackView(Track Track, ImmutableArray<ClipView> Clips)
 {
+    /// <summary>Its transitions that play, in time order.</summary>
+    public ImmutableArray<TransitionView> Transitions { get; init; } = [];
+
     /// <summary>The track's id.</summary>
     public string Id => Track.Id;
 }
@@ -150,6 +173,7 @@ public sealed class TimelineContent
 
         var byId = new Dictionary<string, ClipView>(StringComparer.Ordinal);
         var tracks = ImmutableArray.CreateBuilder<TrackView>(sequence.Tracks.Length);
+        Rational frameRate = project.SettingsFor(sequence).FrameRate;
 
         foreach (Track track in DisplayOrder(sequence.Tracks))
         {
@@ -172,10 +196,36 @@ public sealed class TimelineContent
                 byId[clip.Id] = view;
             }
 
-            tracks.Add(new TrackView(track, clips.MoveToImmutable()));
+            tracks.Add(new TrackView(track, clips.MoveToImmutable()) { Transitions = TransitionViews(project, track, frameRate) });
         }
 
         return new TimelineContent(sequence, project.SettingsFor(sequence), tracks.MoveToImmutable(), byId);
+    }
+
+    /// <summary>A transition by id, or null.</summary>
+    public TransitionView? Transition(string id) =>
+        Tracks.SelectMany(track => track.Transitions).FirstOrDefault(view => string.Equals(view.Id, id, StringComparison.Ordinal));
+
+    /// <summary>Every transition on every track.</summary>
+    public IEnumerable<TransitionView> Transitions => Tracks.SelectMany(track => track.Transitions);
+
+    /// <summary>The transitions of a track that play, with where, and whether a clip is short of source for one.</summary>
+    private static ImmutableArray<TransitionView> TransitionViews(Project project, Track track, Rational frameRate)
+    {
+        if (track.Transitions.IsEmpty)
+        {
+            return [];
+        }
+
+        var views = ImmutableArray.CreateBuilder<TransitionView>();
+        foreach (TransitionSpan span in TransitionTiming.Spans(track, frameRate))
+        {
+            (Flicks leftShort, Flicks rightShort) = TransitionTiming.Shortfall(project, span);
+            string name = Engine.Effects.EffectCatalog.Registry.Find(span.Transition.TypeId)?.Name ?? span.Transition.TypeId;
+            views.Add(new TransitionView(span.Transition, track.Id, span.Range, span.Cut, name, leftShort.Value > 0 || rightShort.Value > 0));
+        }
+
+        return views.ToImmutable();
     }
 
     /// <summary>Subtitles on top, picture with the highest layer uppermost, then sound downwards.</summary>

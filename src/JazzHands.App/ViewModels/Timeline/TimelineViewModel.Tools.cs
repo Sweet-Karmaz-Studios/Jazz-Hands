@@ -119,6 +119,11 @@ public sealed partial class TimelineViewModel
             return true;
         }
 
+        if (key is Key.Delete or Key.Back && modifiers == ModifierKeys.None && DeleteSelectedTransitions())
+        {
+            return true;
+        }
+
         if (SelectedEdit is null)
         {
             return false;
@@ -228,6 +233,11 @@ public sealed partial class TimelineViewModel
         Flicks time = Geometry.TimeAt(point.X);
         bool canPaste = Clipboard?.GetClips() is not null;
 
+        if (hit.Transition is { } bar)
+        {
+            return TransitionMenu(bar);
+        }
+
         if (hit.Clip is not { } clip)
         {
             var items = new List<TimelineMenuItem>();
@@ -291,6 +301,11 @@ public sealed partial class TimelineViewModel
                 return Task.CompletedTask;
             }));
             menu.Add(new TimelineMenuItem("Unnest", null, () => RunAsync(new UnnestClipCommand(clip.Id))));
+        }
+
+        if (DefaultTransitionAt(clip, hit.Edge) is { } transition)
+        {
+            menu.Add(transition);
         }
 
         menu.Add(new TimelineMenuItem(enabled ? "Disable" : "Enable", null, () => RunAsync(Batch([.. ids.Select(id => (ICommand)new SetClipEnabledCommand(id, !enabled))], enabled ? "Disable" : "Enable"))));

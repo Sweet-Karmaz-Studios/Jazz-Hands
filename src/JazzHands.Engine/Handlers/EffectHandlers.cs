@@ -50,6 +50,13 @@ internal static class EffectHelp
                 $"'{typeId}' is a generator: it makes a picture rather than changing one. Add it as a clip, with 'jazz clip add --generator {typeId}'.");
         }
 
+        if (descriptor.Kind is EffectKind.Transition or EffectKind.AudioTransition)
+        {
+            throw new CommandException(
+                "not-an-effect",
+                $"'{typeId}' is a transition: it goes on the cut between two clips. Add it with 'jazz transition add <outgoing clip> <incoming clip> --type {typeId}'.");
+        }
+
         bool picture = owner.Track.Kind is TrackKind.Video or TrackKind.Adjustment;
         if ((descriptor.Kind == EffectKind.Video) != picture)
         {

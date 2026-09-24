@@ -51,8 +51,11 @@ public sealed partial class EffectTypeItemViewModel : ObservableObject
     /// <summary>What it does, for the tooltip.</summary>
     public string Description => Descriptor.Description.Length > 0 ? $"{Descriptor.Description}\n{Descriptor.TypeId}" : Descriptor.TypeId;
 
-    /// <summary>True for a sound effect.</summary>
-    public bool IsAudio => Descriptor.Kind == EffectKind.Audio;
+    /// <summary>True for a sound effect or a sound crossfade, which have no picture.</summary>
+    public bool IsAudio => Descriptor.Kind is EffectKind.Audio or EffectKind.AudioTransition;
+
+    /// <summary>True for a transition, which goes on a cut rather than a clip.</summary>
+    public bool IsTransition => Descriptor.Kind is EffectKind.Transition or EffectKind.AudioTransition;
 
     /// <summary>True for a generator, which makes a clip rather than changing one.</summary>
     public bool IsGenerator => Descriptor.Kind == EffectKind.Generator;
@@ -211,6 +214,11 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
             return AddGeneratorAsync(descriptor);
         }
 
+        if (descriptor.Kind is EffectKind.Transition or EffectKind.AudioTransition)
+        {
+            return ApplyTransitionAsync(descriptor);
+        }
+
         Project project = _session.Project;
         string[] suited =
         [
@@ -262,6 +270,41 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
                 new AddClipCommand(trackId, at, GeneratorId: descriptor.TypeId, Duration: GeneratorLength, Name: descriptor.Name),
             ],
             $"Add {descriptor.Name}"));
+    }
+
+    /// <summary>
+    /// A transition from the browser: the selected transitions of its kind become it, or, with clips
+    /// selected, it goes on the cut at the end of each that meets another. One undo step.
+    /// </summary>
+    public Task ApplyTransitionAsync(EffectDescriptor descriptor)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+
+        Project project = _session.Project;
+        TrackKind kind = descriptor.Kind == EffectKind.Transition ? TrackKind.Video : TrackKind.Audio;
+        var commands = new List<ICommand>();
+
+        foreach (string id in _selection.Ids)
+        {
+            if (ParamTargets.Find(project, id) is { Kind: ParamOwnerKind.Transition } owner && owner.Track.Kind == kind)
+            {
+                commands.Add(new SetTransitionCommand(id, descriptor.TypeId));
+            }
+            else if (project.FindClip(id) is { } found && found.Track.Kind == kind
+                && found.Track.Clips.FirstOrDefault(next => next.Start == found.Clip.End) is { } right
+                && !found.Track.Transitions.Any(existing => existing.LeftClipId == found.Clip.Id))
+            {
+                commands.Add(new AddTransitionCommand(found.Clip.Id, right.Id, descriptor.TypeId, Handles: TransitionHandles.Hold, Audio: false));
+            }
+        }
+
+        if (commands.Count == 0)
+        {
+            Status = $"Select a clip that meets the next one, or a transition, for {descriptor.Name}; or drag it onto a cut.";
+            return Task.CompletedTask;
+        }
+
+        return RunAsync(commands.Count == 1 ? commands[0] : new BatchCommand([.. commands], $"Apply {descriptor.Name}"));
     }
 
     /// <summary>Applies a preset to every selected clip, as one undo step.</summary>
@@ -325,7 +368,6 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
     {
         string search = Search.Trim();
         IEnumerable<EffectDescriptor> matching = _registry.All
-            .Where(descriptor => descriptor.Kind is EffectKind.Video or EffectKind.Audio or EffectKind.Generator)
             .Where(descriptor => search.Length == 0
                 || descriptor.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
                 || descriptor.Category.Contains(search, StringComparison.OrdinalIgnoreCase)
@@ -343,18 +385,25 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
                 favorites.Items.Add(Item(descriptor, favorite: true));
             }
 
-            // Picture folders first, then generators, then sound: the sort key carries the kind,
-            // the title does not repeat it for pictures.
+            // Picture folders first, then generators, transitions, sound and crossfades: the sort key
+            // carries the kind, the title does not repeat it for pictures.
             int rank = descriptor.Kind switch
             {
                 EffectKind.Video => 0,
                 EffectKind.Generator => 1,
-                _ => 2,
+                EffectKind.Transition => 2,
+                EffectKind.Audio => 3,
+                _ => 4,
             };
             string key = $"{rank}:{descriptor.Category}";
             if (!folders.TryGetValue(key, out EffectCategoryViewModel? folder))
             {
-                folder = new EffectCategoryViewModel(descriptor.Kind == EffectKind.Audio ? $"Audio: {descriptor.Category}" : descriptor.Category);
+                folder = new EffectCategoryViewModel(descriptor.Kind switch
+                {
+                    EffectKind.Audio or EffectKind.AudioTransition => $"Audio: {descriptor.Category}",
+                    EffectKind.Transition => $"Transitions: {descriptor.Category}",
+                    _ => descriptor.Category,
+                });
                 folders[key] = folder;
             }
 
