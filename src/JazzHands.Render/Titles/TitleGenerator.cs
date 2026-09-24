@@ -55,6 +55,16 @@ public sealed class TitleGenerator : VideoGenerator
     /// <summary>How many times a look has been drawn rather than found kept.</summary>
     public int Drawn => _renderer?.Drawn ?? 0;
 
+    /// <summary>
+    /// Where a title's text sits on a frame of the sequence's size, in sequence pixels from its
+    /// centre, laid out exactly as it is drawn; null when it has no text.
+    /// </summary>
+    /// <param name="parameters">The title's parameters at the moment asked about.</param>
+    /// <param name="frame">The sequence's size.</param>
+    /// <param name="projectFolder">The project's folder, for its fonts; empty for none.</param>
+    public static TitleBounds? Measure(ParameterSet parameters, System.Numerics.Vector2 frame, string projectFolder) =>
+        TitleLayout.Measure(parameters, frame, projectFolder);
+
     /// <inheritdoc />
     public override void Render(EffectContext context, ParameterSet parameters, RenderTarget output)
     {

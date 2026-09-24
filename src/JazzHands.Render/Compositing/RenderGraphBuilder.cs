@@ -363,6 +363,27 @@ public static class RenderGraphBuilder
         return null;
     }
 
+    /// <summary>
+    /// Where a frame-sized picture (a generator's) of a clip lands at a moment: the matrix from
+    /// its pixels to the frame's, both from the top left, with the clip's transform evaluated as
+    /// the renderer evaluates it.
+    /// </summary>
+    public static Matrix3x2 FramePlacement(Clip clip, Flicks local, Vector2 frameSize)
+    {
+        ArgumentNullException.ThrowIfNull(clip);
+        Transform transform = clip.Transform ?? Transform.Identity;
+
+        return Placement(
+            frameSize,
+            frameSize,
+            ConformPolicy.Stretch,
+            Float2(transform.Position, Intrinsic.Position, local),
+            Float2(transform.Scale, Intrinsic.Scale, local),
+            Float(transform.Rotation, Intrinsic.Rotation, local),
+            Float2(transform.Anchor, Intrinsic.Anchor, local),
+            1.0f);
+    }
+
     private static LayerNode Layer(
         Clip clip,
         Flicks local,

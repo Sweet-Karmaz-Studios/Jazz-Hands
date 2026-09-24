@@ -6,6 +6,7 @@ using JazzHands.Core.Commands;
 using JazzHands.Core.Effects;
 using JazzHands.Core.Model;
 using JazzHands.Core.Time;
+using JazzHands.Core.Titles;
 using JazzHands.Engine.Commands;
 using JazzHands.Engine.Effects;
 using JazzHands.Engine.Selection;
@@ -75,6 +76,10 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
 
     [ObservableProperty]
     private BlendMode _blend;
+
+    /// <summary>The text section, when the clip is a title; null otherwise.</summary>
+    [ObservableProperty]
+    private TitleSectionViewModel? _title;
 
     /// <summary>Creates the panel.</summary>
     public InspectorPanelViewModel(
@@ -341,6 +346,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         _targets = [.. _selection.Ids.Where(id => project.FindClip(id) is not null)];
 
         Sections.Clear();
+        Title = null;
         Effects.Clear();
         _pending.Clear();
 
@@ -371,8 +377,16 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         _targets = [.. _targets.Where(id => project.FindClip(id) is { } other && (other.Track.Kind is TrackKind.Video or TrackKind.Adjustment) == picture)];
 
         ParamOwner owner = ParamTargets.Find(project, clip.Id)!;
+        bool title = string.Equals(clip.GeneratorId, TitleParams.GeneratorId, StringComparison.Ordinal);
+        Title = title ? new TitleSectionViewModel(clip.Id, RunAsync, () => _session.Query(new ListFontsQuery())) : null;
         foreach (EffectDescriptor section in ParamTargets.Sections(owner, EffectCatalog.Registry))
         {
+            if (title && string.Equals(section.TypeId, TitleParams.GeneratorId, StringComparison.Ordinal))
+            {
+                AddTitleSections(clip.Id, section);
+                continue;
+            }
+
             var view = new InspectorSectionViewModel(section.Name);
             foreach (ParamDescriptor parameter in section.Params)
             {
@@ -399,6 +413,38 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         Status = string.Empty;
         RefreshValues();
     }
+
+    /// <summary>
+    /// A title's parameters that are rows rather than the text section's own controls, grouped the
+    /// way a person looks for them; the animation channels start folded, as the animation pickers
+    /// drive them.
+    /// </summary>
+    private void AddTitleSections(string clipId, EffectDescriptor title)
+    {
+        foreach ((string heading, string[] names, bool open) in TitleGroups)
+        {
+            var view = new InspectorSectionViewModel(heading) { IsExpanded = open };
+            foreach (string name in names)
+            {
+                if (title.Param(name) is { } parameter)
+                {
+                    view.Rows.Add(new ParamRowViewModel(this, clipId, parameter, heading));
+                }
+            }
+
+            Sections.Add(view);
+        }
+    }
+
+    /// <summary>The title's rows, section by section; the text section has the rest.</summary>
+    internal static IReadOnlyList<(string Heading, string[] Names, bool Open)> TitleGroups { get; } =
+    [
+        ("Text", [TitleParams.Size, TitleParams.Colour, TitleParams.Position, TitleParams.Width, TitleParams.LineSpacing, TitleParams.Tracking], true),
+        ("Outline", [TitleParams.Stroke, TitleParams.StrokeWidth], true),
+        ("Box", [TitleParams.Box, TitleParams.BoxPadding, TitleParams.BoxRadius], true),
+        ("Shadow", [TitleParams.Shadow, TitleParams.ShadowOffset, TitleParams.ShadowBlur], true),
+        ("Animation channels", [TitleParams.Fade, TitleParams.Offset, TitleParams.Zoom, TitleParams.Blur, TitleParams.Reveal, TitleParams.RevealBy, TitleParams.RevealSoft], false),
+    ];
 
     /// <summary>
     /// The panel for a selected transition: its duration and alignment, then its own parameters,
@@ -560,6 +606,15 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         }
 
         ParamOwner owner = ParamTargets.Find(project, clip.Id)!;
+        if (Title is { } title && clip.Effects.FirstOrDefault(effect => EffectChains.IsOwnParameters(clip, effect)) is var own)
+        {
+            EffectDescriptor descriptor = EffectCatalog.Registry.Find(TitleParams.GeneratorId)!;
+            title.Load(
+                ParameterSet.Evaluate(descriptor, own, Clamp(local, clip.Duration)),
+                own?.Parameter(TitleParams.Text) is KeyframedValue { IsAnimated: true },
+                TitleAnimations.Read(own, clip.Duration));
+        }
+
         foreach (ParamRowViewModel row in Sections.SelectMany(section => section.Rows))
         {
             AnimatedValue? stored = ParamTargets.Get(owner, row.Name);
@@ -666,6 +721,10 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
             _ui.Post(() => Status = exception.Message);
         }
     }
+
+    /// <summary>A time held inside a clip, so a playhead before or after it reads the nearest end.</summary>
+    private static Flicks Clamp(Flicks local, Flicks length) =>
+        local < Flicks.Zero ? Flicks.Zero : local >= length ? length - new Flicks(1) : local;
 
     /// <summary>What decides whether rows can be reloaded in place: the clip, its kind, and its effects.</summary>
     private static string Shape(ClipLocation found) =>

@@ -16,6 +16,36 @@
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="Visible" />
         <local:PathDataConverter x:Key="PathData" />
+        <local:EqualsConverter x:Key="Equals" />
+        <local:HexBrushConverter x:Key="HexBrush" />
+
+        <!-- One of a row of choices, drawn as a small segment that fills with the accent when chosen. -->
+        <Style x:Key="Radio.Segment" TargetType="RadioButton">
+            <Setter Property="MinWidth" Value="28" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="FontFamily" Value="{DynamicResource Font.Ui}" />
+            <Setter Property="FontSize" Value="{DynamicResource Text.Caption}" />
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource FocusVisual.Ring}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Face" Margin="0,0,1,0" Padding="4,0" CornerRadius="2" Background="{DynamicResource Brush.Background.Raised}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Face" Property="Background" Value="{DynamicResource Brush.Background.Hover}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Face" Property="Background" Value="{DynamicResource Brush.Accent}" />
+                                <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
         <!-- The stopwatch takes the accent colour while its parameter is animated. A plain button
              rather than a toggle, because a toggle bound one way loses its binding on the first click. -->
@@ -244,6 +274,163 @@
             </TextBlock>
 
             <StackPanel Visibility="{Binding HasTarget, Mode=OneWay, Converter={StaticResource Visible}}">
+                <!-- A title's text, font, alignment and animations; its other parameters are rows below. -->
+                <ContentControl Content="{Binding Title, Mode=OneWay}" Focusable="False">
+                    <ContentControl.ContentTemplate>
+                        <DataTemplate DataType="{x:Type vm:TitleSectionViewModel}">
+                            <StackPanel Margin="0,10,0,0">
+                                <TextBlock Text="Title"
+                                           FontSize="{DynamicResource Text.Caption}"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource Brush.Text.Primary}" />
+
+                                <!-- Styles for the selected text. -->
+                                <StackPanel Orientation="Horizontal" Margin="0,4,0,3">
+                                    <Button Style="{StaticResource Button.Small}" Content="B" FontWeight="Bold" FontFamily="{DynamicResource Font.Ui}" FontSize="12"
+                                            Command="{Binding ToggleBoldCommand, Mode=OneWay}" ToolTip="Bold the selected text, or take bold off it"
+                                            AutomationProperties.Name="Bold" />
+                                    <Button Style="{StaticResource Button.Small}" Content="I" FontStyle="Italic" FontFamily="{DynamicResource Font.Ui}" FontSize="12"
+                                            Command="{Binding ToggleItalicCommand, Mode=OneWay}" ToolTip="Slant the selected text, or straighten it"
+                                            AutomationProperties.Name="Italic" />
+                                    <Button Style="{StaticResource Button.Small}" Content="U&#x332;" FontFamily="{DynamicResource Font.Ui}" FontSize="12"
+                                            Command="{Binding ToggleUnderlineCommand, Mode=OneWay}" ToolTip="Underline the selected text, or take the line off"
+                                            AutomationProperties.Name="Underline" />
+                                    <Border Width="18" Height="16" Margin="8,0,0,0" CornerRadius="2" BorderThickness="1"
+                                            BorderBrush="{DynamicResource Brush.Border.Strong}"
+                                            Background="{Binding ColourText, Mode=OneWay, Converter={StaticResource HexBrush}}" />
+                                    <TextBox Width="78" Margin="4,0,0,0"
+                                             Style="{StaticResource TextBox.Field}"
+                                             FontFamily="{DynamicResource Font.Mono}"
+                                             Text="{Binding ColourText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             AutomationProperties.Name="Colour for the selection" />
+                                    <Button Style="{StaticResource Button.Small}" Content="&#xE790;"
+                                            Command="{Binding ApplyColourCommand, Mode=OneWay}" ToolTip="Give the selected text this colour"
+                                            AutomationProperties.Name="Colour the selection" />
+                                    <Button Style="{StaticResource Button.Small}" Content="&#xE894;"
+                                            Command="{Binding ClearStyleCommand, Mode=OneWay}" ToolTip="Take every style off the selected text"
+                                            AutomationProperties.Name="Clear styles" />
+                                </StackPanel>
+
+                                <controls:TitleTextEditor MinHeight="56"
+                                                          MaxHeight="160"
+                                                          Padding="2"
+                                                          Background="{DynamicResource Brush.Background.Input}"
+                                                          Foreground="{DynamicResource Brush.Text.Primary}"
+                                                          BorderBrush="{DynamicResource Brush.Border}"
+                                                          CaretBrush="{DynamicResource Brush.Text.Primary}"
+                                                          SelectionBrush="{DynamicResource Brush.Accent}"
+                                                          Markup="{Binding Markup, Mode=OneWay}"
+                                                          BaseSize="{Binding Size, Mode=OneWay}"
+                                                          CommitCommand="{Binding CommitTextCommand, Mode=OneWay}"
+                                                          SelectedStart="{Binding SelectionStart, Mode=OneWayToSource}"
+                                                          SelectedLength="{Binding SelectionLength, Mode=OneWayToSource}"
+                                                          IsReadOnly="{Binding IsTextAnimated, Mode=OneWay}"
+                                                          ToolTip="What the title says. Enter starts a new line; the text is sent as you pause, Ctrl+Enter sends it now, Esc puts it back."
+                                                          AutomationProperties.Name="Title text" />
+                                <TextBlock Text="The text is keyframed: change it with the keyframe at the playhead."
+                                           TextWrapping="Wrap"
+                                           FontSize="{DynamicResource Text.Caption}"
+                                           Foreground="{DynamicResource Brush.Warning}"
+                                           Visibility="{Binding IsTextAnimated, Mode=OneWay, Converter={StaticResource Visible}}" />
+
+                                <Grid Margin="22,6,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="92" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <!-- Each family drawn in itself; only those in view are made. -->
+                                    <TextBlock Grid.Row="0" Text="Font" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" />
+                                    <ComboBox Grid.Row="0" Grid.Column="1" Margin="0,2"
+                                              Style="{StaticResource ComboBox.Compact}"
+                                              ItemsSource="{Binding Fonts, Mode=OneWay}"
+                                              SelectedItem="{Binding Font, Mode=TwoWay}"
+                                              IsTextSearchEnabled="True"
+                                              TextSearch.TextPath="Family"
+                                              MaxDropDownHeight="360"
+                                              AutomationProperties.Name="Font">
+                                        <ComboBox.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <VirtualizingStackPanel VirtualizationMode="Recycling" />
+                                            </ItemsPanelTemplate>
+                                        </ComboBox.ItemsPanel>
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate DataType="{x:Type vm:FontChoice}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding Family, Mode=OneWay}" FontFamily="{Binding Family, Mode=OneWay}" FontSize="14" />
+                                                    <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Text="{Binding Note, Mode=OneWay}"
+                                                               FontSize="{DynamicResource Text.Caption}" Foreground="{DynamicResource Brush.Text.Secondary}" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+
+                                    <TextBlock Grid.Row="1" Text="Weight" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" />
+                                    <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,2">
+                                        <ComboBox Width="120" Style="{StaticResource ComboBox.Compact}"
+                                                  ItemsSource="{Binding Weights, Mode=OneWay}"
+                                                  SelectedItem="{Binding Weight, Mode=TwoWay}"
+                                                  AutomationProperties.Name="Weight" />
+                                        <CheckBox Margin="10,0,0,0" VerticalAlignment="Center" Style="{StaticResource CheckBox.Dark}"
+                                                  Content="Italic" IsChecked="{Binding Italic, Mode=TwoWay}"
+                                                  AutomationProperties.Name="Italic" />
+                                    </StackPanel>
+
+                                    <TextBlock Grid.Row="2" Text="Align" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" />
+                                    <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Margin="0,2">
+                                        <RadioButton Style="{StaticResource Radio.Segment}" GroupName="{Binding ClipId, StringFormat=align-{0}}" Content="Left" ToolTip="Left: the text's left edge is at the position"
+                                                     IsChecked="{Binding Align, Mode=TwoWay, Converter={StaticResource Equals}, ConverterParameter=left}" AutomationProperties.Name="Align left" />
+                                        <RadioButton Style="{StaticResource Radio.Segment}" GroupName="{Binding ClipId, StringFormat=align-{0}}" Content="Centre" ToolTip="Centre: the text's middle is at the position"
+                                                     IsChecked="{Binding Align, Mode=TwoWay, Converter={StaticResource Equals}, ConverterParameter=centre}" AutomationProperties.Name="Align centre" />
+                                        <RadioButton Style="{StaticResource Radio.Segment}" GroupName="{Binding ClipId, StringFormat=align-{0}}" Content="Right" ToolTip="Right: the text's right edge is at the position"
+                                                     IsChecked="{Binding Align, Mode=TwoWay, Converter={StaticResource Equals}, ConverterParameter=right}" AutomationProperties.Name="Align right" />
+                                    </StackPanel>
+
+                                    <TextBlock Grid.Row="3" Text="Vertical" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" />
+                                    <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal" Margin="0,2">
+                                        <RadioButton Style="{StaticResource Radio.Segment}" GroupName="{Binding ClipId, StringFormat=valign-{0}}" Content="Top" ToolTip="The text's top is at the position"
+                                                     IsChecked="{Binding VAlign, Mode=TwoWay, Converter={StaticResource Equals}, ConverterParameter=top}" AutomationProperties.Name="Align top" />
+                                        <RadioButton Style="{StaticResource Radio.Segment}" GroupName="{Binding ClipId, StringFormat=valign-{0}}" Content="Middle" ToolTip="The text's middle is at the position"
+                                                     IsChecked="{Binding VAlign, Mode=TwoWay, Converter={StaticResource Equals}, ConverterParameter=middle}" AutomationProperties.Name="Align middle" />
+                                        <RadioButton Style="{StaticResource Radio.Segment}" GroupName="{Binding ClipId, StringFormat=valign-{0}}" Content="Bottom" ToolTip="The text's bottom is at the position"
+                                                     IsChecked="{Binding VAlign, Mode=TwoWay, Converter={StaticResource Equals}, ConverterParameter=bottom}" AutomationProperties.Name="Align bottom" />
+                                    </StackPanel>
+
+                                    <TextBlock Grid.Row="4" Text="In" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" />
+                                    <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal" Margin="0,2">
+                                        <ComboBox Width="120" Style="{StaticResource ComboBox.Compact}"
+                                                  ItemsSource="{Binding Animations, Mode=OneWay}"
+                                                  SelectedItem="{Binding AnimationIn, Mode=TwoWay}"
+                                                  ToolTip="How it comes in; the animation becomes keyframes you can change"
+                                                  AutomationProperties.Name="Animation in" />
+                                        <controls:NumberBox Width="64" Margin="6,0,0,0" Value="{Binding InSeconds, Mode=TwoWay}" Minimum="0.01" Maximum="60" Step="0.1" Decimals="2" Unit="s"
+                                                            AutomationProperties.Name="Animation in duration" />
+                                    </StackPanel>
+
+                                    <TextBlock Grid.Row="5" Text="Out" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" />
+                                    <StackPanel Grid.Row="5" Grid.Column="1" Orientation="Horizontal" Margin="0,2">
+                                        <ComboBox Width="120" Style="{StaticResource ComboBox.Compact}"
+                                                  ItemsSource="{Binding Animations, Mode=OneWay}"
+                                                  SelectedItem="{Binding AnimationOut, Mode=TwoWay}"
+                                                  ToolTip="How it goes out"
+                                                  AutomationProperties.Name="Animation out" />
+                                        <controls:NumberBox Width="64" Margin="6,0,0,0" Value="{Binding OutSeconds, Mode=TwoWay}" Minimum="0.01" Maximum="60" Step="0.1" Decimals="2" Unit="s"
+                                                            AutomationProperties.Name="Animation out duration" />
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ContentControl.ContentTemplate>
+                </ContentControl>
+
                 <!-- The clip's own parameters. -->
                 <ItemsControl ItemsSource="{Binding Sections, Mode=OneWay}" Focusable="False">
                     <ItemsControl.ItemTemplate>

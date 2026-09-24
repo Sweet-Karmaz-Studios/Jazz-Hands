@@ -362,6 +362,69 @@ public sealed class SetTitleAnimationHandler : ICommandHandler<SetTitleAnimation
     }
 }
 
+/// <summary>Measures where a title's text sits on the frame.</summary>
+public sealed class MeasureTitleHandler : IQueryHandler<MeasureTitleQuery, TitleMeasureInfo>
+{
+    /// <inheritdoc />
+    public TitleMeasureInfo Handle(Project project, MeasureTitleQuery query, QueryContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(query);
+        ArgumentNullException.ThrowIfNull(context);
+
+        ClipLocation location = HandlerHelp.Clip(project, query.ClipId);
+        if (!string.Equals(location.Clip.GeneratorId, TitleParams.GeneratorId, StringComparison.Ordinal))
+        {
+            throw new CommandException("not-a-title", $"'{location.Clip.Name}' ({query.ClipId}) is not a title.");
+        }
+
+        Clip clip = location.Clip;
+        Flicks at = query.At ?? clip.Start + new Flicks(clip.Duration.Value / 2);
+        if (at < clip.Start || at >= clip.End)
+        {
+            throw new CommandException("time-out-of-range", $"'{clip.Name}' plays from {clip.Start} to {clip.End}; {at} is outside it.");
+        }
+
+        return Measure(project, location, at, context.Session?.ProjectPath ?? string.Empty)
+            ?? throw new CommandException("empty-title", $"'{clip.Name}' has no text to measure.");
+    }
+
+    /// <summary>A title's place on the frame at a moment on the sequence, or null when it has no text.</summary>
+    internal static TitleMeasureInfo? Measure(Project project, ClipLocation location, Flicks at, string projectPath)
+    {
+        Clip clip = location.Clip;
+        Flicks local = at - clip.Start;
+        ParameterSet parameters = ParameterSet.Evaluate(TitleHelp.Descriptor, TitleHelp.Own(clip), local);
+        Vector2 frame = TitleHelp.Frame(project, location.Sequence);
+        string folder = projectPath.Length > 0 ? Path.GetDirectoryName(Path.GetFullPath(projectPath)) ?? string.Empty : string.Empty;
+
+        if (TitleGenerator.Measure(parameters, frame, folder) is not { } bounds)
+        {
+            return null;
+        }
+
+        // The title's own offset and zoom, then the clip's transform, as the renderer applies them.
+        Vector2 centre = bounds.Centre;
+        float zoom = parameters.Float(TitleParams.Zoom);
+        Vector2 offset = parameters.Float2(TitleParams.Offset);
+        Matrix3x2 place = Render.Compositing.RenderGraphBuilder.FramePlacement(clip, local, frame);
+        Vector2 half = frame / 2.0f;
+        Vector4 box = bounds.Box;
+        TitlePoint[] corners =
+        [
+            .. new[] { new Vector2(box.X, box.Y), new Vector2(box.X + box.Z, box.Y), new Vector2(box.X + box.Z, box.Y + box.W), new Vector2(box.X, box.Y + box.W) }
+                .Select(corner => ((corner - centre) * zoom) + centre + offset)
+                .Select(corner => Vector2.Transform(corner + half, place) - half)
+                .Select(corner => new TitlePoint(Math.Round(corner.X, 2), Math.Round(corner.Y, 2))),
+        ];
+
+        bool Within(double fraction) => corners.All(corner => Math.Abs(corner.X) <= half.X * fraction + 0.01 && Math.Abs(corner.Y) <= half.Y * fraction + 0.01);
+        static TitleRect Rect(Vector4 rect) => new(Math.Round(rect.X, 2), Math.Round(rect.Y, 2), Math.Round(rect.Z, 2), Math.Round(rect.W, 2));
+
+        return new TitleMeasureInfo(clip.Id, at, Rect(bounds.Block), Rect(bounds.Text), Rect(bounds.Box), bounds.Lines, corners, Within(0.9), Within(1.0));
+    }
+}
+
 /// <summary>Lists the title presets.</summary>
 public sealed class ListTitlePresetsHandler : IQueryHandler<ListTitlePresetsQuery, TitlePresetInfo[]>
 {

@@ -181,97 +181,21 @@ internal sealed class TitleRenderer : IDisposable
     private Look? Build(EffectContext context, ParameterSet parameters, RenderTarget output, string key)
     {
         float scale = context.QualityScale;
-        TitleText text = TitleMarkup.Parse(parameters.Text(TitleParams.Text));
-        if (text.Plain.Length == 0)
+        var frame = new Vector2(output.Width, output.Height);
+        TitleLayout? laid = TitleLayout.Lay(parameters, scale, frame, context.ProjectFolder);
+        if (laid is null)
         {
             return null;
         }
 
-        string folder = context.ProjectFolder;
-        IDWriteFontCollection1 collection = FontCatalog.Collection(folder);
-        FontWeight weight = Weight(parameters.Enum(TitleParams.Weight));
-        float size = Math.Max(1.0f, parameters.Float(TitleParams.Size) * scale);
-        float wrap = parameters.Float(TitleParams.Width) * scale;
-
-        using IDWriteTextFormat format = FontCatalog.Factory.CreateTextFormat(
-            FontCatalog.Resolve(parameters.Text(TitleParams.Font), folder),
-            collection,
-            weight,
-            parameters.Bool(TitleParams.Italic) ? Vortice.DirectWrite.FontStyle.Italic : Vortice.DirectWrite.FontStyle.Normal,
-            FontStretch.Normal,
-            size,
-            "en-us");
-        format.WordWrapping = wrap > 0.0f ? WordWrapping.Wrap : WordWrapping.NoWrap;
-        format.ParagraphAlignment = ParagraphAlignment.Near;
-        format.TextAlignment = parameters.Enum(TitleParams.Align) switch
-        {
-            "left" => TextAlignment.Leading,
-            "right" => TextAlignment.Trailing,
-            _ => TextAlignment.Center,
-        };
-
-        float spacing = parameters.Float(TitleParams.LineSpacing);
-        if (MathF.Abs(spacing - 1.0f) > 1e-4f)
-        {
-            format.SetLineSpacing(LineSpacingMethod.Proportional, spacing, spacing);
-        }
-
-        IDWriteTextLayout layout = FontCatalog.Factory.CreateTextLayout(text.Plain, format, wrap > 0.0f ? wrap : 1_000_000.0f, 1_000_000.0f);
-        foreach (TitleSpan span in text.Spans)
-        {
-            var range = new TextRange((uint)span.Start, (uint)span.Length);
-            TitleStyle style = span.Style;
-            if (style.Bold)
-            {
-                layout.SetFontWeight((FontWeight)Math.Min(900, (int)weight + 300), range);
-            }
-
-            if (style.Italic)
-            {
-                layout.SetFontStyle(Vortice.DirectWrite.FontStyle.Italic, range);
-            }
-
-            if (style.Underline)
-            {
-                layout.SetUnderline(true, range);
-            }
-
-            if (style.Size is { } spanSize)
-            {
-                layout.SetFontSize(Math.Max(1.0f, spanSize * scale), range);
-            }
-
-            if (style.Font is { } font)
-            {
-                layout.SetFontFamilyName(FontCatalog.Resolve(font, folder), range);
-            }
-        }
-
-        float tracking = parameters.Float(TitleParams.Tracking) * scale;
-        if (tracking != 0.0f)
-        {
-            using IDWriteTextLayout1 spaced = layout.QueryInterface<IDWriteTextLayout1>();
-            spaced.SetCharacterSpacing(0.0f, tracking, 0.0f, new TextRange(0, (uint)text.Plain.Length));
-        }
-
-        // Without wrapping the text is as wide as its longest line, and lines align inside that.
-        TextMetrics measured = layout.Metrics;
-        float blockWidth = wrap > 0.0f ? wrap : Math.Max(1.0f, measured.WidthIncludingTrailingWhitespace);
-        layout.MaxWidth = blockWidth;
-        layout.MaxHeight = Math.Max(1.0f, measured.Height);
-        TextMetrics metrics = layout.Metrics;
-        OverhangMetrics overhang = layout.OverhangMetrics;
-        float blockHeight = Math.Max(1.0f, metrics.Height);
-
-        var frame = new Vector2(output.Width, output.Height);
-        Vector2 anchor = (frame / 2.0f) + (parameters.Float2(TitleParams.Position) * scale);
-        var origin = new Vector2(
-            anchor.X - (parameters.Enum(TitleParams.Align) switch { "left" => 0.0f, "right" => blockWidth, _ => blockWidth / 2.0f }),
-            anchor.Y - (parameters.Enum(TitleParams.VAlign) switch { "top" => 0.0f, "bottom" => blockHeight, _ => blockHeight / 2.0f }));
-
-        // DirectWrite puts letter spacing after every letter, the last on a line too, which would
-        // pull centred and right aligned text left of where it belongs.
-        origin.X += parameters.Enum(TitleParams.Align) switch { "left" => 0.0f, "right" => tracking, _ => tracking / 2.0f };
+        // The look keeps the layout; the rest of what was laid out is read here.
+        IDWriteTextLayout layout = laid.Layout;
+        TitleText text = laid.Text;
+        TextMetrics metrics = laid.Metrics;
+        OverhangMetrics overhang = laid.Overhang;
+        float blockWidth = laid.BlockWidth;
+        float blockHeight = laid.BlockHeight;
+        Vector2 origin = laid.Origin;
 
         // What the layer must hold, in layout coordinates: the ink, the outline around it, the
         // box, and the shadow where it falls.
@@ -549,19 +473,6 @@ internal sealed class TitleRenderer : IDisposable
     private static Vector4 Straight(Vector4 premultiplied) => premultiplied.W > 0.0f
         ? new Vector4(premultiplied.X / premultiplied.W, premultiplied.Y / premultiplied.W, premultiplied.Z / premultiplied.W, premultiplied.W)
         : Vector4.Zero;
-
-    private static FontWeight Weight(string name) => name switch
-    {
-        "thin" => FontWeight.Thin,
-        "extra-light" => FontWeight.ExtraLight,
-        "light" => FontWeight.Light,
-        "medium" => FontWeight.Medium,
-        "semibold" => FontWeight.SemiBold,
-        "bold" => FontWeight.Bold,
-        "extra-bold" => FontWeight.ExtraBold,
-        "black" => FontWeight.Black,
-        _ => FontWeight.Normal,
-    };
 
     private static Bounds Union(Bounds a, Bounds b) =>
         new(Math.Min(a.Left, b.Left), Math.Min(a.Top, b.Top), Math.Max(a.Right, b.Right), Math.Max(a.Bottom, b.Bottom));
