@@ -1,0 +1,142 @@
+using JazzHands.Core.Model;
+using JazzHands.Core.Time;
+using JazzHands.Render;
+using JazzHands.Render.Compositing;
+using JazzHands.Render.Scopes;
+using Vortice.Direct3D11;
+using Vortice.DXGI;
+
+namespace JazzHands.Engine.Frames;
+
+/// <summary>One frame rendered for reading on the CPU: linear light, the delivered signal, the scopes.</summary>
+/// <param name="Width">Pixels across.</param>
+/// <param name="Height">Pixels down.</param>
+/// <param name="Linear">Premultiplied linear BT.709, four floats a pixel, top row first.</param>
+/// <param name="Bgra">The same frame encoded as delivered (BT.1886, eight bits), BGRA.</param>
+/// <param name="Scopes">What the scopes read on the delivered frame.</param>
+public sealed record StillFrame(int Width, int Height, float[] Linear, byte[] Bgra, ScopeReading Scopes);
+
+/// <summary>
+/// Renders single frames for queries that need to look at the picture: the eyedropper, the scopes
+/// read headless, and later <c>jazz frame</c>.
+/// </summary>
+/// <remarks>
+/// A frame server of its own on WARP, made when first asked for, so a session that never looks at
+/// a frame never makes a device and a query never competes with playback for the GPU. One frame
+/// at a time behind a lock: queries can arrive on any thread. Full quality, bilinear, the way an
+/// export would draw it.
+/// </remarks>
+public sealed class StillRenderer : IDisposable
+{
+    private readonly Lock _gate = new();
+    private readonly RenderDevice? _given;
+    private RenderDevice? _device;
+    private FrameServer? _frames;
+    private ScopeRenderer? _scopes;
+    private bool _disposed;
+
+    /// <summary>Creates the renderer; the device, WARP unless one is given, is made on first use.</summary>
+    public StillRenderer(RenderDevice? device = null)
+    {
+        _given = device;
+    }
+
+    /// <summary>Renders a sequence at a time and reads it back.</summary>
+    public StillFrame Render(Project project, Sequence sequence, Flicks time, string projectPath = "")
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(sequence);
+
+        lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            _device ??= _given ?? RenderDevice.Create(forceWarp: true);
+            _frames ??= new FrameServer(_device);
+            _scopes ??= new ScopeRenderer(_device);
+
+            RenderTarget stack = _frames.Render(project, sequence, time, new RenderOptions { Bicubic = false }, projectPath);
+            RenderTarget display = _frames.Compositor.Pool.Rent(stack.Width, stack.Height, Format.B8G8R8A8_UNorm);
+            try
+            {
+                _frames.Compositor.Output(stack, display.View, stack.Width, stack.Height, new OutputSettings(DitherLevels: 0));
+                float[] linear = ReadFloats(stack);
+                byte[] bgra = ReadBytes(display);
+                ScopeReading scopes = _scopes.Measure(display.Texture);
+                return new StillFrame(stack.Width, stack.Height, linear, bgra, scopes);
+            }
+            finally
+            {
+                _frames.Compositor.Pool.Return(display);
+                _frames.Compositor.Pool.Return(stack);
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        lock (_gate)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            _scopes?.Dispose();
+            _frames?.Dispose();
+            if (_given is null)
+            {
+                _device?.Dispose();
+            }
+        }
+    }
+
+    private unsafe float[] ReadFloats(RenderTarget target)
+    {
+        using ID3D11Texture2D staging = _device!.CreateStagingTexture(target.Texture);
+        ID3D11DeviceContext context = _device.ImmediateContext;
+        context.CopyResource(staging, target.Texture);
+        MappedSubresource mapped = context.Map(staging, 0, MapMode.Read);
+        try
+        {
+            float[] pixels = new float[target.Width * target.Height * 4];
+            for (int row = 0; row < target.Height; row++)
+            {
+                var halves = new ReadOnlySpan<Half>((byte*)mapped.DataPointer + (row * (int)mapped.RowPitch), target.Width * 4);
+                for (int index = 0; index < halves.Length; index++)
+                {
+                    pixels[(row * target.Width * 4) + index] = (float)halves[index];
+                }
+            }
+
+            return pixels;
+        }
+        finally
+        {
+            context.Unmap(staging, 0);
+        }
+    }
+
+    private unsafe byte[] ReadBytes(RenderTarget target)
+    {
+        using ID3D11Texture2D staging = _device!.CreateStagingTexture(target.Texture);
+        ID3D11DeviceContext context = _device.ImmediateContext;
+        context.CopyResource(staging, target.Texture);
+        MappedSubresource mapped = context.Map(staging, 0, MapMode.Read);
+        try
+        {
+            byte[] pixels = new byte[target.Width * target.Height * 4];
+            for (int row = 0; row < target.Height; row++)
+            {
+                new ReadOnlySpan<byte>((byte*)mapped.DataPointer + (row * (int)mapped.RowPitch), target.Width * 4).CopyTo(pixels.AsSpan(row * target.Width * 4));
+            }
+
+            return pixels;
+        }
+        finally
+        {
+            context.Unmap(staging, 0);
+        }
+    }
+}

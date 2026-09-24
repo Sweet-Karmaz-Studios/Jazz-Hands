@@ -41,6 +41,10 @@ public static class EngineServices
         // selection commands find it here, which is what lets a script select and then act.
         services.TryAddSingleton<Selection.SelectionService>();
 
+        // Frames looked at by queries (the eyedropper, the scopes read headless) are drawn on WARP
+        // by a device of their own, made on first use.
+        services.TryAddSingleton(_ => new Frames.StillRenderer());
+
         // Keyframe indexes for planning exports, shared so a file is scanned once per process.
         services.TryAddSingleton(provider => new Export.KeyframeLookup(provider.GetService<Media.Import.CacheManager>()));
         services.TryAddSingleton(provider =>
