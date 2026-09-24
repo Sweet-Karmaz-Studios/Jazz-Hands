@@ -273,6 +273,8 @@ Inside the bar of 0.1%.
 | `--software` | Decode on the CPU, as CI does. |
 | `--panel <WxH>` | The surface each frame is drawn into. 2560x1440 by default. |
 | `--audible` | Play at full volume. |
+| `--layers <n>` | Video tracks to stack, each scaled and turned into its own quadrant. |
+| `--effects <ids>` | Picture effects stacked on every clip at their defaults, comma separated: `--effects video.blur.gaussian,video.glow`. An id that is not a picture effect is refused. |
 
 "Late" is how far into its frame interval each frame went up. Exit code 1 when more than 0.1% of
 the frames due were dropped.
@@ -525,6 +527,7 @@ jazz clip set-crop trailer.jazz <clip-id> --left 10 --right 10
 jazz mask add trailer.jazz <clip-id> --shape ellipse --x 480 --y 270 --width 960 --height 540 --feather 40
 jazz mask add trailer.jazz <clip-id> --shape bezier --path "M 100 100 C 400 0 800 0 1100 100 L 600 900 Z"
 jazz mask set trailer.jazz <mask-id> --invert true
+jazz mask add trailer.jazz <effect-id> --shape rectangle --x 0 --y 0 --width 640 --height 1080 --expansion 20
 ```
 
 | Verb | Does |
@@ -533,11 +536,11 @@ jazz mask set trailer.jazz <mask-id> --invert true
 | `clip set-opacity <clip> --opacity x` | 0 invisible to 1 opaque. |
 | `clip set-blend <clip> <mode>` | `normal`, `add`, `multiply`, `screen`, `overlay`, `darken`, `lighten`, `difference`, `soft-light`, `hard-light`. Blending happens in linear light. |
 | `clip set-crop <clip> [--left] [--top] [--right] [--bottom]` | Percent of each side cut away. Left and right together, or top and bottom, must leave something. |
-| `mask add <clip> --shape s ...` | `rectangle` and `ellipse` take `--x --y --width --height` in source pixels; `polygon` and `bezier` take `--path`, SVG path data (M, L, H, V, C, Q, Z). `--feather` softens the edge by that many pixels, `--mode` is `add`, `subtract` or `intersect` with the masks before it, `--invert true` keeps the outside. |
+| `mask add <clip-or-effect> --shape s ...` | `rectangle` and `ellipse` take `--x --y --width --height` in source pixels; `polygon` and `bezier` take `--path`, SVG path data (M, L, H, V, C, Q, Z). `--feather` softens the edge by that many pixels, `--expansion` grows the shape by that many pixels (shrinks it when negative, -1000 to 1000), `--mode` is `add`, `subtract` or `intersect` with the masks before it, `--invert true` keeps the outside. On a picture effect (clip or track) the masks limit where the effect applies; the rest of the picture passes through. Coordinates are still the clip's source pixels. |
 | `mask set <mask> ...` | The same options, plus `--enabled on\|off`. |
 | `mask remove <mask>` | Removes it. |
 
-Errors: `not-a-picture` for an audio clip, `value-out-of-range`, `crop-out-of-range`,
+Errors: `not-a-picture` for an audio clip, `not-a-mask-owner` for anything but a picture clip or a picture effect, `value-out-of-range`, `crop-out-of-range`,
 `invalid-mask` (a shape with no area, or a path that does not parse or close), `mask-not-found`,
 `duplicate-id`. All of it is undoable.
 
@@ -733,6 +736,32 @@ nearest name), `wrong-effect-kind`, `not-an-effect` (a generator), `not-an-effec
 `param-animated`, `not-animated`, `not-animatable`, `not-interpolable`, `keyframe-not-found`
 (listing where they are), `keyframe-exists`, `handle-out-of-range`, `time-out-of-range`,
 `preset-not-found`, `duplicate-name`, `invalid-data`, `no-effects`, `generator-parameters`.
+
+#### The library (Phase 16)
+
+| Folder | Types |
+|---|---|
+| Blur | `video.blur.gaussian`, `video.blur.directional`, `video.blur.radial`, `video.sharpen` |
+| Distort | `video.lens-distortion`, `video.mirror`, `video.tile` |
+| Keying | `video.key.chroma` (tolerance, softness, spill, choke, feather, `view matte`), `video.key.luma` |
+| Stylize | `video.drop-shadow`, `video.find-edges`, `video.flicker`, `video.glow`, `video.invert`, `video.noise`, `video.pixelate`, `video.posterize`, `video.vignette` |
+| Transform | `video.transform`, `video.crop` (feathered), `video.ken-burns` |
+| Generators | `gen.solid`, `gen.gradient`, `gen.noise`, `gen.checkerboard`, `gen.countdown`, `gen.timecode` |
+| Shapes | `gen.shape.rectangle`, `gen.shape.ellipse`, `gen.shape.line`, `gen.shape.arrow` |
+
+A generator is a clip, not an effect: `clip add` makes one, and its settings are the clip's own
+parameters, set and keyframed on the clip id.
+
+```bash
+jazz clip add trailer.jazz <track-id> --at 00:00:10.000 --generator gen.countdown --dur 5s
+jazz param set trailer.jazz <clip-id> from 10
+jazz clip add trailer.jazz <track-id> --at 0 --generator gen.shape.arrow --id <arrow-id>
+jazz keyframe add trailer.jazz <arrow-id> end --at 0 --local --value "-400, 0"
+jazz keyframe add trailer.jazz <arrow-id> end --at 1s --local --value "400, 0" --interp ease-out
+```
+
+Grain, noise and flicker are seeded from the clip or effect id, so the same frame always looks the
+same in the preview, in `jazz frame` and in an export.
 
 ### Keys
 

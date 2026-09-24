@@ -280,7 +280,7 @@ public static class GeneratedCommands
         IndentSize = 2,
         NewLine = "\n",
 
-        // As in the project file: an apostrophe in a description reads as one, not as '.
+        // As in the project file: an apostrophe in a description reads as one, not as \u0027.
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
