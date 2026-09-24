@@ -684,6 +684,56 @@ the project: another project with the same footage finds them.
 A true or false option can be given on its own: `--auto` is `--auto true`. Put it after the
 positional arguments, because a word following it is read as its value.
 
+### Effects, parameters and keyframes
+
+Every parameter belongs to something with an id, a clip, a track, an effect or a mask, and is
+named the same way everywhere. A clip's own are `transform.position`, `transform.scale`,
+`transform.rotation`, `transform.anchor`, `opacity`, `crop.left` (`.top`, `.right`, `.bottom`),
+and for sound `volume` and `pan`; a generator clip also has its own (a solid's `color`). An
+effect's are whatever `jazz effect list` shows for its type. Values are text: `12`, `"100, 50"`,
+`"#FF8800"` (sRGB), `both`, `true`.
+
+```bash
+jazz effect list trailer.jazz --kind video
+jazz effect add trailer.jazz <clip-id> video.blur.gaussian --id <effect-id>
+jazz keyframe add trailer.jazz <effect-id> radius --at 00:00:04.000 --value 0
+jazz keyframe add trailer.jazz <effect-id> radius --at 00:00:06.000 --value 40 --interp ease-in-out
+jazz param set trailer.jazz <clip-id> transform.scale 0.5
+jazz keyframe add trailer.jazz <clip-id> transform.position --at 1s --local --value "-300, 0"
+jazz param list trailer.jazz <clip-id>
+```
+
+| Verb | Does |
+|---|---|
+| `effect list [--kind video\|audio\|generator] [--search s]` | Every type with its parameters, types, defaults, limits and choices. |
+| `effect add <owner> <type> [--index n] [--id]` | Adds an effect to a clip or a track. Picture effects go on video and adjustment clips and tracks, sound effects on audio ones. |
+| `effect remove <effect>`, `effect move <effect> --index n` | Takes it off; moves it in its chain (effects run first to last). |
+| `effect set-enabled <effect> false` | Bypasses it without removing it. |
+| `effect set-param <effect> <param> <value> [--at]` | The same as `param set`, for an effect. |
+| `effect reset <effect> [--param p]` | Back to the defaults, keyframes and all. |
+| `effect get <effect>` | Its type, place and every parameter with its keyframes. |
+| `effect copy <ids>`, `effect paste <owner> --data <json> [--index]` | Copies effects (an owner's id copies its chain) as JSON and pastes them with new ids. |
+| `effect save-preset <ids> --name n`, `effect apply-preset <owner> <preset>`, `effect remove-preset <preset>`, `effect list-presets` | Effect chains saved in the project, applied by id or name. |
+| `effect export-preset <preset>`, `effect import-preset --data <json> [--name]` | A preset as JSON, for another project. |
+| `param set <owner> <param> <value> [--at t] [--local]` | A constant; on a parameter with keyframes, `--at` sets the keyframe there, and without it the command is refused rather than dropping the animation. The default value stores nothing. |
+| `param clear-keyframes <owner> <param> [--at t]` | Turns animation off, keeping the value at `--at` (the first keyframe's without it). |
+| `param list <owner>`, `param get <owner> <param> [--at t]` | Parameters with their values and keyframes, times on the sequence. |
+| `keyframe add <owner> <param> --at t [--value v] [--interp i]` | Adds a keyframe, or changes the one at that time. Without `--value` it takes what the parameter is worth there. A new keyframe takes the shape of the one before it. |
+| `keyframe remove`, `keyframe move --to t`, `keyframe set-value --value v`, `keyframe set-interp --interp i` | By `--at`; a keyframe within half a frame of it is found. Removing the last leaves its value as a constant. |
+| `keyframe set-handles <owner> <param> --at t [--in "x, y"] [--out "x, y"]` | Bezier handles, time and value from 0 to 1 across the segment. |
+
+Times are on the sequence; `--local` reads them from the clip's start. Keyframes are stored
+relative to the clip, so moving it carries its animation. A time outside the clip is refused
+with a hint about `--local`. Interpolation is `hold`, `linear`, `bezier`, `ease-in`, `ease-out`
+or `ease-in-out`; switches, choices, text and paths always hold.
+
+Errors: `target-not-found`, `unknown-param` (listing what there is), `unknown-effect` (with the
+nearest name), `wrong-effect-kind`, `not-an-effect` (a generator), `not-an-effect-owner`,
+`effect-not-found`, `index-out-of-range`, `invalid-value`, `value-out-of-range`,
+`param-animated`, `not-animated`, `not-animatable`, `not-interpolable`, `keyframe-not-found`
+(listing where they are), `keyframe-exists`, `handle-out-of-range`, `time-out-of-range`,
+`preset-not-found`, `duplicate-name`, `invalid-data`, `no-effects`, `generator-parameters`.
+
 ### Keys
 
 The editor's editing keys are bindings to these same commands, kept in a keymap. The defaults:
