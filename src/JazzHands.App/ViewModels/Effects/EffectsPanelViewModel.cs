@@ -8,6 +8,7 @@ using JazzHands.Core.Commands;
 using JazzHands.Core.Effects;
 using JazzHands.Core.Model;
 using JazzHands.Core.Time;
+using JazzHands.Core.Titles;
 using JazzHands.Engine.Commands;
 using JazzHands.Engine.Effects;
 using JazzHands.Engine.Selection;
@@ -114,6 +115,25 @@ public sealed partial class EffectPresetItemViewModel(EffectsPanelViewModel pane
     private Task Remove() => panel.RemovePresetAsync(Id);
 }
 
+/// <summary>One title preset: a look and place for a new title, added at the playhead or dragged onto a track.</summary>
+public sealed partial class TitlePresetItemViewModel(EffectsPanelViewModel panel, TitlePresetInfo preset) : ObservableObject
+{
+    /// <summary>The name <c>--preset</c> takes, which a drag carries.</summary>
+    public string Name { get; } = preset.Name;
+
+    /// <summary>What the editor calls it.</summary>
+    public string Label { get; } = preset.Label;
+
+    /// <summary>When to use it.</summary>
+    public string Description { get; } = preset.Description;
+
+    /// <summary>True for one a person wrote rather than one that ships.</summary>
+    public bool IsOwn { get; } = !preset.BuiltIn;
+
+    [RelayCommand]
+    private Task Add() => panel.AddTitleAsync(Name);
+}
+
 /// <summary>
 /// The effects browser: every picture effect, generator and sound effect by folder, each with a
 /// picture of what it does, a search, favorites, and the project's presets.
@@ -188,6 +208,7 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
         _session.ProjectChanged += (_, _) => _ui.Post(LoadPresets);
         Refilter();
         LoadPresets();
+        LoadTitlePresets();
     }
 
     /// <summary>The folders, favorites first, then picture effects, then generators, then sound.</summary>
@@ -195,6 +216,9 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
 
     /// <summary>The project's presets.</summary>
     public ObservableCollection<EffectPresetItemViewModel> Presets { get; } = [];
+
+    /// <summary>The title presets, built in and a person's own.</summary>
+    public ObservableCollection<TitlePresetItemViewModel> TitlePresets { get; } = [];
 
     /// <summary>
     /// Adds an effect to every selected clip it suits, as one undo step.
@@ -245,6 +269,12 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
     {
         ArgumentNullException.ThrowIfNull(descriptor);
 
+        // A title is made from a preset, as jazz title add makes it, on the same free track.
+        if (descriptor.TypeId == TitleParams.GeneratorId)
+        {
+            return AddTitleAsync(null);
+        }
+
         if (_session.Project.ActiveSequence is not { } sequence)
         {
             Status = "Open a sequence to add a generator to.";
@@ -271,6 +301,13 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
             ],
             $"Add {descriptor.Name}"));
     }
+
+    /// <summary>
+    /// Puts a title from a preset on the timeline at the playhead, on the highest video track free
+    /// for its length or a new one above: <c>jazz title add --preset --at</c>.
+    /// </summary>
+    public Task AddTitleAsync(string? preset) =>
+        RunAsync(new AddTitleCommand(_playback?.Position ?? Flicks.Zero, Preset: preset));
 
     /// <summary>
     /// A transition from the browser: the selected transitions of its kind become it, or, with clips
@@ -446,6 +483,23 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
         foreach (EffectPreset look in Looks.All.Where(look => !_session.Project.EffectPresets.Any(preset => string.Equals(preset.Name, look.Name, StringComparison.OrdinalIgnoreCase))))
         {
             Presets.Add(new EffectPresetItemViewModel(this, look, builtIn: true));
+        }
+    }
+
+    private void LoadTitlePresets()
+    {
+        TitlePresets.Clear();
+        try
+        {
+            foreach (TitlePresetInfo preset in _session.Query(new ListTitlePresetsQuery()))
+            {
+                TitlePresets.Add(new TitlePresetItemViewModel(this, preset));
+            }
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            // The browser still works without them; the log says why.
+            _log.Warning(exception, "The title presets could not be listed");
         }
     }
 

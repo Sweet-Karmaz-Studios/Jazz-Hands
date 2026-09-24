@@ -14,6 +14,9 @@ public static class EffectDragData
     /// <summary>The clipboard format for an effect preset.</summary>
     public const string PresetFormat = "JazzHands.EffectPreset.v1";
 
+    /// <summary>The clipboard format for a title preset.</summary>
+    public const string TitlePresetFormat = "JazzHands.TitlePreset.v1";
+
     /// <summary>A drag of one effect type.</summary>
     public static DataObject ForEffect(string typeId)
     {
@@ -31,6 +34,19 @@ public static class EffectDragData
         data.SetData(PresetFormat, presetId);
         return data;
     }
+
+    /// <summary>A drag of one title preset, by name.</summary>
+    public static DataObject ForTitlePreset(string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        var data = new DataObject();
+        data.SetData(TitlePresetFormat, name);
+        return data;
+    }
+
+    /// <summary>The title preset a drag carries, or null.</summary>
+    public static string? TitlePreset(IDataObject? data) =>
+        data?.GetDataPresent(TitlePresetFormat) == true && data.GetData(TitlePresetFormat) is string { Length: > 0 } name ? name : null;
 
     /// <summary>The effect type a drag carries, or null.</summary>
     public static string? Effect(IDataObject? data) =>

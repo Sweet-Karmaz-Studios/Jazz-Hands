@@ -265,13 +265,13 @@ public sealed partial class TimelineViewModel
             if (modifiers.HasFlag(ModifierKeys.Shift))
             {
                 Select(companions, SelectMode.Add);
-                _dragIds = [.. Selected.Union(companions)];
+                _dragIds = [.. InSelectedOrder().Union(companions, StringComparer.Ordinal)];
             }
             else if (Selected.Contains(clip.Id))
             {
                 // A press on what is already selected drags all of it; only a click without a
                 // drag narrows the selection to this clip, on the way up.
-                _dragIds = [.. Selected.Where(id => Content.Clip(id) is not null)];
+                _dragIds = [.. InSelectedOrder().Where(id => Content.Clip(id) is not null)];
             }
             else
             {
@@ -511,13 +511,51 @@ public sealed partial class TimelineViewModel
         }
 
         bool generator = typeId is not null && Engine.Effects.EffectCatalog.Registry.Find(typeId) is { Kind: Core.Effects.EffectKind.Generator };
-        ICommand command = generator
+        ICommand command = generator && typeId == Core.Titles.TitleParams.GeneratorId
+            ? new AddTitleCommand(Geometry.TimeAt(point.X), TrackId: ownerId)
+            : generator
             ? new AddClipCommand(ownerId, Geometry.TimeAt(point.X), GeneratorId: typeId, Name: Engine.Effects.EffectCatalog.Registry.Find(typeId!)!.Name)
             : typeId is not null
                 ? new AddEffectCommand(ownerId, typeId)
                 : new ApplyEffectPresetCommand(ownerId, presetId!);
 
         await RunAsync(command).ConfigureAwait(true);
+    }
+
+    /// <summary>A title preset is over the timeline: says where it would go, and whether it can.</summary>
+    public bool TitleDragOver(string preset, Point point)
+    {
+        (string? trackId, string message) = TitleTarget(preset, point);
+        Status = message;
+        return trackId is not null;
+    }
+
+    /// <summary>
+    /// A title preset was dropped: a new title from it on the video track under the pointer, at
+    /// the pointer, exactly as <c>jazz title add --preset --at --track</c> makes one.
+    /// </summary>
+    public async Task DropTitleAsync(string preset, Point point)
+    {
+        (string? trackId, string message) = TitleTarget(preset, point);
+        if (trackId is null)
+        {
+            Status = message;
+            return;
+        }
+
+        await RunAsync(new AddTitleCommand(Geometry.TimeAt(point.X), Preset: preset, TrackId: trackId)).ConfigureAwait(true);
+    }
+
+    /// <summary>The video track a title dropped at a point goes on, or why it cannot.</summary>
+    private (string? TrackId, string Message) TitleTarget(string preset, Point point)
+    {
+        TimelineHit hit = HitAt(point);
+        if (hit.Region != TimelineRegion.Track || hit.Row is not { Kind: TrackKind.Video } row)
+        {
+            return (null, "Drop a title on a video track.");
+        }
+
+        return (row.TrackId, $"Add a {preset} title to {Content.Track(row.TrackId)?.Track.Name ?? string.Empty} here.");
     }
 
     /// <summary>The transition type being dragged, or null for anything else.</summary>

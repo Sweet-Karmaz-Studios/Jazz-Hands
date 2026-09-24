@@ -231,7 +231,9 @@ public sealed partial class TimelineViewModel
     /// <summary>Delete with transitions selected and no clips: takes the transitions off.</summary>
     private bool DeleteSelectedTransitions()
     {
-        string[] transitions = [.. Selected.Where(id => Content.Transition(id) is not null)];
+        // In the order they were selected: the set's own order follows string hashing, which
+        // changes from one run to the next.
+        string[] transitions = [.. InSelectedOrder().Where(id => Content.Transition(id) is not null)];
         if (transitions.Length == 0 || SelectedClipIds().Length > 0)
         {
             return false;

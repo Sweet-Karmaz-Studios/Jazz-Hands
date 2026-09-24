@@ -147,6 +147,35 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
+                <!-- Title presets: + adds one at the playhead, a drag puts one on a track. -->
+                <Border Margin="0,8,0,4" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,1,0,0" Padding="0,8,0,0">
+                    <TextBlock Style="{StaticResource Heading}" Text="Title presets" />
+                </Border>
+                <TextBlock Text="A look and a place for a new title. Press + for one at the playhead, or drag one onto a video track."
+                           TextWrapping="Wrap"
+                           FontSize="{DynamicResource Text.Caption}"
+                           Foreground="{DynamicResource Brush.Text.Disabled}" />
+                <ItemsControl ItemsSource="{Binding TitlePresets, Mode=OneWay}" Focusable="False">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:TitlePresetItemViewModel}">
+                            <Grid Margin="0,2" Background="Transparent" MouseMove="OnTitlePresetMouseMove" MouseLeftButtonDown="OnEffectMouseDown" ToolTip="{Binding Description, Mode=OneWay}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Label, Mode=OneWay}" Foreground="{DynamicResource Brush.Text.Primary}" />
+                                    <TextBlock Text="{Binding Description, Mode=OneWay}"
+                                               TextTrimming="CharacterEllipsis"
+                                               FontSize="{DynamicResource Text.Caption}"
+                                               Foreground="{DynamicResource Brush.Text.Secondary}" />
+                                </StackPanel>
+                                <Button Grid.Column="1" Style="{StaticResource Button.Small}" Content="&#xE710;" Command="{Binding AddCommand, Mode=OneWay}" ToolTip="Add a title like this at the playhead" AutomationProperties.Name="Add title" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
                 <!-- Presets saved in the project. -->
                 <Border Margin="0,8,0,4" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,1,0,0" Padding="0,8,0,0">
                     <TextBlock Style="{StaticResource Heading}" Text="Presets" />

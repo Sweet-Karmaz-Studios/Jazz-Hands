@@ -405,7 +405,14 @@ public sealed partial class TimelineViewModel
 
     private string NestName() => $"Nested sequence {_session.Project.Sequences.Length}";
 
-    private string[] SelectedClipIds() => [.. Selected.Where(id => Content.Clip(id) is not null)];
+    private string[] SelectedClipIds() => [.. InSelectedOrder().Where(id => Content.Clip(id) is not null)];
+
+    /// <summary>
+    /// What is selected, in the order it was selected. <see cref="Selected"/> is a set whose order
+    /// follows string hashing, which changes from run to run, so anything that builds commands from
+    /// the selection reads it this way.
+    /// </summary>
+    private IEnumerable<string> InSelectedOrder() => _selection.Ids.Where(Selected.Contains);
 
     private void MatchFrameAtPlayhead()
     {

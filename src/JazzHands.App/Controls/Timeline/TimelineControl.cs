@@ -325,6 +325,15 @@ public sealed class TimelineControl : FrameworkElement
         ArgumentNullException.ThrowIfNull(e);
         base.OnDragOver(e);
 
+        // A title preset is a new title on the video track under the pointer, at the pointer.
+        if (EffectDragData.TitlePreset(e.Data) is { } titlePreset)
+        {
+            bool free = _model is not null && _model.TitleDragOver(titlePreset, e.GetPosition(this));
+            e.Effects = free ? DragDropEffects.Copy : DragDropEffects.None;
+            e.Handled = true;
+            return;
+        }
+
         // Effects and presets from the effects panel go on the clip or track under the pointer.
         string? effect = EffectDragData.Effect(e.Data);
         string? preset = EffectDragData.Preset(e.Data);
@@ -355,6 +364,13 @@ public sealed class TimelineControl : FrameworkElement
     {
         ArgumentNullException.ThrowIfNull(e);
         base.OnDrop(e);
+
+        if (_model is not null && EffectDragData.TitlePreset(e.Data) is { } titlePreset)
+        {
+            e.Handled = true;
+            await _model.DropTitleAsync(titlePreset, e.GetPosition(this)).ConfigureAwait(true);
+            return;
+        }
 
         string? effect = EffectDragData.Effect(e.Data);
         string? preset = EffectDragData.Preset(e.Data);

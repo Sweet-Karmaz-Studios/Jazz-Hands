@@ -45,6 +45,14 @@ public partial class EffectsPanelView : UserControl
         }
     }
 
+    private void OnTitlePresetMouseMove(object sender, MouseEventArgs e)
+    {
+        if (StartsDrag(e) && ((FrameworkElement)sender).DataContext is TitlePresetItemViewModel preset)
+        {
+            DragDrop.DoDragDrop((DependencyObject)sender, EffectDragData.ForTitlePreset(preset.Name), DragDropEffects.Copy);
+        }
+    }
+
     private bool StartsDrag(MouseEventArgs e)
     {
         if (e.LeftButton != MouseButtonState.Pressed || _pressed is not { } pressed)
