@@ -43,6 +43,24 @@
                                     TitleBrush="{DynamicResource Brush.Preview.TitleSafe}"
                                     ActiveBrush="{DynamicResource Brush.Accent}"
                                     Markers="{Binding Markers, Mode=OneWay}" />
+            <!-- The selected title's frame: drag inside to move it, a corner to scale, the knob to turn;
+                 double-click to edit its text in place. -->
+            <preview:TitleHandlesOverlay x:Name="TitleFrame"
+                                         Corners="{Binding Titles.Corners, Mode=OneWay}"
+                                         RotateHandle="{Binding Titles.RotateHandle, Mode=OneWay}"
+                                         Brush="{DynamicResource Brush.Accent}" />
+            <TextBox x:Name="TitleEditor"
+                     HorizontalAlignment="Left"
+                     VerticalAlignment="Top"
+                     MinWidth="160"
+                     Visibility="Collapsed"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     Style="{StaticResource TextBox.Field}"
+                     FontSize="{DynamicResource Text.Body}"
+                     Text="{Binding Titles.EditText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                     ToolTip="Ctrl+Enter or clicking away sends the text; Esc leaves it as it was"
+                     AutomationProperties.Name="Title text" />
             <Border HorizontalAlignment="Center"
                     VerticalAlignment="Top"
                     Margin="0,8,0,0"

@@ -26,4 +26,19 @@ public sealed record SetClipTransformCommand(
     [property: Option("scale-y", "The vertical scale alone")] double? ScaleY = null,
     [property: Option("rotation", "Degrees clockwise")] double? Rotation = null,
     [property: Option("anchor-x", "The pivot, picture pixels right of its centre")] double? AnchorX = null,
-    [property: Option("anchor-y", "The pivot, picture pixels below its centre")] double? AnchorY = null) : ICommand;
+    [property: Option("anchor-y", "The pivot, picture pixels below its centre")] double? AnchorY = null) : IMergeableCommand
+{
+    /// <inheritdoc />
+    /// <remarks>A drag on the preview sends the same fields again and again; they are one step.</remarks>
+    public bool Continues(ICommand previous) =>
+        previous is SetClipTransformCommand before
+        && before.ClipId == ClipId
+        && (before.X is null) == (X is null)
+        && (before.Y is null) == (Y is null)
+        && (before.Scale is null) == (Scale is null)
+        && (before.ScaleX is null) == (ScaleX is null)
+        && (before.ScaleY is null) == (ScaleY is null)
+        && (before.Rotation is null) == (Rotation is null)
+        && (before.AnchorX is null) == (AnchorX is null)
+        && (before.AnchorY is null) == (AnchorY is null);
+}

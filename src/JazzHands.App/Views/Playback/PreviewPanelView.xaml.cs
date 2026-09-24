@@ -54,6 +54,15 @@ public partial class PreviewPanelView : UserControl
         Stage.MouseDown += OnStageMouseDown;
         Stage.MouseMove += OnStageMouseMove;
         Stage.MouseUp += OnStageMouseUp;
+
+        TitleEditor.PreviewKeyDown += OnTitleEditorKeyDown;
+        TitleEditor.LostKeyboardFocus += (_, _) =>
+        {
+            if (_model?.Titles is { IsEditingText: true } titles)
+            {
+                _ = titles.CommitTextAsync();
+            }
+        };
     }
 
     /// <summary>The presenter while the view is loaded, for tests.</summary>
@@ -77,12 +86,14 @@ public partial class PreviewPanelView : UserControl
     private void Bind(PreviewPanelViewModel? model)
     {
         _model?.PropertyChanged -= OnModelChanged;
+        _model?.Titles?.PropertyChanged -= OnTitlesChanged;
 
         _model = model;
 
         if (_model is not null)
         {
             _model.PropertyChanged += OnModelChanged;
+            _model.Titles?.PropertyChanged += OnTitlesChanged;
             NoDevice.Visibility = _model.Engine.Device is null ? Visibility.Visible : Visibility.Collapsed;
         }
 
@@ -181,6 +192,7 @@ public partial class PreviewPanelView : UserControl
         if (_model is null || Stage.ActualWidth < 1 || Stage.ActualHeight < 1)
         {
             Overlay.Picture = Rect.Empty;
+            TitleFrame.Picture = Rect.Empty;
             return;
         }
 
@@ -201,6 +213,66 @@ public partial class PreviewPanelView : UserControl
             placement.Width * Stage.ActualWidth,
             placement.Height * Stage.ActualHeight);
         Overlay.SequenceSize = new Size(_model.SequenceWidth, _model.SequenceHeight);
+        TitleFrame.Picture = Overlay.Picture;
+        TitleFrame.SequenceSize = Overlay.SequenceSize;
+        PlaceTitleEditor();
+    }
+
+    /// <summary>How near a grip counts as on it: seven screen units, in sequence pixels.</summary>
+    private float GripTolerance() =>
+        (float)((TitleHandlesOverlay.Grip + 2.5) * Overlay.SequenceSize.Width / Math.Max(1.0, Overlay.Picture.Width));
+
+    /// <summary>Puts the text box over the title while its text is being edited, or hides it.</summary>
+    private void PlaceTitleEditor()
+    {
+        if (_model?.Titles is not { IsEditingText: true, Corners: { Count: 4 } corners } || Overlay.Picture.IsEmpty)
+        {
+            TitleEditor.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        Rect over = TitleHandlesOverlay.Bounds(corners, Overlay.Picture, Overlay.SequenceSize);
+        TitleEditor.Margin = new Thickness(Math.Max(0, over.X), Math.Max(0, over.Y), 0, 0);
+        TitleEditor.Width = Math.Max(TitleEditor.MinWidth, over.Width);
+        TitleEditor.MinHeight = Math.Max(24, over.Height);
+        TitleEditor.Visibility = Visibility.Visible;
+    }
+
+    private void OnTitlesChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is not (nameof(TitleHandlesViewModel.IsEditingText) or nameof(TitleHandlesViewModel.Corners)))
+        {
+            return;
+        }
+
+        bool opening = e.PropertyName == nameof(TitleHandlesViewModel.IsEditingText) && _model?.Titles?.IsEditingText == true;
+        PlaceTitleEditor();
+        if (opening)
+        {
+            TitleEditor.Focus();
+            TitleEditor.SelectAll();
+        }
+    }
+
+    private void OnTitleEditorKeyDown(object sender, KeyEventArgs e)
+    {
+        if (_model?.Titles is not { } titles)
+        {
+            return;
+        }
+
+        if (e.Key == Key.Escape)
+        {
+            titles.CancelTextEdit();
+            Stage.Focus();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Enter && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+        {
+            _ = titles.CommitTextAsync();
+            Stage.Focus();
+            e.Handled = true;
+        }
     }
 
     private void OnStageMouseDown(object sender, MouseButtonEventArgs e)
@@ -226,6 +298,26 @@ public partial class PreviewPanelView : UserControl
             return;
         }
 
+        // The selected title's frame: a double-click inside edits the text, a press on it drags.
+        if (e.ChangedButton == MouseButton.Left && _model?.Titles is { } titles && !Overlay.Picture.IsEmpty)
+        {
+            System.Numerics.Vector2 at = TitleHandlesOverlay.ToSequence(e.GetPosition(Stage), Overlay.Picture, Overlay.SequenceSize);
+            TitleGrip grip = titles.HitTest(at, GripTolerance());
+            if (grip == TitleGrip.Move && e.ClickCount == 2)
+            {
+                titles.BeginTextEdit();
+                e.Handled = true;
+                return;
+            }
+
+            if (grip != TitleGrip.None && titles.Begin(grip, at))
+            {
+                Stage.CaptureMouse();
+                e.Handled = true;
+                return;
+            }
+        }
+
         if (e.ChangedButton == MouseButton.Middle && _model is { Zoom: not PreviewZoom.Fit })
         {
             _panFrom = e.GetPosition(Stage);
@@ -236,6 +328,24 @@ public partial class PreviewPanelView : UserControl
 
     private void OnStageMouseMove(object sender, MouseEventArgs e)
     {
+        if (_model?.Titles is { } titles && !Overlay.Picture.IsEmpty)
+        {
+            System.Numerics.Vector2 at = TitleHandlesOverlay.ToSequence(e.GetPosition(Stage), Overlay.Picture, Overlay.SequenceSize);
+            if (titles.IsDragging)
+            {
+                titles.Move(at, snap: Keyboard.Modifiers.HasFlag(ModifierKeys.Shift));
+                return;
+            }
+
+            Stage.Cursor = titles.HitTest(at, GripTolerance()) switch
+            {
+                TitleGrip.Move => Cursors.SizeAll,
+                TitleGrip.Scale => Cursors.SizeNWSE,
+                TitleGrip.Rotate => Cursors.Hand,
+                _ => null,
+            };
+        }
+
         if (_panFrom is not { } from)
         {
             return;
@@ -250,6 +360,14 @@ public partial class PreviewPanelView : UserControl
 
     private void OnStageMouseUp(object sender, MouseButtonEventArgs e)
     {
+        if (e.ChangedButton == MouseButton.Left && _model?.Titles is { IsDragging: true } titles)
+        {
+            titles.End();
+            Stage.ReleaseMouseCapture();
+            e.Handled = true;
+            return;
+        }
+
         if (_panFrom is not null && e.ChangedButton == MouseButton.Middle)
         {
             _panFrom = null;

@@ -111,7 +111,12 @@ public static class AppServices
             provider.GetRequiredService<IUiDispatcher>(),
             provider.GetRequiredService<IFullScreenPreview>(),
             provider.GetRequiredService<PointPicker>(),
-            provider.GetRequiredService<IDisplaySettings>()));
+            provider.GetRequiredService<IDisplaySettings>(),
+            new TitleHandlesViewModel(
+                provider.GetRequiredService<ISession>(),
+                provider.GetRequiredService<SelectionService>(),
+                provider.GetRequiredService<IPreviewEngine>(),
+                provider.GetRequiredService<IUiDispatcher>())));
         services.AddSingleton<IDisplaySettings>(_ => new FileDisplaySettings());
 
         // Thumbnails and waveforms: the engine's caches, turned into bitmaps and peaks for the
