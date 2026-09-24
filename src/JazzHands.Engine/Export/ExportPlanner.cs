@@ -296,6 +296,11 @@ public static class ExportPlanner
             reasons.Add($"{picture.Name} has effects.");
         }
 
+        if (!picture.Transitions.IsEmpty)
+        {
+            reasons.Add($"{picture.Name} has transitions, which are drawn.");
+        }
+
         if (reasons.Count > before || mediaId is null)
         {
             return null;
@@ -333,6 +338,12 @@ public static class ExportPlanner
 
             if (!Audible(track) || sound.All(clip => !clip.Enabled))
             {
+                continue;
+            }
+
+            if (!track.Transitions.IsEmpty)
+            {
+                reasons.Add($"{track.Name} has crossfades, which are mixed.");
                 continue;
             }
 
