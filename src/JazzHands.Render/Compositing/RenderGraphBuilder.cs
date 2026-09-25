@@ -43,6 +43,12 @@ public interface IFrameProvider
     /// different decoders rather than dragging one back and forth.
     /// </param>
     SourceFrame? Frame(Project project, Clip clip, Flicks timelineTime, int lane);
+
+    /// <summary>
+    /// When a media clip's file is missing or cannot be read, what its offline slate says under
+    /// "Media offline"; null when it is fine, and then a missing picture is only a gap.
+    /// </summary>
+    string? Offline(Project project, Clip clip) => null;
 }
 
 /// <summary>How a frame is built.</summary>
@@ -356,7 +362,21 @@ public static class RenderGraphBuilder
         {
             if (frames.Frame(project, clip, time, lane) is not { } frame)
             {
-                return null;
+                // A missing file shows its slate, drawn by the title generator, not a gap.
+                return frames.Offline(project, clip) is { } label
+                    && options.Effects.Find(TitleParams.GeneratorId) is { Kind: EffectKind.Generator, Implementation: { } titleType } title
+                    && typeof(VideoGenerator).IsAssignableFrom(titleType)
+                    ? (new GeneratorLayerSource(new EffectNode(title, ParameterSet.Evaluate(title, OfflineSlate.Title(label, (int)frameSize.X, (int)frameSize.Y), Flicks.Zero))
+                    {
+                        InstanceId = clip.Id + ":offline",
+                        LocalTime = Flicks.Zero,
+                        Seed = StableSeed(clip.Id),
+                        Model = OfflineSlate.Title(label, (int)frameSize.X, (int)frameSize.Y),
+                        OwnerLength = clip.Duration,
+                        SequenceTime = time,
+                        FrameRate = frameRate,
+                    }), frameSize, ConformPolicy.Stretch)
+                    : null;
             }
 
             ConformPolicy policy = project.MediaItem(mediaId)?.Conform ?? ConformPolicy.Fit;

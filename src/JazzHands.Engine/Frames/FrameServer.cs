@@ -55,6 +55,7 @@ public sealed class FrameServer : IFrameProvider, IDisposable
     private readonly CacheManager? _cacheManager;
     private readonly Dictionary<(string Hash, int Stream), KeyframeIndex?> _keyframes = [];
     private readonly Dictionary<string, string> _failed = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, bool> _missing = new(StringComparer.Ordinal);
     private string _projectPath = string.Empty;
     private ID3D11Query? _decodeFence;
     private bool _decodePending;
@@ -286,8 +287,32 @@ public sealed class FrameServer : IFrameProvider, IDisposable
         return true;
     }
 
-    /// <summary>Forgets which files failed, so they are tried again. Call when the project changes.</summary>
-    public void Retry() => _failed.Clear();
+    /// <summary>Forgets which files failed or were missing, so they are tried again. Call when the project changes.</summary>
+    public void Retry()
+    {
+        _failed.Clear();
+        _missing.Clear();
+    }
+
+    /// <inheritdoc />
+    string? IFrameProvider.Offline(Project project, Clip clip)
+    {
+        if (clip.MediaId is not { } mediaId || project.MediaItem(mediaId) is not { } item)
+        {
+            return null;
+        }
+
+        if (!_missing.TryGetValue(item.Id, out bool missing))
+        {
+            string path = _projectPath.Length == 0 ? Path.GetFullPath(item.RelativePath) : ProjectPaths.Resolve(_projectPath, item.RelativePath);
+            missing = item.Kind == MediaKind.ImageSequence ? !Directory.Exists(Path.GetDirectoryName(path)) : !File.Exists(path);
+            _missing[item.Id] = missing;
+        }
+
+        return missing ? item.Name
+            : _failed.ContainsKey(item.Id) ? $"{item.Name} (cannot be read)"
+            : null;
+    }
 
     /// <summary>
     /// What to decode in place of a media item, or null for the item itself: the proxy service's
