@@ -527,7 +527,7 @@ public sealed partial class TimelineViewModel
             return;
         }
 
-        bool generator = typeId is not null && Engine.Effects.EffectCatalog.Registry.Find(typeId) is { Kind: Core.Effects.EffectKind.Generator };
+        bool generator = typeId is not null && Engine.Effects.EffectCatalog.Registry.Find(typeId) is { Kind: Core.Effects.EffectKind.Generator or Core.Effects.EffectKind.AudioGenerator };
         ICommand command = generator && typeId == Core.Titles.TitleParams.GeneratorId
             ? new AddTitleCommand(Geometry.TimeAt(point.X), TrackId: ownerId)
             : generator
@@ -603,12 +603,13 @@ public sealed partial class TimelineViewModel
 
         // A generator is a clip of its own: it goes on the video track under the pointer, at the
         // pointer, whatever clip is there (the command refuses an overlap).
-        if (descriptor.Kind == Core.Effects.EffectKind.Generator)
+        if (descriptor.Kind is Core.Effects.EffectKind.Generator or Core.Effects.EffectKind.AudioGenerator)
         {
             string track = Content.Track(row.TrackId)?.Track.Name ?? string.Empty;
-            return row.Kind == TrackKind.Video
+            bool sound = descriptor.Kind == Core.Effects.EffectKind.AudioGenerator;
+            return row.Kind == (sound ? TrackKind.Audio : TrackKind.Video)
                 ? (row.TrackId, $"Add a {descriptor.Name} clip to {track} here.")
-                : (null, $"{descriptor.Name} makes a picture of its own; drop it on a video track.");
+                : (null, sound ? $"{descriptor.Name} makes sound of its own; drop it on a sound track." : $"{descriptor.Name} makes a picture of its own; drop it on a video track.");
         }
 
         bool picture = row.Kind is TrackKind.Video or TrackKind.Adjustment;

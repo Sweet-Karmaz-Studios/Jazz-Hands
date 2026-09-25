@@ -53,13 +53,13 @@ public sealed partial class EffectTypeItemViewModel : ObservableObject
     public string Description => Descriptor.Description.Length > 0 ? $"{Descriptor.Description}\n{Descriptor.TypeId}" : Descriptor.TypeId;
 
     /// <summary>True for a sound effect or a sound crossfade, which have no picture.</summary>
-    public bool IsAudio => Descriptor.Kind is EffectKind.Audio or EffectKind.AudioTransition;
+    public bool IsAudio => Descriptor.Kind is EffectKind.Audio or EffectKind.AudioTransition or EffectKind.AudioGenerator;
 
     /// <summary>True for a transition, which goes on a cut rather than a clip.</summary>
     public bool IsTransition => Descriptor.Kind is EffectKind.Transition or EffectKind.AudioTransition;
 
     /// <summary>True for a generator, which makes a clip rather than changing one.</summary>
-    public bool IsGenerator => Descriptor.Kind == EffectKind.Generator;
+    public bool IsGenerator => Descriptor.Kind is EffectKind.Generator or EffectKind.AudioGenerator;
 
     /// <summary>True for the types with a preview: everything but sound.</summary>
     public bool HasPicture => !IsAudio;
@@ -233,7 +233,7 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
             return Task.CompletedTask;
         }
 
-        if (descriptor.Kind == EffectKind.Generator)
+        if (descriptor.Kind is EffectKind.Generator or EffectKind.AudioGenerator)
         {
             return AddGeneratorAsync(descriptor);
         }
@@ -281,10 +281,12 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
             return Task.CompletedTask;
         }
 
+        // A picture generator goes on a video track, a sound one (a test tone) on a sound track.
+        TrackKind kind = descriptor.Kind == EffectKind.AudioGenerator ? TrackKind.Audio : TrackKind.Video;
         Flicks at = _playback?.Position ?? Flicks.Zero;
         Flicks end = at + GeneratorLength;
         Track? free = sequence.Tracks
-            .Where(track => track.Kind == TrackKind.Video && !track.Locked)
+            .Where(track => track.Kind == kind && !track.Locked)
             .OrderByDescending(track => track.Order)
             .FirstOrDefault(track => !track.Clips.Any(clip => clip.Start < end && at < clip.Start + clip.Duration));
 
@@ -296,7 +298,7 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
         string trackId = Id.New();
         return RunAsync(new BatchCommand(
             [
-                new AddTrackCommand(TrackKind.Video, TrackId: trackId),
+                new AddTrackCommand(kind, TrackId: trackId),
                 new AddClipCommand(trackId, at, GeneratorId: descriptor.TypeId, Duration: GeneratorLength, Name: descriptor.Name),
             ],
             $"Add {descriptor.Name}"));
@@ -429,7 +431,7 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
                 EffectKind.Video => 0,
                 EffectKind.Generator => 1,
                 EffectKind.Transition => 2,
-                EffectKind.Audio => 3,
+                EffectKind.Audio or EffectKind.AudioGenerator => 3,
                 _ => 4,
             };
             string key = $"{rank}:{descriptor.Category}";
@@ -437,7 +439,7 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
             {
                 folder = new EffectCategoryViewModel(descriptor.Kind switch
                 {
-                    EffectKind.Audio or EffectKind.AudioTransition => $"Audio: {descriptor.Category}",
+                    EffectKind.Audio or EffectKind.AudioTransition or EffectKind.AudioGenerator => $"Audio: {descriptor.Category}",
                     EffectKind.Transition => $"Transitions: {descriptor.Category}",
                     _ => descriptor.Category,
                 });
