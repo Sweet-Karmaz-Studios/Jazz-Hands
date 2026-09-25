@@ -1,0 +1,275 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jazzhands.dev/schema/export-preset.schema.json",
+  "title": "Jazz Hands export preset",
+  "description": "Generated from the JazzHands.Core model by tools/gen-schema. Do not edit by hand. Which containers take which codecs is in Docs/CODECS.md; presets.save checks a preset against those rules as well as this shape.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "label": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string"
+    },
+    "container": {
+      "type": "string"
+    },
+    "extension": {
+      "type": "string"
+    },
+    "video": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/exportPresetVideo"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "audio": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/exportPresetAudio"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "targetBytes": {
+      "type": "integer"
+    },
+    "loudness": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "$defs": {
+    "animatedValue": {
+      "description": "Either a parameter value, or an object with a keyframes array.",
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "keyframes"
+          ],
+          "properties": {
+            "keyframes": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/keyframe"
+              }
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/paramValue"
+        }
+      ]
+    },
+    "exportPresetAudio": {
+      "type": "object",
+      "properties": {
+        "encoder": {
+          "type": "string"
+        },
+        "bitrate": {
+          "type": "integer"
+        },
+        "channels": {
+          "type": "integer"
+        },
+        "sampleRate": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "encoder"
+      ]
+    },
+    "exportPresetVideo": {
+      "type": "object",
+      "properties": {
+        "codec": {
+          "type": "string"
+        },
+        "encoders": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "maxWidth": {
+          "type": "integer"
+        },
+        "maxHeight": {
+          "type": "integer"
+        },
+        "maxFrameRate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/rational"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "quality": {
+          "type": "integer"
+        },
+        "bitrate": {
+          "type": "integer"
+        },
+        "speed": {
+          "type": "string"
+        },
+        "lossless": {
+          "type": "boolean"
+        },
+        "pixelFormat": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "profile": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "level": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "keyframeSeconds": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "codec"
+      ]
+    },
+    "flicks": {
+      "type": "integer",
+      "description": "A time in flicks, 1/705600000 s. One frame at 30 fps is 23520000."
+    },
+    "paramValue": {
+      "description": "The value of an animatable parameter. A number is a float, a boolean is a bool, a string is text, an array of two or four numbers is a vector, and everything else carries a type tag.",
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 4
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "value"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "float",
+                "float2",
+                "float4",
+                "color",
+                "bool",
+                "int",
+                "enum",
+                "path",
+                "text"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "rational": {
+      "type": "object",
+      "description": "An exact ratio. Frame rates are written this way so that 30000/1001 stays exact.",
+      "required": [
+        "num",
+        "den"
+      ],
+      "properties": {
+        "num": {
+          "type": "integer"
+        },
+        "den": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "timeRange": {
+      "type": "object",
+      "required": [
+        "start",
+        "duration"
+      ],
+      "properties": {
+        "start": {
+          "$ref": "#/$defs/flicks"
+        },
+        "duration": {
+          "$ref": "#/$defs/flicks"
+        }
+      }
+    },
+    "vector2": {
+      "type": "array",
+      "description": "Two numbers, [x, y].",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 2,
+      "maxItems": 2
+    }
+  }
+}

@@ -30,10 +30,53 @@ public static class SchemaGenerator
     /// <summary>The identifier the published schema carries.</summary>
     public const string SchemaId = "https://jazzhands.dev/schema/jazz-project.schema.json";
 
+    /// <summary>The identifier the published export preset schema carries.</summary>
+    public const string PresetSchemaId = "https://jazzhands.dev/schema/export-preset.schema.json";
+
     private static readonly Lazy<string> LazyText = new(() => Render(Generate()));
+    private static readonly Lazy<string> LazyPresetText = new(() => Render(GeneratePreset()));
 
     /// <summary>The schema as canonical text, ending with a newline.</summary>
     public static string Text => LazyText.Value;
+
+    /// <summary>The export preset schema as canonical text, ending with a newline.</summary>
+    public static string PresetText => LazyPresetText.Value;
+
+    /// <summary>
+    /// Builds the schema for an export preset file: the built-in ones in the engine, and a
+    /// person's own in <c>%APPDATA%\JazzHands\export-presets</c>.
+    /// </summary>
+    public static JsonObject GeneratePreset()
+    {
+        var definitions = new JsonObject();
+        var seen = new Dictionary<Type, string>();
+
+        foreach ((string name, JsonObject schema) in PrimitiveDefinitions())
+        {
+            definitions[name] = schema;
+        }
+
+        JsonObject root = ObjectSchema(typeof(Export.ExportPreset), definitions, seen);
+
+        var document = new JsonObject
+        {
+            ["$schema"] = "https://json-schema.org/draft/2020-12/schema",
+            ["$id"] = PresetSchemaId,
+            ["title"] = "Jazz Hands export preset",
+            ["description"] =
+                "Generated from the JazzHands.Core model by tools/gen-schema. Do not edit by hand. "
+                + "Which containers take which codecs is in Docs/CODECS.md; presets.save checks a "
+                + "preset against those rules as well as this shape.",
+        };
+
+        foreach ((string name, JsonNode? value) in root)
+        {
+            document[name] = value?.DeepClone();
+        }
+
+        document["$defs"] = Sorted(definitions);
+        return document;
+    }
 
     /// <summary>Builds the schema document.</summary>
     public static JsonObject Generate()
