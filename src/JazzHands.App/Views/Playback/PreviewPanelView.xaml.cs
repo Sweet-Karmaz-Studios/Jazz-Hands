@@ -54,6 +54,7 @@ public partial class PreviewPanelView : UserControl
         Stage.MouseDown += OnStageMouseDown;
         Stage.MouseMove += OnStageMouseMove;
         Stage.MouseUp += OnStageMouseUp;
+        Stage.PreviewKeyDown += OnStageKeyDown;
 
         TitleEditor.PreviewKeyDown += OnTitleEditorKeyDown;
         TitleEditor.LostKeyboardFocus += (_, _) =>
@@ -206,6 +207,7 @@ public partial class PreviewPanelView : UserControl
         {
             Overlay.Picture = Rect.Empty;
             TitleFrame.Picture = Rect.Empty;
+            MaskFrame.Picture = Rect.Empty;
             return;
         }
 
@@ -228,6 +230,8 @@ public partial class PreviewPanelView : UserControl
         Overlay.SequenceSize = new Size(_model.SequenceWidth, _model.SequenceHeight);
         TitleFrame.Picture = Overlay.Picture;
         TitleFrame.SequenceSize = Overlay.SequenceSize;
+        MaskFrame.Picture = Overlay.Picture;
+        MaskFrame.SequenceSize = Overlay.SequenceSize;
         PlaceTitleEditor();
     }
 
@@ -288,6 +292,26 @@ public partial class PreviewPanelView : UserControl
         }
     }
 
+    /// <summary>While a mask is being drawn, Esc drops it and Enter closes it.</summary>
+    private void OnStageKeyDown(object sender, KeyEventArgs e)
+    {
+        if (_model?.MaskHandles is not { IsDrawing: true } masks)
+        {
+            return;
+        }
+
+        if (e.Key == Key.Escape)
+        {
+            masks.CancelDrawing();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Enter)
+        {
+            masks.Close();
+            e.Handled = true;
+        }
+    }
+
     private void OnStageMouseDown(object sender, MouseButtonEventArgs e)
     {
         // Clicking the picture takes keyboard focus away from whatever text box had it, so the
@@ -309,6 +333,26 @@ public partial class PreviewPanelView : UserControl
 
             e.Handled = true;
             return;
+        }
+
+        // The masks: a drawing tool takes every press; with the select tool a press on a mask drags it.
+        if (e.ChangedButton == MouseButton.Left && _model?.MaskHandles is { } masks && !Overlay.Picture.IsEmpty)
+        {
+            System.Numerics.Vector2 at = TitleHandlesOverlay.ToSequence(e.GetPosition(Stage), Overlay.Picture, Overlay.SequenceSize);
+            if (masks.Press(at, e.ClickCount, GripTolerance()))
+            {
+                Stage.CaptureMouse();
+                e.Handled = true;
+                return;
+            }
+
+            MaskGrip grip = masks.HitTest(at, GripTolerance());
+            if (grip.Kind != MaskGripKind.None && masks.Begin(grip, at))
+            {
+                Stage.CaptureMouse();
+                e.Handled = true;
+                return;
+            }
         }
 
         // The selected title's frame: a double-click inside edits the text, a press on it drags.
@@ -341,6 +385,40 @@ public partial class PreviewPanelView : UserControl
 
     private void OnStageMouseMove(object sender, MouseEventArgs e)
     {
+        if (_model?.MaskHandles is { } masks && !Overlay.Picture.IsEmpty)
+        {
+            System.Numerics.Vector2 at = TitleHandlesOverlay.ToSequence(e.GetPosition(Stage), Overlay.Picture, Overlay.SequenceSize);
+            if (masks.IsDragging)
+            {
+                masks.Move(at, broken: Keyboard.Modifiers.HasFlag(ModifierKeys.Alt));
+                return;
+            }
+
+            if (masks.IsDrawing && e.LeftButton == MouseButtonState.Pressed)
+            {
+                masks.Pull(at);
+                return;
+            }
+
+            if (masks.Tool != MaskTool.Select)
+            {
+                Stage.Cursor = Cursors.Cross;
+                return;
+            }
+
+            MaskGrip grip = masks.HitTest(at, GripTolerance());
+            if (grip.Kind != MaskGripKind.None)
+            {
+                Stage.Cursor = grip.Kind switch
+                {
+                    MaskGripKind.Body => Cursors.SizeAll,
+                    MaskGripKind.Feather => Cursors.SizeNS,
+                    _ => Cursors.Hand,
+                };
+                return;
+            }
+        }
+
         if (_model?.Titles is { } titles && !Overlay.Picture.IsEmpty)
         {
             System.Numerics.Vector2 at = TitleHandlesOverlay.ToSequence(e.GetPosition(Stage), Overlay.Picture, Overlay.SequenceSize);
@@ -373,6 +451,14 @@ public partial class PreviewPanelView : UserControl
 
     private void OnStageMouseUp(object sender, MouseButtonEventArgs e)
     {
+        if (e.ChangedButton == MouseButton.Left && _model?.MaskHandles is { } masks && (masks.IsDragging || masks.IsDrawing))
+        {
+            masks.End(TitleHandlesOverlay.ToSequence(e.GetPosition(Stage), Overlay.Picture, Overlay.SequenceSize));
+            Stage.ReleaseMouseCapture();
+            e.Handled = true;
+            return;
+        }
+
         if (e.ChangedButton == MouseButton.Left && _model?.Titles is { IsDragging: true } titles)
         {
             titles.End();

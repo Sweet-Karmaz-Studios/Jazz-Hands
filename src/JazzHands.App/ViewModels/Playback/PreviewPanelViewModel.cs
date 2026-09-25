@@ -122,8 +122,11 @@ public sealed partial class PreviewPanelViewModel : ToolViewModel
     /// <summary>The selected title's frame and handles on the picture; null where the panel has no selection to follow.</summary>
     public TitleHandlesViewModel? Titles { get; }
 
+    /// <summary>The selected clip's masks on the picture, and the tools that draw new ones; null where the panel has no selection to follow.</summary>
+    public MaskHandlesViewModel? MaskHandles { get; }
+
     /// <summary>Creates the panel.</summary>
-    public PreviewPanelViewModel(ISession session, IPreviewEngine engine, IUiDispatcher ui, IFullScreenPreview? fullScreen = null, PointPicker? picker = null, IDisplaySettings? display = null, TitleHandlesViewModel? titles = null)
+    public PreviewPanelViewModel(ISession session, IPreviewEngine engine, IUiDispatcher ui, IFullScreenPreview? fullScreen = null, PointPicker? picker = null, IDisplaySettings? display = null, TitleHandlesViewModel? titles = null, MaskHandlesViewModel? masks = null)
         : base(PanelId, "Preview")
     {
         ArgumentNullException.ThrowIfNull(session);
@@ -137,6 +140,7 @@ public sealed partial class PreviewPanelViewModel : ToolViewModel
         _picker = picker;
         _displaySettings = display;
         Titles = titles;
+        MaskHandles = masks;
         _display = display?.Transfer ?? DisplayTransfer.Srgb;
 
         // The inspector's points and picks show on the picture.

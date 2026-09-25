@@ -49,6 +49,38 @@
                                          Corners="{Binding Titles.Corners, Mode=OneWay}"
                                          RotateHandle="{Binding Titles.RotateHandle, Mode=OneWay}"
                                          Brush="{DynamicResource Brush.Accent}" />
+            <!-- The selected clip's masks: drag a point, a handle (Alt breaks a pair), a corner, the
+                 inside, or the feather knob above; the tools below draw new ones. -->
+            <preview:MaskHandlesOverlay x:Name="MaskFrame"
+                                        Masks="{Binding MaskHandles.Masks, Mode=OneWay}"
+                                        Sketch="{Binding MaskHandles.Sketch, Mode=OneWay}"
+                                        Tool="{Binding MaskHandles.Tool, Mode=OneWay}"
+                                        Brush="{DynamicResource Brush.Warning}" />
+            <Border HorizontalAlignment="Left"
+                    VerticalAlignment="Top"
+                    Margin="6"
+                    Padding="2"
+                    CornerRadius="3"
+                    Background="{DynamicResource Brush.Background.Raised}"
+                    Visibility="{Binding MaskHandles.CanDraw, Mode=OneWay, Converter={StaticResource Visible}}">
+                <StackPanel Orientation="Horizontal">
+                    <ToggleButton Style="{StaticResource Button.Text}" Content="Select"
+                                  IsChecked="{Binding MaskHandles.IsSelectTool, Mode=TwoWay}"
+                                  ToolTip="Drag the masks' points, handles and feather" AutomationProperties.Name="Select masks" />
+                    <ToggleButton Style="{StaticResource Button.Text}" Content="Rect"
+                                  IsChecked="{Binding MaskHandles.IsRectangleTool, Mode=TwoWay}"
+                                  ToolTip="Drag out a rectangle mask" AutomationProperties.Name="Rectangle mask" />
+                    <ToggleButton Style="{StaticResource Button.Text}" Content="Ellipse"
+                                  IsChecked="{Binding MaskHandles.IsEllipseTool, Mode=TwoWay}"
+                                  ToolTip="Drag out an ellipse mask" AutomationProperties.Name="Ellipse mask" />
+                    <ToggleButton Style="{StaticResource Button.Text}" Content="Polygon"
+                                  IsChecked="{Binding MaskHandles.IsPolygonTool, Mode=TwoWay}"
+                                  ToolTip="Click corner after corner; click the first point or double-click to close. Esc cancels." AutomationProperties.Name="Polygon mask" />
+                    <ToggleButton Style="{StaticResource Button.Text}" Content="Bezier"
+                                  IsChecked="{Binding MaskHandles.IsBezierTool, Mode=TwoWay}"
+                                  ToolTip="Click for a corner, drag for a curve; click the first point or double-click to close. Esc cancels." AutomationProperties.Name="Bezier mask" />
+                </StackPanel>
+            </Border>
             <TextBox x:Name="TitleEditor"
                      HorizontalAlignment="Left"
                      VerticalAlignment="Top"

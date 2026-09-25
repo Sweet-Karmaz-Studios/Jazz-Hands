@@ -100,6 +100,9 @@ public sealed class AnimationEvaluator
                 new ParamValue.Color(Vector4.Lerp(a.Value, b.Value, t)),
 
             // Mask outlines morph point by point; outlines that cannot hold until the next keyframe.
+            // At the ends the keyframe's own text comes back, not its cubic rewriting.
+            (ParamValue.Path, ParamValue.Path) when t <= 0.0f => from,
+            (ParamValue.Path, ParamValue.Path) when t >= 1.0f => to,
             (ParamValue.Path a, ParamValue.Path b) =>
                 MaskShapes.Interpolate(a.Value, b.Value, t) is { } shape ? new ParamValue.Path(shape) : from,
 
