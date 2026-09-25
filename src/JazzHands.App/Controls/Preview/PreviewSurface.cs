@@ -83,6 +83,24 @@ public sealed class PreviewSurface : IDisposable
     public double LastUnlockMs { get; private set; }
 
     /// <summary>
+    /// Makes the shared back buffer again on the render device as it now is, after the GPU was
+    /// reset and the device made again (Phase 33). UI thread.
+    /// </summary>
+    public void Rebuild()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        int width = Math.Max(1, PixelWidth);
+        int height = Math.Max(1, PixelHeight);
+        ReleaseBackBuffer();
+        ReleaseD3D9Device();
+        PixelWidth = 0;
+        PixelHeight = 0;
+        Resize(width, height);
+        SurfaceRecreated?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
     /// Allocates or reallocates the shared back buffer at the given pixel size. Cheap to call with
     /// an unchanged size, which is what makes it safe to call from a debounced SizeChanged handler.
     /// </summary>

@@ -52,6 +52,12 @@ public interface IAudioOutput : IDisposable
     /// <summary>A name for the device, for logs and the status bar.</summary>
     string DeviceName { get; }
 
+    /// <summary>
+    /// Times the output moved to another device because the one it had went away (unplugged,
+    /// disabled) or the default changed. The transport tells the person (Phase 33).
+    /// </summary>
+    int DeviceSwitches => 0;
+
     /// <summary>Starts pulling from a callback.</summary>
     void Start(IAudioRenderCallback callback);
 

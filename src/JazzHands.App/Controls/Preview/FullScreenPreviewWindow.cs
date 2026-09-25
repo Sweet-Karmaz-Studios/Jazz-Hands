@@ -131,8 +131,9 @@ internal sealed class SwapChainPresenter : IPreviewTarget, IDisposable
 {
     private readonly RenderDevice _device;
     private readonly SwapChainPreview _host;
-    private readonly PreviewPass _pass;
     private readonly Action<ID3D11Texture2D, int, int> _draw;
+    private PreviewPass _pass;
+    private int _generation;
     private readonly Func<DisplayTransfer>? _display;
     private readonly Lock _sync = new();
     private PreviewFrame _frame;
@@ -144,6 +145,7 @@ internal sealed class SwapChainPresenter : IPreviewTarget, IDisposable
         _display = display;
         _host = host;
         _pass = new PreviewPass(device);
+        _generation = device.Generation;
         _draw = Draw;
     }
 
@@ -156,6 +158,16 @@ internal sealed class SwapChainPresenter : IPreviewTarget, IDisposable
         {
             if (_disposed)
             {
+                return false;
+            }
+
+            if (_generation != _device.Generation)
+            {
+                // The GPU was reset: the pass and the swap chain are made again on the new device.
+                _generation = _device.Generation;
+                _pass.Dispose();
+                _pass = new PreviewPass(_device);
+                _host.Dispatcher.InvokeAsync(_host.Rebuild);
                 return false;
             }
 

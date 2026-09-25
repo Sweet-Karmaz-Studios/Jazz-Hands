@@ -33,7 +33,10 @@ public sealed class RenderDevice : IDisposable
     ];
 
     private readonly ILogger _log = Log.ForContext<RenderDevice>();
+    private readonly Lock _swap = new();
     private bool _disposed;
+    private volatile bool _simulatedLoss;
+    private int _generation;
 
     private RenderDevice(
         ID3D11Device device,
@@ -52,32 +55,113 @@ public sealed class RenderDevice : IDisposable
         FeatureLevel = device.FeatureLevel;
     }
 
-    /// <summary>The underlying device.</summary>
-    public ID3D11Device Device { get; }
+    /// <summary>The underlying device. Replaced by <see cref="Recreate"/> after the GPU was reset.</summary>
+    public ID3D11Device Device { get; private set; }
 
     /// <summary>The immediate context. Only the render thread may touch it.</summary>
-    public ID3D11DeviceContext ImmediateContext { get; }
+    public ID3D11DeviceContext ImmediateContext { get; private set; }
 
     /// <summary>Whether this is a hardware or WARP device.</summary>
-    public RenderDeviceKind Kind { get; }
+    public RenderDeviceKind Kind { get; private set; }
 
     /// <summary>The adapter description, for the version banner and logs.</summary>
-    public string AdapterName { get; }
+    public string AdapterName { get; private set; }
 
     /// <summary>
     /// The adapter LUID. The preview bridge matches this against the D3D9 adapter list, because a
     /// shared surface that crosses adapters is copied through system memory on every frame.
     /// </summary>
-    public long AdapterLuid { get; }
+    public long AdapterLuid { get; private set; }
 
     /// <summary>The feature level the device was created at.</summary>
-    public FeatureLevel FeatureLevel { get; }
+    public FeatureLevel FeatureLevel { get; private set; }
 
     /// <summary>
     /// True when the device was created with video support, which D3D11VA needs to share it with
     /// the decoder. WARP has no video support, so headless tests decode in software.
     /// </summary>
-    public bool SupportsVideo { get; }
+    public bool SupportsVideo { get; private set; }
+
+    /// <summary>
+    /// How many times the device has been made again after the GPU was reset. Anything holding
+    /// resources made on it compares this with what it saw last and makes them again (Phase 33).
+    /// </summary>
+    public int Generation => Volatile.Read(ref _generation);
+
+    /// <summary>
+    /// True when the GPU has gone from under this device: a driver update or crash, a timeout
+    /// detection and recovery, the adapter disabled. Nothing drawn on it will show until
+    /// <see cref="Recreate"/>.
+    /// </summary>
+    public bool IsLost => _simulatedLoss || Device.DeviceRemovedReason.Failure;
+
+    /// <summary>Why the device was lost, in words, or empty when it was not.</summary>
+    public string LostReason => _simulatedLoss ? "simulated" : Device.DeviceRemovedReason is { Failure: true } reason ? reason.ToString() : string.Empty;
+
+    /// <summary>Raised on the thread that called <see cref="Recreate"/>, once the new device is in place.</summary>
+    public event EventHandler? Recreated;
+
+    /// <summary>
+    /// True when an error is the GPU being removed, reset or hung, as Direct3D and DXGI report it
+    /// from any call, Present included.
+    /// </summary>
+    public static bool IsDeviceLoss(Exception? error)
+    {
+        for (Exception? current = error; current is not null; current = current.InnerException)
+        {
+            if (current is SharpGen.Runtime.SharpGenException { ResultCode.Code: var code }
+                && (uint)code is 0x887A0005 or 0x887A0006 or 0x887A0007 or 0x887A0020)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>For tests and drills: behaves as a device the GPU was taken from, until <see cref="Recreate"/>.</summary>
+    public void SimulateLoss() => _simulatedLoss = true;
+
+    /// <summary>
+    /// Makes the device again after the GPU was reset, on the same kind of adapter (the best one
+    /// again, which may be a different one, or WARP when that is all there is now), and raises
+    /// <see cref="Recreated"/>. Everything made on the old device must be made again; the caller
+    /// has already let go of what it held.
+    /// </summary>
+    public void Recreate()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        RenderDevice fresh = Kind == RenderDeviceKind.Warp ? Create(forceWarp: true) : Create();
+        lock (_swap)
+        {
+            ID3D11DeviceContext oldContext = ImmediateContext;
+            ID3D11Device oldDevice = Device;
+
+            Device = fresh.Device;
+            ImmediateContext = fresh.ImmediateContext;
+            Kind = fresh.Kind;
+            AdapterName = fresh.AdapterName;
+            AdapterLuid = fresh.AdapterLuid;
+            FeatureLevel = fresh.FeatureLevel;
+            SupportsVideo = fresh.SupportsVideo;
+            _simulatedLoss = false;
+            Interlocked.Increment(ref _generation);
+
+            try
+            {
+                oldContext.Dispose();
+                oldDevice.Dispose();
+            }
+            catch (SharpGen.Runtime.SharpGenException error)
+            {
+                _log.Debug(error, "Releasing the lost device");
+            }
+        }
+
+        _log.Warning("Direct3D 11 device made again on {Adapter} after the GPU was reset (generation {Generation})", AdapterName, Generation);
+        Recreated?.Invoke(this, EventArgs.Empty);
+    }
 
     /// <summary>True for a real GPU.</summary>
     public bool IsHardware => Kind == RenderDeviceKind.Hardware;

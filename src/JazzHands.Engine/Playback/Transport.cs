@@ -617,6 +617,7 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
         long ahead = (long)(DecodeAhead.TotalSeconds * _output.SampleRate);
         long reportedUnderruns = 0;
         long reportedStarved = 0;
+        int reportedSwitches = _output.DeviceSwitches;
 
         try
         {
@@ -676,6 +677,18 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
 
                 reportedUnderruns = Report(_output.Underruns, reportedUnderruns, "The audio device ran dry {Count} time(s); raise the buffer or look for a stall");
                 reportedStarved = Report(_graph.StarvedBlocks, reportedStarved, "{Count} audio block(s) played before their source was decoded");
+
+                if (_output.DeviceSwitches is var switches && switches != reportedSwitches)
+                {
+                    reportedSwitches = switches;
+                    _log.Warning("The sound device changed or went away; playing on {Device}", _output.DeviceName);
+                    _session?.Notices.Report(
+                        string.Empty,
+                        "Sound",
+                        DeviceChangedCode,
+                        $"The sound device changed or went away; sound now plays on {_output.DeviceName}.",
+                        Core.Diagnostics.DiagnosticLevel.Warning);
+                }
             }
         }
         catch (Exception exception)
@@ -688,6 +701,9 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
             _server.Dispose();
         }
     }
+
+    /// <summary>The notice when the sound device went away and playing moved to another.</summary>
+    public const string DeviceChangedCode = "audio-device-changed";
 
     /// <summary>True for the rates that play with sound at their own speed and their own pitch.</summary>
     internal static bool IsStretchable(double rate) =>

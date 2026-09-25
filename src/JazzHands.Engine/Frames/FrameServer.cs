@@ -310,7 +310,7 @@ public sealed class FrameServer : IFrameProvider, IDisposable
 
         if (!_missing.TryGetValue(item.Id, out bool missing))
         {
-            string path = _projectPath.Length == 0 ? Path.GetFullPath(item.RelativePath) : ProjectPaths.Resolve(_projectPath, item.RelativePath);
+            string path = PathOf(item);
             missing = item.Kind == MediaKind.ImageSequence ? !Directory.Exists(Path.GetDirectoryName(path)) : !File.Exists(path);
             _missing[item.Id] = missing;
         }
@@ -319,6 +319,10 @@ public sealed class FrameServer : IFrameProvider, IDisposable
             : _failed.ContainsKey(item.Id) ? $"{item.Name} (cannot be read)"
             : null;
     }
+
+    /// <summary>Where a media item's file is, on this machine.</summary>
+    private string PathOf(MediaItem item) =>
+        _projectPath.Length == 0 ? Path.GetFullPath(item.RelativePath) : ProjectPaths.Resolve(_projectPath, item.RelativePath);
 
     /// <inheritdoc />
     Core.Stabilization.CameraMotion? IFrameProvider.Motion(Project project, Clip clip) =>
@@ -381,6 +385,21 @@ public sealed class FrameServer : IFrameProvider, IDisposable
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
+            // A file that went away since it was last looked for (deleted, a share gone, a drive
+            // pulled) is offline, not broken: it shows the offline slate and comes back with it.
+            if (!File.Exists(PathOf(item)))
+            {
+                _missing[item.Id] = true;
+                _log.Warning(exception, "{Media} went missing while it was in use", item.Name);
+                _notices?.Report(
+                    item.Id,
+                    item.Name,
+                    DiagnosticCodes.MediaMissing,
+                    $"This file is no longer where the project says: {PathOf(item)}. It shows as offline until it is back, or relinked.",
+                    DiagnosticLevel.Warning);
+                return null;
+            }
+
             _failed[item.Id] = exception.Message;
             _log.Error(exception, "Could not show {Media}", item.Name);
             _notices?.Report(

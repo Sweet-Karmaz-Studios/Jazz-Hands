@@ -103,6 +103,7 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
     private int _programHeight;
     private PreviewFrame? _lastFrame;
     private ScopeRenderer? _scopes;
+    private long _deviceResets;
     private volatile bool _scopesWanted;
     private volatile bool _scopesStale;
     private long _scopesAt;
@@ -744,7 +745,24 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
                     resolution = null;
                 }
 
-                int wait = Tick(frames);
+                int wait;
+                try
+                {
+                    wait = Tick(frames);
+                }
+                catch (Exception error) when (_device.IsLost || RenderDevice.IsDeviceLoss(error))
+                {
+                    wait = 0;
+                }
+
+                // A GPU that went away (a driver update or crash, a timeout reset, the adapter
+                // disabled) does not always throw: presents fail quietly. So it is asked each turn.
+                if (_device.IsLost)
+                {
+                    RecoverDevice(ref frames, ref hardware);
+                    continue;
+                }
+
                 if (wait > 0)
                 {
                     _wake.WaitOne(wait);
@@ -1182,6 +1200,48 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
         _programWidth = width;
         _programHeight = height;
     }
+
+    /// <summary>
+    /// Lets go of everything made on a device the GPU was taken from, makes the device again, and
+    /// carries on: the next turn makes new decoders, cache and passes, and draws the frame the
+    /// clock is in, so playback goes on from where it was (Phase 33).
+    /// </summary>
+    private void RecoverDevice(ref FrameServer? frames, ref HardwareDeviceContext? hardware)
+    {
+        string reason = _device.LostReason;
+        _log.Warning("The GPU was reset ({Reason}); making the device again", reason);
+
+        ReleaseProgram();
+        _scopes?.Dispose();
+        _scopes = null;
+        frames?.Dispose();
+        frames = null;
+        hardware?.Dispose();
+        hardware = null;
+
+        try
+        {
+            _device.Recreate();
+            _device.EnableMultithreadProtection();
+            Interlocked.Increment(ref _deviceResets);
+            _lastKey = default;
+            _notices?.Report(
+                string.Empty,
+                "GPU",
+                "gpu-reset",
+                $"The graphics card was reset ({reason}); the preview carried on, on {_device.AdapterName}.",
+                Core.Diagnostics.DiagnosticLevel.Warning);
+        }
+        catch (RenderDeviceException error)
+        {
+            // Nothing to draw on for now. The next turn asks again; the sound carries on meanwhile.
+            _log.Error(error, "The device could not be made again after the GPU was reset");
+            Thread.Sleep(500);
+        }
+    }
+
+    /// <summary>How many times the GPU was reset under the preview and the device made again.</summary>
+    public long DeviceResets => Interlocked.Read(ref _deviceResets);
 
     private void ReleaseProgram()
     {

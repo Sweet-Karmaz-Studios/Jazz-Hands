@@ -29,7 +29,8 @@ public sealed class PreviewPresenter : IPreviewTarget, IDisposable
     private readonly RenderDevice _device;
     private readonly Dispatcher _dispatcher;
     private readonly PreviewSurface _surface;
-    private readonly PreviewPass _pass;
+    private PreviewPass _pass;
+    private int _generation;
     private readonly Lock _gate = new();
     private readonly Action _handOver;
 
@@ -55,6 +56,7 @@ public sealed class PreviewPresenter : IPreviewTarget, IDisposable
         _dispatcher = Dispatcher.CurrentDispatcher;
         _surface = new PreviewSurface(device);
         _pass = new PreviewPass(device);
+        _generation = device.Generation;
         _handOver = HandOver;
     }
 
@@ -104,6 +106,20 @@ public sealed class PreviewPresenter : IPreviewTarget, IDisposable
 
         lock (_gate)
         {
+            if (!_disposed && _generation != _device.Generation)
+            {
+                // The GPU was reset and the engine made the device again: everything here was
+                // made on the old one. The pass is made again now; the surface on the UI thread,
+                // which asks the engine for the frame again when it is ready.
+                _generation = _device.Generation;
+                ReleaseView();
+                _pass.Dispose();
+                _pass = new PreviewPass(_device);
+                _dispatcher.InvokeAsync(RebuildSurface, DispatcherPriority.Render);
+                Volatile.Write(ref _pending, 0);
+                return false;
+            }
+
             ID3D11Texture2D? target = _surface.Texture;
             if (_disposed || target is null)
             {
@@ -172,6 +188,26 @@ public sealed class PreviewPresenter : IPreviewTarget, IDisposable
         finally
         {
             Volatile.Write(ref _pending, 0);
+        }
+    }
+
+    /// <summary>Makes the surface again on the new device. UI thread.</summary>
+    private void RebuildSurface()
+    {
+        try
+        {
+            lock (_gate)
+            {
+                if (!_disposed)
+                {
+                    ReleaseView();
+                    _surface.Rebuild();
+                }
+            }
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            _log.Error(exception, "Making the preview surface again after the GPU was reset failed");
         }
     }
 

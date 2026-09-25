@@ -112,6 +112,24 @@ public sealed partial class SwapChainPreview : HwndHost
         }
     }
 
+    /// <summary>Makes the swap chain again on the render device as it now is, after a GPU reset. UI thread.</summary>
+    public void Rebuild()
+    {
+        lock (_gate)
+        {
+            if (_hwnd == IntPtr.Zero)
+            {
+                return;
+            }
+
+            _backBuffer?.Dispose();
+            _backBuffer = null;
+            _swapChain?.Dispose();
+            _swapChain = null;
+            CreateSwapChain();
+        }
+    }
+
     /// <summary>Resizes the swap chain buffers. Call when the host size changes.</summary>
     public void Resize(int pixelWidth, int pixelHeight)
     {

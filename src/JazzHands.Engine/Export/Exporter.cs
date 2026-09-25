@@ -63,6 +63,7 @@ public static class Exporter
         environment ??= ExportEnvironment.Default;
         string folder = Path.GetDirectoryName(plan.OutputPath) ?? ".";
         Directory.CreateDirectory(folder);
+        DiskSpace.Check(plan);
         bool sequence = ExportPresets.Container(plan.Container) is { Sequence: true };
 
         // An image sequence goes into a folder of its own and its frames move out of it; a file
@@ -126,6 +127,18 @@ public static class Exporter
                 result.Speed);
 
             return result with { Path = plan.OutputPath };
+        }
+        catch (Exception error) when (DiskSpace.IsFull(error))
+        {
+            Log.Warning(error, "The disk filled up exporting {Path}", plan.OutputPath);
+            throw DiskSpace.Full(plan.OutputPath, error);
+        }
+        catch (Exception error) when (Render.RenderDevice.IsDeviceLoss(error))
+        {
+            Log.Warning(error, "The GPU was reset exporting {Path}", plan.OutputPath);
+            throw new ExportException(
+                "The graphics card was reset while exporting (a driver update or crash, or it was disabled). The part-written file was removed and nothing else was touched; export again.",
+                error);
         }
         finally
         {

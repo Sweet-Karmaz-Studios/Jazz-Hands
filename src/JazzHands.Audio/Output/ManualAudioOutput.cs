@@ -48,6 +48,9 @@ public sealed class ManualAudioOutput : IAudioOutput
     /// <inheritdoc />
     public string DeviceName => "manual";
 
+    /// <summary>For tests: as though the device had been unplugged this many times and the output moved on.</summary>
+    public int DeviceSwitches { get; set; }
+
     /// <summary>What the last <see cref="Pull"/> produced.</summary>
     public AudioBuffer Last => _buffer;
 
