@@ -14,14 +14,17 @@ using Path = System.IO.Path;
 namespace JazzHands.App.ViewModels.Export;
 
 /// <summary>
-/// The export dialog: where the file goes, which preset, copy or encode, and what the planner
-/// will do about it and why.
+/// The export dialog: where the file goes, which preset and what to change about it, copy or
+/// encode, and what the planner will do about it and why.
 /// </summary>
 /// <remarks>
 /// Every change asks <c>export.plan</c> again and shows the answer, so the person sees "copying,
-/// two cuts moved to keyframes" or "encoding, because the preset writes 480p" before anything is
-/// written, in the planner's own words. Export queues the job with <c>export.enqueue</c>, the
-/// same command the CLI and MCP send; the dialog never plans or exports by itself.
+/// two cuts moved to keyframes" or "encoding, because the preset writes 480p", and about how big
+/// and how long, before anything is written, in the planner's own words. The overrides are the
+/// same text the command line takes (<c>--size 1280x720</c>, <c>--bitrate 8M</c>), passed through
+/// as typed, so a value the planner will not take is refused in its words too. Add to queue sends
+/// <c>export.enqueue</c>, the same command the CLI and MCP send; Export now sends it at high
+/// priority, so it starts ahead of anything waiting. The dialog never plans or exports by itself.
 ///
 /// A Quick Trim opens in Copy with snapping on, because that is what Quick Trim is for; anything
 /// else opens in Auto.
@@ -52,15 +55,6 @@ public sealed partial class ExportDialogViewModel : ObservableObject
     [ObservableProperty]
     private bool _useExternalFfmpeg;
 
-    /// <summary>What subtitle tracks can become, in words, for the dialog's picker.</summary>
-    public static IReadOnlyList<SubtitleChoice> SubtitleChoices { get; } =
-    [
-        new(SubtitleDelivery.Soft, "In the file, to turn on and off"),
-        new(SubtitleDelivery.Burn, "Burned into the picture"),
-        new(SubtitleDelivery.Sidecar, "As files beside it"),
-        new(SubtitleDelivery.None, "Left out"),
-    ];
-
     [ObservableProperty]
     private SubtitleDelivery _subtitles = SubtitleDelivery.Soft;
 
@@ -68,7 +62,55 @@ public sealed partial class ExportDialogViewModel : ObservableObject
     private bool _chapters = true;
 
     [ObservableProperty]
+    private bool _showOverrides;
+
+    [ObservableProperty]
+    private string _sizeText = string.Empty;
+
+    [ObservableProperty]
+    private string _frameRateText = string.Empty;
+
+    [ObservableProperty]
+    private string _qualityText = string.Empty;
+
+    [ObservableProperty]
+    private string _bitrateText = string.Empty;
+
+    [ObservableProperty]
+    private string _encodersText = string.Empty;
+
+    [ObservableProperty]
+    private string _pixelFormatText = string.Empty;
+
+    [ObservableProperty]
+    private string _audioEncoderText = string.Empty;
+
+    [ObservableProperty]
+    private string _audioBitrateText = string.Empty;
+
+    [ObservableProperty]
+    private ChannelChoice _channels = ChannelChoices[0];
+
+    [ObservableProperty]
+    private bool _normalise;
+
+    [ObservableProperty]
+    private string _loudnessText = "-14";
+
+    [ObservableProperty]
+    private string _targetSizeText = string.Empty;
+
+    [ObservableProperty]
+    private string _startText = string.Empty;
+
+    [ObservableProperty]
+    private string _endText = string.Empty;
+
+    [ObservableProperty]
     private string _summary = string.Empty;
+
+    [ObservableProperty]
+    private string _estimate = string.Empty;
 
     [ObservableProperty]
     private string _error = string.Empty;
@@ -78,6 +120,7 @@ public sealed partial class ExportDialogViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ExportCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ExportNowCommand))]
     private ExportPlan? _plan;
 
     /// <summary>Creates the dialog's viewmodel.</summary>
@@ -97,13 +140,43 @@ public sealed partial class ExportDialogViewModel : ObservableObject
     /// <summary>Raised when the dialog should close.</summary>
     public event EventHandler? CloseRequested;
 
+    /// <summary>What subtitle tracks can become, in words, for the dialog's picker.</summary>
+    public static IReadOnlyList<SubtitleChoice> SubtitleChoices { get; } =
+    [
+        new(SubtitleDelivery.Soft, "In the file, to turn on and off"),
+        new(SubtitleDelivery.Burn, "Burned into the picture"),
+        new(SubtitleDelivery.Sidecar, "As files beside it"),
+        new(SubtitleDelivery.None, "Left out"),
+    ];
+
+    /// <summary>Channel counts the export can be written in.</summary>
+    public static IReadOnlyList<ChannelChoice> ChannelChoices { get; } =
+    [
+        new(0, "The preset's"),
+        new(1, "Mono"),
+        new(2, "Stereo"),
+        new(6, "5.1"),
+    ];
+
+    /// <summary>Sizes offered in the size box; any other can be typed.</summary>
+    public static IReadOnlyList<string> SizeSuggestions { get; } = ["3840x2160", "2560x1440", "1920x1080", "1280x720", "854x480"];
+
+    /// <summary>Rates offered in the rate box; any other can be typed.</summary>
+    public static IReadOnlyList<string> FrameRateSuggestions { get; } = ["60", "50", "30", "30000/1001", "25", "24", "15"];
+
+    /// <summary>Sound encoders offered in the encoder box.</summary>
+    public static IReadOnlyList<string> AudioEncoderSuggestions { get; } = ["aac", "libopus", "flac", "eac3", "ac3", "libmp3lame", "pcm_s24le", "pcm_s16le"];
+
+    /// <summary>Pixel formats offered in the colour box.</summary>
+    public static IReadOnlyList<string> PixelFormatSuggestions { get; } = ["yuv420p", "yuv420p10le", "yuv422p10le"];
+
     /// <summary>The sequence being exported.</summary>
     public string? SequenceId { get; private set; }
 
     /// <summary>What the dialog is exporting, for its heading.</summary>
     public string Heading { get; private set; } = "Export";
 
-    /// <summary>Every preset.</summary>
+    /// <summary>Every preset, built in and the person's own.</summary>
     public IReadOnlyList<ExportPresetSummary> Presets { get; }
 
     /// <summary>The three modes, in the order the dialog offers them.</summary>
@@ -145,13 +218,30 @@ public sealed partial class ExportDialogViewModel : ObservableObject
     public Task RefreshPlanAsync()
     {
         int version = ++_planVersion;
-        var query = new PlanExportQuery(OutputPath, Preset?.Name ?? ExportPresets.Default, Mode, SequenceId, SnapToKeyframes, UseInOut, UseExternalFfmpeg, Subtitles, Chapters: Chapters);
         IsPlanning = true;
+        PlanExportQuery? query = null;
+        string error = string.Empty;
+
+        try
+        {
+            query = Query();
+        }
+        catch (CommandException refusal)
+        {
+            // A value that does not read, such as a size of "big", is said here and not planned.
+            error = refusal.Message;
+        }
+
+        if (query is null)
+        {
+            Show(null, error);
+            return Task.CompletedTask;
+        }
 
         return Task.Run(() =>
         {
             ExportPlan? plan = null;
-            string error = string.Empty;
+            string failure = string.Empty;
 
             try
             {
@@ -159,13 +249,13 @@ public sealed partial class ExportDialogViewModel : ObservableObject
             }
             catch (CommandException refusal)
             {
-                error = refusal.Message;
+                failure = refusal.Message;
             }
-            catch (Exception failure) when (failure is not OutOfMemoryException)
+            catch (Exception problem) when (problem is not OutOfMemoryException)
             {
                 // A file that cannot be read shows as a sentence in the dialog, not a crash.
-                _log.Warning(failure, "Planning the export failed");
-                error = failure.Message;
+                _log.Warning(problem, "Planning the export failed");
+                failure = problem.Message;
             }
 
             _ui.Post(() =>
@@ -175,7 +265,7 @@ public sealed partial class ExportDialogViewModel : ObservableObject
                     return;
                 }
 
-                Show(plan, error);
+                Show(plan, failure);
             });
         });
     }
@@ -210,6 +300,34 @@ public sealed partial class ExportDialogViewModel : ObservableObject
 
     partial void OnChaptersChanged(bool value) => RefreshPlan();
 
+    partial void OnSizeTextChanged(string value) => RefreshPlan();
+
+    partial void OnFrameRateTextChanged(string value) => RefreshPlan();
+
+    partial void OnQualityTextChanged(string value) => RefreshPlan();
+
+    partial void OnBitrateTextChanged(string value) => RefreshPlan();
+
+    partial void OnEncodersTextChanged(string value) => RefreshPlan();
+
+    partial void OnPixelFormatTextChanged(string value) => RefreshPlan();
+
+    partial void OnAudioEncoderTextChanged(string value) => RefreshPlan();
+
+    partial void OnAudioBitrateTextChanged(string value) => RefreshPlan();
+
+    partial void OnChannelsChanged(ChannelChoice value) => RefreshPlan();
+
+    partial void OnNormaliseChanged(bool value) => RefreshPlan();
+
+    partial void OnLoudnessTextChanged(string value) => RefreshPlan();
+
+    partial void OnTargetSizeTextChanged(string value) => RefreshPlan();
+
+    partial void OnStartTextChanged(string value) => RefreshPlan();
+
+    partial void OnEndTextChanged(string value) => RefreshPlan();
+
     [RelayCommand]
     private void Browse()
     {
@@ -219,19 +337,62 @@ public sealed partial class ExportDialogViewModel : ObservableObject
         }
     }
 
-    [RelayCommand(CanExecute = nameof(CanExport))]
-    private async Task ExportAsync()
+    [RelayCommand]
+    private void ResetOverrides()
     {
+        SizeText = FrameRateText = QualityText = BitrateText = EncodersText = PixelFormatText = string.Empty;
+        AudioEncoderText = AudioBitrateText = TargetSizeText = StartText = EndText = string.Empty;
+        Channels = ChannelChoices[0];
+        Normalise = false;
+        LoudnessText = "-14";
+    }
+
+    /// <summary>Adds the export to the queue, behind anything already waiting.</summary>
+    [RelayCommand(CanExecute = nameof(CanExport))]
+    private Task ExportAsync() => EnqueueAsync(ExportPriority.Normal);
+
+    /// <summary>Adds the export to the queue ahead of everything waiting, so it starts as soon as a slot is free.</summary>
+    [RelayCommand(CanExecute = nameof(CanExport))]
+    private Task ExportNowAsync() => EnqueueAsync(ExportPriority.High);
+
+    private async Task EnqueueAsync(ExportPriority priority)
+    {
+        PlanExportQuery query;
+        try
+        {
+            query = Query();
+        }
+        catch (CommandException refusal)
+        {
+            Error = refusal.Message;
+            return;
+        }
+
         CommandResult result = await _session.ExecuteAsync(new EnqueueExportCommand(
-            OutputPath,
-            Preset?.Name ?? ExportPresets.Default,
-            Mode,
-            SequenceId,
-            SnapToKeyframes,
-            UseInOut,
-            UseExternalFfmpeg,
-            Subtitles,
-            Chapters: Chapters)).ConfigureAwait(true);
+            query.Output,
+            query.Preset,
+            query.Mode,
+            query.SequenceId,
+            query.SnapToKeyframes,
+            query.UseInOut,
+            query.External,
+            query.Subtitles,
+            query.SidecarFormat,
+            query.Chapters,
+            query.Size,
+            query.FrameRate,
+            query.Quality,
+            query.Bitrate,
+            query.Encoders,
+            query.AudioEncoder,
+            query.AudioBitrate,
+            query.Channels,
+            query.Loudness,
+            query.TargetSize,
+            query.PixelFormat,
+            query.Start,
+            query.End,
+            priority)).ConfigureAwait(true);
 
         if (result.Ok)
         {
@@ -250,6 +411,44 @@ public sealed partial class ExportDialogViewModel : ObservableObject
 
     private void RefreshPlan() => _ = RefreshPlanAsync();
 
+    /// <summary>The plan query the dialog's fields make, reading each override as the command line would.</summary>
+    /// <exception cref="CommandException">When an override does not read.</exception>
+    private PlanExportQuery Query()
+    {
+        Rational rate = _session.Project.Sequence(SequenceId ?? string.Empty) is { } sequence
+            ? _session.Project.SettingsFor(sequence).FrameRate
+            : _session.Project.Settings.FrameRate;
+
+        T? Read<T>(string text, string name) =>
+            string.IsNullOrWhiteSpace(text) ? default : (T?)CommandValues.Parse(typeof(T), text.Trim(), rate, name);
+
+        return new PlanExportQuery(
+            OutputPath,
+            Preset?.Name ?? ExportPresets.Default,
+            Mode,
+            SequenceId,
+            SnapToKeyframes,
+            UseInOut,
+            UseExternalFfmpeg,
+            Subtitles,
+            Chapters: Chapters,
+            Size: Read<FrameSize?>(SizeText, "size"),
+            FrameRate: Read<Rational?>(FrameRateText, "fps"),
+            Quality: Read<int?>(QualityText, "quality"),
+            Bitrate: Blank(BitrateText),
+            Encoders: string.IsNullOrWhiteSpace(EncodersText) ? default : Read<EquatableArray<string>>(EncodersText, "encoder"),
+            AudioEncoder: Blank(AudioEncoderText),
+            AudioBitrate: Blank(AudioBitrateText),
+            Channels: Channels.Count > 0 ? Channels.Count : null,
+            Loudness: Normalise ? Read<double?>(LoudnessText, "loudness") : null,
+            TargetSize: Blank(TargetSizeText),
+            PixelFormat: Blank(PixelFormatText),
+            Start: Read<Flicks?>(StartText, "start"),
+            End: Read<Flicks?>(EndText, "end"));
+    }
+
+    private static string? Blank(string text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+
     private void Show(ExportPlan? plan, string error)
     {
         IsPlanning = false;
@@ -260,6 +459,7 @@ public sealed partial class ExportDialogViewModel : ObservableObject
         if (plan is null)
         {
             Summary = string.Empty;
+            Estimate = string.Empty;
             return;
         }
 
@@ -278,7 +478,7 @@ public sealed partial class ExportDialogViewModel : ObservableObject
         string what = plan.Mode == ExportMode.Copy
             ? $"Copy, {(plan.Copy!.AudioStreams.IsEmpty ? "no sound" : $"{plan.Copy.AudioStreams.Length} sound stream(s)")}"
             : plan.Video is { } video
-                ? $"Encode {video.Width}x{video.Height} {video.Codec}{(plan.Audio is null ? string.Empty : $" with {plan.Audio.Encoder}")}"
+                ? string.Create(CultureInfo.InvariantCulture, $"Encode {video.Width}x{video.Height} {video.Codec} at {video.FrameRate.ToDouble():0.###} fps{(plan.Audio is null ? string.Empty : $" with {plan.Audio.Encoder}")}")
                 : $"Sound only, {plan.Audio!.Encoder}";
 
         string extras = string.Concat(
@@ -293,6 +493,9 @@ public sealed partial class ExportDialogViewModel : ObservableObject
             plan.Chapters.IsEmpty ? string.Empty : $", {plan.Chapters.Length} chapter(s)");
 
         Summary = $"{what}, {Timecode.FormatClock(plan.Duration)}{extras}, to {Path.GetFileName(plan.OutputPath)}";
+        Estimate = plan.Estimate is { } estimate
+            ? $"{char.ToUpperInvariant(estimate.ToString()[0])}{estimate.ToString()[1..]}{(plan.TargetBytes > 0 ? $", under {ExportPresets.FormatBytes(plan.TargetBytes)}" : string.Empty)}. Colour: BT.709, SDR{(plan.Video?.TenBit == true ? ", ten bit" : string.Empty)}."
+            : string.Empty;
     }
 
     private string SuggestedPath(Project project, Sequence? sequence)
@@ -315,3 +518,8 @@ public sealed partial class ExportDialogViewModel : ObservableObject
 /// <param name="Value">The delivery.</param>
 /// <param name="Label">What the picker says.</param>
 public sealed record SubtitleChoice(SubtitleDelivery Value, string Label);
+
+/// <summary>A channel count, with the words the dialog shows for it.</summary>
+/// <param name="Count">1, 2 or 6, or 0 for the preset's own.</param>
+/// <param name="Label">What the picker says.</param>
+public sealed record ChannelChoice(int Count, string Label);

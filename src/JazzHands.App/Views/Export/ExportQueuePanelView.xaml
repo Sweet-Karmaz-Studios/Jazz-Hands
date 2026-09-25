@@ -14,11 +14,14 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <Grid Grid.Row="0" Margin="0,0,0,8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBlock Text="{Binding Status, Mode=OneWay}"
@@ -27,6 +30,18 @@
                        FontSize="{DynamicResource Text.Caption}"
                        Foreground="{DynamicResource Brush.Text.Secondary}" />
             <Button Grid.Column="1"
+                    Style="{StaticResource Button.Icon}"
+                    Content="&#xE769;"
+                    Command="{Binding PauseAllCommand, Mode=OneWay}"
+                    ToolTip="Pause every export"
+                    AutomationProperties.Name="Pause every export" />
+            <Button Grid.Column="2"
+                    Style="{StaticResource Button.Icon}"
+                    Content="&#xE768;"
+                    Command="{Binding ResumeAllCommand, Mode=OneWay}"
+                    ToolTip="Resume every paused export"
+                    AutomationProperties.Name="Resume every paused export" />
+            <Button Grid.Column="3"
                     Style="{StaticResource Button.Text}"
                     Content="Clear finished"
                     Command="{Binding ClearFinishedCommand, Mode=OneWay}"
@@ -35,6 +50,7 @@
 
         <ListBox Grid.Row="1"
                  ItemsSource="{Binding Jobs, Mode=OneWay}"
+                 SelectedItem="{Binding SelectedJob, Mode=TwoWay}"
                  Background="{DynamicResource Brush.Background.Base}"
                  BorderThickness="0"
                  HorizontalContentAlignment="Stretch"
@@ -69,6 +85,16 @@
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource Brush.Text.Secondary}" />
                         <StackPanel Grid.Row="0" Grid.RowSpan="3" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top">
+                            <Button Style="{StaticResource Button.Icon}"
+                                    Content="&#xE74A;"
+                                    Command="{Binding RaiseCommand, Mode=OneWay}"
+                                    ToolTip="Move to the front of the queue, or back"
+                                    AutomationProperties.Name="Change priority" />
+                            <Button Style="{StaticResource Button.Icon}"
+                                    Content="{Binding PauseGlyph, Mode=OneWay}"
+                                    Command="{Binding PauseOrResumeCommand, Mode=OneWay}"
+                                    ToolTip="{Binding PauseText, Mode=OneWay}"
+                                    AutomationProperties.Name="{Binding PauseText, Mode=OneWay}" />
                             <Button Style="{StaticResource Button.Icon}"
                                     Content="&#xE838;"
                                     Command="{Binding ShowInFolderCommand, Mode=OneWay}"
@@ -116,5 +142,35 @@
                 </DataTemplate>
             </ListBox.ItemTemplate>
         </ListBox>
+
+        <Border Grid.Row="2"
+                Margin="0,8,0,0"
+                Padding="6"
+                MaxHeight="140"
+                Background="{DynamicResource Brush.Background.Base}"
+                AutomationProperties.Name="Export log">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding SelectedJob, Mode=OneWay}" Value="{x:Null}">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl ItemsSource="{Binding Log, Mode=OneWay}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Mode=OneWay}"
+                                       TextWrapping="Wrap"
+                                       FontFamily="{DynamicResource Font.Mono}"
+                                       FontSize="{DynamicResource Text.Caption}"
+                                       Foreground="{DynamicResource Brush.Text.Secondary}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Border>
     </Grid>
 </UserControl>

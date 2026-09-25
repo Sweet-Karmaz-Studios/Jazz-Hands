@@ -64,12 +64,26 @@ public static class ExportPlanner
         ExportSubtitles? subtitles = Subtitles(request, sequence, plan, container, reasons);
         bool chapters = request.Chapters && container is { Chapters: true };
 
-        return plan with
+        plan = plan with
         {
             Subtitles = subtitles,
             Chapters = chapters ? Chapters(sequence, plan.Ranges, plan.Duration) : default,
             Reasons = [.. reasons],
         };
+
+        return plan with { Estimate = ExportEstimates.For(plan, CopiedBytes(project, plan)) };
+    }
+
+    /// <summary>For a copy, about how many of the source's bytes it takes: its share of the file by time.</summary>
+    private static long CopiedBytes(Project project, ExportPlan plan)
+    {
+        if (plan.Copy is not { } copy || project.MediaItem(copy.MediaId) is not { Info: { } info } media || media.Duration <= Flicks.Zero)
+        {
+            return 0;
+        }
+
+        double kept = copy.SourceRanges.Sum(range => range.Duration.ToSeconds());
+        return (long)(info.SizeBytes * Math.Min(1.0, kept / media.Duration.ToSeconds()));
     }
 
     /// <summary>The subtitle tracks an export of these ranges carries: not muted, with a cue inside.</summary>

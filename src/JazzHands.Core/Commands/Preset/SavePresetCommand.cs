@@ -28,6 +28,7 @@ namespace JazzHands.Core.Commands;
 /// <param name="Channels">1, 2 or 6 channels.</param>
 /// <param name="Loudness">Normalise the mix to this many LUFS.</param>
 /// <param name="TargetSize">Come in under this size: 8MB.</param>
+/// <param name="PixelFormat">The pixel format to encode, for ten bits or 4:2:2.</param>
 [Command("presets.save",
     Description = "Save an export preset of your own",
     Undoable = false,
@@ -48,9 +49,10 @@ public sealed record SavePresetCommand(
     [property: Option("audio-bitrate", "The sound bitrate: 320k")] string? AudioBitrate = null,
     [property: Option("channels", "1, 2 or 6 channels")] int? Channels = null,
     [property: Option("loudness", "Normalise the mix to this many LUFS, for example -14")] double? Loudness = null,
-    [property: Option("target-size", "Come in under this size: 8MB")] string? TargetSize = null) : ICommand
+    [property: Option("target-size", "Come in under this size: 8MB")] string? TargetSize = null,
+    [property: Option("pixel-format", "yuv420p10le for ten bits, yuv422p10le for 4:2:2 ten bit")] string? PixelFormat = null) : ICommand
 {
     /// <summary>The changes to the preset it starts from.</summary>
     public Export.ExportOverrides? ToOverrides() =>
-        Export.ExportOverrideText.Parse(Size, FrameRate, Quality, Bitrate, Encoders, AudioEncoder, AudioBitrate, Channels, Loudness, TargetSize);
+        Export.ExportOverrideText.Parse(Size, FrameRate, Quality, Bitrate, Encoders, AudioEncoder, AudioBitrate, Channels, Loudness, TargetSize, PixelFormat);
 }

@@ -44,7 +44,7 @@ public sealed class EnqueueExportHandler : ICommandHandler<EnqueueExportCommand>
                 $"Another export in the queue is already writing '{plan.OutputPath}'. Pick another name, or cancel that one.");
         }
 
-        queue.Enqueue(plan, project, context.ProjectPath, id);
+        queue.Enqueue(plan, project, context.ProjectPath, id, command.ToOptions());
         context.Changed(id);
         return project;
     }
@@ -108,5 +108,94 @@ public sealed class ListExportsHandler : IQueryHandler<ListExportsQuery, ExportJ
     {
         ArgumentNullException.ThrowIfNull(context);
         return context.Services?.GetService<IExportService>()?.List() ?? [];
+    }
+}
+
+/// <summary>Holds an export, or all of them.</summary>
+public sealed class PauseExportHandler : ICommandHandler<PauseExportCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, PauseExportCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        IExportService queue = ExportHelp.Queue(context.Services);
+        if (queue.Pause(command.JobId) == 0 && command.JobId is { } id)
+        {
+            throw new CommandException(
+                "export-job-not-found",
+                $"There is no waiting or running export '{id}' to pause. 'jazz export list' shows the queue.");
+        }
+
+        if (command.JobId is { } paused)
+        {
+            context.Changed(paused);
+        }
+
+        return project;
+    }
+}
+
+/// <summary>Lets a paused export run again, or all of them.</summary>
+public sealed class ResumeExportHandler : ICommandHandler<ResumeExportCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, ResumeExportCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        IExportService queue = ExportHelp.Queue(context.Services);
+        if (queue.Resume(command.JobId) == 0 && command.JobId is { } id)
+        {
+            throw new CommandException(
+                "export-job-not-found",
+                $"There is no paused export '{id}'. 'jazz export list' shows the queue.");
+        }
+
+        if (command.JobId is { } resumed)
+        {
+            context.Changed(resumed);
+        }
+
+        return project;
+    }
+}
+
+/// <summary>Moves an export up or down the queue.</summary>
+public sealed class SetExportPriorityHandler : ICommandHandler<SetExportPriorityCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, SetExportPriorityCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        if (!ExportHelp.Queue(context.Services).SetPriority(command.JobId, command.Priority))
+        {
+            throw new CommandException(
+                "export-job-not-found",
+                $"There is no unfinished export '{command.JobId}'. 'jazz export list' shows the queue.");
+        }
+
+        context.Changed(command.JobId);
+        return project;
+    }
+}
+
+/// <summary>What an export has done, step by step.</summary>
+public sealed class ExportLogHandler : IQueryHandler<ExportLogQuery, string[]>
+{
+    /// <inheritdoc />
+    public string[] Handle(Project project, ExportLogQuery query, QueryContext context)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        ArgumentNullException.ThrowIfNull(context);
+
+        return ExportHelp.Queue(context.Services).Log(query.JobId)
+            ?? throw new CommandException(
+                "export-job-not-found",
+                $"There is no export '{query.JobId}'. 'jazz export list' shows the queue.");
     }
 }

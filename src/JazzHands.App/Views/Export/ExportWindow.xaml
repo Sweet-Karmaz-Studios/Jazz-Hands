@@ -7,7 +7,7 @@
         mc:Ignorable="d"
         d:DataContext="{d:DesignInstance vm:ExportDialogViewModel}"
         Title="{Binding Heading, Mode=OneWay}"
-        Height="620"
+        Height="780"
         Width="640"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
@@ -20,6 +20,7 @@
 
     <Grid Margin="16" TextElement.Foreground="{DynamicResource Brush.Text.Primary}">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -52,28 +53,32 @@
                 Command="{Binding BrowseCommand, Mode=OneWay}"
                 AutomationProperties.Name="Browse for the output file" />
 
-        <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,12,0,0" Text="Preset" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" />
+        <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,16,0,0" Text="Preset" VerticalAlignment="Top" Foreground="{DynamicResource Brush.Text.Secondary}" />
         <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,12,0,0">
             <ComboBox Style="{StaticResource ComboBox.Compact}"
                       HorizontalAlignment="Left"
-                      Width="200"
+                      Width="240"
                       ItemsSource="{Binding Presets, Mode=OneWay}"
                       SelectedItem="{Binding Preset, Mode=TwoWay}"
                       AutomationProperties.Name="Preset">
                 <ComboBox.ItemTemplate>
                     <DataTemplate>
-                        <TextBlock Text="{Binding Name, Mode=OneWay}" />
+                        <TextBlock Text="{Binding Label, Mode=OneWay}" ToolTip="{Binding Name, Mode=OneWay}" />
                     </DataTemplate>
                 </ComboBox.ItemTemplate>
             </ComboBox>
             <TextBlock Margin="0,6,0,0"
+                       Text="{Binding Preset.Summary, Mode=OneWay}"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource Brush.Text.Primary}" />
+            <TextBlock Margin="0,2,0,0"
                        Text="{Binding Preset.Description, Mode=OneWay}"
                        TextWrapping="Wrap"
                        FontSize="{DynamicResource Text.Caption}"
                        Foreground="{DynamicResource Brush.Text.Secondary}" />
         </StackPanel>
 
-        <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,12,0,0" Text="Mode" VerticalAlignment="Top" Foreground="{DynamicResource Brush.Text.Secondary}" />
+        <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,16,0,0" Text="Mode" VerticalAlignment="Top" Foreground="{DynamicResource Brush.Text.Secondary}" />
         <StackPanel Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,12,0,0">
             <ComboBox Style="{StaticResource ComboBox.Compact}"
                       ItemsSource="{Binding Modes, Mode=OneWay}"
@@ -107,11 +112,18 @@
                 <TextBlock DockPanel.Dock="Left" Text="Subtitles" VerticalAlignment="Center" Margin="0,0,8,0"
                            Foreground="{DynamicResource Brush.Text.Primary}" />
                 <ComboBox Style="{StaticResource ComboBox.Compact}"
+                          HorizontalAlignment="Left"
+                          Width="260"
                           ItemsSource="{Binding Source={x:Static vm:ExportDialogViewModel.SubtitleChoices}, Mode=OneTime}"
-                          DisplayMemberPath="Label"
                           SelectedValuePath="Value"
                           SelectedValue="{Binding Subtitles, Mode=TwoWay}"
-                          AutomationProperties.Name="Subtitles" />
+                          AutomationProperties.Name="Subtitles">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Label, Mode=OneWay}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
             </DockPanel>
             <CheckBox Margin="0,4,0,0"
                       Content="Chapters from the chapter marks"
@@ -120,16 +132,140 @@
                       AutomationProperties.Name="Chapters" />
         </StackPanel>
 
-        <TextBlock Grid.Row="4"
-                   Grid.Column="0"
-                   Grid.ColumnSpan="3"
-                   Margin="0,16,0,0"
-                   Text="{Binding Summary, Mode=OneWay}"
-                   FontWeight="SemiBold"
-                   TextWrapping="Wrap" />
+
+        <!-- Changes to the preset for this export, in the words the command line takes. -->
+        <StackPanel Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,12,0,0">
+            <ToggleButton HorizontalAlignment="Left"
+                          Style="{StaticResource Button.Text}"
+                          Content="Change the preset for this export..."
+                          IsChecked="{Binding ShowOverrides, Mode=TwoWay}"
+                          AutomationProperties.Name="Show the preset overrides" />
+            <Grid Margin="0,8,0,0" Visibility="{Binding ShowOverrides, Converter={StaticResource Visible}, Mode=OneWay}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Grid.Resources>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="VerticalAlignment" Value="Center" />
+                        <Setter Property="Margin" Value="0,0,8,0" />
+                        <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
+                    </Style>
+                    <Style TargetType="TextBox" BasedOn="{StaticResource TextBox.Field}">
+                        <Setter Property="Margin" Value="0,2,12,2" />
+                    </Style>
+                </Grid.Resources>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Size" />
+                <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding SizeText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         ToolTip="Fit inside this size, never scaling up: 3840x2160, 1920x1080, 1280x720, 854x480"
+                         AutomationProperties.Name="Size" />
+                <TextBlock Grid.Row="0" Grid.Column="2" Text="Frame rate" />
+                <TextBox Grid.Row="0" Grid.Column="3" Text="{Binding FrameRateText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         ToolTip="60, 50, 30, 30000/1001, 25, 24, 15"
+                         AutomationProperties.Name="Frame rate" />
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Quality" />
+                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding QualityText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         ToolTip="Constant quality, CRF or CQ: lower is better, about 18 to 23 for delivery"
+                         AutomationProperties.Name="Quality" />
+                <TextBlock Grid.Row="1" Grid.Column="2" Text="Bitrate" />
+                <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding BitrateText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         ToolTip="A picture bitrate instead of constant quality: 8M, 2500k"
+                         AutomationProperties.Name="Bitrate" />
+
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="Encoders" />
+                <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding EncodersText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         ToolTip="The encoders to try in order: hevc_nvenc,libx265"
+                         AutomationProperties.Name="Encoders" />
+                <TextBlock Grid.Row="2" Grid.Column="2" Text="Colour" />
+                <TextBox Grid.Row="2" Grid.Column="3" Text="{Binding PixelFormatText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         ToolTip="The pixel format: yuv420p, yuv420p10le for ten bits, yuv422p10le. BT.709 SDR either way."
+                         AutomationProperties.Name="Pixel format" />
+
+                <TextBlock Grid.Row="3" Grid.Column="0" Text="Sound" />
+                <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding AudioEncoderText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         ToolTip="aac, libopus, flac, eac3, ac3, libmp3lame, pcm_s24le"
+                         AutomationProperties.Name="Sound encoder" />
+                <TextBlock Grid.Row="3" Grid.Column="2" Text="Sound bitrate" />
+                <TextBox Grid.Row="3" Grid.Column="3" Text="{Binding AudioBitrateText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         ToolTip="320k"
+                         AutomationProperties.Name="Sound bitrate" />
+
+                <TextBlock Grid.Row="4" Grid.Column="0" Text="Channels" />
+                <ComboBox Grid.Row="4" Grid.Column="1" Margin="0,2,12,2"
+                          Style="{StaticResource ComboBox.Compact}"
+                          ItemsSource="{Binding Source={x:Static vm:ExportDialogViewModel.ChannelChoices}, Mode=OneTime}"
+                          SelectedItem="{Binding Channels, Mode=TwoWay}"
+                          AutomationProperties.Name="Channels">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Label, Mode=OneWay}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                <TextBlock Grid.Row="4" Grid.Column="2" Text="Under" />
+                <TextBox Grid.Row="4" Grid.Column="3" Text="{Binding TargetSizeText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         ToolTip="Come in under this size, with a smaller picture when it must: 8MB, 25MB"
+                         AutomationProperties.Name="Target size" />
+
+                <CheckBox Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,4,0,4"
+                          VerticalAlignment="Center"
+                          Content="Normalise the loudness to"
+                          IsChecked="{Binding Normalise, Mode=TwoWay}"
+                          Foreground="{DynamicResource Brush.Text.Primary}"
+                          AutomationProperties.Name="Normalise the loudness" />
+                <TextBlock Grid.Row="5" Grid.Column="2" Text="LUFS" />
+                <TextBox Grid.Row="5" Grid.Column="3" Text="{Binding LoudnessText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         IsEnabled="{Binding Normalise, Mode=OneWay}"
+                         ToolTip="-14 for YouTube and Spotify, -16 for Apple, -23 for broadcast"
+                         AutomationProperties.Name="Loudness target" />
+
+                <TextBlock Grid.Row="6" Grid.Column="0" Text="From" />
+                <TextBox Grid.Row="6" Grid.Column="1" Text="{Binding StartText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         ToolTip="Export from here, in sequence time: 00:00:10.000"
+                         AutomationProperties.Name="Export from" />
+                <TextBlock Grid.Row="6" Grid.Column="2" Text="To" />
+                <TextBox Grid.Row="6" Grid.Column="3" Text="{Binding EndText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         ToolTip="Export to here, in sequence time: 00:01:30.000"
+                         AutomationProperties.Name="Export to" />
+
+                <DockPanel Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="4" Margin="0,4,0,0">
+                    <Button DockPanel.Dock="Right"
+                            Style="{StaticResource Button.Text}"
+                            Content="Reset"
+                            Command="{Binding ResetOverridesCommand, Mode=OneWay}"
+                            AutomationProperties.Name="Reset the overrides" />
+                    <TextBlock Text="An empty box keeps the preset's own."
+                               FontSize="{DynamicResource Text.Caption}" />
+                </DockPanel>
+            </Grid>
+        </StackPanel>
+
+        <StackPanel Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,16,0,0">
+            <TextBlock Text="{Binding Summary, Mode=OneWay}"
+                       FontWeight="SemiBold"
+                       TextWrapping="Wrap" />
+            <TextBlock Margin="0,2,0,0"
+                       Text="{Binding Estimate, Mode=OneWay}"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource Brush.Text.Secondary}" />
+        </StackPanel>
 
         <!-- The planner's reasons, in its own words, or why nothing can be planned. -->
-        <Border Grid.Row="5"
+        <Border Grid.Row="6"
                 Grid.Column="0"
                 Grid.ColumnSpan="3"
                 Margin="0,8,0,0"
@@ -155,7 +291,7 @@
             </StackPanel>
         </Border>
 
-        <StackPanel Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,12,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
+        <StackPanel Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,12,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button Style="{StaticResource Button.Text}"
                     Content="Cancel"
                     IsCancel="True"
@@ -167,6 +303,12 @@
                     IsDefault="True"
                     Command="{Binding ExportCommand, Mode=OneWay}"
                     AutomationProperties.Name="Add to the export queue" />
+            <Button Style="{StaticResource Button.Text}"
+                    Margin="8,0,0,0"
+                    Content="Export now"
+                    Command="{Binding ExportNowCommand, Mode=OneWay}"
+                    ToolTip="Ahead of everything waiting, so it starts as soon as a slot is free"
+                    AutomationProperties.Name="Export now" />
         </StackPanel>
     </Grid>
 </Window>

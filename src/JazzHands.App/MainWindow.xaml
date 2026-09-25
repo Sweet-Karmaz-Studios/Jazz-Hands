@@ -35,6 +35,12 @@
         Background="{DynamicResource Brush.Background.Base}"
         Foreground="{DynamicResource Brush.Text.Primary}">
 
+    <Window.TaskbarItemInfo>
+        <!-- The taskbar button fills as exports run, so a long one can be watched from anywhere. -->
+        <TaskbarItemInfo ProgressState="{Binding Exports.TaskbarState, Mode=OneWay, FallbackValue=None}"
+                         ProgressValue="{Binding Exports.TaskbarProgress, Mode=OneWay, FallbackValue=0}" />
+    </Window.TaskbarItemInfo>
+
     <Window.Resources>
         <media:EnumMatchConverter x:Key="EnumMatch" />
         <!-- Which view draws which panel. Implicit, keyed by viewmodel type, so adding a panel in

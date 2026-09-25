@@ -77,6 +77,7 @@ public sealed record ExportRequest(
 /// <param name="Channels">1, 2 or 6 channels; 0 for the preset's.</param>
 /// <param name="Loudness">Normalise the mix to this many LUFS.</param>
 /// <param name="TargetBytes">Come in under this many bytes; 0 for the preset's target, if it has one.</param>
+/// <param name="PixelFormat">The pixel format to encode, for ten bits or 4:2:2: yuv420p10le, yuv422p10le; null for the preset's.</param>
 public sealed record ExportOverrides(
     int MaxWidth = 0,
     int MaxHeight = 0,
@@ -88,7 +89,8 @@ public sealed record ExportOverrides(
     long AudioBitrate = 0,
     int Channels = 0,
     double? Loudness = null,
-    long TargetBytes = 0) : IEquatable<ExportOverrides>
+    long TargetBytes = 0,
+    string? PixelFormat = null) : IEquatable<ExportOverrides>
 {
     /// <summary>True when it changes nothing.</summary>
     public bool IsEmpty => this == new ExportOverrides();
@@ -149,6 +151,7 @@ public sealed record ExportChapter(Flicks Start, Flicks End, string Title) : IEq
 /// <param name="Subtitles">The subtitles it carries, and how; null for none.</param>
 /// <param name="Chapters">The chapters it carries, at their times in the output.</param>
 /// <param name="TargetBytes">The size the file must come in under, or 0. The exporter checks it and encodes again, smaller, when it does not.</param>
+/// <param name="Estimate">About how big the file is and how long it takes, for the dialog and the dry run.</param>
 public sealed record ExportPlan(
     string SequenceId,
     string Preset,
@@ -165,7 +168,8 @@ public sealed record ExportPlan(
     bool External = false,
     ExportSubtitles? Subtitles = null,
     EquatableArray<ExportChapter> Chapters = default,
-    long TargetBytes = 0) : IEquatable<ExportPlan>;
+    long TargetBytes = 0,
+    ExportEstimate? Estimate = null) : IEquatable<ExportPlan>;
 
 /// <summary>The video side of an encode.</summary>
 /// <param name="Codec">h264, hevc, av1, vp9, prores, dnxhr, ffv1, gif or png.</param>

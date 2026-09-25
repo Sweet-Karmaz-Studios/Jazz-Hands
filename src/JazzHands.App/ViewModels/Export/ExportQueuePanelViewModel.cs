@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Globalization;
+using System.Windows.Shell;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using JazzHands.App.Services;
@@ -13,13 +14,17 @@ using Path = System.IO.Path;
 namespace JazzHands.App.ViewModels.Export;
 
 /// <summary>
-/// The Export Queue panel: every job, where it has got to, and a way to stop it.
+/// The Export Queue panel: every job, where it has got to, what it has done, and ways to stop,
+/// hold and reorder it.
 /// </summary>
 /// <remarks>
-/// It reads the queue and hears its progress, but cancelling and clearing are commands
-/// (<c>export.cancel</c>, <c>export.clear</c>), so a job cancelled here is cancelled the way
-/// Claude Code would cancel it. Progress arrives on the export thread about four times a second
-/// and is folded into one update per job on the UI thread.
+/// It reads the queue and hears its progress, but cancelling, pausing, resuming, reordering and
+/// clearing are commands (<c>export.cancel</c>, <c>export.pause</c> and the rest), so a job paused
+/// here is paused the way Claude Code would pause it. Progress arrives on the export threads about
+/// four times a second a job and is folded into one update per job on the UI thread.
+///
+/// A job that finishes or fails says so in <see cref="Notice"/>, which the main window shows where
+/// the person is looking, and the taskbar button carries the progress of everything running.
 /// </remarks>
 public sealed partial class ExportQueuePanelViewModel : ToolViewModel
 {
@@ -32,8 +37,17 @@ public sealed partial class ExportQueuePanelViewModel : ToolViewModel
     [ObservableProperty]
     private string _status = string.Empty;
 
+    [ObservableProperty]
+    private ExportJobViewModel? _selectedJob;
+
+    [ObservableProperty]
+    private double _taskbarProgress;
+
+    [ObservableProperty]
+    private TaskbarItemProgressState _taskbarState = TaskbarItemProgressState.None;
+
     /// <summary>Creates the panel.</summary>
-    /// <param name="session">Where the cancel and clear commands go.</param>
+    /// <param name="session">Where the queue commands go.</param>
     /// <param name="queue">The queue, or null in a host without one.</param>
     /// <param name="ui">The UI thread.</param>
     public ExportQueuePanelViewModel(ISession session, IExportService? queue, IUiDispatcher ui)
@@ -58,21 +72,29 @@ public sealed partial class ExportQueuePanelViewModel : ToolViewModel
         UpdateStatus();
     }
 
+    /// <summary>Raised on the UI thread when a job finishes or fails, with a sentence saying so.</summary>
+    public event EventHandler<string>? Notice;
+
     /// <summary>Every job, oldest first.</summary>
     public ObservableCollection<ExportJobViewModel> Jobs { get; } = [];
+
+    /// <summary>What the selected job has done, a line a step.</summary>
+    public ObservableCollection<string> Log { get; } = [];
 
     /// <summary>True when there is nothing in the queue, for the empty state.</summary>
     public bool IsEmpty => Jobs.Count == 0;
 
     /// <summary>Stops a job through the command every surface uses.</summary>
-    internal async Task CancelAsync(string jobId)
-    {
-        CommandResult result = await _session.ExecuteAsync(new CancelExportCommand(jobId)).ConfigureAwait(true);
-        if (!result.Ok)
-        {
-            Status = result.Error ?? string.Empty;
-        }
-    }
+    internal Task CancelAsync(string jobId) => RunAsync(new CancelExportCommand(jobId));
+
+    /// <summary>Holds or lets go of a job.</summary>
+    internal Task PauseOrResumeAsync(ExportJobViewModel job) =>
+        RunAsync(job.State == ExportJobState.Paused ? new ResumeExportCommand(job.Id) : new PauseExportCommand(job.Id));
+
+    /// <summary>Moves a job up or down the queue.</summary>
+    internal Task SetPriorityAsync(string jobId, ExportPriority priority) => RunAsync(new SetExportPriorityCommand(jobId, priority));
+
+    partial void OnSelectedJobChanged(ExportJobViewModel? value) => RefreshLog();
 
     [RelayCommand]
     private async Task ClearFinishedAsync()
@@ -93,6 +115,21 @@ public sealed partial class ExportQueuePanelViewModel : ToolViewModel
         }
 
         UpdateStatus();
+    }
+
+    [RelayCommand]
+    private Task PauseAllAsync() => RunAsync(new PauseExportCommand());
+
+    [RelayCommand]
+    private Task ResumeAllAsync() => RunAsync(new ResumeExportCommand());
+
+    private async Task RunAsync(ICommand command)
+    {
+        CommandResult result = await _session.ExecuteAsync(command).ConfigureAwait(true);
+        if (!result.Ok)
+        {
+            Status = result.Error ?? string.Empty;
+        }
     }
 
     private void Queue(ExportJobInfo job)
@@ -127,26 +164,71 @@ public sealed partial class ExportQueuePanelViewModel : ToolViewModel
             if (existing is null)
             {
                 Jobs.Add(new ExportJobViewModel(this, update));
+                continue;
             }
-            else
+
+            ExportJobState before = existing.State;
+            existing.Update(update);
+            if (before != update.State)
             {
-                existing.Update(update);
+                Announce(existing, update);
             }
         }
 
+        if (SelectedJob is { } selected && updates.Any(update => string.Equals(update.Id, selected.Id, StringComparison.Ordinal)))
+        {
+            RefreshLog();
+        }
+
         UpdateStatus();
+    }
+
+    private void Announce(ExportJobViewModel job, ExportJobInfo update)
+    {
+        string? text = update.State switch
+        {
+            ExportJobState.Done => string.Create(CultureInfo.InvariantCulture, $"Exported {job.Name}: {update.Bytes / 1048576.0:F1} MB."),
+            ExportJobState.Failed => $"{job.Name} did not export: {update.Error}",
+            _ => null,
+        };
+
+        if (text is not null)
+        {
+            Notice?.Invoke(this, text);
+        }
+    }
+
+    private void RefreshLog()
+    {
+        Log.Clear();
+        if (SelectedJob is not { } job || _queue is null)
+        {
+            return;
+        }
+
+        foreach (string line in _queue.Log(job.Id) ?? [])
+        {
+            Log.Add(line);
+        }
     }
 
     private void UpdateStatus()
     {
         int running = Jobs.Count(job => job.State == ExportJobState.Running);
         int waiting = Jobs.Count(job => job.State == ExportJobState.Queued);
+        int paused = Jobs.Count(job => job.State == ExportJobState.Paused);
 
         Status = _queue is null
             ? "There is no export queue in this window."
-            : running + waiting == 0
+            : running + waiting + paused == 0
                 ? Jobs.Count == 0 ? "Nothing queued. Export from File, or press Export on a Quick Trim." : "Everything has finished."
-                : string.Create(CultureInfo.InvariantCulture, $"{running} exporting, {waiting} waiting.");
+                : string.Create(CultureInfo.InvariantCulture, $"{running} exporting, {waiting} waiting{(paused > 0 ? $", {paused} paused" : string.Empty)}.");
+
+        ExportJobViewModel[] active = [.. Jobs.Where(job => job.State == ExportJobState.Running)];
+        TaskbarProgress = active.Length == 0 ? 0 : active.Average(job => job.Progress);
+        TaskbarState = active.Length > 0 ? TaskbarItemProgressState.Normal
+            : paused > 0 ? TaskbarItemProgressState.Paused
+            : TaskbarItemProgressState.None;
 
         OnPropertyChanged(nameof(IsEmpty));
     }
@@ -159,6 +241,8 @@ public sealed partial class ExportJobViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(CancelCommand))]
+    [NotifyCanExecuteChangedFor(nameof(PauseOrResumeCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RaiseCommand))]
     private ExportJobState _state;
 
     [ObservableProperty]
@@ -169,6 +253,9 @@ public sealed partial class ExportJobViewModel : ObservableObject
 
     [ObservableProperty]
     private string _stateText = string.Empty;
+
+    [ObservableProperty]
+    private ExportPriority _priority;
 
     internal ExportJobViewModel(ExportQueuePanelViewModel panel, ExportJobInfo job)
     {
@@ -193,15 +280,26 @@ public sealed partial class ExportJobViewModel : ObservableObject
     /// <summary>True for a failure, which the row shows in the warning colour.</summary>
     public bool IsFailed => State == ExportJobState.Failed;
 
+    /// <summary>True while it is held.</summary>
+    public bool IsPaused => State == ExportJobState.Paused;
+
+    /// <summary>The pause button's glyph: play to resume a held job, pause otherwise.</summary>
+    public string PauseGlyph => IsPaused ? "" : "";
+
+    /// <summary>What the pause button does, for its tooltip and screen readers.</summary>
+    public string PauseText => IsPaused ? "Resume this export" : "Pause this export";
+
     /// <summary>Takes a new report.</summary>
     internal void Update(ExportJobInfo job)
     {
         State = job.State;
         Progress = job.Progress;
+        Priority = job.Priority;
         StateText = job.State switch
         {
-            ExportJobState.Queued => "Waiting",
-            ExportJobState.Running => string.Create(CultureInfo.InvariantCulture, $"{job.Progress * 100:F0}%"),
+            ExportJobState.Queued => job.Priority == ExportPriority.Normal ? "Waiting" : $"Waiting, {job.Priority.ToString().ToLowerInvariant()}",
+            ExportJobState.Running => string.Create(CultureInfo.InvariantCulture, $"{job.Progress * 100:F0}%{(job.Hardware ? " GPU" : string.Empty)}"),
+            ExportJobState.Paused => "Paused",
             ExportJobState.Done => "Done",
             ExportJobState.Failed => "Failed",
             _ => "Cancelled",
@@ -222,12 +320,26 @@ public sealed partial class ExportJobViewModel : ObservableObject
 
         OnPropertyChanged(nameof(IsFinished));
         OnPropertyChanged(nameof(IsFailed));
+        OnPropertyChanged(nameof(IsPaused));
+        OnPropertyChanged(nameof(PauseGlyph));
+        OnPropertyChanged(nameof(PauseText));
     }
 
     [RelayCommand(CanExecute = nameof(CanCancel))]
     private Task CancelAsync() => _panel.CancelAsync(Id);
 
     private bool CanCancel() => !IsFinished;
+
+    [RelayCommand(CanExecute = nameof(CanPause))]
+    private Task PauseOrResumeAsync() => _panel.PauseOrResumeAsync(this);
+
+    private bool CanPause() => State is ExportJobState.Queued or ExportJobState.Running or ExportJobState.Paused;
+
+    /// <summary>Moves a waiting job to the front of the queue, or back to normal from there.</summary>
+    [RelayCommand(CanExecute = nameof(CanRaise))]
+    private Task RaiseAsync() => _panel.SetPriorityAsync(Id, Priority == ExportPriority.High ? ExportPriority.Normal : ExportPriority.High);
+
+    private bool CanRaise() => State is ExportJobState.Queued or ExportJobState.Paused;
 
     [RelayCommand]
     private void ShowInFolder()

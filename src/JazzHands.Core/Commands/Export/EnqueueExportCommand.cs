@@ -32,6 +32,7 @@ namespace JazzHands.Core.Commands;
 /// <param name="Channels">1, 2 or 6 channels.</param>
 /// <param name="Loudness">Normalise the mix to this many LUFS.</param>
 /// <param name="TargetSize">Come in under this size.</param>
+/// <param name="PixelFormat">The pixel format to encode, for ten bits or 4:2:2.</param>
 /// <param name="Start">Export from here, in sequence time.</param>
 /// <param name="End">Export to here, in sequence time.</param>
 /// <param name="Priority">Where it goes in the queue: high jobs start before normal ones, normal before low.</param>
@@ -63,6 +64,7 @@ public sealed record EnqueueExportCommand(
     [property: Option("channels", "1, 2 or 6 channels")] int? Channels = null,
     [property: Option("loudness", "Normalise the mix to this many LUFS, for example -14")] double? Loudness = null,
     [property: Option("target-size", "Come in under this size: 8MB")] string? TargetSize = null,
+    [property: Option("pixel-format", "yuv420p10le for ten bits, yuv422p10le for 4:2:2 ten bit")] string? PixelFormat = null,
     [property: Option("start", "Export from here")] Flicks? Start = null,
     [property: Option("end", "Export to here")] Flicks? End = null,
     [property: Option("priority", "low, normal or high")] ExportPriority Priority = ExportPriority.Normal,
@@ -82,7 +84,7 @@ public sealed record EnqueueExportCommand(
         Subtitles,
         SidecarFormat,
         Chapters,
-        ExportOverrideText.Parse(Size, FrameRate, Quality, Bitrate, Encoders, AudioEncoder, AudioBitrate, Channels, Loudness, TargetSize),
+        ExportOverrideText.Parse(Size, FrameRate, Quality, Bitrate, Encoders, AudioEncoder, AudioBitrate, Channels, Loudness, TargetSize, PixelFormat),
         ExportOverrideText.Range(Start, End));
 
     /// <summary>How the queue treats the job.</summary>

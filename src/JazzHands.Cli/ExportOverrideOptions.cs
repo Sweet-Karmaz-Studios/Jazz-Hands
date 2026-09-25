@@ -23,13 +23,14 @@ internal sealed class ExportOverrideOptions
     private readonly Option<string?> _channels = new("--channels") { Description = "1, 2 or 6 channels. Stereo from a 5.1 sequence folds it down." };
     private readonly Option<string?> _loudness = new("--loudness") { Description = "Normalise the mix to this many LUFS, for example -14." };
     private readonly Option<string?> _targetSize = new("--target-size") { Description = "Come in under this size: 8MB. The picture gets smaller when it must." };
+    private readonly Option<string?> _pixelFormat = new("--pixel-format") { Description = "The pixel format: yuv420p10le for ten bits, yuv422p10le for 4:2:2 ten bit." };
     private readonly Option<string?> _start = new("--start") { Description = "Export from here, in sequence time." };
     private readonly Option<string?> _end = new("--end") { Description = "Export to here, in sequence time." };
 
     /// <summary>Adds the options to a command.</summary>
     public void AddTo(Command command)
     {
-        foreach (Option option in new Option[] { _size, _fps, _quality, _bitrate, _encoder, _audioEncoder, _audioBitrate, _channels, _loudness, _targetSize, _start, _end })
+        foreach (Option option in new Option[] { _size, _fps, _quality, _bitrate, _encoder, _audioEncoder, _audioBitrate, _channels, _loudness, _targetSize, _pixelFormat, _start, _end })
         {
             command.Options.Add(option);
         }
@@ -46,7 +47,8 @@ internal sealed class ExportOverrideOptions
         parse.GetValue(_audioBitrate),
         Value<int?>(parse, _channels, rate, "channels"),
         Value<double?>(parse, _loudness, rate, "loudness"),
-        parse.GetValue(_targetSize));
+        parse.GetValue(_targetSize),
+        parse.GetValue(_pixelFormat));
 
     /// <summary>The stretch asked for, or null for all of it.</summary>
     public TimeRange? Range(ParseResult parse, Rational rate) => ExportOverrideText.Range(

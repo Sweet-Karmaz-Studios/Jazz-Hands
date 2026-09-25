@@ -76,6 +76,9 @@ public sealed partial class MainViewModel : ObservableObject
         // A key that did nothing says why where the person is looking: the timeline in front.
         keys?.Message += (_, message) => ui.Post(() => Timelines?.ActiveTimeline?.Status = message);
 
+        // So does an export that finished or failed while the person was editing.
+        exports?.Notice += (_, message) => Say(message);
+
         // Tools, snapping and the clipboard are the timeline's, not the engine's.
         keys?.Actions = action => Timelines?.ActiveTimeline?.Invoke(action) == true;
         Panels = [media];

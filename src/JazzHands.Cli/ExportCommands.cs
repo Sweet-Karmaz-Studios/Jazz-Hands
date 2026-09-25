@@ -352,6 +352,11 @@ public static class ExportCommands
             }
         }
 
+        if (plan.Estimate is { } estimate)
+        {
+            text.AppendLine($"  Estimate: {estimate}.");
+        }
+
         foreach (KeyframeSnap snap in plan.Snaps)
         {
             text.Append(CultureInfo.InvariantCulture, $"  Moved the {snap.Edge} at {Timecode.FormatClock(snap.Requested)} to the keyframe at {Timecode.FormatClock(snap.Snapped)} (frame {snap.Frame}).");

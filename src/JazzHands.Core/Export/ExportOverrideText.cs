@@ -27,7 +27,8 @@ public static class ExportOverrideText
         string? audioBitrate,
         int? channels,
         double? loudness,
-        string? targetSize)
+        string? targetSize,
+        string? pixelFormat = null)
     {
         var overrides = new ExportOverrides(
             size?.Width ?? 0,
@@ -40,7 +41,13 @@ public static class ExportOverrideText
             Bitrate(audioBitrate, "audio-bitrate"),
             channels ?? 0,
             loudness,
-            Bytes(targetSize));
+            Bytes(targetSize),
+            string.IsNullOrWhiteSpace(pixelFormat) ? null : pixelFormat.Trim().ToLowerInvariant());
+
+        if (overrides.PixelFormat is { } format && !ExportPresets.PixelFormats.Contains(format))
+        {
+            throw new CommandException("invalid-value", $"'pixel-format' is one of {string.Join(", ", ExportPresets.PixelFormats)}, not '{format}'.");
+        }
 
         if (overrides.Channels is not (0 or 1 or 2 or 6))
         {
@@ -103,6 +110,7 @@ public static class ExportOverrideText
                 Quality = overrides.Quality ?? video.Quality,
                 Bitrate = overrides.Bitrate > 0 ? overrides.Bitrate : overrides.Quality is not null ? 0 : video.Bitrate,
                 Encoders = overrides.Encoders.IsEmpty ? video.Encoders : overrides.Encoders,
+                PixelFormat = overrides.PixelFormat ?? video.PixelFormat,
             };
         }
 
