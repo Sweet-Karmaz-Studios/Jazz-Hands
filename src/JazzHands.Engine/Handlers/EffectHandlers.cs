@@ -67,6 +67,19 @@ internal static class EffectHelp
                 $"'{descriptor.Name}' works on {wants}, and {ParamHelp.Describe(owner)} carries {has}.");
         }
 
+        if (descriptor.Implementation is { } type)
+        {
+            if (typeof(JazzHands.Audio.Effects.IClipEffect).IsAssignableFrom(type) && owner.Clip is null)
+            {
+                throw new CommandException("clip-only", $"'{descriptor.Name}' goes on a clip, not a track: it reads ahead in the clip's file to stay in time.");
+            }
+
+            if (typeof(JazzHands.Audio.Effects.ITrackEffect).IsAssignableFrom(type) && owner.Clip is not null)
+            {
+                throw new CommandException("track-only", $"'{descriptor.Name}' goes on a track, not a clip: it listens to another track.");
+            }
+        }
+
         return descriptor;
     }
 

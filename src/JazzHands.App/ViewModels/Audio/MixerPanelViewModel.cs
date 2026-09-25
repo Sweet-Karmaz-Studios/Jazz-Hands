@@ -103,7 +103,7 @@ public sealed partial class MixerPanelViewModel : ToolViewModel, IDisposable, Sh
         Channels = Math.Clamp(feed.Channels, 1, Dsp.MaxChannels);
         Master = new MasterStripViewModel(this, Channels);
         AvailableEffects = [.. EffectCatalog.Registry.All
-            .Where(descriptor => descriptor.Kind == EffectKind.Audio)
+            .Where(descriptor => descriptor.Kind == EffectKind.Audio && !typeof(JazzHands.Audio.Effects.IClipEffect).IsAssignableFrom(descriptor.Implementation))
             .OrderBy(descriptor => descriptor.Category, StringComparer.Ordinal)
             .ThenBy(descriptor => descriptor.Name, StringComparer.Ordinal)
             .Select(descriptor => new MixerEffectChoice(descriptor.TypeId, descriptor.Name, descriptor.Category))];

@@ -97,7 +97,7 @@ public sealed class MixSnapshot
 
                 if (from < to)
                 {
-                    (long first, long count) = clip.SourceWindow(from - clip.Start, (int)Math.Min(to - from, int.MaxValue));
+                    (long first, long count) = clip.SourceWindow(from - clip.Start + clip.Latency, (int)Math.Min(to - from, int.MaxValue));
                     demands.Add(new SourceDemand(clip.Source, first, count));
                 }
             }
@@ -245,6 +245,11 @@ public sealed class ClipMix
         Pan = pan ?? ScalarCurve.Constant(0.0f);
         ChannelMap = channelMap;
         EffectArray = effects is null ? [] : [.. effects];
+        foreach (AudioEffectSlot slot in EffectArray)
+        {
+            Latency += slot.Effect.LatencySamples;
+        }
+
         LeadIn = Math.Max(0, leadIn);
         Tail = Math.Max(0, tail);
         CrossIn = crossIn;
@@ -316,6 +321,9 @@ public sealed class ClipMix
     public IReadOnlyList<AudioEffectSlot> Effects => EffectArray;
 
     internal AudioEffectSlot[] EffectArray { get; }
+
+    /// <summary>How many samples late its effects hand the sound back, together: the mixer reads its file this far ahead.</summary>
+    public int Latency { get; }
 
     /// <summary>The clip identifier.</summary>
     public string Id { get; }

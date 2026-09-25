@@ -26,7 +26,7 @@ namespace JazzHands.Audio.Effects;
 [Param("attack", ParamType.Float, Default = "15", Min = 0.1, Max = 1000, SliderMax = 200, Unit = "ms", Description = "How quickly it goes down when the key starts.")]
 [Param("hold", ParamType.Float, Default = "300", Min = 0, Max = 5000, SliderMax = 1000, Unit = "ms", Description = "How long it stays down after the key stops, to ride over the gaps between words.")]
 [Param("release", ParamType.Float, Default = "400", Min = 1, Max = 10000, SliderMax = 2000, Unit = "ms", Description = "How quickly it comes back up.")]
-public sealed class DuckerEffect : AudioEffect
+public sealed class DuckerEffect : AudioEffect, ITrackEffect
 {
     private const int Depth = 1;
     private const int Threshold = 2;

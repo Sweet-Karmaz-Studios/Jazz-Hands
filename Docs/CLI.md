@@ -442,6 +442,21 @@ Duck the music under a voice: one track drops by a depth while another has sound
 | `--off` | Take the ducking off the music track. |
 | `--no-save` | Do not write the project back. |
 
+### `jazz audio learn-noise <project> <clip-id>`
+
+Learn a clip's background noise (a fan, hiss, the room) from a stretch with only noise in it, and take it out with noise reduction.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | A sound clip, or a video clip for its linked sound. |
+
+| Option | Meaning |
+|---|---|
+| `--from <time>` | Where the stretch of noise starts, on the sequence. Default: the clip's quietest half second. |
+| `--to <time>` | Where it ends. |
+| `--no-save` | Do not write the project back. |
+
 ### `jazz audio measure <project>`
 
 Measure a clip, a track or the mix on its own: peak, RMS and integrated loudness (LUFS).
@@ -502,6 +517,22 @@ Set a clip's, a track's or the mix's gain so it measures a peak, RMS or loudness
 | `--mode <peak|rms|lufs>` | peak, rms or lufs. Default: lufs. Default: lufs. |
 | `--target <number>` | dBFS for peak and rms, LUFS for lufs. Default: -1, -20 and -14. |
 | `--sequence <id>` | For --mix, which sequence. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz audio reduce-noise <project> <clip-id>`
+
+Turn a clip's noise reduction on, change how much it takes out, or take it off.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | A sound clip, or a video clip for its linked sound. |
+
+| Option | Meaning |
+|---|---|
+| `--reduction <number>` | How far the noise goes down at most: 12dB. Default: 12. |
+| `--sensitivity <number>` | How far over the noise a sound must be to stay, 0.5 to 4. Default: 2. |
+| `--off` | Take noise reduction off. |
 | `--no-save` | Do not write the project back. |
 
 ### `jazz audio replace <project> <clip-id> <media-id>`

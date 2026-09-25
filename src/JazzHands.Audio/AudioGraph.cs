@@ -432,7 +432,15 @@ public sealed class AudioGraph
     private bool MixClip(ClipMix clip, long clipSample, int offset, int frames)
     {
         int sourceChannels = clip.Source.Channels;
-        bool ready = FetchSource(clip, clipSample, frames);
+        int latency = clip.Latency;
+        if (latency > 0 && clip.EffectArray[0].Effect.Next != clipSample)
+        {
+            PreRoll(clip, clipSample, latency);
+        }
+
+        // An effect that hands sound back late is fed the file that much ahead, so what comes out
+        // is this block's sound, in time with the other clips.
+        bool ready = FetchSource(clip, clipSample + latency, frames);
 
         // Clip effects run on the source channels, before gain, fades and pan: ClipSource, ClipFx, then the rest.
         foreach (Effects.AudioEffectSlot effect in clip.EffectArray)
@@ -490,6 +498,31 @@ public sealed class AudioGraph
         }
 
         return ready;
+    }
+
+    /// <summary>
+    /// Starts a clip's chain afresh where it is about to play (its start, or after a jump): forgets
+    /// what the effects held, then feeds them the stretch of the file their latency needs ahead of
+    /// the block and throws away what comes out, so the block itself is the clip's own sound.
+    /// </summary>
+    private void PreRoll(ClipMix clip, long clipSample, int latency)
+    {
+        foreach (Effects.AudioEffectSlot effect in clip.EffectArray)
+        {
+            effect.Effect.ResetAll();
+        }
+
+        for (int done = 0; done < latency;)
+        {
+            int count = Math.Min(BlockSize, latency - done);
+            FetchSource(clip, clipSample + done, count);
+            foreach (Effects.AudioEffectSlot effect in clip.EffectArray)
+            {
+                effect.Process(_clipSource, 0, count, clip.Source.Channels, SampleRate, clipSample - latency + done);
+            }
+
+            done += count;
+        }
     }
 
     /// <summary>

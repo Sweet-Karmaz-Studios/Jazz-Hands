@@ -78,6 +78,17 @@ public abstract class AudioEffect
     /// </summary>
     public virtual double TailSeconds => 0.0;
 
+    /// <summary>
+    /// How many samples late its output is: an effect that works on a window of sound (a spectral
+    /// one) hands each sample back that much later. Only a clip effect may have latency (see
+    /// <see cref="IClipEffect"/>): the mixer reads the clip's file that far ahead, so the clip stays
+    /// in time with everything else.
+    /// </summary>
+    public virtual int LatencySamples => 0;
+
+    /// <summary>The owner sample the next block should start at, where the last one ended; <see cref="long.MinValue"/> after a reset.</summary>
+    internal long Next { get; set; } = long.MinValue;
+
     /// <summary>The rate it was last prepared for.</summary>
     protected int SampleRate { get; private set; }
 
@@ -124,7 +135,17 @@ public abstract class AudioEffect
     internal void ResetAll()
     {
         HasLast = false;
+        Next = long.MinValue;
         Reset();
+    }
+
+    /// <summary>
+    /// Takes the value of one of its text parameters (a learned profile, a key track), on the thread
+    /// that builds the mix whenever the mix is built. Parse here, never on the audio thread, and hand
+    /// the result over by swapping one reference.
+    /// </summary>
+    public virtual void Text(string name, string value)
+    {
     }
 
     /// <summary>Allocates what it needs for a rate and a channel count.</summary>
@@ -132,6 +153,15 @@ public abstract class AudioEffect
     {
     }
 }
+
+/// <summary>
+/// An effect that belongs on a clip, never a track: it reads ahead in the clip's file to make up
+/// its latency (noise reduction), which a track, the sum of many clips, cannot.
+/// </summary>
+public interface IClipEffect;
+
+/// <summary>An effect that belongs on a track, never a clip: it listens to another track (a ducker).</summary>
+public interface ITrackEffect;
 
 /// <summary>One effect in a clip's or a track's chain, as the audio thread runs it.</summary>
 public sealed class AudioEffectSlot
@@ -184,6 +214,7 @@ public sealed class AudioEffectSlot
         }
 
         Effect.Process(new AudioEffectBlock(buffer, offset, frames, channels, sampleRate, _from, _to, key));
+        Effect.Next = time + frames;
 
         if (last is not null && last.Length == _params.Length)
         {
@@ -247,6 +278,11 @@ public sealed class AudioEffectHost
                 }
 
                 live.Effect.Prepare(sampleRate, channels);
+                foreach (ParamDescriptor text in descriptor.Params.Where(parameter => parameter.Type == ParamType.Text))
+                {
+                    live.Effect.Text(text.Name, effect.Parameter(text.Name) is StaticValue { Value: ParamValue.Text value } ? value.Value : string.Empty);
+                }
+
                 live.Effect.Last ??= new float[descriptor.Params.Length];
                 keep.Add(effect.Id);
                 slots.Add(new AudioEffectSlot(effect.Id, live.Effect, Curves(descriptor, effect, sampleRate))
