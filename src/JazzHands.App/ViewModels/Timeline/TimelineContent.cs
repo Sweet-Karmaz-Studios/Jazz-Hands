@@ -196,10 +196,35 @@ public sealed class TimelineContent
                 byId[clip.Id] = view;
             }
 
-            tracks.Add(new TrackView(track, clips.MoveToImmutable()) { Transitions = TransitionViews(project, track, frameRate) });
+            // A track nothing changed on keeps its view too, so the timeline keeps its drawing.
+            ImmutableArray<ClipView> views = clips.MoveToImmutable();
+            ImmutableArray<TransitionView> transitions = TransitionViews(project, track, frameRate);
+            TrackView? before = previous?.Track(track.Id);
+            tracks.Add(before is not null && ReferenceEquals(before.Track, track) && Same(before.Clips, views) && before.Transitions.SequenceEqual(transitions)
+                ? before
+                : new TrackView(track, views) { Transitions = transitions });
         }
 
         return new TimelineContent(sequence, project.SettingsFor(sequence), tracks.MoveToImmutable(), byId);
+    }
+
+    /// <summary>True when two lists hold the very same clip views.</summary>
+    private static bool Same(ImmutableArray<ClipView> before, ImmutableArray<ClipView> now)
+    {
+        if (before.Length != now.Length)
+        {
+            return false;
+        }
+
+        for (int index = 0; index < now.Length; index++)
+        {
+            if (!ReferenceEquals(before[index], now[index]))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>A transition by id, or null.</summary>

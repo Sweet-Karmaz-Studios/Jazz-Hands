@@ -22,8 +22,14 @@ namespace JazzHands.App.Controls.Timeline;
 /// Everything that says where a thing is comes from <see cref="TimelineGeometry"/>; everything
 /// the mouse does goes to the view model, which decides what it means. This only draws.
 ///
-/// <see cref="LastClipsRender"/> and <see cref="ClipsRenders"/> are what the performance test
-/// reads: how long drawing the clips took, and how many times it happened.
+/// The clips layer is a visual per track, each recorded on its own and kept: an edit records
+/// again only the tracks whose clips changed, and the rest stay as they are (Phase 32; an edit to
+/// two thousand clips on screen went from about 7 ms of drawing to about half a millisecond). Scrolling, zooming,
+/// a row moving and new thumbnails record every track again.
+///
+/// <see cref="LastClipsRender"/>, <see cref="ClipsRenders"/> and <see cref="TracksRecorded"/> are
+/// what the performance tests read: how long drawing the clips took, how many times it happened,
+/// and how many track drawings were made.
 /// </remarks>
 public sealed class TimelineControl : FrameworkElement
 {
@@ -43,6 +49,9 @@ public sealed class TimelineControl : FrameworkElement
     private readonly Dictionary<string, SolidColorBrush> _trackBrushes = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, TextDrawing> _labels = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TextDrawing> _rulerLabels = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, TrackDrawing> _trackDrawings = new(StringComparer.Ordinal);
+    private readonly List<string> _goneTracks = [];
+    private readonly HashSet<string> _drawnTracks = new(StringComparer.Ordinal);
 
     private TimelineViewModel? _model;
     private TimelineLayers _dirty = TimelineLayers.All;
@@ -52,6 +61,7 @@ public sealed class TimelineControl : FrameworkElement
     private Typeface? _typeface;
     private double _pixelsPerDip = 1.0;
     private ITimelineImagery _imagery = NoImagery.Instance;
+    private int _imageryVersion;
 
     /// <summary>Creates the control.</summary>
     public TimelineControl()
@@ -82,6 +92,7 @@ public sealed class TimelineControl : FrameworkElement
             _imagery.Changed -= OnImageryChanged;
             _imagery = value;
             _imagery.Changed += OnImageryChanged;
+            _imageryVersion++;
             OnInvalidated(this, TimelineLayers.Clips);
         }
     }
@@ -91,6 +102,9 @@ public sealed class TimelineControl : FrameworkElement
 
     /// <summary>How many times the clips layer has been drawn.</summary>
     public int ClipsRenders { get; private set; }
+
+    /// <summary>How many track drawings the clips layer has recorded, kept ones not counted.</summary>
+    public int TracksRecorded { get; private set; }
 
     /// <summary>How many times the playhead layer has been drawn.</summary>
     public int PlayheadRenders { get; private set; }
@@ -498,7 +512,11 @@ public sealed class TimelineControl : FrameworkElement
 
     private void OnRendering(object? sender, EventArgs e) => DrawDirty();
 
-    private void OnImageryChanged(object? sender, EventArgs e) => Dispatcher.BeginInvoke(() => OnInvalidated(this, TimelineLayers.Clips));
+    private void OnImageryChanged(object? sender, EventArgs e) => Dispatcher.BeginInvoke(() =>
+    {
+        _imageryVersion++;
+        OnInvalidated(this, TimelineLayers.Clips);
+    });
 
     private SolidColorBrush TrackBrush(string color)
     {
@@ -697,15 +715,20 @@ public sealed class TimelineControl : FrameworkElement
     private void DrawClips()
     {
         TimelineViewModel model = _model!;
-        Palette palette = _palette!;
         TimelineGeometry geometry = model.Geometry;
         double width = ActualWidth;
         double height = ActualHeight;
         (Flicks visibleStart, Flicks visibleEnd) = geometry.Visible(width);
 
-        using DrawingContext dc = _clips.RenderOpen();
-        dc.PushClip(new RectangleGeometry(new Rect(0, TimelineGeometry.TracksTop, width, Math.Max(0, height - TimelineGeometry.TracksTop))));
+        var area = new Rect(0, TimelineGeometry.TracksTop, width, Math.Max(0, height - TimelineGeometry.TracksTop));
+        if (_clips.Clip is not RectangleGeometry { Rect: var clipped } || clipped != area)
+        {
+            var clip = new RectangleGeometry(area);
+            clip.Freeze();
+            _clips.Clip = clip;
+        }
 
+        _drawnTracks.Clear();
         foreach (TrackView track in model.Content.Tracks)
         {
             if (geometry.Row(track.Id) is not { } row)
@@ -719,71 +742,136 @@ public sealed class TimelineControl : FrameworkElement
                 continue;
             }
 
-            SolidColorBrush fill = TrackBrush(track.Track.Color);
-            double clipTop = top + ClipInset;
-            double clipHeight = Math.Max(1.0, row.Height - (ClipInset * 2));
-
-            foreach (ClipView clip in Visible(track, visibleStart, visibleEnd))
+            _drawnTracks.Add(track.Id);
+            _trackDrawings.TryGetValue(track.Id, out TrackDrawing? kept);
+            if (kept is null || !kept.Matches(track, geometry, top, row.Height, width, _imageryVersion, _palette!))
             {
-                double left = geometry.XOf(clip.Start);
-                double right = geometry.XOf(clip.End);
-
-                // Past the edges the body is clipped; drawing it wider than the control only
-                // costs the rasterizer.
-                double drawnLeft = Math.Max(left, -4.0);
-                double drawnRight = Math.Min(right, width + 4.0);
-                var body = new Rect(drawnLeft, clipTop, Math.Max(1.0, drawnRight - drawnLeft - 1.0), clipHeight);
-
-                Brush bodyBrush = clip.MediaMissing ? palette.Missing : clip.Clip.Enabled ? fill : palette.Disabled;
-                dc.DrawRoundedRectangle(bodyBrush, palette.ClipEdge, body, 3.0, 3.0);
-
-                DrawImagery(dc, clip, body, visibleStart, visibleEnd, geometry.PixelsPerSecond);
-
-                Rect lineBody = VolumeLine.Body(geometry, row, clip);
-                if (VolumeLine.Shown(clip, lineBody))
+                DrawingVisual visual = kept?.Visual ?? new DrawingVisual();
+                using (DrawingContext recording = visual.RenderOpen())
                 {
-                    DrawVolumeLine(dc, clip, lineBody, width);
+                    DrawTrack(recording, track, row, top, geometry, width, visibleStart, visibleEnd);
                 }
 
-                if (clip.Clip.LinkGroupId is not null)
+                if (kept is null)
                 {
-                    dc.DrawRectangle(palette.LinkMark, null, new Rect(body.Left + 1, body.Bottom - 3, Math.Min(10.0, body.Width - 2), 2));
+                    _clips.Children.Add(visual);
                 }
 
-                if (body.Width > 16 && clipHeight > ClipFontSize + 2)
+                _trackDrawings[track.Id] = new TrackDrawing(track, geometry.PixelsPerSecond, geometry.Scroll, top, row.Height, width, _imageryVersion, _palette!, visual);
+                TracksRecorded++;
+            }
+        }
+
+        // Tracks gone or scrolled out of view let go of their visuals.
+        if (_trackDrawings.Count > _drawnTracks.Count)
+        {
+            _goneTracks.Clear();
+            foreach ((string id, TrackDrawing drawing) in _trackDrawings)
+            {
+                if (!_drawnTracks.Contains(id))
                 {
-                    TextDrawing label = ClipLabel(clip.Label, palette.ClipText);
-                    double textLeft = Math.Max(body.Left, 0) + LabelPadding;
-                    double room = body.Right - LabelPadding - textLeft;
-
-                    if (room > 4)
-                    {
-                        bool fits = label.Width <= room;
-                        if (!fits)
-                        {
-                            dc.PushClip(new RectangleGeometry(new Rect(textLeft, body.Top, room, body.Height)));
-                        }
-
-                        DrawTextAt(dc, label, textLeft, body.Top + 2);
-
-                        if (!fits)
-                        {
-                            dc.Pop();
-                        }
-                    }
+                    _clips.Children.Remove(drawing.Visual);
+                    _goneTracks.Add(id);
                 }
             }
 
-            foreach (TransitionView bar in track.Transitions)
+            foreach (string id in _goneTracks)
             {
-                if (bar.End >= visibleStart && bar.Start <= visibleEnd)
+                _trackDrawings.Remove(id);
+            }
+        }
+    }
+
+    /// <summary>One track's clips and transitions, recorded into a drawing of its own.</summary>
+    private void DrawTrack(DrawingContext dc, TrackView track, TrackRow row, double top, TimelineGeometry geometry, double width, Flicks visibleStart, Flicks visibleEnd)
+    {
+        Palette palette = _palette!;
+        SolidColorBrush fill = TrackBrush(track.Track.Color);
+        double clipTop = top + ClipInset;
+        double clipHeight = Math.Max(1.0, row.Height - (ClipInset * 2));
+
+        foreach (ClipView clip in Visible(track, visibleStart, visibleEnd))
+        {
+            double left = geometry.XOf(clip.Start);
+            double right = geometry.XOf(clip.End);
+
+            // Past the edges the body is clipped; drawing it wider than the control only
+            // costs the rasterizer.
+            double drawnLeft = Math.Max(left, -4.0);
+            double drawnRight = Math.Min(right, width + 4.0);
+            var body = new Rect(drawnLeft, clipTop, Math.Max(1.0, drawnRight - drawnLeft - 1.0), clipHeight);
+
+            Brush bodyBrush = clip.MediaMissing ? palette.Missing : clip.Clip.Enabled ? fill : palette.Disabled;
+            dc.DrawRoundedRectangle(bodyBrush, palette.ClipEdge, body, 3.0, 3.0);
+
+            DrawImagery(dc, clip, body, visibleStart, visibleEnd, geometry.PixelsPerSecond);
+
+            Rect lineBody = VolumeLine.Body(geometry, row, clip);
+            if (VolumeLine.Shown(clip, lineBody))
+            {
+                DrawVolumeLine(dc, clip, lineBody, width);
+            }
+
+            if (clip.Clip.LinkGroupId is not null)
+            {
+                dc.DrawRectangle(palette.LinkMark, null, new Rect(body.Left + 1, body.Bottom - 3, Math.Min(10.0, body.Width - 2), 2));
+            }
+
+            if (body.Width > 16 && clipHeight > ClipFontSize + 2)
+            {
+                TextDrawing label = ClipLabel(clip.Label, palette.ClipText);
+                double textLeft = Math.Max(body.Left, 0) + LabelPadding;
+                double room = body.Right - LabelPadding - textLeft;
+
+                if (room > 4)
                 {
-                    DrawTransition(dc, geometry.TransitionBand(row, bar.Start, bar.End), bar);
+                    bool fits = label.Width <= room;
+                    if (!fits)
+                    {
+                        dc.PushClip(new RectangleGeometry(new Rect(textLeft, body.Top, room, body.Height)));
+                    }
+
+                    DrawTextAt(dc, label, textLeft, body.Top + 2);
+
+                    if (!fits)
+                    {
+                        dc.Pop();
+                    }
                 }
             }
         }
 
-        dc.Pop();
+        foreach (TransitionView bar in track.Transitions)
+        {
+            if (bar.End >= visibleStart && bar.Start <= visibleEnd)
+            {
+                DrawTransition(dc, geometry.TransitionBand(row, bar.Start, bar.End), bar);
+            }
+        }
+    }
+
+    /// <summary>A track's visual and everything it was recorded for.</summary>
+    private sealed record TrackDrawing(
+        TrackView View,
+        double PixelsPerSecond,
+        Flicks Scroll,
+        double Top,
+        double RowHeight,
+        double Width,
+        int ImageryVersion,
+        Palette Palette,
+        DrawingVisual Visual)
+    {
+        /// <summary>True when the drawing still shows the track as it would be drawn now.</summary>
+        public bool Matches(TrackView view, TimelineGeometry geometry, double top, double rowHeight, double width, int imageryVersion, Palette palette) =>
+            ReferenceEquals(View, view)
+            && PixelsPerSecond == geometry.PixelsPerSecond
+            && Scroll == geometry.Scroll
+            && Top == top
+            && RowHeight == rowHeight
+            && Width == width
+            && ImageryVersion == imageryVersion
+            && ReferenceEquals(Palette, palette);
     }
 
     /// <summary>
