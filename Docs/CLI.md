@@ -2908,6 +2908,19 @@ hevc10_2160p30_10min.mp4: 600 s, 3840x2160 hevc 30 fps
 "Shown" is every thumbnail of the strip on screen, a keyframe near its time at least; "exact" is
 when the workers have finished making each one the frame its grid asks for.
 
+### `jazz perf project <file>`
+
+Time a big project: load, open, and the edits a person makes, each to the change being published.
+
+| Argument | Meaning |
+|---|---|
+| `<file>` | A media file with a picture and sound, cut into the project's clips. |
+
+| Option | Meaning |
+|---|---|
+| `--clips <clips>` | How many clips, over four picture and four sound tracks. Default: 2000. |
+| `--edits <edits>` | Rounds of edits: a move, a trim and a split on a random clip, each undone. Default: 100. |
+
 ## `jazz playback`
 
 The transport of a running editor: play, pause, seek, loop, rate.

@@ -155,7 +155,67 @@ namespace JazzHands.Cli
             perf.Subcommands.Add(BuildAudioBenchmarkCommand());
             perf.Subcommands.Add(BuildPlaybackBenchmarkCommand());
             perf.Subcommands.Add(BuildThumbnailBenchmarkCommand());
+            perf.Subcommands.Add(BuildProjectBenchmarkCommand());
             return perf;
+        }
+
+        private static Command BuildProjectBenchmarkCommand()
+        {
+            var file = new Argument<FileInfo>("file") { Description = "A media file with a picture and sound, cut into the project's clips." };
+            var clips = new Option<int>("--clips")
+            {
+                Description = "How many clips, over four picture and four sound tracks.",
+                DefaultValueFactory = _ => 2000,
+            };
+            var edits = new Option<int>("--edits")
+            {
+                Description = "Rounds of edits: a move, a trim and a split on a random clip, each undone.",
+                DefaultValueFactory = _ => 100,
+            };
+
+            var command = new Command(
+                "project",
+                "Time a big project: load, open, and the edits a person makes, each to the change being published.")
+            {
+                file,
+                clips,
+                edits,
+            };
+
+            command.SetAction(async (parseResult, cancellationToken) =>
+            {
+                FileInfo target = parseResult.GetValue(file)!;
+                if (!target.Exists)
+                {
+                    Console.Error.WriteLine($"jazz: '{target.FullName}' does not exist.");
+                    return ExitCode.CommandError;
+                }
+
+                LogSetup.ConfigureForCli(parseResult.GetValue(VerboseOption) ? LogEventLevel.Debug : LogEventLevel.Warning);
+
+                try
+                {
+                    ProjectBenchmarkResult result = await ProjectBenchmark.RunAsync(target.FullName, parseResult.GetValue(clips), parseResult.GetValue(edits)).ConfigureAwait(false);
+
+                    Console.Out.WriteLine(parseResult.GetValue(JsonOption)
+                        ? System.Text.Json.JsonSerializer.Serialize(result, JazzHands.Core.Serialization.JazzJson.Options)
+                        : ProjectBenchmark.Describe(result));
+
+                    return ExitCode.Ok;
+                }
+                catch (JazzHands.Media.Interop.FfmpegException ex)
+                {
+                    Console.Error.WriteLine($"jazz: {ex.Message}");
+                    return ExitCode.MediaError;
+                }
+                catch (InvalidOperationException ex)
+                {
+                    Console.Error.WriteLine($"jazz: {ex.Message}");
+                    return ExitCode.CommandError;
+                }
+            });
+
+            return command;
         }
 
         private static Command BuildThumbnailBenchmarkCommand()
