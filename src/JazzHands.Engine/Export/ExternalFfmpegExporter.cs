@@ -294,6 +294,14 @@ internal static class ExternalFfmpegExporter
         private readonly byte[] _row = new byte[width * (tenBit ? 2 : 1)];
 
         public bool TenBit => tenBit;
+
+        public bool TakesTextures => false;
+
+        public TextureFrame RentTexture(CancellationToken cancellationToken) =>
+            throw new NotSupportedException("ffmpeg.exe is handed frames through a pipe, not textures.");
+
+        public void Submit(TextureFrame frame, long index, CancellationToken cancellationToken) =>
+            throw new NotSupportedException("ffmpeg.exe is handed frames through a pipe, not textures.");
         private readonly Stopwatch _clock = Stopwatch.StartNew();
         private long _reported;
 

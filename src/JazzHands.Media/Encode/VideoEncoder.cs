@@ -87,6 +87,8 @@ public sealed unsafe class VideoEncoder : IDisposable
     private readonly SwsContext* _convert;
     private readonly AvFrame? _converted;
     private readonly PaletteGraph? _palette;
+    private readonly Decode.HardwareDeviceContext? _device;
+    private readonly AvBufferRef? _frames;
     private long _sent;
 
     private VideoEncoder(AvCodecContext context, string name, VideoEncoderSettings settings, AVPixelFormat input, AVPixelFormat encoded, IReadOnlyList<string> skipped)
@@ -124,6 +126,18 @@ public sealed unsafe class VideoEncoder : IDisposable
         }
     }
 
+    private VideoEncoder(AvCodecContext context, string name, VideoEncoderSettings settings, AVPixelFormat format, Decode.HardwareDeviceContext device, AvBufferRef frames, IReadOnlyList<string> skipped)
+    {
+        _context = context;
+        _device = device;
+        _frames = frames;
+        Name = name;
+        Settings = settings;
+        InputFormat = format;
+        EncodedFormat = format;
+        Skipped = skipped;
+    }
+
     /// <summary>The encoder that opened, for example h264_nvenc.</summary>
     public string Name { get; }
 
@@ -142,6 +156,9 @@ public sealed unsafe class VideoEncoder : IDisposable
     /// <summary>True when frames are P010: ten bits in the top of sixteen.</summary>
     public bool TakesP010 => InputFormat == AVPixelFormat.AV_PIX_FMT_P010LE;
 
+    /// <summary>True when it takes textures on the render device (<see cref="RentTexture"/>) rather than frames in system memory.</summary>
+    public bool TakesTextures => _frames is not null;
+
     /// <summary>Encoders earlier in the chain that would not open, with why.</summary>
     public IReadOnlyList<string> Skipped { get; }
 
@@ -153,8 +170,13 @@ public sealed unsafe class VideoEncoder : IDisposable
     /// <summary>Opens the first encoder in the chain that will open.</summary>
     /// <param name="settings">What to encode.</param>
     /// <param name="globalHeader">True when the container keeps parameter sets in its header, as MP4 does.</param>
+    /// <param name="textures">
+    /// The render device, to hand NVENC textures on it rather than frames in system memory; null
+    /// for system memory. Only NVENC takes textures, and one that will not open on them opens on
+    /// system memory instead and says so.
+    /// </param>
     /// <exception cref="FfmpegException">When none of them opens.</exception>
-    public static VideoEncoder Open(VideoEncoderSettings settings, bool globalHeader)
+    public static VideoEncoder Open(VideoEncoderSettings settings, bool globalHeader, D3D11Textures? textures = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         FfmpegLoader.Initialize();
@@ -168,6 +190,12 @@ public sealed unsafe class VideoEncoder : IDisposable
             {
                 skipped.Add($"{name}: not in this FFmpeg build");
                 continue;
+            }
+
+            if (textures is not null && name.Contains("nvenc", StringComparison.Ordinal)
+                && OpenOnTextures(codec, name, settings, globalHeader, textures, skipped) is { } direct)
+            {
+                return direct;
             }
 
             var context = new AvCodecContext(codec);
@@ -214,8 +242,107 @@ public sealed unsafe class VideoEncoder : IDisposable
         throw new FfmpegException($"No video encoder would open: {string.Join("; ", skipped)}.");
     }
 
+    /// <summary>
+    /// Opens NVENC on textures of the render device: a D3D11 frame pool on that device, which the
+    /// renderer copies each finished frame into on the GPU and NVENC reads where it lies. Null,
+    /// with the reason noted, when this encoder will not open that way.
+    /// </summary>
+    private static VideoEncoder? OpenOnTextures(AVCodec* codec, string name, VideoEncoderSettings settings, bool globalHeader, D3D11Textures textures, List<string> skipped)
+    {
+        var context = new AvCodecContext(codec);
+        Decode.HardwareDeviceContext? device = null;
+        AvBufferRef? frames = null;
+        try
+        {
+            AVPixelFormat encoded = ChooseFormat(context.Handle, codec, name, settings);
+            AVPixelFormat format = Depth(encoded) > 8 ? AVPixelFormat.AV_PIX_FMT_P010LE : AVPixelFormat.AV_PIX_FMT_NV12;
+
+            device = Decode.HardwareDeviceContext.CreateShared(textures.Device, textures.ImmediateContext);
+            frames = new AvBufferRef(Av.CheckAlloc(ffmpeg.av_hwframe_ctx_alloc(device.Handle), "av_hwframe_ctx_alloc"));
+            var pool = (AVHWFramesContext*)frames.Handle->data;
+            pool->format = AVPixelFormat.AV_PIX_FMT_D3D11;
+            pool->sw_format = format;
+            pool->width = settings.Width;
+            pool->height = settings.Height;
+
+            // No fixed array: NVENC holds frames for its lookahead and B-frames, and a pool of
+            // single textures grows to what it holds rather than failing at a guess.
+            pool->initial_pool_size = 0;
+            Av.Check(ffmpeg.av_hwframe_ctx_init(frames.Handle), "av_hwframe_ctx_init", "D3D11 frames for " + name);
+
+            Configure(context.Handle, name, settings, AVPixelFormat.AV_PIX_FMT_D3D11, globalHeader);
+            context.Handle->sw_pix_fmt = format;
+            context.Handle->hw_frames_ctx = ffmpeg.av_buffer_ref(frames.Handle);
+
+            AVDictionary* options = ToDictionary(EncoderOptions(name, settings));
+            int result;
+            try
+            {
+                result = ffmpeg.avcodec_open2(context.Handle, codec, &options);
+            }
+            finally
+            {
+                ffmpeg.av_dict_free(&options);
+            }
+
+            if (result < 0)
+            {
+                skipped.Add($"{name} on textures: {Av.DescribeError(result)}; frames go through system memory instead");
+                context.Dispose();
+                frames.Dispose();
+                device.Dispose();
+                return null;
+            }
+
+            return new VideoEncoder(context, name, settings, format, device, frames, skipped);
+        }
+        catch (FfmpegException error)
+        {
+            skipped.Add($"{name} on textures: {error.Message}; frames go through system memory instead");
+            context.Dispose();
+            frames?.Dispose();
+            device?.Dispose();
+            return null;
+        }
+    }
+
     /// <summary>A frame of the right size and format for this encoder, with its own buffers.</summary>
     public EncoderFrame CreateFrame() => new(Settings.Width, Settings.Height, InputFormat);
+
+    /// <summary>A texture from the encoder's pool to copy a finished frame into, for an encoder that <see cref="TakesTextures"/>.</summary>
+    public TextureFrame RentTexture()
+    {
+        if (_frames is null)
+        {
+            throw new InvalidOperationException($"{Name} takes frames in system memory, not textures.");
+        }
+
+        var frame = new AvFrame();
+        try
+        {
+            Av.Check(ffmpeg.av_hwframe_get_buffer(_frames.Handle, frame.Handle, 0), "av_hwframe_get_buffer", Name);
+            Tag(frame.Handle, InputFormat);
+            return new TextureFrame(frame);
+        }
+        catch
+        {
+            frame.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>Sends a texture at a frame index and writes whatever packets come out; the texture goes back to the pool when NVENC is done with it.</summary>
+    public void Encode(TextureFrame frame, long index, Muxer muxer, int stream)
+    {
+        ArgumentNullException.ThrowIfNull(frame);
+        ArgumentNullException.ThrowIfNull(muxer);
+
+        AVFrame* sent = frame.Handle;
+        sent->pts = index;
+        Av.Check(ffmpeg.avcodec_send_frame(_context.Handle, sent), "avcodec_send_frame", Name);
+        _sent++;
+        Drain(muxer, stream);
+    }
 
     /// <summary>Sends one frame at a frame index and writes whatever packets come out.</summary>
     public void Encode(EncoderFrame frame, long index, Muxer muxer, int stream)
@@ -289,6 +416,8 @@ public sealed unsafe class VideoEncoder : IDisposable
         _context.Dispose();
         _converted?.Dispose();
         _palette?.Dispose();
+        _frames?.Dispose();
+        _device?.Dispose();
 
         if (_convert is not null)
         {
@@ -541,6 +670,15 @@ public sealed unsafe class VideoEncoder : IDisposable
             EncoderSpeed.Slow => "p6",
             _ => "p5",
         });
+
+        // At 4K one NVENC engine manages about 95 frames a second at p5, short of twice real time
+        // at 60 fps. An RTX 40 card has two, and split frame encoding gives each half the picture:
+        // about 175 frames a second, for strips a viewer cannot see at these bitrates. Below 4K
+        // one engine is fast enough, and whole frames compress a little better.
+        if (settings.Height >= 2160)
+        {
+            Set(options, "split_encode_mode", "forced");
+        }
 
         if (settings.Lossless)
         {
@@ -797,5 +935,32 @@ public sealed unsafe class EncoderFrame : IDisposable
     public int Stride(int plane) => _frame.Handle->linesize[(uint)plane];
 
     /// <inheritdoc />
+    public void Dispose() => _frame.Dispose();
+}
+
+/// <summary>The render device an encoder takes textures on: an <c>ID3D11Device*</c> and its immediate context.</summary>
+/// <param name="Device">The <c>ID3D11Device*</c>.</param>
+/// <param name="ImmediateContext">Its <c>ID3D11DeviceContext*</c>.</param>
+public sealed record D3D11Textures(IntPtr Device, IntPtr ImmediateContext);
+
+/// <summary>
+/// One texture from an encoder's D3D11 frame pool: the renderer copies a finished frame into it,
+/// and the encoder reads it where it lies.
+/// </summary>
+public sealed unsafe class TextureFrame : IDisposable
+{
+    private readonly AvFrame _frame;
+
+    internal TextureFrame(AvFrame frame) => _frame = frame;
+
+    /// <summary>The <c>ID3D11Texture2D*</c>, which may be an array.</summary>
+    public IntPtr Texture => (IntPtr)_frame.Handle->data[0];
+
+    /// <summary>The slice of the array this frame is.</summary>
+    public int Index => (int)(nint)_frame.Handle->data[1];
+
+    internal AVFrame* Handle => _frame.Handle;
+
+    /// <summary>Gives the texture back to the pool, once the encoder has a reference of its own.</summary>
     public void Dispose() => _frame.Dispose();
 }

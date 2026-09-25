@@ -24,6 +24,15 @@ internal interface IFrameSink
 
     /// <summary>True when the frames are P010, for an encoder that keeps ten bits; false for NV12.</summary>
     bool TenBit { get; }
+
+    /// <summary>True when the encoder takes textures on the render device: <see cref="RentTexture"/> instead of <see cref="Rent"/>.</summary>
+    bool TakesTextures { get; }
+
+    /// <summary>A texture from the encoder's pool to copy a finished frame into.</summary>
+    TextureFrame RentTexture(CancellationToken cancellationToken);
+
+    /// <summary>Hands a filled texture over, at its index in the output.</summary>
+    void Submit(TextureFrame frame, long index, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -67,13 +76,24 @@ internal sealed class ExportRenderer : IDisposable
         _device = RenderDevice.Create(environment.ForceWarp);
         if (environment.HardwareDecode && _device.SupportsVideo)
         {
+            _device.EnableMultithreadProtection();
             _hardware = HardwareDeviceContext.CreateShared(_device.Device.NativePointer, _device.ImmediateContext.NativePointer);
+        }
+
+        // NVENC reads textures of this device on the writer thread while this one renders.
+        if (environment.EncodeTextures && _device.IsHardware)
+        {
+            _device.EnableMultithreadProtection();
+            Textures = new D3D11Textures(_device.Device.NativePointer, _device.ImmediateContext.NativePointer);
         }
 
         // Every frame is decoded once and never looked at again, so the cache only needs to hold
         // what a render in flight is using.
         _frames = new FrameServer(_device, _hardware, frameCacheBytes: 256L * 1024 * 1024);
     }
+
+    /// <summary>This device, for an encoder to take textures on; null on WARP or when the environment says not to.</summary>
+    public D3D11Textures? Textures { get; }
 
     /// <summary>The GPU the export renders on.</summary>
     public string Adapter => _device.AdapterName;
@@ -104,8 +124,6 @@ internal sealed class ExportRenderer : IDisposable
             ?? throw new InvalidOperationException($"The sequence '{plan.SequenceId}' has gone.");
         ProjectSettings settings = project.SettingsFor(sequence);
 
-        Allocate(video.Width, video.Height, sink.TenBit);
-
         var options = new RenderOptions
         {
             Scale = (float)video.Height / settings.Height,
@@ -117,6 +135,14 @@ internal sealed class ExportRenderer : IDisposable
         var output = new OutputSettings(
             video.Codec is "png" or "gif" ? OutputEncoding.Srgb : OutputEncoding.Bt1886,
             DitherLevels: sink.TenBit ? 1023 : 255);
+
+        if (sink.TakesTextures)
+        {
+            RenderToTextures(project, projectPath, sequence, plan, video, options, output, sink, cancellationToken);
+            return;
+        }
+
+        Allocate(video.Width, video.Height, sink.TenBit);
 
         long index = 0;
         long read = 0;
@@ -162,6 +188,89 @@ internal sealed class ExportRenderer : IDisposable
         }
 
         _log.Debug("Rendered {Frames} frames at {Width}x{Height} on {Adapter}", index, _width, _height, _device.AdapterName);
+    }
+
+    /// <summary>
+    /// Spike S3: renders each frame into an NV12 or P010 texture and copies it, on the GPU, into a
+    /// texture of the encoder's own pool on this device, which NVENC reads where it lies. Nothing
+    /// is read back, nothing is copied by the CPU, and nothing crosses the bus twice.
+    /// </summary>
+    private void RenderToTextures(
+        Project project,
+        string projectPath,
+        Sequence sequence,
+        ExportPlan plan,
+        ExportVideo video,
+        RenderOptions options,
+        OutputSettings output,
+        IFrameSink sink,
+        CancellationToken cancellationToken)
+    {
+        ID3D11Device device = _device.Device;
+        ID3D11DeviceContext context = _device.ImmediateContext;
+        bool tenBit = sink.TenBit;
+
+        // One texture in the encoder's format, drawn into through a view of each plane: the luma
+        // plane as R8 (R16 for P010) and the chroma plane as R8G8 (R16G16).
+        using ID3D11Texture2D frame = device.CreateTexture2D(new Texture2DDescription
+        {
+            Width = (uint)video.Width,
+            Height = (uint)video.Height,
+            MipLevels = 1,
+            ArraySize = 1,
+            Format = tenBit ? Format.P010 : Format.NV12,
+            SampleDescription = new SampleDescription(1, 0),
+            Usage = ResourceUsage.Default,
+            BindFlags = BindFlags.RenderTarget,
+        });
+        using ID3D11RenderTargetView luma = device.CreateRenderTargetView(frame, new RenderTargetViewDescription(RenderTargetViewDimension.Texture2D, tenBit ? Format.R16_UNorm : Format.R8_UNorm));
+        using ID3D11RenderTargetView chroma = device.CreateRenderTargetView(frame, new RenderTargetViewDescription(RenderTargetViewDimension.Texture2D, tenBit ? Format.R16G16_UNorm : Format.R8G8_UNorm));
+
+        long index = 0;
+        foreach (TimeRange range in plan.Ranges)
+        {
+            long first = range.Start.ToFrames(video.FrameRate, RoundingMode.Nearest);
+            long end = range.End.ToFrames(video.FrameRate, RoundingMode.Nearest);
+
+            for (long number = first; number < end; number++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                RenderTarget stack = _frames.Render(project, sequence, Flicks.FromFrames(number, video.FrameRate), options, projectPath);
+                try
+                {
+                    _frames.Compositor.OutputYuv(stack, luma, chroma, video.Width, video.Height, output, tenBit);
+                }
+                finally
+                {
+                    _frames.Compositor.Pool.Return(stack);
+                }
+
+                TextureFrame target = sink.RentTexture(cancellationToken);
+                try
+                {
+                    // The pool's texture belongs to FFmpeg: borrow a reference for the copy and
+                    // give it back, so this wrapper's release is its own.
+                    System.Runtime.InteropServices.Marshal.AddRef(target.Texture);
+                    using (var pooled = new ID3D11Texture2D(target.Texture))
+                    {
+                        context.CopySubresourceRegion(pooled, (uint)target.Index, 0, 0, 0, frame, 0);
+                    }
+
+                    // Submitted now, so the copy is on its way before NVENC maps the texture.
+                    context.Flush();
+                }
+                catch
+                {
+                    target.Dispose();
+                    throw;
+                }
+
+                sink.Submit(target, index++, cancellationToken);
+            }
+        }
+
+        _log.Debug("Rendered {Frames} frames at {Width}x{Height} on {Adapter} straight into the encoder's textures", index, video.Width, video.Height, _device.AdapterName);
     }
 
     public void Dispose()

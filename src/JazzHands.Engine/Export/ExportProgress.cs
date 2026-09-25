@@ -36,7 +36,8 @@ public sealed record ExportResult(
 /// <param name="ForceWarp">Render on WARP. Tests, and machines without a GPU.</param>
 /// <param name="HardwareDecode">Decode on the GPU when it can.</param>
 /// <param name="Keyframes">Keyframe indexes, shared with planning.</param>
-public sealed record ExportEnvironment(bool ForceWarp = false, bool HardwareDecode = true, KeyframeLookup? Keyframes = null)
+/// <param name="EncodeTextures">Hand NVENC the rendered textures rather than reading frames back (spike S3); off to measure the difference or to rule it out.</param>
+public sealed record ExportEnvironment(bool ForceWarp = false, bool HardwareDecode = true, KeyframeLookup? Keyframes = null, bool EncodeTextures = true)
 {
     /// <summary>The GPU if there is one, decoding on it.</summary>
     public static ExportEnvironment Default { get; } = new();

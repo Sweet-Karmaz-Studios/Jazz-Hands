@@ -311,7 +311,7 @@ public static class Exporter
 
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var renderer = new ExportRenderer(environment);
-        using var writer = new EncodeWriter(plan, project, projectPath, temporary, total, progress, linked);
+        using var writer = new EncodeWriter(plan, project, projectPath, temporary, total, progress, linked, renderer.Textures);
 
         try
         {
@@ -409,7 +409,10 @@ public static class Exporter
         private readonly IProgress<ExportProgress>? _progress;
         private readonly CancellationTokenSource _cancellation;
         private readonly BlockingCollection<EncoderFrame> _free = new(FrameCount);
-        private readonly BlockingCollection<(EncoderFrame Frame, long Index)> _pending = new(QueueLength);
+        private readonly BlockingCollection<(EncoderFrame? Frame, TextureFrame? Texture, long Index)> _pending = new(QueueLength);
+        private readonly D3D11Textures? _textures;
+        private readonly Lock _encoderGate = new();
+        private VideoEncoder? _encoder;
         private readonly List<EncoderFrame> _frames = [];
         private readonly ManualResetEventSlim _ready = new();
         private readonly Thread _thread;
@@ -423,9 +426,11 @@ public static class Exporter
             string path,
             long total,
             IProgress<ExportProgress>? progress,
-            CancellationTokenSource cancellation)
+            CancellationTokenSource cancellation,
+            D3D11Textures? textures)
         {
             _plan = plan;
+            _textures = textures;
             _project = project;
             _projectPath = projectPath;
             _path = path;
@@ -439,6 +444,8 @@ public static class Exporter
         public string? EncoderName { get; private set; }
 
         public bool TenBit { get; private set; }
+
+        public bool TakesTextures { get; private set; }
 
         public IReadOnlyList<string> Notes => _notes;
 
@@ -466,10 +473,35 @@ public static class Exporter
         {
             try
             {
-                _pending.Add((frame, index), cancellationToken);
+                _pending.Add((frame, null, index), cancellationToken);
             }
             catch (OperationCanceledException)
             {
+                ThrowIfFailed();
+                throw;
+            }
+        }
+
+        public TextureFrame RentTexture(CancellationToken cancellationToken)
+        {
+            // Under the gate the writer disposes the encoder behind, so a failing writer cannot
+            // free the pool while the renderer is taking a texture from it.
+            lock (_encoderGate)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return (_encoder ?? throw new OperationCanceledException("The encoder has closed.")).RentTexture();
+            }
+        }
+
+        public void Submit(TextureFrame frame, long index, CancellationToken cancellationToken)
+        {
+            try
+            {
+                _pending.Add((null, frame, index), cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                frame.Dispose();
                 ThrowIfFailed();
                 throw;
             }
@@ -515,6 +547,12 @@ public static class Exporter
                 frame.Dispose();
             }
 
+            // Textures the writer never reached go back to their pool.
+            while (_pending.TryTake(out (EncoderFrame? Frame, TextureFrame? Texture, long Index) left))
+            {
+                left.Texture?.Dispose();
+            }
+
             _free.Dispose();
             _pending.Dispose();
             _ready.Dispose();
@@ -532,9 +570,15 @@ public static class Exporter
             try
             {
                 muxer = Muxer.Create(_path, _plan.Container);
-                encoder = VideoEncoder.Open(Settings(video), muxer.NeedsGlobalHeader);
+                encoder = VideoEncoder.Open(Settings(video), muxer.NeedsGlobalHeader, _textures);
+                lock (_encoderGate)
+                {
+                    _encoder = encoder;
+                }
+
                 EncoderName = encoder.Name;
                 TenBit = encoder.TakesP010;
+                TakesTextures = encoder.TakesTextures;
                 _notes.AddRange(encoder.Skipped.Select(skipped => $"Skipped {skipped}."));
 
                 if (_plan.Audio is { } audio)
@@ -553,7 +597,7 @@ public static class Exporter
                 extras?.Open(muxer);
                 muxer.WriteHeader(fastStart: _plan.Container is "mp4" or "mov");
 
-                for (int index = 0; index < FrameCount; index++)
+                for (int index = 0; index < FrameCount && !encoder.TakesTextures; index++)
                 {
                     EncoderFrame frame = encoder.CreateFrame();
                     _frames.Add(frame);
@@ -566,12 +610,24 @@ public static class Exporter
                 long written = 0;
                 long reported = 0;
 
-                foreach ((EncoderFrame frame, long index) in _pending.GetConsumingEnumerable())
+                foreach ((EncoderFrame? frame, TextureFrame? texture, long index) in _pending.GetConsumingEnumerable())
                 {
-                    _cancellation.Token.ThrowIfCancellationRequested();
+                    if (texture is not null)
+                    {
+                        // NVENC takes a reference of its own; this one goes back now.
+                        using (texture)
+                        {
+                            _cancellation.Token.ThrowIfCancellationRequested();
+                            encoder.Encode(texture, index, muxer, videoStream);
+                        }
+                    }
+                    else
+                    {
+                        _cancellation.Token.ThrowIfCancellationRequested();
+                        encoder.Encode(frame!, index, muxer, videoStream);
+                        _free.Add(frame!);
+                    }
 
-                    encoder.Encode(frame, index, muxer, videoStream);
-                    _free.Add(frame);
                     written = index + 1;
 
                     mix?.WriteUpTo(SamplesAt(written), sound!, muxer, soundStream);
@@ -629,7 +685,12 @@ public static class Exporter
                 extras?.Dispose();
                 mix?.Dispose();
                 sound?.Dispose();
-                encoder?.Dispose();
+                lock (_encoderGate)
+                {
+                    encoder?.Dispose();
+                    _encoder = null;
+                }
+
                 muxer?.Dispose();
             }
         }
