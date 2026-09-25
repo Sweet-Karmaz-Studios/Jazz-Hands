@@ -59,6 +59,16 @@ public sealed class EffectPreviews : IDisposable
         ["color.hsl"] = [("hue", "355"), ("hue-width", "25"), ("hue-shift", "150")],
         ["color.lut"] = [("file", DemoLut.Value)],
         ["color.white-balance"] = [("neutral", "#FFD8A8")],
+
+        // Timed effects fire just before the preview is taken, so it catches them at work.
+        ["video.shake"] = [("trigger", "0.9"), ("amplitude", "80"), ("rotation", "6")],
+        ["video.zoom-punch"] = [("trigger", "0.97"), ("amount", "1.3")],
+        ["video.flash"] = [("trigger", "0.98"), ("strength", "0.6")],
+        ["video.impact-frame"] = [("trigger", "0.99")],
+        ["video.light-sweep"] = [("trigger", "0.6"), ("width", "200")],
+        ["video.chromatic-aberration"] = [("amount", "24")],
+        ["video.deband"] = [("dither", "8")],
+        ["video.echo"] = [("spacing", "3")],
     };
 
     private readonly Lock _gate = new();
@@ -208,7 +218,8 @@ public sealed class EffectPreviews : IDisposable
         }
     }
 
-    private static bool OnTheCard(EffectDescriptor descriptor) => descriptor.TypeId == "video.drop-shadow";
+    /// <summary>Effects shown on the card: a shadow of the whole frame falls outside it, and echo trails a moving clip.</summary>
+    private static bool OnTheCard(EffectDescriptor descriptor) => descriptor.TypeId is "video.drop-shadow" or "video.echo";
 
     private static List<Clip> PictureLayers(EffectDescriptor descriptor)
     {
@@ -216,6 +227,22 @@ public sealed class EffectPreviews : IDisposable
         if (OnTheCard(descriptor))
         {
             card = card with { Effects = card.Effects.Add(Configured(descriptor)) };
+
+            // Echo trails what moves, so the card slides right across the second before the preview.
+            if (descriptor.TypeId == "video.echo")
+            {
+                card = card with
+                {
+                    Transform = Transform.Identity with
+                    {
+                        Position = new KeyframedValue(
+                        [
+                            new Keyframe(Flicks.Zero, new ParamValue.Float2(new System.Numerics.Vector2(-300, 0))),
+                            new Keyframe(At, new ParamValue.Float2(System.Numerics.Vector2.Zero)),
+                        ]),
+                    },
+                };
+            }
         }
 
         return
