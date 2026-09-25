@@ -16,7 +16,7 @@ namespace JazzHands.Render.Effects.Particles;
 /// along the particle's velocity; additive fields add light, and each dot gets a faint halo.
 /// Sizes and positions are sequence pixels, scaled to the working resolution.
 /// </remarks>
-public abstract class ParticleGenerator : VideoGenerator
+public abstract class ParticleGenerator : VideoGenerator, ITimedGenerator
 {
     /// <summary>The settings a clip's parameters make, with its seed.</summary>
     public static ParticleSettings Settings(ParameterSet parameters, int seed)

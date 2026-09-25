@@ -85,7 +85,7 @@ public sealed class GradientGenerator() : ShaderGenerator("Generators.hlsl", "Ps
 [Param("contrast", ParamType.Float, Default = "1.5", Min = 0, Max = 10, SliderMax = 4, Description = "How far the brightest and darkest parts are pushed apart.")]
 [Param("drift", ParamType.Point, Default = "20, 10", Unit = "px", Description = "How far the pattern moves each second, in sequence pixels.")]
 [Param("colour", ParamType.Bool, Default = "false", Animatable = false, Description = "Coloured noise instead of grey.")]
-public sealed class NoiseGenerator() : ShaderGenerator("Generators.hlsl", "PsNoise")
+public sealed class NoiseGenerator() : ShaderGenerator("Generators.hlsl", "PsNoise"), ITimedGenerator
 {
     /// <inheritdoc />
     protected override EffectValues Values(EffectContext context, ParameterSet parameters, RenderTarget output)

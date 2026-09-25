@@ -15,7 +15,7 @@ namespace JazzHands.Render.Effects.Generators;
 [Param("colour", ParamType.Color, Default = "#FFFFFF", Description = "The number and the rings.")]
 [Param("background", ParamType.Color, Default = "#202020", Description = "Behind everything.")]
 [Param("sweep", ParamType.Color, Default = "#555555", Description = "The wedge that sweeps round each second.")]
-public sealed class CountdownGenerator : VideoGenerator
+public sealed class CountdownGenerator : VideoGenerator, ITimedGenerator
 {
     /// <summary>The number shown at a time, or 0 once the countdown has finished.</summary>
     public static int NumberAt(double seconds, int from) => seconds >= from ? 0 : Math.Max(1, (int)Math.Ceiling(from - seconds));
@@ -99,7 +99,7 @@ public sealed class CountdownGenerator : VideoGenerator
 [Param("colour", ParamType.Color, Default = "#FFFFFF", Description = "The text.")]
 [Param("box", ParamType.Color, Default = "#000000B3", Description = "The box behind the text; transparent for none.")]
 [Param("prefix", ParamType.Text, Default = "", Animatable = false, Description = "Text before the time, such as a reel name.")]
-public sealed class TimecodeGenerator : VideoGenerator
+public sealed class TimecodeGenerator : VideoGenerator, ITimedGenerator
 {
     /// <summary>The text for a sequence time.</summary>
     public static string TextAt(Flicks time, Rational rate, string format, string prefix)

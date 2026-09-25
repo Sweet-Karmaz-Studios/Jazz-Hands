@@ -14,7 +14,7 @@ namespace JazzHands.Render.Effects.Generators;
 [Param("margin", ParamType.Float, Default = "70", Min = 0, Max = 2000, SliderMax = 300, Unit = "px", Description = "Distance from the frame's edges.")]
 [Param("colour", ParamType.Color, Default = "#FFFFFF", Description = "The text.")]
 [Param("play", ParamType.Bool, Default = "true", Animatable = false, Description = "Show PLAY in the top left.")]
-public sealed class DateStampGenerator : VideoGenerator
+public sealed class DateStampGenerator : VideoGenerator, ITimedGenerator
 {
     /// <summary>The two lines at a time from the clip's start, or null when the start does not read.</summary>
     public static (string Date, string Clock)? TextAt(string start, double seconds)

@@ -717,16 +717,53 @@ public sealed class Compositor : IDisposable
         // Bilinear, not bicubic: at an exact texel an identity draw then copies it unchanged.
         RenderGraph exact = graph with { Bicubic = false };
         var whole = new LayerNode(new SolidLayerSource(Vector4.Zero), graph.Width, graph.Height, Matrix3x2.Identity, LayerNode.NoCrop, 1.0f, BlendMode.Normal, []);
+        LayerSource? held = null;
+        RenderTarget? picture = null;
         for (int index = 0; index < source.Samples.Length; index++)
         {
             float share = source.Weights.IsDefault ? 1.0f / source.Samples.Length : source.Weights[index];
-            RenderTarget placed = Alone(graph, source.Samples[index]);
+            LayerNode sample = source.Samples[index];
+
+            // A plain moment (no effects, masks or matte) is its picture placed straight onto the
+            // sum at its share: the same as drawing it alone and adding that, without clearing and
+            // reading a frame for each. Moments that place one picture share one drawing of it.
+            if (Plain(sample))
+            {
+                if (sample.IsAdjustment || sample.Opacity <= 0.0f)
+                {
+                    continue;
+                }
+
+                if (picture is null || !ReferenceEquals(held, sample.Source))
+                {
+                    if (picture is not null)
+                    {
+                        Pool.Return(picture);
+                    }
+
+                    picture = Linear(graph, sample);
+                    held = sample.Source;
+                }
+
+                DrawQuad(graph, sample, picture, sum.View, share * Math.Min(sample.Opacity, 1.0f), _add);
+                continue;
+            }
+
+            RenderTarget placed = Alone(graph, sample);
             DrawQuad(exact, whole, placed, sum.View, share, _add);
             Pool.Return(placed);
         }
 
+        if (picture is not null)
+        {
+            Pool.Return(picture);
+        }
+
         return sum;
     }
+
+    /// <summary>A layer that is only its picture placed: no effects, masks or track matte, blended normally.</summary>
+    private static bool Plain(LayerNode layer) => layer.Effects.IsDefaultOrEmpty && Unmatted(layer) && layer.Blend == BlendMode.Normal;
 
     /// <summary>One side of a transition drawn over nothing, frame sized; transparent when there is no picture.</summary>
     private RenderTarget Alone(RenderGraph graph, LayerNode? layer) =>

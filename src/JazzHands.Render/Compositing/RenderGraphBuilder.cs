@@ -667,11 +667,26 @@ public static class RenderGraphBuilder
             return null;
         }
 
-        bool generated = source.Source is GeneratorLayerSource;
-        var samples = ImmutableArray.CreateBuilder<LayerNode>();
-        foreach (Flicks at in blur.Moments(time, frameRate, options.MaxBlurSamples))
+        // A generator is drawn again at each moment only when its picture changes: its own
+        // parameters animate, or it changes by itself (particles, a countdown). Otherwise every
+        // moment places the one picture, and the compositor draws it once.
+        bool redraw = source.Source is GeneratorLayerSource generator
+            && (typeof(ITimedGenerator).IsAssignableFrom(generator.Node.Descriptor.Implementation) || OwnParametersAnimate(clip));
+        IReadOnlyList<Flicks> moments = blur.Moments(time, frameRate, options.MaxBlurSamples);
+        if (!redraw && moments.Count > 2)
         {
-            (LayerSource Source, Vector2 Size, ConformPolicy Policy) picture = generated
+            LayerNode At(Flicks at) => Layer(clip, at - clip.Start, source, frameSize, options, Steady(project, clip, at, source.Size, frames, options));
+            int needed = SamplesFor(At(moments[0]), At(moments[moments.Count / 2]), At(moments[^1]));
+            if (needed < moments.Count)
+            {
+                moments = blur.Moments(time, frameRate, needed);
+            }
+        }
+
+        var samples = ImmutableArray.CreateBuilder<LayerNode>();
+        foreach (Flicks at in moments)
+        {
+            (LayerSource Source, Vector2 Size, ConformPolicy Policy) picture = redraw
                 && Source(project, clip, at, track.Order, frameSize, output, frames, options, depth, frameRate) is { } redrawn
                     ? redrawn
                     : source;
@@ -680,7 +695,7 @@ public static class RenderGraphBuilder
         }
 
         LayerNode first = samples[0];
-        if (!generated && samples.All(sample => sample.Transform == first.Transform && sample.Crop == first.Crop && sample.Opacity == first.Opacity && sample.Masks.SequenceEqual(first.Masks)))
+        if (!redraw && samples.All(sample => sample.Transform == first.Transform && sample.Crop == first.Crop && sample.Opacity == first.Opacity && sample.Masks.SequenceEqual(first.Masks)))
         {
             return null;
         }
@@ -765,7 +780,31 @@ public static class RenderGraphBuilder
             || transform.Anchor.IsAnimated
             || clip.Crop is { } crop && (crop.Left.IsAnimated || crop.Top.IsAnimated || crop.Right.IsAnimated || crop.Bottom.IsAnimated)
             || clip.Masks.Any(mask => mask.Bounds?.IsAnimated == true || mask.PathData?.IsAnimated == true || mask.Feather?.IsAnimated == true || mask.Expansion?.IsAnimated == true)
-            || clip.GeneratorId is not null && clip.Effects.Any(effect => EffectChains.IsOwnParameters(clip, effect) && effect.Parameters.Any(parameter => parameter.Value.IsAnimated));
+            || OwnParametersAnimate(clip);
+    }
+
+    /// <summary>True when a generator clip animates its own parameters (a title's fly in, a shape's size).</summary>
+    private static bool OwnParametersAnimate(Clip clip) =>
+        clip.GeneratorId is not null && clip.Effects.Any(effect => EffectChains.IsOwnParameters(clip, effect) && effect.Parameters.Any(parameter => parameter.Value.IsAnimated));
+
+    /// <summary>
+    /// How many moments a layer's blur needs: one for every output pixel its farthest corner
+    /// travels across the shutter (through the middle moment, so a turn inside it counts), and
+    /// at least two. Samples closer than a pixel apart look the same as more of them, so a slow
+    /// layer costs a few draws rather than the setting's full count.
+    /// </summary>
+    private static int SamplesFor(LayerNode first, LayerNode middle, LayerNode last)
+    {
+        float travel = 0;
+        foreach (Vector2 corner in (ReadOnlySpan<Vector2>)[Vector2.Zero, new(first.SourceWidth, 0), new(0, first.SourceHeight), new(first.SourceWidth, first.SourceHeight)])
+        {
+            Vector2 start = Vector2.Transform(corner, first.Transform);
+            Vector2 through = Vector2.Transform(corner, middle.Transform);
+            Vector2 end = Vector2.Transform(corner, last.Transform);
+            travel = MathF.Max(travel, Vector2.Distance(start, through) + Vector2.Distance(through, end));
+        }
+
+        return (int)Math.Clamp(MathF.Ceiling(travel) + 1, 2, MotionBlur.MaxSamples);
     }
 
     /// <summary>

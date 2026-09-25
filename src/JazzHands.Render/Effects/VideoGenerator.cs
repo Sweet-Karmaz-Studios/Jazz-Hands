@@ -35,3 +35,10 @@ public abstract class VideoGenerator : IDisposable
     {
     }
 }
+
+/// <summary>
+/// A generator whose picture changes with time by itself, with none of its parameters animated:
+/// particles, a countdown, a clock, drifting noise. Motion blur draws it again at each moment
+/// across the shutter; any other generator is drawn once and placed at each moment.
+/// </summary>
+public interface ITimedGenerator;
