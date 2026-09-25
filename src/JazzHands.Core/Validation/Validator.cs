@@ -248,7 +248,20 @@ public static class Validator
 
             CheckClip(clip, clipPath, mediaIds, sequenceIds, issues);
 
-            if (clip.Start < previousEnd)
+            bool subtitles = track.Kind == TrackKind.Subtitle;
+            if (subtitles != clip.Cue is not null)
+            {
+                issues.Add(new ValidationIssue(
+                    Severity.Warning,
+                    subtitles ? "not-a-cue" : "cue-off-subtitle-track",
+                    clipPath,
+                    subtitles
+                        ? $"'{clip.Name}' is on subtitle track '{track.Name}' but says nothing; it is neither shown nor exported."
+                        : $"'{clip.Name}' is a subtitle cue on {track.Kind.ToString().ToLowerInvariant()} track '{track.Name}'; cues show only on a subtitle track."));
+            }
+
+            // Cues may overlap: two people talking at once stack on the frame.
+            if (clip.Start < previousEnd && !subtitles)
             {
                 issues.Add(new ValidationIssue(
                     Severity.Error,

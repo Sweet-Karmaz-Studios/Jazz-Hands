@@ -67,3 +67,26 @@ public sealed record SubtitleStyle(
     /// <summary>White semibold Segoe UI with a thin black outline and a soft shadow, a line and a half above the bottom.</summary>
     public static SubtitleStyle Default { get; } = new();
 }
+
+/// <summary>What a cue on a subtitle track says and where it sits.</summary>
+/// <remarks>
+/// A cue is a clip on a subtitle track with the generator <see cref="GeneratorId"/>; its times are
+/// the clip's range, and how it looks is the track's <see cref="SubtitleStyle"/>. Cues on a
+/// subtitle track may overlap, and overlapping cues stack upwards from the bottom.
+/// </remarks>
+/// <param name="Text">What it says, as title markup: <c>[b]</c>, <c>[i]</c>, <c>[u]</c>, <c>[color=#FFCC00]</c>, <c>\n</c> for a new line.</param>
+/// <param name="Align">Where on the frame it sits.</param>
+/// <param name="Name">A WebVTT cue id or an ASS speaker, kept for writing the file back.</param>
+/// <param name="Raw">
+/// What the file it came from said that the markup cannot hold (an ASS line with its override
+/// tags, a WebVTT cue's settings), kept for writing that format back while the text is unchanged.
+/// </param>
+public sealed record Cue(
+    string Text,
+    SubtitleAlign Align = SubtitleAlign.Bottom,
+    string? Name = null,
+    string? Raw = null)
+{
+    /// <summary>The generator a cue clip names.</summary>
+    public const string GeneratorId = "gen.subtitle";
+}

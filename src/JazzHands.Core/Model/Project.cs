@@ -356,6 +356,7 @@ public sealed record Marker(
 /// <param name="Masks">Shapes limiting what of the picture is seen, in the order they combine.</param>
 /// <param name="Hold">True for a freeze frame: the clip shows the frame at <c>SourceIn</c> for its whole length, and is silent.</param>
 /// <param name="ToneMap">How an HDR source is tone mapped for this clip, over the project's default. Null for the project's.</param>
+/// <param name="Cue">What a cue on a subtitle track says and where it sits; null on every other clip.</param>
 public sealed record Clip(
     string Id,
     TimeRange Range,
@@ -383,7 +384,8 @@ public sealed record Clip(
     Crop? Crop = null,
     EquatableArray<Mask> Masks = default,
     bool? Hold = null,
-    ToneMapping? ToneMap = null) : IEquatable<Clip>
+    ToneMapping? ToneMap = null,
+    Cue? Cue = null) : IEquatable<Clip>
 {
     /// <summary>Playback rate, defaulting to normal speed.</summary>
     public Rational EffectiveSpeed => Speed ?? Rational.One;
@@ -482,6 +484,11 @@ public sealed record Clip(
 /// Whether ripple edits on other tracks move this one too, so it stays in sync with them. Null is
 /// the default, which is on, as it is in Premiere and Resolve; false turns it off.
 /// </param>
+/// <param name="Language">
+/// The language of what the track says, as an ISO 639-2 code (<c>eng</c>, <c>fra</c>), written to
+/// the exported stream. Null is undetermined.
+/// </param>
+/// <param name="SubtitleStyle">How a subtitle track's cues look; null for the default style.</param>
 public sealed record Track(
     string Id,
     TrackKind Kind,
@@ -497,7 +504,9 @@ public sealed record Track(
     string Color = "#3A6EA5",
     AnimatedValue? Volume = null,
     AnimatedValue? Pan = null,
-    bool? SyncLock = null) : IEquatable<Track>
+    bool? SyncLock = null,
+    string? Language = null,
+    SubtitleStyle? SubtitleStyle = null) : IEquatable<Track>
 {
     /// <summary>The first position after the last clip, or zero for an empty track.</summary>
     public Flicks Duration => Clips.IsEmpty ? Flicks.Zero : Clips[^1].End;

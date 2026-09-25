@@ -323,7 +323,8 @@ public sealed class MediaImporter(CacheManager? cache = null, Prober? prober = n
             probe.SizeBytes,
             probe.BitRate,
             new EquatableArray<MediaStream>(streams.ToImmutable()),
-            DateTimeOffset.UtcNow);
+            DateTimeOffset.UtcNow,
+            new EquatableArray<MediaChapter>([.. probe.Chapters.Select(chapter => new MediaChapter(chapter.Start, chapter.End, chapter.Title ?? string.Empty))]));
     }
 
     /// <summary>

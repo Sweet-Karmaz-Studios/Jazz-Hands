@@ -311,6 +311,16 @@
               "type": "null"
             }
           ]
+        },
+        "cue": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/cue"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -340,6 +350,51 @@
         "top",
         "right",
         "bottom"
+      ]
+    },
+    "cue": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "align": {
+          "type": "string",
+          "enum": [
+            "bottomLeft",
+            "bottom",
+            "bottomRight",
+            "left",
+            "middle",
+            "right",
+            "topLeft",
+            "top",
+            "topRight"
+          ]
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "raw": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "text"
       ]
     },
     "effect": {
@@ -677,6 +732,25 @@
         }
       }
     },
+    "mediaChapter": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "$ref": "#/$defs/flicks"
+        },
+        "end": {
+          "$ref": "#/$defs/flicks"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "start",
+        "end",
+        "title"
+      ]
+    },
     "mediaInfo": {
       "type": "object",
       "properties": {
@@ -701,6 +775,12 @@
         "probedAt": {
           "type": "string",
           "format": "date-time"
+        },
+        "chapters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/mediaChapter"
+          }
         }
       },
       "required": [
@@ -1137,6 +1217,47 @@
         "matrix"
       ]
     },
+    "subtitleStyle": {
+      "type": "object",
+      "properties": {
+        "font": {
+          "type": "string"
+        },
+        "weight": {
+          "type": "string"
+        },
+        "italic": {
+          "type": "boolean"
+        },
+        "size": {
+          "type": "number"
+        },
+        "color": {
+          "type": "string"
+        },
+        "outline": {
+          "type": "string"
+        },
+        "outlineWidth": {
+          "type": "number"
+        },
+        "box": {
+          "type": "string"
+        },
+        "shadow": {
+          "type": "string"
+        },
+        "margin": {
+          "type": "number"
+        },
+        "maxLines": {
+          "type": "integer"
+        },
+        "maxChars": {
+          "type": "integer"
+        }
+      }
+    },
     "timeRange": {
       "type": "object",
       "required": [
@@ -1257,6 +1378,26 @@
           "anyOf": [
             {
               "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "language": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "subtitleStyle": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/subtitleStyle"
             },
             {
               "type": "null"

@@ -3,7 +3,9 @@ using System.Numerics;
 using JazzHands.Core.Effects;
 using JazzHands.Core.Model;
 using JazzHands.Core.Queries;
+using JazzHands.Core.Subtitles;
 using JazzHands.Core.Time;
+using JazzHands.Core.Titles;
 using JazzHands.Render.Color;
 using JazzHands.Render.Effects;
 using JazzHands.Render.Frames;
@@ -66,6 +68,12 @@ public sealed record RenderOptions
 
     /// <summary>How deep nested sequences may go before the builder stops, whatever the validator allowed.</summary>
     public int MaxNesting { get; init; } = 16;
+
+    /// <summary>
+    /// Draw subtitle tracks that are not muted: on for the preview, and for an export only when
+    /// its subtitles are burned in.
+    /// </summary>
+    public bool Subtitles { get; init; } = true;
 
     /// <summary>What the preview gets at a given quality divisor: 1, 2 or 4.</summary>
     public static RenderOptions ForDivisor(int divisor) => new() { Scale = 1.0f / Math.Max(1, divisor) };
@@ -172,6 +180,16 @@ public static class RenderGraphBuilder
         // Tracks are kept in stacking order by every edit and by loading, so this is bottom first.
         foreach (Track track in sequence.Tracks)
         {
+            if (track.Kind == TrackKind.Subtitle)
+            {
+                if (options.Subtitles && !track.Muted)
+                {
+                    layers.AddRange(Subtitles(track, time, settings, frameSize, options));
+                }
+
+                continue;
+            }
+
             if (track.Kind is not (TrackKind.Video or TrackKind.Adjustment) || track.Muted)
             {
                 continue;
@@ -290,6 +308,36 @@ public static class RenderGraphBuilder
             new TransitionNode(effect, TransitionEasing.Apply(parameters, linear)) { Linear = linear });
 
         return new LayerNode(source, output.Width, output.Height, Matrix3x2.Identity, LayerNode.NoCrop, 1.0f, BlendMode.Normal, [], options.Scale);
+    }
+
+    /// <summary>
+    /// A subtitle track at a time: a title layer for each place cues are showing, drawn by the
+    /// title generator from the track's style (<see cref="SubtitleLook"/>).
+    /// </summary>
+    private static IEnumerable<LayerNode> Subtitles(Track track, Flicks time, ProjectSettings settings, Vector2 frameSize, RenderOptions options)
+    {
+        if (options.Effects.Find(TitleParams.GeneratorId) is not { Kind: EffectKind.Generator, Implementation: { } type } descriptor
+            || !typeof(VideoGenerator).IsAssignableFrom(type))
+        {
+            yield break;
+        }
+
+        foreach ((Clip first, Effect title) in SubtitleLook.Titles(track, time, settings.Width, settings.Height))
+        {
+            Flicks local = time - first.Start;
+            var node = new EffectNode(descriptor, ParameterSet.Evaluate(descriptor, title, local))
+            {
+                InstanceId = first.Id,
+                LocalTime = local,
+                Seed = StableSeed(first.Id),
+                Model = title,
+                OwnerLength = first.Duration,
+                SequenceTime = time,
+                FrameRate = settings.FrameRate,
+            };
+
+            yield return Layer(first, local, (new GeneratorLayerSource(node), frameSize, ConformPolicy.Stretch), frameSize, options);
+        }
     }
 
     /// <summary>What a picture clip shows, and how big it is in its own pixels.</summary>

@@ -138,13 +138,15 @@ public sealed record MediaStream(
 /// <param name="BitRate">Overall bits per second.</param>
 /// <param name="Streams">Every stream, in container order.</param>
 /// <param name="ProbedAt">When it was probed.</param>
+/// <param name="Chapters">The file's chapters, in order; empty for a file with none, or probed before Phase 21.</param>
 public sealed record MediaInfo(
     string FormatName,
     Flicks Duration,
     long SizeBytes,
     long BitRate,
     EquatableArray<MediaStream> Streams = default,
-    DateTimeOffset ProbedAt = default) : IEquatable<MediaInfo>
+    DateTimeOffset ProbedAt = default,
+    EquatableArray<MediaChapter> Chapters = default) : IEquatable<MediaInfo>
 {
     /// <summary>The video streams, in container order.</summary>
     public IEnumerable<MediaStream> VideoStreams => Streams.Where(stream => stream.Kind == MediaStreamKind.Video);
@@ -209,3 +211,9 @@ public sealed record ImageSequenceInfo(
         return string.Concat(pattern.AsSpan(0, marker), number, pattern.AsSpan(close + 1));
     }
 }
+
+/// <summary>A chapter a file carries, as its probe read it.</summary>
+/// <param name="Start">Where it starts, in the file's time.</param>
+/// <param name="End">Where it ends.</param>
+/// <param name="Title">Its title; empty when it has none.</param>
+public sealed record MediaChapter(Flicks Start, Flicks End, string Title);
