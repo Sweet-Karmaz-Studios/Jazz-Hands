@@ -1,3 +1,4 @@
+using JazzHands.Core.Model;
 using JazzHands.Core.Time;
 
 namespace JazzHands.Core.Commands;
@@ -30,5 +31,5 @@ public sealed record ContactSheetCommand(
     [property: Option("sequence", "Which sequence")] string? SequenceId = null,
     [property: Option("start", "From here")] Flicks? Start = null,
     [property: Option("end", "To here")] Flicks? End = null,
-    [property: Option("times", "Fractions of the way through, 0 to 1, rather than even steps")] double[]? Times = null,
+    [property: Option("times", "Fractions of the way through, 0 to 1, rather than even steps")] EquatableArray<double> Times = default,
     [property: Option("clip", "Through this clip rather than the sequence")] string? ClipId = null) : ICommand;

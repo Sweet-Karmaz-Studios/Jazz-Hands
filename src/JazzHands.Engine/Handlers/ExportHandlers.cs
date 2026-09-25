@@ -243,7 +243,7 @@ public sealed class ContactSheetHandler : ICommandHandler<ContactSheetCommand>
             command.Width,
             command.SequenceId,
             ExportOverrideText.Range(command.Start, command.End),
-            fractions: command.Times,
+            fractions: command.Times.IsEmpty ? null : [.. command.Times],
             clipId: command.ClipId);
         context.Changed(sheet.Path);
         return project;

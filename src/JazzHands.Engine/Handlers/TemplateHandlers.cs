@@ -35,7 +35,7 @@ public sealed class ApplyTemplateHandler : ICommandHandler<ApplyTemplateCommand>
         // value before it: position=0, 330 and text=Hello, world arrive in two pieces each.
         var given = new Dictionary<string, string>(StringComparer.Ordinal);
         string? last = null;
-        foreach (string pair in command.Params ?? [])
+        foreach (string pair in command.Params)
         {
             int split = pair.IndexOf('=', StringComparison.Ordinal);
             if (split <= 0 && last is not null)
@@ -93,8 +93,8 @@ public sealed class SaveTemplateHandler : ICommandHandler<SaveTemplateCommand>
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(context);
 
-        string[] ids = command.ClipIds is { Length: > 0 } named
-            ? named
+        string[] ids = !command.ClipIds.IsEmpty
+            ? [.. command.ClipIds]
             : [.. context.Services?.GetService<SelectionService>()?.Ids.Where(id => project.FindClip(id) is not null) ?? []];
         if (ids.Length == 0)
         {
@@ -102,7 +102,7 @@ public sealed class SaveTemplateHandler : ICommandHandler<SaveTemplateCommand>
         }
 
         ClipLocation[] clips = [.. ids.Select(id => HandlerHelp.Clip(project, id)).OrderBy(found => found.Clip.Start.Value)];
-        var promote = new HashSet<string>(command.Promote ?? [], StringComparer.Ordinal);
+        var promote = new HashSet<string>(command.Promote, StringComparer.Ordinal);
         var writer = new TemplateWriter(project, promote);
         MotionTemplate template = writer.Write(command.Name, command.Label ?? string.Empty, command.Description ?? string.Empty, clips);
         if (MotionTemplate.Check(template) is { } problem)

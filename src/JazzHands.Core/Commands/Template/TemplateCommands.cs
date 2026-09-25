@@ -1,3 +1,4 @@
+using JazzHands.Core.Model;
 using System.Collections.Immutable;
 using JazzHands.Core.Templates;
 using JazzHands.Core.Time;
@@ -22,7 +23,7 @@ namespace JazzHands.Core.Commands;
 public sealed record ApplyTemplateCommand(
     [property: Arg(0, "The template; template.list names them")] string Name,
     [property: Option("at", "The moment on the sequence it is placed")] Flicks At,
-    [property: Option("param", "Values as name=value, several separated by commas: text=Out now,accent=#FF8800")] string[]? Params = null,
+    [property: Option("param", "Values as name=value, several separated by commas: text=Out now,accent=#FF8800")] EquatableArray<string> Params = default,
     [property: Option("sequence", "Which sequence")] string? SequenceId = null) : ICommand;
 
 /// <summary>The motion templates, with what each is filled in with.</summary>
@@ -59,8 +60,8 @@ public sealed record TemplateInfo(string Name, string Label, string Description,
 [Command("template.save-selection", Description = "Save clips and their effects as a motion template, with chosen values as parameters", Undoable = false, NotUndoableReason = "It writes a template file, not the project.")]
 public sealed record SaveTemplateCommand(
     [property: Arg(0, "What to call it, in kebab case")] string Name,
-    [property: Option("clips", "The clips; the selection when not given")] string[]? ClipIds = null,
-    [property: Option("promote", "Parameter names that become the template's parameters")] string[]? Promote = null,
+    [property: Option("clips", "The clips; the selection when not given")] EquatableArray<string> ClipIds = default,
+    [property: Option("promote", "Parameter names that become the template's parameters")] EquatableArray<string> Promote = default,
     [property: Option("label", "What the editor calls it")] string? Label = null,
     [property: Option("description", "What it makes")] string? Description = null,
     [property: Option("force", "Replace a template of the same name")] bool Force = false) : ICommand;

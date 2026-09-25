@@ -1,3 +1,4 @@
+using JazzHands.Core.Model;
 namespace JazzHands.Core.Commands;
 
 /// <summary>Places clips on stacked tracks in a layout: a facecam corner, side by side, before and after, grids.</summary>
@@ -28,7 +29,7 @@ namespace JazzHands.Core.Commands;
 [Command("layout.apply", Description = "Lay clips out on the frame: facecam corner, side by side, before and after, grids of 2, 3 and 4")]
 public sealed record ApplyLayoutCommand(
     [property: Arg(0, "facecam, side-by-side, before-after, grid-2, grid-3 or grid-4")] string Layout,
-    [property: Option("clips", "The clips, in the order the layout fills")] string[] ClipIds,
+    [property: Option("clips", "The clips, in the order the layout fills")] EquatableArray<string> ClipIds,
     [property: Option("corner", "facecam: top-left, top-right, bottom-left or bottom-right. Default: bottom-right")] string Corner = "bottom-right",
     [property: Option("size", "facecam: its width as a fraction of the frame. Default: 0.28")] double Size = 0.28,
     [property: Option("margin", "facecam: distance from the edges, in pixels. Default: 40")] double Margin = 40,

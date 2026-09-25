@@ -67,7 +67,7 @@ public static class InspectCommands
                         : throw new CommandException("invalid-value", $"'{text}' is not a fraction; --times takes numbers from 0 to 1, as 0,0.5,1."))];
                 int across = Math.Min(fractions.Length, 5);
                 int sheetWidth = ParseSize(parse.GetValue(size), rate)?.Width ?? 1920;
-                Send(loaded, path, new ContactSheetCommand(file, across, Rows: 1, Width: sheetWidth, SequenceId: chosen.Id, Times: fractions, ClipId: parse.GetValue(clip)), token);
+                Send(loaded, path, new ContactSheetCommand(file, across, Rows: 1, Width: sheetWidth, SequenceId: chosen.Id, Times: [.. fractions], ClipId: parse.GetValue(clip)), token);
                 return Wrote(parse, file, $"{fractions.Length} frames", new { frames = fractions.Length });
             }
 

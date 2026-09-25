@@ -288,6 +288,13 @@ public static class CommandValues
             return new EquatableArray<TimeRange>([.. Split(text).Select(pair => ParseRange(pair, frameRate, name))]);
         }
 
+        if (type == typeof(EquatableArray<double>))
+        {
+            return new EquatableArray<double>([.. Split(text).Select(number => double.TryParse(number, NumberStyles.Float, CultureInfo.InvariantCulture, out double value)
+                ? value
+                : throw new CommandException("invalid-value", $"'{number}' is not a number for --{name}."))]);
+        }
+
         if (type == typeof(TimeRange))
         {
             return ParseRange(text.Trim(), frameRate, name);
@@ -319,6 +326,7 @@ public static class CommandValues
         bool flag => flag ? "true" : "false",
         string[] items => string.Join(",", items),
         EquatableArray<string> items => string.Join(",", items),
+        EquatableArray<double> numbers => string.Join(",", numbers.Select(number => number.ToString("R", CultureInfo.InvariantCulture))),
         EquatableArray<TimeRange> ranges => string.Join(",", ranges.Select(range => $"{Format(range.Start, frameRate)}-{Format(range.End, frameRate)}")),
         TimeRange range => $"{Format(range.Start, frameRate)}-{Format(range.End, frameRate)}",
         Enum member => ToKebabCase(member.ToString()),

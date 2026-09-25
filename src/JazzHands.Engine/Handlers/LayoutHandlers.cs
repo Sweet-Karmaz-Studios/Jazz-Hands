@@ -32,7 +32,7 @@ public sealed class ApplyLayoutHandler : ICommandHandler<ApplyLayoutCommand>
 
         LayoutInfo layout = Layouts.All.FirstOrDefault(known => string.Equals(known.Name, command.Layout, StringComparison.OrdinalIgnoreCase))
             ?? throw new CommandException("unknown-layout", $"There is no layout '{command.Layout}'. There are {string.Join(", ", Layouts.All.Select(known => known.Name))}.");
-        string[] ids = command.ClipIds ?? [];
+        string[] ids = [.. command.ClipIds];
         if (ids.Length != layout.Clips || ids.Distinct(StringComparer.Ordinal).Count() != ids.Length)
         {
             throw new CommandException("invalid-value", $"{layout.Name} lays out {layout.Clips} different clips; {ids.Length} were given.", "clips");
