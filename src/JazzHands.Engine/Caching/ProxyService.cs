@@ -99,6 +99,23 @@ public sealed class ProxyService
     public ProxyFile? Find(string hash) =>
         hash.Length > 0 && _files.TryGetValue(Digits(hash), out ProxyFile? file) ? file : null;
 
+    /// <summary>
+    /// Gives a source's proxy to the source's new hash, for a file that was only touched: its
+    /// content, and so its proxy, is the same.
+    /// </summary>
+    public void Rekey(string from, string to)
+    {
+        if (Find(from) is not { } file)
+        {
+            return;
+        }
+
+        string name = Path.GetFileName(file.Path);
+        string moved = Path.Combine(Folder, Digits(to) + name[Digits(from).Length..]);
+        File.Move(file.Path, moved, overwrite: true);
+        Refresh();
+    }
+
     /// <summary>Looks at the folder again.</summary>
     public void Refresh()
     {

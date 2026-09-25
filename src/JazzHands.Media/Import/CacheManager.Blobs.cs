@@ -331,6 +331,44 @@ public sealed partial class CacheManager
         }
     }
 
+    /// <summary>Brings an older database up to <see cref="SchemaVersion"/>, one step at a time.</summary>
+    private void Migrate()
+    {
+        int version = UserVersion();
+        if (version > SchemaVersion)
+        {
+            _log.Warning("The cache was written by a newer Jazz Hands (schema {Version}); using it as it is", version);
+            return;
+        }
+
+        if (version < 1)
+        {
+            MigrateThumbs();
+        }
+
+        if (version < 2)
+        {
+            Execute("""
+                CREATE INDEX IF NOT EXISTS blobs_by_use ON blobs (lastUsed);
+                CREATE INDEX IF NOT EXISTS thumbs_by_blob ON thumbs (blobId);
+                CREATE INDEX IF NOT EXISTS waveform_by_blob ON waveform (blobId);
+                """);
+        }
+
+        if (version < SchemaVersion)
+        {
+            Execute(string.Create(CultureInfo.InvariantCulture, $"PRAGMA user_version = {SchemaVersion}"));
+            _log.Information("The cache database moved from schema {From} to {To}", version, SchemaVersion);
+        }
+    }
+
+    private int UserVersion()
+    {
+        using SqliteCommand command = _connection.CreateCommand();
+        command.CommandText = "PRAGMA user_version";
+        return Convert.ToInt32(command.ExecuteScalar(), CultureInfo.InvariantCulture);
+    }
+
     /// <summary>
     /// The thumbs table as Phase 06 created it had no column for the frame a thumbnail shows. It
     /// was never written to, so it is replaced rather than altered.

@@ -175,6 +175,58 @@ public sealed partial class CacheManager : IDisposable
     /// <summary>Forgets everything known about a hash, which is what a replaced file needs.</summary>
     public void Forget(string hash) => Forget(hash, CacheParts.All);
 
+    /// <summary>The schema this build writes, kept in the database's <c>user_version</c>.</summary>
+    /// <remarks>
+    /// 1: thumbnails remember the frame they show (<c>frameFlicks</c>). 2: indexes for eviction
+    /// and blob lookups. A database from a newer build is used as it is; its tables are a superset.
+    /// </remarks>
+    public const int SchemaVersion = 2;
+
+    /// <summary>The schema version of the open database.</summary>
+    public int Version
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return UserVersion();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Moves everything known about one hash to another: for a file that was only touched, whose
+    /// hash changed with its date while its content did not, so its thumbnails, waveform, probe
+    /// and keyframes are kept rather than made again.
+    /// </summary>
+    public void Rekey(string from, string to)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(from);
+        ArgumentException.ThrowIfNullOrWhiteSpace(to);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (string.Equals(from, to, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        lock (_gate)
+        {
+            foreach (string table in new[] { "probe", "thumbs", "waveform", "keyframes" })
+            {
+                // A probe is kept as hash#probeN; the suffix goes with it. Rows the new hash
+                // already has win, and the old ones left over are dropped.
+                using SqliteCommand move = _connection.CreateCommand();
+                move.CommandText = $"UPDATE OR IGNORE {table} SET hash = $to || substr(hash, length($from) + 1) WHERE hash = $from OR hash LIKE $versioned";
+                move.Parameters.AddWithValue("$from", from);
+                move.Parameters.AddWithValue("$to", to);
+                move.Parameters.AddWithValue("$versioned", from + "#%");
+                move.ExecuteNonQuery();
+            }
+        }
+
+        Forget(from);
+    }
+
     /// <summary>Forgets parts of what is known about a hash.</summary>
     public void Forget(string hash, CacheParts parts)
     {
@@ -303,7 +355,7 @@ public sealed partial class CacheManager : IDisposable
 
         command.ExecuteNonQuery();
 
-        MigrateThumbs();
+        Migrate();
     }
 
     /// <summary>Marks an entry as used, so eviction takes the oldest rather than the unluckiest.</summary>
