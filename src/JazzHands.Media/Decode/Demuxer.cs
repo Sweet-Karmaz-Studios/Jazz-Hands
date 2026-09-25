@@ -137,6 +137,23 @@ public sealed unsafe class Demuxer : IDisposable
         IsAtEnd = false;
     }
 
+    /// <summary>
+    /// Tells the demuxer to skip every stream but these, so reading one sound stream of a 4K file
+    /// does not read its picture too. A container that can (MP4) does not even read their bytes.
+    /// </summary>
+    public void Keep(params int[] streams)
+    {
+        VerifyThread();
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(streams);
+
+        AVFormatContext* format = _format.Handle;
+        for (int index = 0; index < format->nb_streams; index++)
+        {
+            format->streams[index]->discard = streams.Contains(index) ? AVDiscard.AVDISCARD_DEFAULT : AVDiscard.AVDISCARD_ALL;
+        }
+    }
+
     /// <summary>Rewinds to the start of the file.</summary>
     public void Rewind()
     {

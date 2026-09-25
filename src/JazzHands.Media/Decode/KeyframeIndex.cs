@@ -27,9 +27,10 @@ namespace JazzHands.Media.Decode;
 public sealed class KeyframeIndex
 {
     /// <summary>The version written into a cached index, so an older one is ignored rather than trusted.</summary>
-    private const int Version = 2;
+    private const int Version = 3;
 
     private readonly ImmutableArray<Flicks> _times;
+    private ImmutableArray<Flicks> _leadingStarts;
 
     private KeyframeIndex(ImmutableArray<Flicks> times, Flicks duration, bool isComplete)
     {
@@ -110,6 +111,7 @@ public sealed class KeyframeIndex
         bool complete = true;
         bool leading = false;
         Flicks? lastKeyframe = null;
+        var leadingStarts = new Dictionary<Flicks, Flicks>();
 
         demuxer.Rewind();
 
@@ -158,6 +160,7 @@ public sealed class KeyframeIndex
             else if (lastKeyframe is { } keyframe && at < keyframe)
             {
                 leading = true;
+                leadingStarts[keyframe] = leadingStarts.TryGetValue(keyframe, out Flicks earliest) && earliest < at ? earliest : at;
             }
         }
 
@@ -179,6 +182,7 @@ public sealed class KeyframeIndex
         {
             IsAllKeyframes = complete && packets > 0 && sorted.Length == packets,
             HasLeadingPictures = leading,
+            _leadingStarts = [.. sorted.Select(time => leadingStarts.TryGetValue(time, out Flicks start) ? start : time)],
         };
     }
 
@@ -209,6 +213,9 @@ public sealed class KeyframeIndex
             {
                 IsAllKeyframes = stored.AllKeyframes,
                 HasLeadingPictures = stored.LeadingPictures,
+                _leadingStarts = stored.LeadingStarts is { } starts && starts.Length == stored.Times.Length
+                    ? [.. starts.Select(value => new Flicks(value))]
+                    : [.. stored.Times.Select(value => new Flicks(value))],
             };
         }
         catch (JsonException error)
@@ -235,7 +242,8 @@ public sealed class KeyframeIndex
             [.. _times.Select(time => time.Value)],
             Duration.Value,
             IsAllKeyframes,
-            HasLeadingPictures);
+            HasLeadingPictures,
+            [.. LeadingStarts().Select(time => time.Value)]);
 
         cache.PutKeyframes(hash, streamIndex, JsonSerializer.Serialize(stored));
         return true;
@@ -260,6 +268,21 @@ public sealed class KeyframeIndex
         // time landed exactly on a keyframe, where it is still one along.
         int next = at + 1;
         return next >= 0 && next < _times.Length ? _times[next] : null;
+    }
+
+    /// <summary>
+    /// Where the pictures a copy loses by stopping at this keyframe start: the earliest leading
+    /// picture shown before it but decoded after it, or the keyframe itself in a closed group.
+    /// </summary>
+    /// <remarks>
+    /// A stream copy reads in decode order and stops at the keyframe that ends a stretch, so the
+    /// pictures decoded after that keyframe never arrive, although they are shown before it. Smart
+    /// cut re-encodes from here instead.
+    /// </remarks>
+    public Flicks LeadingStart(Flicks keyframe)
+    {
+        int at = _times.AsSpan().BinarySearch(keyframe);
+        return at >= 0 && !_leadingStarts.IsDefault && at < _leadingStarts.Length ? _leadingStarts[at] : keyframe;
     }
 
     /// <summary>
@@ -313,6 +336,8 @@ public sealed class KeyframeIndex
         return time > keyframe ? time - keyframe : Flicks.Zero;
     }
 
+    private IEnumerable<Flicks> LeadingStarts() => _leadingStarts.IsDefault ? _times : _leadingStarts;
+
     /// <summary>What goes in the cache. A record so a version bump is a compile error away from being handled.</summary>
-    private sealed record Stored(int Version, long[] Times, long Duration, bool AllKeyframes, bool LeadingPictures);
+    private sealed record Stored(int Version, long[] Times, long Duration, bool AllKeyframes, bool LeadingPictures, long[]? LeadingStarts = null);
 }
