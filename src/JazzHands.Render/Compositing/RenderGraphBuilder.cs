@@ -548,6 +548,34 @@ public static class RenderGraphBuilder
     }
 
     /// <summary>
+    /// Where a clip's own picture lands at a moment: the matrix from its source pixels to the
+    /// frame's, both from the top left, as the renderer places it. A media clip's picture is its
+    /// stream's size, fitted as its media says; anything else is the frame's size, stretched.
+    /// </summary>
+    public static Matrix3x2 SourcePlacement(Project project, Clip clip, Flicks local, Vector2 frameSize)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(clip);
+
+        (Vector2 size, ConformPolicy policy) = clip.MediaId is { } mediaId
+            && project.MediaItem(mediaId) is { } item
+            && item.Info?.Streams.FirstOrDefault(stream => stream.Index == clip.SourceStreamIndex) is { Width: > 0, Height: > 0 } stream
+                ? (new Vector2(stream.Width, stream.Height), item.Conform)
+                : (frameSize, ConformPolicy.Stretch);
+        Transform transform = clip.Transform ?? Transform.Identity;
+
+        return Placement(
+            size,
+            frameSize,
+            policy,
+            Float2(transform.Position, Intrinsic.Position, local),
+            Float2(transform.Scale, Intrinsic.Scale, local),
+            Float(transform.Rotation, Intrinsic.Rotation, local),
+            Float2(transform.Anchor, Intrinsic.Anchor, local),
+            1.0f);
+    }
+
+    /// <summary>
     /// Where a frame-sized picture (a generator's) of a clip lands at a moment: the matrix from
     /// its pixels to the frame's, both from the top left, with the clip's transform evaluated as
     /// the renderer evaluates it.

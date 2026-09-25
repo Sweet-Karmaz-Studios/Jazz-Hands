@@ -359,6 +359,12 @@
               "type": "null"
             }
           ]
+        },
+        "pointTracks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/pointTrack"
+          }
         }
       },
       "required": [
@@ -1077,6 +1083,31 @@
         }
       ]
     },
+    "pointTrack": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "size": {
+          "type": "integer"
+        },
+        "points": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/trackPoint"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "size"
+      ]
+    },
     "projectSettings": {
       "type": "object",
       "properties": {
@@ -1522,6 +1553,29 @@
       },
       "required": [
         "sourceTrackId"
+      ]
+    },
+    "trackPoint": {
+      "type": "object",
+      "properties": {
+        "time": {
+          "$ref": "#/$defs/flicks"
+        },
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "confidence": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "time",
+        "x",
+        "y",
+        "confidence"
       ]
     },
     "transform": {

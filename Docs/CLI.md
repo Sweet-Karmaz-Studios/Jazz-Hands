@@ -3883,6 +3883,60 @@ Set an audio track's volume in dB, or a keyframe of it.
 | `--at <time>` | Set a keyframe at this time on the sequence. |
 | `--no-save` | Do not write the project back. |
 
+## `jazz tracking`
+
+Commands and queries about tracking.
+
+### `jazz tracking apply <project> <track-id>`
+
+Make a clip, an effect's point or a mask follow a tracked point.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<track-id>` | The point track id. |
+
+| Option | Meaning |
+|---|---|
+| `--to <to>` | Required. The clip, effect or mask that follows. |
+| `--param <param>` | Which parameter follows, when not the usual one. |
+| `--absolute` | Put it on the point rather than keeping its distance. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz tracking point <project> <clip-id>`
+
+Track a point of a clip's picture through its frames.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The clip id. |
+
+| Option | Meaning |
+|---|---|
+| `--at <time>` | Required. The moment the point is picked, on the sequence. |
+| `--x <number>` | Required. The point across, in source pixels. |
+| `--y <number>` | Required. The point down, in source pixels. |
+| `--size <n>` | The square followed, in pixels. Default: 31. Default: 31. |
+| `--search <n>` | How far it may move in a frame, in pixels. Default: 48. Default: 48. |
+| `--direction <both|forward|backward>` | both, forward or backward. Default: both. Default: both. |
+| `--id <id>` | A track to re-track from here, or the id for a new one. |
+| `--name <name>` | What to call a new track. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz tracking remove <project> <track-id>`
+
+Remove a point track.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<track-id>` | The point track id. |
+
+| Option | Meaning |
+|---|---|
+| `--no-save` | Do not write the project back. |
+
 ## `jazz transition`
 
 Transitions on cuts: add, change, remove, and the default ones.

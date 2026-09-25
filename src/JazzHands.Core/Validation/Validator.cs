@@ -398,6 +398,29 @@ public static class Validator
                     $"An effect on '{clip.Name}' has no type."));
             }
         }
+
+        for (int trackIndex = 0; trackIndex < clip.PointTracks.Length; trackIndex++)
+        {
+            PointTrack track = clip.PointTracks[trackIndex];
+            string trackPath = $"{clipPath}/pointTracks/{trackIndex}";
+            if (!Id.IsValid(track.Id))
+            {
+                issues.Add(new ValidationIssue(Severity.Error, "invalid-id", $"{trackPath}/id", $"'{track.Id}' is not a ULID."));
+            }
+
+            for (int point = 1; point < track.Points.Length; point++)
+            {
+                if (track.Points[point].Time <= track.Points[point - 1].Time)
+                {
+                    issues.Add(new ValidationIssue(
+                        Severity.Error,
+                        "points-out-of-order",
+                        $"{trackPath}/points/{point}",
+                        $"The points of '{track.Name}' on '{clip.Name}' must go forwards in time, each after the one before."));
+                    break;
+                }
+            }
+        }
     }
 
     private static void CheckKeyframesWithin(

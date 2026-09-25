@@ -388,6 +388,7 @@ public sealed record Marker(
 /// <param name="Retime">How a picture between two source frames is shown when the clip plays at another speed or rate: the nearer frame, or a blend of both.</param>
 /// <param name="MotionBlur">Motion blur on the clip's animated placement, over its track's and sequence's; null to follow them.</param>
 /// <param name="Matte">Another track used as this clip's matte, over its track's; null to follow the track.</param>
+/// <param name="PointTracks">Points of its picture followed through its frames (<c>tracking.point</c>).</param>
 public sealed record Clip(
     string Id,
     TimeRange Range,
@@ -420,7 +421,8 @@ public sealed record Clip(
     AnimatedValue? Remap = null,
     RetimeMode Retime = RetimeMode.Nearest,
     MotionBlur? MotionBlur = null,
-    TrackMatte? Matte = null) : IEquatable<Clip>
+    TrackMatte? Matte = null,
+    EquatableArray<PointTrack> PointTracks = default) : IEquatable<Clip>
 {
     /// <summary>Playback rate, defaulting to normal speed.</summary>
     public Rational EffectiveSpeed => Speed ?? Rational.One;

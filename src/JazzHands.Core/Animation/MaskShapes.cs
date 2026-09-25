@@ -71,6 +71,35 @@ public static class MaskShapes
         return result.ToString().TrimEnd();
     }
 
+    /// <summary>An outline moved by an offset, written as curves; null when it does not read.</summary>
+    public static string? Translate(string path, Vector2 by)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        List<Vector2[]> figures;
+        try
+        {
+            figures = [.. MaskPath.Parse(path).Select(Cubic)];
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+
+        var result = new StringBuilder();
+        foreach (Vector2[] points in figures)
+        {
+            result.Append('M').Append(Format(points[0] + by));
+            for (int at = 1; at + 2 < points.Length; at += 3)
+            {
+                result.Append(" C").Append(Format(points[at] + by)).Append(' ').Append(Format(points[at + 1] + by)).Append(' ').Append(Format(points[at + 2] + by));
+            }
+
+            result.Append(" Z ");
+        }
+
+        return result.ToString().TrimEnd();
+    }
+
     /// <summary>A figure as cubic points: the start, then three points a segment, closed back to the start.</summary>
     internal static Vector2[] Cubic(MaskPathFigure figure)
     {
