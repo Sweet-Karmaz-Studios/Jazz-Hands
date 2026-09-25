@@ -107,7 +107,8 @@ public static class FfmpegLoader
 
     /// <summary>
     /// Searches the standard locations in order: an explicit JAZZ_FFMPEG_DIR, the ffmpeg folder
-    /// next to the running assembly (published layout), then third_party/ffmpeg/bin walking up
+    /// next to the running assembly (published layout), the assembly's own folder, then
+    /// third_party/ffmpeg/bin walking up
     /// from the assembly towards the repository root (development layout).
     /// </summary>
     public static string? Locate()
@@ -135,6 +136,7 @@ public static class FfmpegLoader
         string appDirectory = AppContext.BaseDirectory;
         yield return Path.Combine(appDirectory, "ffmpeg");
         yield return Path.Combine(appDirectory, "ffmpeg", "bin");
+        yield return appDirectory;
 
         // Walk up from the build output to the repository root, which holds third_party/ffmpeg.
         var directory = new DirectoryInfo(appDirectory);

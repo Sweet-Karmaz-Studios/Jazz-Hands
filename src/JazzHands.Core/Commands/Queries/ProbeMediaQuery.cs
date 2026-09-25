@@ -15,7 +15,7 @@ namespace JazzHands.Core.Commands;
 /// <param name="Conform">How the picture would be fitted to a frame of a different shape.</param>
 /// <param name="Deinterlace">Whether it would be deinterlaced on decode.</param>
 /// <param name="VfrConform">Whether variable frame timing would be remapped onto the project grid.</param>
-[Query("media.probe", Description = "Read a file and say what is in it, without importing it")]
+[Query("media.probe", Description = "Read a file and say what is in it, without importing it", Standalone = true)]
 public sealed record ProbeMediaQuery(
     [property: Arg(0, "The file to read")] string Path,
     [property: Option("conform", "fit, fill, stretch or native")] ConformPolicy Conform = ConformPolicy.Fit,

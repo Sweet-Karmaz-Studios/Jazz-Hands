@@ -38,6 +38,19 @@ public sealed record ImportedMedia(
 /// </remarks>
 public sealed class MediaImporter(CacheManager? cache = null, Prober? prober = null)
 {
+    /// <summary>The handler names muxers write on every track, which say nothing about it.</summary>
+    private static readonly HashSet<string> DefaultHandlers = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "SoundHandler", "VideoHandler", "SubtitleHandler", "DataHandler",
+        "Core Media Audio", "Core Media Video", "Core Media Text",
+        "Apple Sound Media Handler", "Apple Video Media Handler",
+        "L-SMASH Audio Handler", "L-SMASH Video Handler",
+        "GPAC ISO Audio Handler", "GPAC ISO Video Handler",
+        "Mainconcept MP4 Sound Media Handler", "Mainconcept MP4 Video Media Handler",
+        "Bento4 Sound Handler", "Bento4 Video Handler",
+        "ISO Media file produced by Google Inc.",
+    };
+
     /// <summary>
     /// The numbered-file pattern an image sequence is recognised by.
     /// </summary>
@@ -225,9 +238,16 @@ public sealed class MediaImporter(CacheManager? cache = null, Prober? prober = n
     /// <remarks>
     /// Bumped whenever the prober learns something new about files it has already seen, so a
     /// probe cached before is taken again rather than trusted. Version 2 reads Matroska's per
-    /// stream DURATION tag; version 3 keeps each picture stream's colour signalling (Phase 17).
+    /// stream DURATION tag; version 3 keeps each picture stream's colour signalling (Phase 17);
+    /// version 4 leaves out the handler names muxers write as titles (Phase 24).
     /// </remarks>
-    internal static string ProbeKey(string hash) => $"{hash}#probe3";
+    internal static string ProbeKey(string hash) => $"{hash}#probe4";
+
+    /// <summary>
+    /// A stream title a person gave, not the handler name a muxer writes into every MP4 (FFmpeg's
+    /// SoundHandler, Apple's Core Media Audio), which would otherwise name every audio track.
+    /// </summary>
+    internal static string? Named(string? title) => title is null || DefaultHandlers.Contains(title.Trim()) ? null : title;
 
     /// <summary>Probes a file, using the cache when it has seen this content before.</summary>
     private (MediaInfo Info, bool FromCache) ProbeWithCache(string path, string hash)
@@ -302,7 +322,7 @@ public sealed class MediaImporter(CacheManager? cache = null, Prober? prober = n
                 stream.CodecName,
                 stream.Duration,
                 stream.Language,
-                stream.Title,
+                Named(stream.Title),
                 stream.Video?.Width ?? 0,
                 stream.Video?.Height ?? 0,
                 stream.Video?.FrameRate,

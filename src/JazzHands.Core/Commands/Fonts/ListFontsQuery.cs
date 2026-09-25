@@ -6,6 +6,6 @@ namespace JazzHands.Core.Commands;
 /// used before installed ones of the same name, so a project carries its look to another machine.
 /// </remarks>
 /// <param name="Search">Only families whose name contains this.</param>
-[Query("fonts.list", Description = "List the font families titles can use")]
+[Query("fonts.list", Description = "List the font families titles can use: installed, and with --project the project's own", Standalone = true)]
 public sealed record ListFontsQuery(
     [property: Option("search", "Only families whose name contains this")] string? Search = null) : IQuery<FontInfo[]>;

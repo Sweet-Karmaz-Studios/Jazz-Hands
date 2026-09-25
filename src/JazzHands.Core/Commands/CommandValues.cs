@@ -288,6 +288,11 @@ public static class CommandValues
             return new EquatableArray<TimeRange>([.. Split(text).Select(pair => ParseRange(pair, frameRate, name))]);
         }
 
+        if (type == typeof(TimeRange))
+        {
+            return ParseRange(text.Trim(), frameRate, name);
+        }
+
         throw new CommandException("unsupported-type", $"A command cannot take a {type.Name}.");
     }
 
@@ -315,6 +320,7 @@ public static class CommandValues
         string[] items => string.Join(",", items),
         EquatableArray<string> items => string.Join(",", items),
         EquatableArray<TimeRange> ranges => string.Join(",", ranges.Select(range => $"{Format(range.Start, frameRate)}-{Format(range.End, frameRate)}")),
+        TimeRange range => $"{Format(range.Start, frameRate)}-{Format(range.End, frameRate)}",
         Enum member => ToKebabCase(member.ToString()),
         IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
         _ => value.ToString() ?? string.Empty,

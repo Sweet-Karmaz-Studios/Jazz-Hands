@@ -253,7 +253,7 @@ public static class CommandRegistry
                             ?? throw new CommandException("invalid-argument", "A batch holds command objects."),
                         frameRate)).ToArray()
                     : frameRate is { } rate && IsTime(parameter.Type) && node is JsonValue value && value.TryGetValue(out string? text)
-                        ? CommandValues.Parse(typeof(Flicks), text, rate, parameter.JsonName)
+                        ? CommandValues.Parse(parameter.Type, text, rate, parameter.JsonName)
                         : node.Deserialize(parameter.Type, JazzJson.Options);
             }
             catch (JsonException error)
@@ -499,7 +499,7 @@ public static class CommandRegistry
         return null;
     }
 
-    private static bool IsTime(Type type) => (Nullable.GetUnderlyingType(type) ?? type) == typeof(Flicks);
+    private static bool IsTime(Type type) => (Nullable.GetUnderlyingType(type) ?? type) is var bare && (bare == typeof(Flicks) || bare == typeof(TimeRange) || bare == typeof(Model.EquatableArray<TimeRange>));
 
     private static string FriendlyTypeName(Type type) =>
         (Nullable.GetUnderlyingType(type) ?? type).Name;

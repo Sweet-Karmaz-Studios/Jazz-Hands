@@ -72,6 +72,46 @@ public sealed class StillRenderer : IDisposable
         }
     }
 
+    /// <summary>
+    /// Draws a frame exactly as the editor's preview draws it at this size: the same scale, the
+    /// same sampling, BT.1886 and dithered for eight bits, so a PNG of it looks on screen as the
+    /// preview does. BGRA, top row first. This is <c>jazz frame</c>.
+    /// </summary>
+    /// <param name="project">The project.</param>
+    /// <param name="sequence">The sequence.</param>
+    /// <param name="time">The sequence time.</param>
+    /// <param name="width">The picture's width; the height follows the sequence's shape.</param>
+    /// <param name="projectPath">Where the project lives, for its media.</param>
+    public (int Width, int Height, byte[] Bgra) RenderPreview(Project project, Sequence sequence, Flicks time, int width, string projectPath = "")
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(sequence);
+        ArgumentOutOfRangeException.ThrowIfLessThan(width, 16);
+
+        ProjectSettings settings = project.SettingsFor(sequence);
+        int height = Math.Max(2, (int)Math.Round(width * (double)settings.Height / settings.Width / 2) * 2);
+
+        lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            _device ??= _given ?? RenderDevice.Create(forceWarp: true);
+            _frames ??= new FrameServer(_device);
+
+            RenderTarget display = _frames.Compositor.Pool.Rent(width, height, Format.B8G8R8A8_UNorm);
+            try
+            {
+                // The preview renders at a fraction of the sequence's size, then fits the panel.
+                var options = new RenderOptions { Scale = Math.Min(1f, (float)width / settings.Width) };
+                _frames.Render(project, sequence, time, options, display.View, width, height, OutputSettings.Preview, projectPath);
+                return (width, height, ReadBytes(display));
+            }
+            finally
+            {
+                _frames.Compositor.Pool.Return(display);
+            }
+        }
+    }
+
     /// <inheritdoc />
     public void Dispose()
     {

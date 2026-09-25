@@ -181,8 +181,11 @@ public sealed class ProbeMediaHandler : IQueryHandler<ProbeMediaQuery, MediaProb
         ArgumentNullException.ThrowIfNull(query);
         ArgumentNullException.ThrowIfNull(context);
 
-        string full = Path.GetFullPath(
-            ProjectPaths.Resolve(context.Session?.ProjectPath ?? Directory.GetCurrentDirectory(), query.Path));
+        // Relative to the project, or with no saved project to the current folder.
+        string anchor = context.Session?.ProjectPath is { Length: > 0 } projectPath
+            ? projectPath
+            : Path.Combine(Directory.GetCurrentDirectory(), "untitled.jazz");
+        string full = Path.GetFullPath(ProjectPaths.Resolve(anchor, query.Path));
 
         if (!File.Exists(full))
         {

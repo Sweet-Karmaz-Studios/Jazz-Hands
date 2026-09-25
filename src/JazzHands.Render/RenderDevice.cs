@@ -83,12 +83,28 @@ public sealed class RenderDevice : IDisposable
     public bool IsHardware => Kind == RenderDeviceKind.Hardware;
 
     /// <summary>
+    /// Which adapter a device made without saying goes on, for the whole process: the best GPU
+    /// (the default), WARP, or an adapter by its number in <c>jazz version</c>'s list. The command
+    /// line sets it from <c>--gpu</c>; <c>JAZZ_GPU</c> sets it for any process.
+    /// </summary>
+    public static GpuChoice Preferred { get; set; } = GpuChoice.TryParse(Environment.GetEnvironmentVariable("JAZZ_GPU"), out GpuChoice? fromEnvironment) ? fromEnvironment : GpuChoice.Auto;
+
+    /// <summary>
     /// Creates a device on the best available adapter, falling back to WARP when no GPU can be
-    /// used. Pass <paramref name="forceWarp"/> in tests that must be deterministic.
+    /// used. Pass <paramref name="forceWarp"/> in tests that must be deterministic. Otherwise
+    /// <see cref="Preferred"/> decides.
     /// </summary>
     public static RenderDevice Create(bool forceWarp = false, bool enableDebugLayer = false)
     {
         ILogger log = Log.ForContext<RenderDevice>();
+        forceWarp |= Preferred.Warp;
+
+        if (!forceWarp && Preferred.Adapter is { } number)
+        {
+            return TryCreate(DriverType.Unknown, enableDebugLayer, out RenderDevice? chosen, number)
+                ? chosen
+                : throw new RenderDeviceException($"There is no usable GPU number {number}. 'jazz version --json' lists the adapters.");
+        }
 
         if (!forceWarp && TryCreate(DriverType.Unknown, enableDebugLayer, out RenderDevice? hardware))
         {
@@ -203,7 +219,7 @@ public sealed class RenderDevice : IDisposable
         Device.Dispose();
     }
 
-    private static bool TryCreate(DriverType driverType, bool enableDebugLayer, out RenderDevice device)
+    private static bool TryCreate(DriverType driverType, bool enableDebugLayer, out RenderDevice device, uint? adapterNumber = null)
     {
         device = null!;
 
@@ -222,7 +238,7 @@ public sealed class RenderDevice : IDisposable
         {
             if (driverType == DriverType.Unknown)
             {
-                adapter = FindBestAdapter();
+                adapter = adapterNumber is { } number ? FindAdapter(number) : FindBestAdapter();
                 if (adapter is null)
                 {
                     return false;
@@ -288,6 +304,48 @@ public sealed class RenderDevice : IDisposable
             }
 
             if ((adapter.Description1.Flags & AdapterFlags.Software) == 0)
+            {
+                return adapter;
+            }
+
+            adapter.Dispose();
+        }
+
+        return null;
+    }
+
+    /// <summary>The hardware adapters, in the order <see cref="GpuChoice"/> numbers them: fastest first.</summary>
+    public static IReadOnlyList<string> Adapters()
+    {
+        var names = new List<string>();
+        using IDXGIFactory6 factory = DXGI.CreateDXGIFactory1<IDXGIFactory6>();
+        for (uint index = 0; factory.EnumAdapterByGpuPreference(index, GpuPreference.HighPerformance, out IDXGIAdapter1? adapter).Success; index++)
+        {
+            using (adapter)
+            {
+                if (adapter is not null && (adapter.Description1.Flags & AdapterFlags.Software) == 0)
+                {
+                    names.Add(adapter.Description1.Description);
+                }
+            }
+        }
+
+        return names;
+    }
+
+    /// <summary>The hardware adapter with this number, counting fastest first and leaving software ones out.</summary>
+    private static IDXGIAdapter1? FindAdapter(uint number)
+    {
+        using IDXGIFactory6 factory = DXGI.CreateDXGIFactory1<IDXGIFactory6>();
+        uint hardware = 0;
+        for (uint index = 0; factory.EnumAdapterByGpuPreference(index, GpuPreference.HighPerformance, out IDXGIAdapter1? adapter).Success; index++)
+        {
+            if (adapter is null)
+            {
+                continue;
+            }
+
+            if ((adapter.Description1.Flags & AdapterFlags.Software) == 0 && hardware++ == number)
             {
                 return adapter;
             }

@@ -33,9 +33,23 @@ public sealed class DescribeTimelineHandler : IQueryHandler<DescribeTimelineQuer
         ArgumentNullException.ThrowIfNull(query);
 
         Sequence sequence = HandlerHelp.Sequence(project, query.SequenceId);
+        return Write(project, sequence, query.Detail == DescribeDetail.Full, range: null, clipLimit: int.MaxValue, context.Session?.ProjectPath ?? string.Empty, out _);
+    }
+
+    /// <summary>A sequence in text.</summary>
+    /// <param name="project">The project.</param>
+    /// <param name="sequence">The sequence.</param>
+    /// <param name="full">Ids, sources, effects and problems too.</param>
+    /// <param name="range">Only clips, gaps, transitions and markers inside this stretch, or null.</param>
+    /// <param name="clipLimit">The most clips to list on one track; the middle of a longer one is summed up in a line.</param>
+    /// <param name="projectPath">Where the project lives, for missing fonts and files.</param>
+    /// <param name="elided">How many clips were left out for the limit.</param>
+    /// <param name="problems">At full, end with what is wrong with the sequence.</param>
+    internal static string Write(Project project, Sequence sequence, bool full, TimeRange? range, int clipLimit, string projectPath, out int elided, bool problems = true)
+    {
         ProjectSettings settings = project.SettingsFor(sequence);
         Rational fps = settings.FrameRate;
-        bool full = query.Detail == DescribeDetail.Full;
+        elided = 0;
 
         var text = new StringBuilder();
 
@@ -49,10 +63,16 @@ public sealed class DescribeTimelineHandler : IQueryHandler<DescribeTimelineQuer
         text.Append(CultureInfo.InvariantCulture, $", {sequence.Tracks.Sum(track => track.Clips.Length)} clips");
         text.Append(sequence.IsMagnetic ? ", magnetic\n" : "\n");
 
-        if (sequence.InOut is { } range)
+        if (sequence.InOut is { } inOut)
         {
             text.Append(CultureInfo.InvariantCulture,
-                $"  in and out: {Timecode.Format(range.Start, fps)} to {Timecode.Format(range.End, fps)}\n");
+                $"  in and out: {Timecode.Format(inOut.Start, fps)} to {Timecode.Format(inOut.End, fps)}\n");
+        }
+
+        if (range is { } only)
+        {
+            text.Append(CultureInfo.InvariantCulture,
+                $"  only {Timecode.Format(only.Start, fps)} to {Timecode.Format(only.End, fps)} is described\n");
         }
 
         // The order a timeline is drawn in: picture stacked upward from the middle, sound
@@ -67,26 +87,29 @@ public sealed class DescribeTimelineHandler : IQueryHandler<DescribeTimelineQuer
 
         foreach (Track track in picture.Concat(sound))
         {
-            AppendTrack(text, project, sequence, track, fps, full);
+            elided += AppendTrack(text, project, sequence, track, fps, full, range, clipLimit);
         }
 
-        AppendMarkers(text, sequence, fps);
+        AppendMarkers(text, sequence, fps, range);
 
-        if (full)
+        if (full && problems)
         {
-            AppendProblems(text, project, sequence, context.Session?.ProjectPath ?? string.Empty);
+            AppendProblems(text, project, sequence, projectPath);
         }
 
         return text.ToString();
     }
 
-    private static void AppendTrack(
+    /// <summary>One track: its clips (the middle of a long one summed up), gaps and transitions. Returns how many clips were left out.</summary>
+    private static int AppendTrack(
         StringBuilder text,
         Project project,
         Sequence sequence,
         Track track,
         Rational fps,
-        bool full)
+        bool full,
+        TimeRange? range,
+        int clipLimit)
     {
         text.Append('\n');
         text.Append(CultureInfo.InvariantCulture,
@@ -111,18 +134,36 @@ public sealed class DescribeTimelineHandler : IQueryHandler<DescribeTimelineQuer
 
         text.Append('\n');
 
-        if (track.Clips.IsEmpty)
+        bool Inside(TimeRange span) => range is not { } only || span.Intersects(only);
+        Clip[] clips = [.. track.Clips.Where(clip => Inside(clip.Range))];
+        if (clips.Length == 0)
         {
-            text.Append("  empty\n");
-            return;
+            text.Append(track.Clips.IsEmpty ? "  empty\n" : "  nothing in the range\n");
+            return 0;
         }
 
-        foreach (Clip clip in track.Clips)
+        // The start and end of a long track, and a line for what is between.
+        int head = clips.Length > clipLimit ? (clipLimit + 1) / 2 : clips.Length;
+        int tail = clips.Length > clipLimit ? clipLimit / 2 : 0;
+        int left = clips.Length - head - tail;
+        for (int index = 0; index < clips.Length; index++)
         {
-            AppendClip(text, project, clip, fps, full, track.IsAudio);
+            if (index == head && left > 0)
+            {
+                Clip first = clips[head];
+                Clip last = clips[head + left - 1];
+                text.Append(CultureInfo.InvariantCulture,
+                    $"  ... {left} more clips, {Timecode.Format(first.Start, fps)} to {Timecode.Format(last.End, fps)} (ask with --range or --detail full)\n");
+                index += left - 1;
+                continue;
+            }
+
+            AppendClip(text, project, clips[index], fps, full, track.IsAudio);
         }
 
-        foreach (Gap gap in TimelineQueries.Gaps(track))
+        // Gaps and transitions only where the clips around them were listed.
+        bool Listed(Flicks time) => left == 0 || time < clips[head].Start || time >= clips[head + left - 1].End;
+        foreach (Gap gap in TimelineQueries.Gaps(track).Where(gap => Inside(gap.Range) && Listed(gap.Range.Start)))
         {
             text.Append(CultureInfo.InvariantCulture,
                 $"  gap    {Timecode.Format(gap.Range.Start, fps)} to {Timecode.Format(gap.Range.End, fps)}\n");
@@ -130,8 +171,15 @@ public sealed class DescribeTimelineHandler : IQueryHandler<DescribeTimelineQuer
 
         foreach (Transition transition in track.Transitions)
         {
+            if (TransitionTiming.Span(track, transition, fps) is { } span && (!Inside(span.Range) || !Listed(span.Cut)))
+            {
+                continue;
+            }
+
             AppendTransition(text, project, track, transition, fps, full);
         }
+
+        return left;
     }
 
     /// <summary>
@@ -250,16 +298,17 @@ public sealed class DescribeTimelineHandler : IQueryHandler<DescribeTimelineQuer
         }
     }
 
-    private static void AppendMarkers(StringBuilder text, Sequence sequence, Rational fps)
+    private static void AppendMarkers(StringBuilder text, Sequence sequence, Rational fps, TimeRange? range)
     {
-        if (sequence.Markers.IsEmpty)
+        Marker[] markers = [.. sequence.Markers.Where(marker => range is not { } only || (marker.IsRange ? marker.Range.Intersects(only) : only.Contains(marker.Time)))];
+        if (markers.Length == 0)
         {
             return;
         }
 
         text.Append("\nmarkers\n");
 
-        foreach (Marker marker in sequence.Markers)
+        foreach (Marker marker in markers)
         {
             text.Append(CultureInfo.InvariantCulture, $"  {Timecode.Format(marker.Time, fps)} {marker.Name}");
 
