@@ -809,7 +809,7 @@ public sealed class Compositor : IDisposable
             Transfer = (uint)color.Transfer,
             Layout = layout.IsRgb
                 ? (layout.PlaneCount == 1 ? 2u : 3u)
-                : layout.IsSemiPlanar ? 0u : 1u,
+                : layout.IsSemiPlanar ? 0u : layout.IsYuva ? 4u : 1u,
             Primaries = (uint)color.Primaries,
             ToneOperator = (uint)color.ToneMap.Operator,
             PeakNits = color.ToneMap.PeakNits,

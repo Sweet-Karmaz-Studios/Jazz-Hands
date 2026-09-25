@@ -1,0 +1,14 @@
+{
+  "name": "alpha-png-sequence",
+  "label": "PNG sequence with alpha",
+  "description": "One PNG a frame with transparency where nothing covers, at the sequence's size: name_00001.png.",
+  "category": "image",
+  "container": "image2",
+  "extension": ".png",
+  "video": {
+    "codec": "png",
+    "encoders": ["png"],
+    "pixelFormat": "rgba",
+    "keyframeSeconds": 0
+  }
+}

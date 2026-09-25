@@ -1,0 +1,15 @@
+{
+  "name": "alpha-prores-4444",
+  "label": "ProRes 4444 with alpha",
+  "description": "Graphics for another editor, OBS or Unity: ProRes 4444, 10 bit, with alpha, every frame a keyframe, QuickTime, no sound.",
+  "category": "archive",
+  "container": "mov",
+  "extension": ".mov",
+  "video": {
+    "codec": "prores",
+    "encoders": ["prores_ks"],
+    "pixelFormat": "yuva444p10le",
+    "profile": "4",
+    "keyframeSeconds": 0
+  }
+}

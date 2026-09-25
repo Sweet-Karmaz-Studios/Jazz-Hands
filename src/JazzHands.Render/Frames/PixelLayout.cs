@@ -88,6 +88,18 @@ public sealed record PixelLayout(string Name, ImmutableArray<PixelPlane> Planes,
     /// <summary>12-bit planar 4:2:0, which some camera intermediates use.</summary>
     public static readonly PixelLayout Yuv420P12 = Planar("yuv420p12le", Format.R16_UNorm, 1, 1, 12);
 
+    /// <summary>8-bit planar 4:2:0 with alpha, what VP9 with alpha decodes to.</summary>
+    public static readonly PixelLayout Yuva420P = PlanarAlpha("yuva420p", Format.R8_UNorm, 1, 1, 8);
+
+    /// <summary>8-bit planar 4:4:4 with alpha.</summary>
+    public static readonly PixelLayout Yuva444P = PlanarAlpha("yuva444p", Format.R8_UNorm, 0, 0, 8);
+
+    /// <summary>10-bit planar 4:4:4 with alpha, what ProRes 4444 decodes to.</summary>
+    public static readonly PixelLayout Yuva444P10 = PlanarAlpha("yuva444p10le", Format.R16_UNorm, 0, 0, 10);
+
+    /// <summary>12-bit planar 4:4:4 with alpha, what ProRes 4444 XQ decodes to.</summary>
+    public static readonly PixelLayout Yuva444P12 = PlanarAlpha("yuva444p12le", Format.R16_UNorm, 0, 0, 12);
+
     /// <summary>Eight bit interleaved RGBA, what the image decoder gives for an ordinary still.</summary>
     public static readonly PixelLayout Rgba = new("rgba", [new PixelPlane(Format.R8G8B8A8_UNorm, 0, 0, 4)], 8);
 
@@ -111,7 +123,7 @@ public sealed record PixelLayout(string Name, ImmutableArray<PixelPlane> Planes,
     /// <summary>Every layout this build knows, by the FFmpeg name it answers to.</summary>
     public static readonly ImmutableArray<PixelLayout> All =
     [
-        Nv12, P010, Yuv420P, Yuv420P10, Yuv420P12, Yuv422P, Yuv422P10, Yuv444P, Yuv444P10, Rgba, Rgba64, Gbrapf32,
+        Nv12, P010, Yuv420P, Yuv420P10, Yuv420P12, Yuv422P, Yuv422P10, Yuv444P, Yuv444P10, Yuva420P, Yuva444P, Yuva444P10, Yuva444P12, Rgba, Rgba64, Gbrapf32,
     ];
 
     /// <summary>
@@ -131,6 +143,9 @@ public sealed record PixelLayout(string Name, ImmutableArray<PixelPlane> Planes,
 
     /// <summary>True when the samples are RGB rather than YUV.</summary>
     public bool IsRgb => Name is "rgba" or "rgba64le" or "gbrapf32le";
+
+    /// <summary>True for planar YUV with a fourth plane of straight alpha.</summary>
+    public bool IsYuva => Name.StartsWith("yuva", StringComparison.Ordinal);
 
     /// <summary>
     /// True when chroma arrives as one plane of interleaved pairs, which is what a hardware
@@ -174,6 +189,17 @@ public sealed record PixelLayout(string Name, ImmutableArray<PixelPlane> Planes,
 
         return null;
     }
+
+    private static PixelLayout PlanarAlpha(string name, Format format, int widthShift, int heightShift, int bitDepth) =>
+        new(
+            name,
+            [
+                new PixelPlane(format, 0, 0, 1),
+                new PixelPlane(format, widthShift, heightShift, 1),
+                new PixelPlane(format, widthShift, heightShift, 1),
+                new PixelPlane(format, 0, 0, 1),
+            ],
+            bitDepth);
 
     private static PixelLayout Planar(string name, Format format, int widthShift, int heightShift, int bitDepth) =>
         new(

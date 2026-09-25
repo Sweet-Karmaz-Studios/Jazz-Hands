@@ -54,6 +54,16 @@ public sealed unsafe class PixelConverter : IDisposable
     public AVPixelFormat To { get; }
 
     /// <summary>
+    /// The interleaved RGBA a frame in some other format is best turned into when nothing samples
+    /// it as it is: sixteen bits a channel for a format deeper than eight, eight otherwise.
+    /// </summary>
+    public static AVPixelFormat RgbaFor(AVPixelFormat format)
+    {
+        AVPixFmtDescriptor* descriptor = ffmpeg.av_pix_fmt_desc_get(format);
+        return descriptor is not null && descriptor->comp[0].depth > 8 ? AVPixelFormat.AV_PIX_FMT_RGBA64LE : AVPixelFormat.AV_PIX_FMT_RGBA;
+    }
+
+    /// <summary>
     /// Converts a frame, returning a new one the caller disposes. The source is untouched.
     /// </summary>
     public VideoFrame Convert(VideoFrame source)

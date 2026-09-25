@@ -110,11 +110,12 @@ public sealed unsafe class VideoEncoder : IDisposable
                 ffmpeg.sws_getContext(settings.Width, settings.Height, input, settings.Width, settings.Height, encoded, (int)SwsFlags.SWS_BICUBIC, null, null, null),
                 $"sws_getContext ({input} to {encoded})");
 
-            // The frames are BT.709 limited range. swscale assumes BT.601 unless told, which
-            // shifts every colour a little on the way to RGB; and RGB is full range.
+            // The frames are BT.709, limited range as YUV and full as RGB (sixteen bit RGBA, when
+            // alpha is kept). swscale assumes BT.601 unless told, which shifts every colour a
+            // little on the way; and RGB is full range.
             bool rgb = IsRgb(encoded);
             int_array4 bt709 = *(int_array4*)ffmpeg.sws_getCoefficients(ffmpeg.SWS_CS_ITU709);
-            ffmpeg.sws_setColorspaceDetails(_convert, bt709, 0, bt709, rgb ? 1 : 0, 0, 1 << 16, 1 << 16);
+            ffmpeg.sws_setColorspaceDetails(_convert, bt709, IsRgb(input) ? 1 : 0, bt709, rgb ? 1 : 0, 0, 1 << 16, 1 << 16);
 
             _converted = new AvFrame();
             AVFrame* frame = _converted.Handle;
@@ -155,6 +156,9 @@ public sealed unsafe class VideoEncoder : IDisposable
 
     /// <summary>True when frames are P010: ten bits in the top of sixteen.</summary>
     public bool TakesP010 => InputFormat == AVPixelFormat.AV_PIX_FMT_P010LE;
+
+    /// <summary>True when the encoder keeps alpha and takes sixteen bit RGBA with straight alpha, rendered with alpha kept.</summary>
+    public bool TakesRgba => InputFormat == AVPixelFormat.AV_PIX_FMT_RGBA64LE;
 
     /// <summary>True when it takes textures on the render device (<see cref="RentTexture"/>) rather than frames in system memory.</summary>
     public bool TakesTextures => _frames is not null;
@@ -202,7 +206,10 @@ public sealed unsafe class VideoEncoder : IDisposable
             try
             {
                 AVPixelFormat encoded = ChooseFormat(context.Handle, codec, name, settings);
-                AVPixelFormat input = Depth(encoded) > 8 ? AVPixelFormat.AV_PIX_FMT_P010LE : AVPixelFormat.AV_PIX_FMT_NV12;
+
+                // A palette says it has alpha too, but the GIF path draws its own from NV12.
+                AVPixelFormat input = HasAlpha(encoded) && encoded != AVPixelFormat.AV_PIX_FMT_PAL8 ? AVPixelFormat.AV_PIX_FMT_RGBA64LE
+                    : Depth(encoded) > 8 ? AVPixelFormat.AV_PIX_FMT_P010LE : AVPixelFormat.AV_PIX_FMT_NV12;
 
                 Configure(context.Handle, name, settings, encoded, globalHeader);
 
@@ -633,6 +640,12 @@ public sealed unsafe class VideoEncoder : IDisposable
     {
         AVPixFmtDescriptor* descriptor = ffmpeg.av_pix_fmt_desc_get(format);
         return descriptor is null ? 8 : descriptor->comp[0].depth;
+    }
+
+    private static bool HasAlpha(AVPixelFormat format)
+    {
+        AVPixFmtDescriptor* descriptor = ffmpeg.av_pix_fmt_desc_get(format);
+        return descriptor is not null && (descriptor->flags & (ulong)ffmpeg.AV_PIX_FMT_FLAG_ALPHA) != 0;
     }
 
     private static bool IsRgb(AVPixelFormat format)

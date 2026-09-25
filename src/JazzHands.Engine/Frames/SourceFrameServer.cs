@@ -46,6 +46,7 @@ public sealed class SourceFrameServer : IDisposable
     private readonly PlaneUploader _uploader;
     private readonly DiagnosticsLog? _notices;
     private readonly bool _ownsDecoders;
+    private readonly Dictionary<(int Width, int Height, FFmpeg.AutoGen.AVPixelFormat From), PixelConverter> _converters = [];
     private bool _disposed;
 
     /// <summary>Creates a frame server.</summary>
@@ -193,7 +194,9 @@ public sealed class SourceFrameServer : IDisposable
         (item, int stream, _) = Decodable(item, clip.SourceStreamIndex);
 
         Rational rate = RateOf(item, stream);
-        Flicks sourceTime = SourceTimeFor(clip, timelineTime, rate);
+
+        // A still is one picture however long its clip, and its decoder has it only at zero.
+        Flicks sourceTime = item.Kind == MediaKind.Still ? Flicks.Zero : SourceTimeFor(clip, timelineTime, rate);
         var key = new FrameKey(item.Hash, stream, sourceTime);
 
         if (_cache.Get(key) is { } cached)
@@ -237,7 +240,7 @@ public sealed class SourceFrameServer : IDisposable
 
         (item, int stream, _) = Decodable(item, clip.SourceStreamIndex);
         Rational rate = RateOf(item, stream);
-        return _cache.Get(new FrameKey(item.Hash, stream, SourceTimeFor(clip, timelineTime, rate)));
+        return _cache.Get(new FrameKey(item.Hash, stream, item.Kind == MediaKind.Still ? Flicks.Zero : SourceTimeFor(clip, timelineTime, rate)));
     }
 
     /// <summary>
@@ -331,6 +334,13 @@ public sealed class SourceFrameServer : IDisposable
         }
 
         _cache.Dispose();
+
+        foreach (PixelConverter converter in _converters.Values)
+        {
+            converter.Dispose();
+        }
+
+        _converters.Clear();
     }
 
     /// <summary>
@@ -475,6 +485,19 @@ public sealed class SourceFrameServer : IDisposable
         }
     }
 
+    /// <summary>A converter to RGBA for frames of one size and format, made once and kept.</summary>
+    private PixelConverter Converter(VideoFrame frame)
+    {
+        var key = (frame.Width, frame.Height, frame.PixelFormat);
+        if (!_converters.TryGetValue(key, out PixelConverter? converter))
+        {
+            converter = new PixelConverter(frame.Width, frame.Height, frame.PixelFormat, PixelConverter.RgbaFor(frame.PixelFormat));
+            _converters[key] = converter;
+        }
+
+        return converter;
+    }
+
     /// <summary>
     /// Puts a decoded frame into a texture the cache can keep, by whichever of the two routes the
     /// decode path calls for.
@@ -495,11 +518,15 @@ public sealed class SourceFrameServer : IDisposable
             return target;
         }
 
-        PixelLayout software = PixelLayout.ForName(frame.PixelFormatName)
-            ?? throw new NotSupportedException(
-                $"There is no texture layout for the pixel format {frame.PixelFormatName}. "
-                + "Add one to PixelLayout, or convert the frame first.");
+        // A format nothing samples as it is (a PNG's rgb24, a JPEG's yuvj420p, a palette) is
+        // turned into RGBA here, on the CPU, where the frame already is.
+        if (PixelLayout.ForName(frame.PixelFormatName) is null)
+        {
+            using VideoFrame converted = Converter(frame).Convert(frame);
+            return Store(converted, bitDepth);
+        }
 
+        PixelLayout software = PixelLayout.ForName(frame.PixelFormatName)!;
         FrameTexture uploaded = _cache.Textures.Rent(software, frame.Width, frame.Height, FrameTextureUsage.Upload);
 
         Span<SourcePlane> planes = stackalloc SourcePlane[software.PlaneCount];

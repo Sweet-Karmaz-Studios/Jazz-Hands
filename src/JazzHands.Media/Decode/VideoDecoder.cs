@@ -96,7 +96,15 @@ public sealed unsafe class VideoDecoder : IVideoSource
         _frameRate = demuxer.GetFrameRate(streamIndex);
 
         bool preferHardware = hardware is not null && !hardware.IsDisposed && tuning == DecodeTuning.Playback;
-        AVCodec* codec = FindDecoder(stream->codecpar->codec_id, preferHardware);
+
+        // FFmpeg's own VP8 and VP9 decoders drop the alpha a WebM keeps beside the picture;
+        // libvpx decodes it, so a stream that says it has alpha goes there.
+        AVCodec* codec = HasSideAlpha(stream) ? AlphaDecoder(stream->codecpar->codec_id) : null;
+        if (codec is null)
+        {
+            codec = FindDecoder(stream->codecpar->codec_id, preferHardware);
+        }
+
         if (codec is null)
         {
             throw new FfmpegException(
@@ -260,6 +268,21 @@ public sealed unsafe class VideoDecoder : IVideoSource
         _codec.Dispose();
         _pool.Dispose();
     }
+
+    /// <summary>True when a WebM stream says it carries alpha beside its picture (<c>alpha_mode</c> 1).</summary>
+    private static bool HasSideAlpha(AVStream* stream)
+    {
+        AVDictionaryEntry* entry = ffmpeg.av_dict_get(stream->metadata, "alpha_mode", null, 0);
+        return entry is not null && Av.ReadString(entry->value) == "1";
+    }
+
+    /// <summary>The libvpx decoder for VP8 or VP9, which decodes the alpha beside the picture; null for another codec or a build without it.</summary>
+    private static AVCodec* AlphaDecoder(AVCodecID codecId) => codecId switch
+    {
+        AVCodecID.AV_CODEC_ID_VP9 => ffmpeg.avcodec_find_decoder_by_name("libvpx-vp9"),
+        AVCodecID.AV_CODEC_ID_VP8 => ffmpeg.avcodec_find_decoder_by_name("libvpx"),
+        _ => null,
+    };
 
     /// <summary>
     /// Finds a decoder for a codec, preferring one that can decode on the GPU.

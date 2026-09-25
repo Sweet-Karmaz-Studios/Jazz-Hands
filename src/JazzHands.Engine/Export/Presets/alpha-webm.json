@@ -1,0 +1,16 @@
+{
+  "name": "alpha-webm",
+  "label": "WebM VP9 with alpha",
+  "description": "A transparent overlay for a web page or a browser source: VP9 with alpha up to 1080p, WebM, no sound.",
+  "category": "web",
+  "container": "webm",
+  "extension": ".webm",
+  "video": {
+    "codec": "vp9",
+    "encoders": ["libvpx-vp9"],
+    "pixelFormat": "yuva420p",
+    "maxHeight": 1080,
+    "quality": 31,
+    "speed": "medium"
+  }
+}

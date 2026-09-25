@@ -295,6 +295,8 @@ internal static class ExternalFfmpegExporter
 
         public bool TenBit => tenBit;
 
+        public bool Rgba => false;
+
         public bool TakesTextures => false;
 
         public TextureFrame RentTexture(CancellationToken cancellationToken) =>

@@ -22,6 +22,9 @@ internal interface IFrameSink
     /// <summary>Hands a filled frame over, at its index in the output.</summary>
     void Submit(EncoderFrame frame, long index, CancellationToken cancellationToken);
 
+    /// <summary>True when the frames are sixteen bit RGBA with straight alpha, for an encoder that keeps alpha.</summary>
+    bool Rgba { get; }
+
     /// <summary>True when the frames are P010, for an encoder that keeps ten bits; false for NV12.</summary>
     bool TenBit { get; }
 
@@ -135,6 +138,13 @@ internal sealed class ExportRenderer : IDisposable
         var output = new OutputSettings(
             video.Codec is "png" or "gif" ? OutputEncoding.Srgb : OutputEncoding.Bt1886,
             DitherLevels: sink.TenBit ? 1023 : 255);
+
+        if (sink.Rgba)
+        {
+            // Alpha kept: straight, over nothing, at sixteen bits so no dither is needed.
+            RenderRgba(project, projectPath, sequence, plan, video, options, output with { KeepAlpha = true, DitherLevels = 0, Background = System.Numerics.Vector4.Zero }, sink, cancellationToken);
+            return;
+        }
 
         if (sink.TakesTextures)
         {
@@ -271,6 +281,74 @@ internal sealed class ExportRenderer : IDisposable
         }
 
         _log.Debug("Rendered {Frames} frames at {Width}x{Height} on {Adapter} straight into the encoder's textures", index, video.Width, video.Height, _device.AdapterName);
+    }
+
+    /// <summary>
+    /// Renders each frame as sixteen bit RGBA with its alpha, for an encoder that keeps alpha
+    /// (ProRes 4444, PNG with alpha, VP9 with alpha), and reads it back as it goes. Alpha exports
+    /// are graphics for other tools rather than long programmes, so this skips the read back ring.
+    /// </summary>
+    private unsafe void RenderRgba(
+        Project project,
+        string projectPath,
+        Sequence sequence,
+        ExportPlan plan,
+        ExportVideo video,
+        RenderOptions options,
+        OutputSettings output,
+        IFrameSink sink,
+        CancellationToken cancellationToken)
+    {
+        ID3D11Device device = _device.Device;
+        ID3D11DeviceContext context = _device.ImmediateContext;
+        using ID3D11Texture2D target = device.CreateTexture2D(Target(Format.R16G16B16A16_UNorm, video.Width, video.Height));
+        using ID3D11RenderTargetView view = device.CreateRenderTargetView(target);
+        using ID3D11Texture2D staging = device.CreateTexture2D(Staging(Format.R16G16B16A16_UNorm, video.Width, video.Height));
+        int rowBytes = video.Width * 8;
+
+        long index = 0;
+        foreach (TimeRange range in plan.Ranges)
+        {
+            long first = range.Start.ToFrames(video.FrameRate, RoundingMode.Nearest);
+            long end = range.End.ToFrames(video.FrameRate, RoundingMode.Nearest);
+
+            for (long number = first; number < end; number++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                RenderTarget stack = _frames.Render(project, sequence, Flicks.FromFrames(number, video.FrameRate), options, projectPath);
+                try
+                {
+                    _frames.Compositor.Output(stack, view, video.Width, video.Height, output);
+                }
+                finally
+                {
+                    _frames.Compositor.Pool.Return(stack);
+                }
+
+                context.CopyResource(staging, target);
+                EncoderFrame frame = sink.Rent(cancellationToken);
+                frame.MakeWritable();
+                MappedSubresource mapped = context.Map(staging, 0, MapMode.Read, Vortice.Direct3D11.MapFlags.None);
+                try
+                {
+                    byte* destination = (byte*)frame.Plane(0);
+                    int stride = frame.Stride(0);
+                    for (int row = 0; row < video.Height; row++)
+                    {
+                        Buffer.MemoryCopy((byte*)mapped.DataPointer + ((long)row * mapped.RowPitch), destination + ((long)row * stride), stride, rowBytes);
+                    }
+                }
+                finally
+                {
+                    context.Unmap(staging, 0);
+                }
+
+                sink.Submit(frame, index++, cancellationToken);
+            }
+        }
+
+        _log.Debug("Rendered {Frames} frames at {Width}x{Height} with alpha on {Adapter}", index, video.Width, video.Height, _device.AdapterName);
     }
 
     public void Dispose()

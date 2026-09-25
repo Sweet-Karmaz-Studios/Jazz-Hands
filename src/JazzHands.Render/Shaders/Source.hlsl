@@ -11,6 +11,7 @@
 #define LAYOUT_PLANAR 1       // yuv420p and friends: Y, U, V
 #define LAYOUT_RGBA 2         // one interleaved RGBA plane, straight alpha
 #define LAYOUT_GBRA_PLANAR 3  // four float planes in G, B, R, A order
+#define LAYOUT_PLANAR_ALPHA 4 // yuva: Y, U, V and a plane of straight alpha
 
 cbuffer SourceConstants : register(b0)
 {
@@ -78,5 +79,12 @@ float4 PsMain(FullScreenVertex input) : SV_TARGET
     yuv.z = (chroma.y - ChromaOffset) * ChromaRange;
 
     float3 encoded = saturate(float3(dot(MatrixRow0, yuv), dot(MatrixRow1, yuv), dot(MatrixRow2, yuv)));
+    if (Layout == LAYOUT_PLANAR_ALPHA)
+    {
+        // Alpha is full range whatever the colour's range, and straight: premultiplied here.
+        float alpha = saturate(Plane3.SampleLevel(LinearClamp, uv, 0).r * SampleScale);
+        return Premultiply(float4(Decode(encoded), alpha));
+    }
+
     return float4(Decode(encoded), 1.0);
 }

@@ -494,6 +494,8 @@ public static class Exporter
 
         public bool TenBit { get; private set; }
 
+        public bool Rgba { get; private set; }
+
         public bool TakesTextures { get; private set; }
 
         public IReadOnlyList<string> Notes => _notes;
@@ -627,6 +629,7 @@ public static class Exporter
 
                 EncoderName = encoder.Name;
                 TenBit = encoder.TakesP010;
+                Rgba = encoder.TakesRgba;
                 TakesTextures = encoder.TakesTextures;
                 _notes.AddRange(encoder.Skipped.Select(skipped => $"Skipped {skipped}."));
 

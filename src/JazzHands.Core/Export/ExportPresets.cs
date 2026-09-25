@@ -175,7 +175,7 @@ public static partial class ExportPresets
 
     /// <summary>The pixel formats a preset may ask for.</summary>
     public static IReadOnlyList<string> PixelFormats { get; } =
-        ["yuv420p", "yuv420p10le", "yuv422p", "yuv422p10le", "yuv444p10le", "nv12", "p010le", "rgb24", "pal8"];
+        ["yuv420p", "yuv420p10le", "yuv422p", "yuv422p10le", "yuv444p10le", "nv12", "p010le", "rgb24", "pal8", "yuva420p", "yuva444p10le", "rgba"];
 
     /// <summary>The categories presets are grouped under.</summary>
     public static IReadOnlyList<string> Categories { get; } = ["youtube", "discord", "device", "archive", "web", "image", "audio", "other"];
