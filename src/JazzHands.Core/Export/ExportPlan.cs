@@ -45,6 +45,8 @@ public enum SubtitleDelivery
 /// <param name="Subtitles">What happens to subtitle tracks: streams in the file, burned in, files beside it, or nothing.</param>
 /// <param name="SidecarFormat">The format of subtitle files written beside the video.</param>
 /// <param name="Chapters">Write the sequence's chapter marks into the file.</param>
+/// <param name="Overrides">Changes to the preset for this export, or null to take it as it is.</param>
+/// <param name="Range">Export only this stretch of the sequence, in sequence time; null for all of it.</param>
 public sealed record ExportRequest(
     string OutputPath,
     string Preset = ExportPresets.Default,
@@ -55,7 +57,42 @@ public sealed record ExportRequest(
     bool External = false,
     SubtitleDelivery Subtitles = SubtitleDelivery.Soft,
     Subtitles.SubtitleFormat SidecarFormat = Subtitles.SubtitleFormat.Srt,
-    bool Chapters = true);
+    bool Chapters = true,
+    ExportOverrides? Overrides = null,
+    TimeRange? Range = null);
+
+/// <summary>
+/// Changes to a preset for one export: what the export dialog's overrides and the command line's
+/// <c>--size</c>, <c>--fps</c>, <c>--bitrate</c> and the rest set. Zero or null leaves the
+/// preset's own.
+/// </summary>
+/// <param name="MaxWidth">Fit the picture inside this width, never scaling up; 0 for the preset's.</param>
+/// <param name="MaxHeight">Fit the picture inside this height; 0 for the preset's.</param>
+/// <param name="FrameRate">Write at this rate instead of the sequence's.</param>
+/// <param name="Quality">Constant quality instead of the preset's.</param>
+/// <param name="Bitrate">A picture bitrate in bits per second instead of constant quality; 0 for the preset's.</param>
+/// <param name="Encoders">The encoders to try, in order, instead of the preset's chain.</param>
+/// <param name="AudioEncoder">The sound encoder instead of the preset's.</param>
+/// <param name="AudioBitrate">The sound bitrate in bits per second; 0 for the preset's.</param>
+/// <param name="Channels">1, 2 or 6 channels; 0 for the preset's.</param>
+/// <param name="Loudness">Normalise the mix to this many LUFS.</param>
+/// <param name="TargetBytes">Come in under this many bytes; 0 for the preset's target, if it has one.</param>
+public sealed record ExportOverrides(
+    int MaxWidth = 0,
+    int MaxHeight = 0,
+    Rational? FrameRate = null,
+    int? Quality = null,
+    long Bitrate = 0,
+    EquatableArray<string> Encoders = default,
+    string? AudioEncoder = null,
+    long AudioBitrate = 0,
+    int Channels = 0,
+    double? Loudness = null,
+    long TargetBytes = 0) : IEquatable<ExportOverrides>
+{
+    /// <summary>True when it changes nothing.</summary>
+    public bool IsEmpty => this == new ExportOverrides();
+}
 
 /// <summary>The subtitles an export carries, and how.</summary>
 /// <param name="Delivery">Streams, burned in, or files beside the video.</param>
@@ -111,6 +148,7 @@ public sealed record ExportChapter(Flicks Start, Flicks End, string Title) : IEq
 /// <param name="External">Encode through ffmpeg.exe.</param>
 /// <param name="Subtitles">The subtitles it carries, and how; null for none.</param>
 /// <param name="Chapters">The chapters it carries, at their times in the output.</param>
+/// <param name="TargetBytes">The size the file must come in under, or 0. The exporter checks it and encodes again, smaller, when it does not.</param>
 public sealed record ExportPlan(
     string SequenceId,
     string Preset,
@@ -126,10 +164,11 @@ public sealed record ExportPlan(
     EquatableArray<KeyframeSnap> Snaps = default,
     bool External = false,
     ExportSubtitles? Subtitles = null,
-    EquatableArray<ExportChapter> Chapters = default) : IEquatable<ExportPlan>;
+    EquatableArray<ExportChapter> Chapters = default,
+    long TargetBytes = 0) : IEquatable<ExportPlan>;
 
 /// <summary>The video side of an encode.</summary>
-/// <param name="Codec">h264 or hevc.</param>
+/// <param name="Codec">h264, hevc, av1, vp9, prores, dnxhr, ffv1, gif or png.</param>
 /// <param name="Encoders">FFmpeg encoders to try in order.</param>
 /// <param name="Width">Output width.</param>
 /// <param name="Height">Output height.</param>
@@ -140,6 +179,9 @@ public sealed record ExportPlan(
 /// <param name="GopLength">Frames between keyframes.</param>
 /// <param name="BFrames">B-frames between references.</param>
 /// <param name="Lossless">Encode without loss.</param>
+/// <param name="PixelFormat">The FFmpeg pixel format to encode, or null for the encoder's usual one.</param>
+/// <param name="Profile">The codec profile, or null.</param>
+/// <param name="Level">The codec level, or null.</param>
 public sealed record ExportVideo(
     string Codec,
     EquatableArray<string> Encoders,
@@ -151,14 +193,22 @@ public sealed record ExportVideo(
     string Speed,
     int GopLength,
     int BFrames,
-    bool Lossless) : IEquatable<ExportVideo>;
+    bool Lossless,
+    string? PixelFormat = null,
+    string? Profile = null,
+    string? Level = null) : IEquatable<ExportVideo>
+{
+    /// <summary>True when the encode keeps more than eight bits a sample, so the renderer hands over ten.</summary>
+    public bool TenBit => PixelFormat is { } format && (format.Contains("10", StringComparison.Ordinal) || format.Contains("16", StringComparison.Ordinal));
+}
 
 /// <summary>The sound side of an encode: the mix, as one stream.</summary>
-/// <param name="Encoder">aac or flac.</param>
+/// <param name="Encoder">aac, libopus, flac, libmp3lame, ac3, eac3, pcm_s16le or pcm_s24le.</param>
 /// <param name="SampleRate">Samples per second.</param>
-/// <param name="Channels">Channel count.</param>
-/// <param name="Bitrate">Bits per second, for AAC.</param>
-public sealed record ExportAudio(string Encoder, int SampleRate, int Channels, long Bitrate) : IEquatable<ExportAudio>;
+/// <param name="Channels">1, 2 or 6. The mix is made at this count, so a 5.1 sequence exported in stereo is folded down.</param>
+/// <param name="Bitrate">Bits per second for a lossy encoder, or 0 for its default.</param>
+/// <param name="Loudness">Integrated loudness to normalise to, in LUFS, or null.</param>
+public sealed record ExportAudio(string Encoder, int SampleRate, int Channels, long Bitrate, double? Loudness = null) : IEquatable<ExportAudio>;
 
 /// <summary>The streams and stretches of one file a copy takes.</summary>
 /// <param name="MediaId">The file.</param>

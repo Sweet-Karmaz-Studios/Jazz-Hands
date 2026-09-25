@@ -1,0 +1,9 @@
+{
+  "name": "audio-wav",
+  "label": "Sound, WAV",
+  "description": "The mix alone for a DAW: 24 bit PCM WAV.",
+  "category": "audio",
+  "container": "wav",
+  "extension": ".wav",
+  "audio": { "encoder": "pcm_s24le" }
+}

@@ -5,7 +5,8 @@
 // the two by two block of pixels it covers.
 //
 // Eight bit targets store n/255, so the limited range codes are written as 16/255 to 235/255 for
-// luma and 16/255 to 240/255 for chroma, with neutral chroma at 128/255.
+// luma and 16/255 to 240/255 for chroma, with neutral chroma at 128/255. For a ten bit encode the
+// targets are R16 and R16G16 and the codes are 64 to 940 and 64 to 960, laid out as P010.
 
 #include "Common.hlsli"
 #include "Color.hlsli"
@@ -20,6 +21,8 @@ cbuffer YuvConstants : register(b0)
     uint Encoding;
     uint DitherLevels;      // 255 for eight bit, 1023 for ten, 0 for none
     uint2 LumaSize;         // the luma target: where a chroma sample's four pixels are
+    uint Bits;              // 8 for R8 targets (NV12), 10 for R16 targets (P010)
+    uint3 Pad;
 };
 
 Texture2D<float4> Stack : register(t0);
@@ -79,9 +82,21 @@ float LumaOf(float3 rgb)
     return dot(rgb, float3(0.2126, 0.7152, 0.0722));
 }
 
+// A sixteen bit target stores n/65535, and P010 keeps the ten bit code in the top ten bits, so
+// code c is written as c * 64 / 65535, which the target rounds back to exactly c * 64.
+float TenBit(float code)
+{
+    return round(code) * 64.0 / 65535.0;
+}
+
 float PsLuma(FullScreenVertex input) : SV_TARGET
 {
     float y = LumaOf(EncodedAt(int2(input.Position.xy)));
+    if (Bits == 10)
+    {
+        return TenBit(64.0 + 876.0 * y);
+    }
+
     return (16.0 + 219.0 * y) / 255.0;
 }
 
@@ -98,6 +113,11 @@ float2 PsChroma(FullScreenVertex input) : SV_TARGET
     float y = LumaOf(rgb);
     float cb = (rgb.b - y) / 1.8556;
     float cr = (rgb.r - y) / 1.5748;
+
+    if (Bits == 10)
+    {
+        return float2(TenBit(512.0 + 896.0 * cb), TenBit(512.0 + 896.0 * cr));
+    }
 
     return float2((128.0 + 224.0 * cb) / 255.0, (128.0 + 224.0 * cr) / 255.0);
 }

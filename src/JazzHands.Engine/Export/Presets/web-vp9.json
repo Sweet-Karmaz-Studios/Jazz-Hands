@@ -1,0 +1,16 @@
+{
+  "name": "web-vp9",
+  "label": "WebM VP9",
+  "description": "For a web page's video element: VP9 up to 1080p, Opus 160 kb/s, WebM.",
+  "category": "web",
+  "container": "webm",
+  "extension": ".webm",
+  "video": {
+    "codec": "vp9",
+    "encoders": ["libvpx-vp9"],
+    "maxHeight": 1080,
+    "quality": 31,
+    "speed": "medium"
+  },
+  "audio": { "encoder": "libopus", "bitrate": 160000 }
+}

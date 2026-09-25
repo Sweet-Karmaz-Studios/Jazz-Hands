@@ -1,0 +1,9 @@
+{
+  "name": "audio-only",
+  "label": "Sound, FLAC",
+  "description": "The mix alone, without loss: FLAC.",
+  "category": "audio",
+  "container": "flac",
+  "extension": ".flac",
+  "audio": { "encoder": "flac" }
+}

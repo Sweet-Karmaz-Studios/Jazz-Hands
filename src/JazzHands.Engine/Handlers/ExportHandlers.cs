@@ -110,11 +110,3 @@ public sealed class ListExportsHandler : IQueryHandler<ListExportsQuery, ExportJ
         return context.Services?.GetService<IExportService>()?.List() ?? [];
     }
 }
-
-/// <summary>Lists the export presets.</summary>
-public sealed class ListExportPresetsHandler : IQueryHandler<ListExportPresetsQuery, ExportPresetInfo[]>
-{
-    /// <inheritdoc />
-    public ExportPresetInfo[] Handle(Project project, ListExportPresetsQuery query, QueryContext context) =>
-        [.. ExportPresets.All];
-}

@@ -1,0 +1,16 @@
+{
+  "name": "lossless",
+  "label": "Lossless",
+  "description": "Every pixel kept: FFV1 version 3 at the sequence's size with FLAC sound, Matroska. For archiving and intermediates.",
+  "category": "archive",
+  "container": "matroska",
+  "extension": ".mkv",
+  "video": {
+    "codec": "ffv1",
+    "encoders": ["ffv1"],
+    "lossless": true,
+    "level": "3",
+    "keyframeSeconds": 0
+  },
+  "audio": { "encoder": "flac" }
+}

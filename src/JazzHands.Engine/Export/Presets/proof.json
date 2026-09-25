@@ -1,0 +1,16 @@
+{
+  "name": "proof",
+  "label": "Proof",
+  "description": "For checking a cut, not for keeping: H.264 at 480p, fast and small, AAC 128 kb/s, MP4.",
+  "category": "other",
+  "container": "mp4",
+  "extension": ".mp4",
+  "video": {
+    "codec": "h264",
+    "encoders": ["h264_nvenc", "libx264"],
+    "maxHeight": 480,
+    "quality": 28,
+    "speed": "fast"
+  },
+  "audio": { "encoder": "aac", "bitrate": 128000 }
+}

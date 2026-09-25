@@ -54,14 +54,7 @@ public sealed unsafe class Muxer : IDisposable
     /// <summary>The FFmpeg muxer name for a file extension.</summary>
     /// <returns>The name, or null for an extension Jazz Hands does not write.</returns>
     public static string? FormatForExtension(string extension) =>
-        extension.TrimStart('.').ToLowerInvariant() switch
-        {
-            "mp4" or "m4v" => "mp4",
-            "mov" => "mov",
-            "mkv" => "matroska",
-            "webm" => "webm",
-            _ => null,
-        };
+        Core.Export.ExportPresets.ContainerForExtension(extension)?.Muxer;
 
     /// <summary>Creates the output file's context. Nothing is written until <see cref="WriteHeader"/>.</summary>
     /// <param name="path">Where to write.</param>

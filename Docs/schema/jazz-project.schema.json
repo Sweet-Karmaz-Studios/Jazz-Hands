@@ -42,7 +42,7 @@
     "presets": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/exportPreset"
+        "$ref": "#/$defs/storedExportPreset"
       }
     },
     "created": {
@@ -456,27 +456,6 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/effect"
-          }
-        }
-      },
-      "required": [
-        "id",
-        "name"
-      ]
-    },
-    "exportPreset": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "settings": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/effectParameter"
           }
         }
       },
@@ -1182,6 +1161,27 @@
               "type": "null"
             }
           ]
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ]
+    },
+    "storedExportPreset": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "settings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/effectParameter"
+          }
         }
       },
       "required": [

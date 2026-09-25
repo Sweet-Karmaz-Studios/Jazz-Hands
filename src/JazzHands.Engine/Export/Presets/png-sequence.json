@@ -1,0 +1,14 @@
+{
+  "name": "png-sequence",
+  "label": "PNG sequence",
+  "description": "One PNG a frame at the sequence's size, numbered from 1: name_00001.png.",
+  "category": "image",
+  "container": "image2",
+  "extension": ".png",
+  "video": {
+    "codec": "png",
+    "encoders": ["png"],
+    "pixelFormat": "rgb24",
+    "keyframeSeconds": 0
+  }
+}

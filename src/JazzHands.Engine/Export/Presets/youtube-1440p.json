@@ -1,0 +1,16 @@
+{
+  "name": "youtube-1440p",
+  "label": "YouTube 1440p",
+  "description": "For uploading at 1440p, which YouTube gives its better codec: HEVC, AAC 256 kb/s, MP4.",
+  "category": "youtube",
+  "container": "mp4",
+  "extension": ".mp4",
+  "video": {
+    "codec": "hevc",
+    "encoders": ["hevc_nvenc", "libx265"],
+    "maxHeight": 1440,
+    "quality": 20,
+    "speed": "medium"
+  },
+  "audio": { "encoder": "aac", "bitrate": 256000 }
+}

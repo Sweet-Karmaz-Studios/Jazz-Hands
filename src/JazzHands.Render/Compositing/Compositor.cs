@@ -176,7 +176,9 @@ public sealed class Compositor : IDisposable
     /// <summary>
     /// Encodes a stack as BT.709 limited range Y'CbCr for an encoder: luma into an R8 target at
     /// <paramref name="width"/> by <paramref name="height"/>, chroma into an R8G8 target at half
-    /// each way, which together are the two planes of an NV12 frame.
+    /// each way, which together are the two planes of an NV12 frame. With
+    /// <paramref name="tenBit"/> the targets are R16 and R16G16 and hold ten bit codes in the top
+    /// of each sixteen, which is P010.
     /// </summary>
     /// <remarks>
     /// The colour is exactly what <see cref="Output"/> would have written as R'G'B', dither
@@ -189,7 +191,8 @@ public sealed class Compositor : IDisposable
         ID3D11RenderTargetView chroma,
         int width,
         int height,
-        OutputSettings settings)
+        OutputSettings settings,
+        bool tenBit = false)
     {
         ArgumentNullException.ThrowIfNull(stack);
         ArgumentNullException.ThrowIfNull(luma);
@@ -209,6 +212,7 @@ public sealed class Compositor : IDisposable
             DitherLevels = (uint)Math.Max(0, settings.DitherLevels),
             LumaWidth = (uint)width,
             LumaHeight = (uint)height,
+            Bits = tenBit ? 10u : 8u,
         };
 
         _views[0] = stack.Resource;
@@ -1164,5 +1168,9 @@ public sealed class Compositor : IDisposable
         public uint DitherLevels;
         public uint LumaWidth;
         public uint LumaHeight;
+        public uint Bits;
+        public uint Pad0;
+        public uint Pad1;
+        public uint Pad2;
     }
 }

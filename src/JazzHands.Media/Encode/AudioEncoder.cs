@@ -6,10 +6,10 @@ using Serilog;
 namespace JazzHands.Media.Encode;
 
 /// <summary>What an audio encoder is asked for.</summary>
-/// <param name="Encoder">The FFmpeg encoder name: aac, libopus, flac.</param>
+/// <param name="Encoder">The FFmpeg encoder name: aac, libopus, flac, libmp3lame, ac3, eac3, pcm_s16le or pcm_s24le.</param>
 /// <param name="SampleRate">Samples per second.</param>
 /// <param name="Channels">Channel count: 1, 2 or 6.</param>
-/// <param name="Bitrate">Bits per second, for the lossy encoders.</param>
+/// <param name="Bitrate">Bits per second for the lossy encoders, or 0 for the encoder's own default.</param>
 public sealed record AudioEncoderSettings(string Encoder, int SampleRate, int Channels, long Bitrate = 256_000);
 
 /// <summary>
@@ -30,6 +30,7 @@ public sealed unsafe class AudioEncoder : IDisposable
     private readonly AvFrame _frame = new();
     private readonly int _frameSize;
     private AVAudioFifo* _fifo;
+    private byte[] _scratch = [];
     private long _samplesSent;
 
     private AudioEncoder(AvCodecContext context, AudioEncoderSettings settings)
@@ -72,15 +73,10 @@ public sealed unsafe class AudioEncoder : IDisposable
         {
             AVCodecContext* handle = context.Handle;
             handle->sample_rate = settings.SampleRate;
-            handle->sample_fmt = AVSampleFormat.AV_SAMPLE_FMT_FLTP;
+            handle->sample_fmt = ChooseFormat(handle, codec);
             handle->time_base = new AVRational { num = 1, den = settings.SampleRate };
             handle->bit_rate = settings.Bitrate;
             ffmpeg.av_channel_layout_default(&handle->ch_layout, settings.Channels);
-
-            if (settings.Encoder == "flac")
-            {
-                handle->sample_fmt = AVSampleFormat.AV_SAMPLE_FMT_S32;
-            }
 
             if (globalHeader)
             {
@@ -124,7 +120,7 @@ public sealed unsafe class AudioEncoder : IDisposable
         }
         else
         {
-            WriteInt32(planes, offset, count);
+            WriteConverted(planes, offset, count);
         }
 
         while (ffmpeg.av_audio_fifo_size(_fifo) >= _frameSize)
@@ -193,24 +189,91 @@ public sealed unsafe class AudioEncoder : IDisposable
         }
     }
 
-    private void WriteInt32(float[][] planes, int offset, int count)
+    /// <summary>
+    /// The sample format an encoder is opened with: planar float, which is what the mixer makes,
+    /// when the encoder takes it; otherwise the nearest it does take, with 32 bit integers before
+    /// 16 so a 24 bit PCM or FLAC file keeps its bits.
+    /// </summary>
+    private static AVSampleFormat ChooseFormat(AVCodecContext* context, AVCodec* codec)
     {
-        // FLAC takes interleaved 32 bit integers, left justified.
-        int channels = Settings.Channels;
-        int[] interleaved = new int[count * channels];
-        for (int sample = 0; sample < count; sample++)
+        void* configs = null;
+        int count = 0;
+        if (ffmpeg.avcodec_get_supported_config(context, codec, AVCodecConfig.AV_CODEC_CONFIG_SAMPLE_FORMAT, 0, &configs, &count) < 0 || configs == null)
         {
-            for (int channel = 0; channel < channels; channel++)
+            return AVSampleFormat.AV_SAMPLE_FMT_FLTP;
+        }
+
+        var supported = new ReadOnlySpan<AVSampleFormat>(configs, count);
+        foreach (AVSampleFormat preferred in Preference)
+        {
+            if (supported.Contains(preferred))
             {
-                float value = Math.Clamp(planes[channel][offset + sample], -1.0f, 1.0f);
-                interleaved[(sample * channels) + channel] = (int)Math.Round(value * int.MaxValue);
+                return preferred;
             }
         }
 
-        fixed (int* data = interleaved)
+        throw new FfmpegException($"The audio encoder takes {supported[0]}, which Jazz Hands does not write.");
+    }
+
+    private static readonly AVSampleFormat[] Preference =
+    [
+        AVSampleFormat.AV_SAMPLE_FMT_FLTP,
+        AVSampleFormat.AV_SAMPLE_FMT_FLT,
+        AVSampleFormat.AV_SAMPLE_FMT_S32,
+        AVSampleFormat.AV_SAMPLE_FMT_S32P,
+        AVSampleFormat.AV_SAMPLE_FMT_S16,
+        AVSampleFormat.AV_SAMPLE_FMT_S16P,
+    ];
+
+    /// <summary>
+    /// Converts planar float to whatever else the encoder takes and queues it: interleaved or
+    /// planar, float, 32 bit integers left justified (FLAC and 24 bit PCM keep the top 24) or 16
+    /// bit integers.
+    /// </summary>
+    private void WriteConverted(float[][] planes, int offset, int count)
+    {
+        int channels = Settings.Channels;
+        AVSampleFormat format = _context.Handle->sample_fmt;
+        bool planar = ffmpeg.av_sample_fmt_is_planar(format) != 0;
+        int bytes = ffmpeg.av_get_bytes_per_sample(format);
+        int needed = count * channels * bytes;
+        if (_scratch.Length < needed)
         {
-            void* pointer = data;
-            Av.Check(ffmpeg.av_audio_fifo_write(_fifo, &pointer, count), "av_audio_fifo_write");
+            _scratch = new byte[needed];
+        }
+
+        fixed (byte* scratch = _scratch)
+        {
+            for (int channel = 0; channel < channels; channel++)
+            {
+                float[] plane = planes[channel];
+                for (int sample = 0; sample < count; sample++)
+                {
+                    float value = Math.Clamp(plane[offset + sample], -1.0f, 1.0f);
+                    int index = planar ? (channel * count) + sample : (sample * channels) + channel;
+                    switch (format)
+                    {
+                        case AVSampleFormat.AV_SAMPLE_FMT_FLT:
+                            ((float*)scratch)[index] = value;
+                            break;
+                        case AVSampleFormat.AV_SAMPLE_FMT_S32:
+                        case AVSampleFormat.AV_SAMPLE_FMT_S32P:
+                            ((int*)scratch)[index] = (int)Math.Round(value * int.MaxValue);
+                            break;
+                        default:
+                            ((short*)scratch)[index] = (short)Math.Round(value * short.MaxValue);
+                            break;
+                    }
+                }
+            }
+
+            void** pointers = stackalloc void*[channels];
+            for (int channel = 0; channel < channels; channel++)
+            {
+                pointers[channel] = planar ? scratch + (channel * count * bytes) : scratch;
+            }
+
+            Av.Check(ffmpeg.av_audio_fifo_write(_fifo, pointers, count), "av_audio_fifo_write");
         }
     }
 

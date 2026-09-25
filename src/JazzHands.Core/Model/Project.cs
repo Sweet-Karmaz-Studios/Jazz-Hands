@@ -759,14 +759,18 @@ public sealed record EffectPreset(
     string Name,
     EquatableArray<Effect> Effects = default) : IEquatable<EffectPreset>;
 
-/// <summary>An export preset. Filled in by Phase 22; carried here so projects can store their own.</summary>
+/// <summary>
+/// An export preset kept in the project. A placeholder: presets live in the editor and in
+/// <c>%APPDATA%\JazzHands\export-presets</c> (<see cref="Export.ExportPreset"/>), and this keeps the
+/// file format's room for a project's own should one ever be wanted.
+/// </summary>
 /// <param name="Id">The preset identifier.</param>
 /// <param name="Name">Its display name.</param>
-/// <param name="Settings">Encoder settings by name, kept opaque until the export engine exists.</param>
-public sealed record ExportPreset(
+/// <param name="Settings">Settings by name, kept opaque.</param>
+public sealed record StoredExportPreset(
     string Id,
     string Name,
-    EquatableArray<EffectParameter> Settings = default) : IEquatable<ExportPreset>;
+    EquatableArray<EffectParameter> Settings = default) : IEquatable<StoredExportPreset>;
 
 /// <summary>
 /// Everything in a .jazz file.
@@ -795,7 +799,7 @@ public sealed record Project(
     EquatableArray<MediaItem> Media = default,
     EquatableArray<Sequence> Sequences = default,
     string? ActiveSequenceId = null,
-    EquatableArray<ExportPreset> Presets = default,
+    EquatableArray<StoredExportPreset> Presets = default,
     DateTimeOffset Created = default,
     DateTimeOffset Modified = default,
     EquatableArray<EffectPreset> EffectPresets = default) : IEquatable<Project>
@@ -824,7 +828,7 @@ public sealed record Project(
             EquatableArray<MediaItem>.Empty,
             EquatableArray.Create(sequence),
             sequence.Id,
-            EquatableArray<ExportPreset>.Empty,
+            EquatableArray<StoredExportPreset>.Empty,
             now,
             now);
     }

@@ -1,0 +1,16 @@
+{
+  "name": "youtube-4k-av1",
+  "label": "YouTube 4K AV1",
+  "description": "4K in AV1, smaller than HEVC at the same quality; needs an RTX 40 card to be quick.",
+  "category": "youtube",
+  "container": "mp4",
+  "extension": ".mp4",
+  "video": {
+    "codec": "av1",
+    "encoders": ["av1_nvenc", "libsvtav1"],
+    "maxHeight": 2160,
+    "quality": 26,
+    "speed": "medium"
+  },
+  "audio": { "encoder": "aac", "bitrate": 320000 }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "discord-25mb",
+  "label": "Discord 25 MB",
+  "description": "Comes in under 25 MB for a Discord upload: the bitrate is worked out from the length, and the picture gets smaller when it must.",
+  "category": "discord",
+  "container": "mp4",
+  "extension": ".mp4",
+  "video": {
+    "codec": "h264",
+    "encoders": ["h264_nvenc", "libx264"],
+    "maxHeight": 1080,
+    "quality": 20,
+    "speed": "slow"
+  },
+  "audio": { "encoder": "aac", "bitrate": 128000, "channels": 2 },
+  "targetBytes": 26214400
+}

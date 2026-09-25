@@ -41,3 +41,24 @@ public sealed record ExportEnvironment(bool ForceWarp = false, bool HardwareDeco
     /// <summary>The GPU if there is one, decoding on it.</summary>
     public static ExportEnvironment Default { get; } = new();
 }
+
+/// <summary>An export that ran and could not deliver what its plan asked for, such as a size it could not get under.</summary>
+public sealed class ExportException : Exception
+{
+    /// <summary>Creates one with a message.</summary>
+    public ExportException()
+    {
+    }
+
+    /// <summary>Creates one with a message.</summary>
+    public ExportException(string message)
+        : base(message)
+    {
+    }
+
+    /// <summary>Creates one with a message and a cause.</summary>
+    public ExportException(string message, Exception inner)
+        : base(message, inner)
+    {
+    }
+}

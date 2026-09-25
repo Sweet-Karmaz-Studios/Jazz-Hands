@@ -1,3 +1,4 @@
+using System.Globalization;
 using JazzHands.Audio;
 using JazzHands.Core.Model;
 using JazzHands.Core.Time;
@@ -64,6 +65,62 @@ internal sealed class ExportSound : IDisposable
     /// <summary>The samples <see cref="Read"/> filled, one array per channel.</summary>
     public float[][] Planes => _planes;
 
+    /// <summary>A linear gain on everything <see cref="Read"/> returns: 1 leaves the mix as it is.</summary>
+    public float Gain { get; set; } = 1.0f;
+
+    /// <summary>
+    /// Plays the whole export through a meter, for loudness normalisation: its integrated
+    /// loudness (EBU R128) and its highest sample.
+    /// </summary>
+    public static (float Integrated, float Peak) Measure(Project project, Sequence sequence, string projectPath, IReadOnlyList<TimeRange> ranges, int sampleRate, int channels, CancellationToken cancellationToken)
+    {
+        using var mix = new ExportSound(project, sequence, projectPath, ranges, sampleRate, channels);
+        var meter = new Loudness(sampleRate, channels);
+        float peak = 0.0f;
+
+        int count;
+        while ((count = mix.Read(Chunk)) > 0)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            meter.Process(mix._buffer, 0, count);
+            for (int channel = 0; channel < channels; channel++)
+            {
+                foreach (float sample in mix._buffer.Plane(channel, 0, count))
+                {
+                    peak = Math.Max(peak, Math.Abs(sample));
+                }
+            }
+        }
+
+        return (meter.Integrated, peak);
+    }
+
+    /// <summary>
+    /// The gain that brings a mix to a loudness target, held so its highest sample stays at or under
+    /// -1 dBFS, with a sentence saying what was done.
+    /// </summary>
+    /// <remarks>
+    /// One gain for the whole export, as the streaming services apply theirs: normalising changes
+    /// how loud the mix is, never its dynamics. Where the ceiling stops the gain short of the target,
+    /// the mix needs a limiter, which is a choice about how it sounds and so is left to the person.
+    /// </remarks>
+    public static float GainFor(double target, float integrated, float peak, out string note)
+    {
+        if (float.IsNegativeInfinity(integrated) || peak <= 0.0f)
+        {
+            note = "The mix is silent, so the loudness was left alone.";
+            return 1.0f;
+        }
+
+        double wanted = target - integrated;
+        double ceiling = -1.0 - (20.0 * Math.Log10(peak));
+        double applied = Math.Min(wanted, ceiling);
+        note = applied < wanted - 0.05
+            ? string.Create(CultureInfo.InvariantCulture, $"The mix measured {integrated:0.0} LUFS. Raised by {applied:+0.0;-0.0} dB, short of {target:0.#} LUFS, to keep its peaks under -1 dBFS; a limiter on the mix would let it go further.")
+            : string.Create(CultureInfo.InvariantCulture, $"The mix measured {integrated:0.0} LUFS and was changed by {applied:+0.0;-0.0} dB to {target:0.#} LUFS.");
+        return (float)Math.Pow(10.0, applied / 20.0);
+    }
+
     /// <summary>
     /// Mixes the next samples into <see cref="Planes"/>, at most <paramref name="wanted"/> and
     /// never across a cut.
@@ -82,7 +139,16 @@ internal sealed class ExportSound : IDisposable
 
         for (int channel = 0; channel < _planes.Length; channel++)
         {
-            _buffer.Plane(channel, 0, count).CopyTo(_planes[channel]);
+            Span<float> plane = _buffer.Plane(channel, 0, count);
+            if (Gain != 1.0f)
+            {
+                foreach (ref float sample in plane)
+                {
+                    sample *= Gain;
+                }
+            }
+
+            plane.CopyTo(_planes[channel]);
         }
 
         _written += count;

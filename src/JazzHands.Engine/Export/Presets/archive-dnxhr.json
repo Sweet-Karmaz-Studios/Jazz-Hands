@@ -1,0 +1,16 @@
+{
+  "name": "archive-dnxhr",
+  "label": "DNxHR HQ",
+  "description": "A master for Avid and broadcast: DNxHR HQ, every frame a keyframe, 24 bit PCM, MXF.",
+  "category": "archive",
+  "container": "mxf",
+  "extension": ".mxf",
+  "video": {
+    "codec": "dnxhr",
+    "encoders": ["dnxhd"],
+    "pixelFormat": "yuv422p",
+    "profile": "dnxhr_hq",
+    "keyframeSeconds": 0
+  },
+  "audio": { "encoder": "pcm_s24le" }
+}

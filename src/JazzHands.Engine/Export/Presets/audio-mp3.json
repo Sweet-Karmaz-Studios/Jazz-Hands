@@ -1,0 +1,9 @@
+{
+  "name": "audio-mp3",
+  "label": "Sound, MP3",
+  "description": "The mix alone for anything that plays sound: MP3 320 kb/s stereo.",
+  "category": "audio",
+  "container": "mp3",
+  "extension": ".mp3",
+  "audio": { "encoder": "libmp3lame", "bitrate": 320000, "channels": 2 }
+}

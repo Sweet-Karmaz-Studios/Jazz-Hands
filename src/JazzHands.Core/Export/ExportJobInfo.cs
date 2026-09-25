@@ -17,7 +17,32 @@ public enum ExportJobState
 
     /// <summary>Stopped on request. The partial file was deleted.</summary>
     Cancelled,
+
+    /// <summary>Held: it does not start until it is resumed. A running job that is paused stops and starts again from the top when resumed.</summary>
+    Paused,
 }
+
+/// <summary>Which queued job starts first.</summary>
+public enum ExportPriority
+{
+    /// <summary>After everything else.</summary>
+    Low,
+
+    /// <summary>In the order they were queued.</summary>
+    Normal,
+
+    /// <summary>Before anything normal or low that has not started.</summary>
+    High,
+}
+
+/// <summary>How the queue treats a job, beyond what it writes.</summary>
+/// <param name="Priority">Which queued job starts first.</param>
+/// <param name="OpenFolder">Show the file in Explorer when it is done.</param>
+/// <param name="RunScript">A script to run when it is done, given the output path as its argument.</param>
+public sealed record ExportJobOptions(
+    ExportPriority Priority = ExportPriority.Normal,
+    bool OpenFolder = false,
+    string? RunScript = null);
 
 /// <summary>One job in the export queue, as the queue panel, <c>export.list</c> and MCP see it.</summary>
 /// <param name="Id">The job id.</param>
@@ -36,6 +61,8 @@ public enum ExportJobState
 /// <param name="Created">When it was queued.</param>
 /// <param name="Finished">When it stopped, for any end state.</param>
 /// <param name="Note">Anything worth knowing that is not an error: a fallback encoder, keyframe snaps.</param>
+/// <param name="Priority">Which queued job starts first.</param>
+/// <param name="Hardware">True when it encodes on the GPU and so counts against the NVENC session limit.</param>
 public sealed record ExportJobInfo(
     string Id,
     ExportJobState State,
@@ -52,7 +79,9 @@ public sealed record ExportJobInfo(
     string? Error,
     DateTimeOffset Created,
     DateTimeOffset? Finished,
-    string? Note = null)
+    string? Note = null,
+    ExportPriority Priority = ExportPriority.Normal,
+    bool Hardware = false)
 {
     /// <summary>True for a job that will not change again.</summary>
     public bool IsFinished => State is ExportJobState.Done or ExportJobState.Failed or ExportJobState.Cancelled;

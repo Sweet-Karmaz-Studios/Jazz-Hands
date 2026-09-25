@@ -1,0 +1,19 @@
+{
+  "name": "shield-direct",
+  "label": "NVIDIA Shield",
+  "description": "Plays on a Shield TV Pro without transcoding: 10 bit HEVC up to 4K60, E-AC-3 in the sequence's channels, Matroska.",
+  "category": "device",
+  "container": "matroska",
+  "extension": ".mkv",
+  "video": {
+    "codec": "hevc",
+    "encoders": ["hevc_nvenc", "libx265"],
+    "maxHeight": 2160,
+    "maxFrameRate": { "num": 60, "den": 1 },
+    "quality": 19,
+    "speed": "medium",
+    "pixelFormat": "yuv420p10le",
+    "profile": "main10"
+  },
+  "audio": { "encoder": "eac3" }
+}

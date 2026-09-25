@@ -1,3 +1,4 @@
+using System.Globalization;
 using FFmpeg.AutoGen;
 using JazzHands.Core.Time;
 using JazzHands.Media.Interop;
@@ -14,14 +15,17 @@ namespace JazzHands.Media.Encode;
 /// <param name="Height">Frame height.</param>
 /// <param name="FrameRate">The constant output rate.</param>
 /// <param name="Quality">
-/// Constant quality: CRF for x264 and x265, CQ for NVENC. Lower is better; about 18 to 23 is
-/// visually clean for delivery, 28 and up is a proof.
+/// Constant quality: CRF for x264, x265, SVT-AV1 and VP9, CQ for NVENC. Lower is better; about 18
+/// to 23 is visually clean for delivery in H.264, 28 and up is a proof.
 /// </param>
 /// <param name="Bitrate">A target in bits per second instead of constant quality, or 0.</param>
 /// <param name="Speed">Speed against quality: slow, medium, fast. Mapped to each encoder's own presets.</param>
-/// <param name="GopLength">Frames between keyframes.</param>
+/// <param name="GopLength">Frames between keyframes; 1 for every frame a keyframe.</param>
 /// <param name="BFrames">B-frames between references.</param>
 /// <param name="Lossless">Encode without loss, ignoring quality and bitrate.</param>
+/// <param name="PixelFormat">The FFmpeg pixel format to encode, or null for the encoder's usual one.</param>
+/// <param name="Profile">The codec profile, spelled as the encoder spells it, or null.</param>
+/// <param name="Level">The codec level, or null. For FFV1 it is the version.</param>
 public sealed record VideoEncoderSettings(
     IReadOnlyList<string> Encoders,
     int Width,
@@ -32,7 +36,10 @@ public sealed record VideoEncoderSettings(
     EncoderSpeed Speed = EncoderSpeed.Medium,
     int GopLength = 0,
     int BFrames = 2,
-    bool Lossless = false);
+    bool Lossless = false,
+    string? PixelFormat = null,
+    string? Profile = null,
+    string? Level = null);
 
 /// <summary>Speed against quality, spelled the same for every encoder.</summary>
 public enum EncoderSpeed
@@ -48,55 +55,72 @@ public enum EncoderSpeed
 }
 
 /// <summary>
-/// One FFmpeg video encoder, fed CPU frames in NV12 or planar 4:2:0, writing packets to a muxer.
+/// One FFmpeg video encoder, fed CPU frames in NV12 or P010, writing packets to a muxer.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Frames come from <see cref="CreateFrame"/> so they are the right size and format for this
-/// encoder. A frame is reused after it has been sent: <see cref="EncoderFrame.MakeWritable"/>
-/// copies it first if the encoder is still holding the buffer, which is FFmpeg's own rule for
-/// reusing a frame and costs nothing when the encoder has already copied it, as NVENC and x264 do.
-///
-/// Every frame is tagged BT.709 limited range, which is what the compositor's output pass writes.
-/// HDR export is Phase 22's.
-///
-/// Thread affine: open, encode and flush on one thread.
+/// encoder: NV12 when it encodes eight bits, P010 when it keeps more. That is what the compositor's
+/// output pass writes, so the renderer copies rows and never converts. An encoder that wants
+/// something else (4:2:2 for ProRes and DNxHR, planar 4:2:0 for x265 and SVT-AV1, RGB for PNG) is
+/// handed a frame converted by swscale first, which for the same sampling is a deinterleave and for
+/// RGB is the BT.709 limited range matrix undone into full range.
+/// </para>
+/// <para>
+/// GIF is the one encoder with a pass of its own: a GIF has 256 colours, and the best 256 are only
+/// known once every frame has been seen. Frames go through libavfilter's palettegen and paletteuse,
+/// which hold them until the end, so a GIF's frames come out when the encoder is flushed. That
+/// holds every frame in memory, which is fine for the few seconds a GIF is.
+/// </para>
+/// <para>
+/// A frame is reused after it has been sent: <see cref="EncoderFrame.MakeWritable"/> copies it
+/// first if the encoder is still holding the buffer, which is FFmpeg's own rule for reusing a
+/// frame and costs nothing when the encoder has already copied it, as NVENC and x264 do.
+/// </para>
+/// <para>Thread affine: open, encode and flush on one thread.</para>
 /// </remarks>
 public sealed unsafe class VideoEncoder : IDisposable
 {
     private readonly ILogger _log = Log.ForContext<VideoEncoder>();
     private readonly AvCodecContext _context;
     private readonly AvPacket _packet = new();
-    private readonly SwsContext* _widen;
-    private readonly AvFrame? _wide;
+    private readonly SwsContext* _convert;
+    private readonly AvFrame? _converted;
+    private readonly PaletteGraph? _palette;
     private long _sent;
 
-    private VideoEncoder(AvCodecContext context, string name, VideoEncoderSettings settings, AVPixelFormat format, AVPixelFormat encoded, IReadOnlyList<string> skipped)
+    private VideoEncoder(AvCodecContext context, string name, VideoEncoderSettings settings, AVPixelFormat input, AVPixelFormat encoded, IReadOnlyList<string> skipped)
     {
         _context = context;
         Name = name;
         Settings = settings;
-        InputFormat = format;
+        InputFormat = input;
+        EncodedFormat = encoded;
         Skipped = skipped;
 
-        if (encoded != format)
+        if (encoded == AVPixelFormat.AV_PIX_FMT_PAL8)
         {
-            // DNxHR takes 4:2:2. Frames arrive 4:2:0 from the GPU like everyone else's, and the
-            // chroma is doubled vertically here rather than teaching the renderer a second layout
-            // for one intermediate codec.
-            _widen = Av.CheckAlloc(
-                ffmpeg.sws_getContext(settings.Width, settings.Height, format, settings.Width, settings.Height, encoded, (int)SwsFlags.SWS_BILINEAR, null, null, null),
-                $"sws_getContext ({format} to {encoded})");
+            _palette = new PaletteGraph(settings, input);
+        }
+        else if (encoded != input)
+        {
+            _convert = Av.CheckAlloc(
+                ffmpeg.sws_getContext(settings.Width, settings.Height, input, settings.Width, settings.Height, encoded, (int)SwsFlags.SWS_BICUBIC, null, null, null),
+                $"sws_getContext ({input} to {encoded})");
 
-            _wide = new AvFrame();
-            AVFrame* wide = _wide.Handle;
-            wide->width = settings.Width;
-            wide->height = settings.Height;
-            wide->format = (int)encoded;
-            wide->color_primaries = AVColorPrimaries.AVCOL_PRI_BT709;
-            wide->color_trc = AVColorTransferCharacteristic.AVCOL_TRC_BT709;
-            wide->colorspace = AVColorSpace.AVCOL_SPC_BT709;
-            wide->color_range = AVColorRange.AVCOL_RANGE_MPEG;
-            Av.Check(ffmpeg.av_frame_get_buffer(wide, 0), "av_frame_get_buffer");
+            // The frames are BT.709 limited range. swscale assumes BT.601 unless told, which
+            // shifts every colour a little on the way to RGB; and RGB is full range.
+            bool rgb = IsRgb(encoded);
+            int_array4 bt709 = *(int_array4*)ffmpeg.sws_getCoefficients(ffmpeg.SWS_CS_ITU709);
+            ffmpeg.sws_setColorspaceDetails(_convert, bt709, 0, bt709, rgb ? 1 : 0, 0, 1 << 16, 1 << 16);
+
+            _converted = new AvFrame();
+            AVFrame* frame = _converted.Handle;
+            frame->width = settings.Width;
+            frame->height = settings.Height;
+            frame->format = (int)encoded;
+            Tag(frame, encoded);
+            Av.Check(ffmpeg.av_frame_get_buffer(frame, 0), "av_frame_get_buffer");
         }
     }
 
@@ -106,11 +130,17 @@ public sealed unsafe class VideoEncoder : IDisposable
     /// <summary>What was asked for.</summary>
     public VideoEncoderSettings Settings { get; }
 
-    /// <summary>NV12 or YUV420P, whichever this encoder takes.</summary>
+    /// <summary>What frames from <see cref="CreateFrame"/> are: NV12, or P010 for an encoder that keeps ten bits.</summary>
     public AVPixelFormat InputFormat { get; }
 
-    /// <summary>True when frames want an interleaved chroma plane (NV12).</summary>
+    /// <summary>What the encoder itself takes.</summary>
+    public AVPixelFormat EncodedFormat { get; }
+
+    /// <summary>True when frames want an interleaved eight bit chroma plane (NV12).</summary>
     public bool TakesNv12 => InputFormat == AVPixelFormat.AV_PIX_FMT_NV12;
+
+    /// <summary>True when frames are P010: ten bits in the top of sixteen.</summary>
+    public bool TakesP010 => InputFormat == AVPixelFormat.AV_PIX_FMT_P010LE;
 
     /// <summary>Encoders earlier in the chain that would not open, with why.</summary>
     public IReadOnlyList<string> Skipped { get; }
@@ -140,14 +170,12 @@ public sealed unsafe class VideoEncoder : IDisposable
                 continue;
             }
 
-            AVPixelFormat encoded = EncodedFormat(name);
-            AVPixelFormat format = encoded == AVPixelFormat.AV_PIX_FMT_NV12
-                ? AVPixelFormat.AV_PIX_FMT_NV12
-                : AVPixelFormat.AV_PIX_FMT_YUV420P;
-
             var context = new AvCodecContext(codec);
             try
             {
+                AVPixelFormat encoded = ChooseFormat(context.Handle, codec, name, settings);
+                AVPixelFormat input = Depth(encoded) > 8 ? AVPixelFormat.AV_PIX_FMT_P010LE : AVPixelFormat.AV_PIX_FMT_NV12;
+
                 Configure(context.Handle, name, settings, encoded, globalHeader);
 
                 AVDictionary* options = ToDictionary(EncoderOptions(name, settings));
@@ -168,7 +196,7 @@ public sealed unsafe class VideoEncoder : IDisposable
                     continue;
                 }
 
-                var encoder = new VideoEncoder(context, name, settings, format, encoded, skipped);
+                var encoder = new VideoEncoder(context, name, settings, input, encoded, skipped);
                 if (skipped.Count > 0)
                 {
                     encoder._log.Warning("Encoding with {Encoder}; skipped {Skipped}", name, skipped);
@@ -196,18 +224,26 @@ public sealed unsafe class VideoEncoder : IDisposable
         ArgumentNullException.ThrowIfNull(muxer);
 
         AVFrame* sent = frame.Handle;
+        sent->pts = index;
 
-        if (_wide is not null)
+        if (_palette is not null)
         {
-            AVFrame* wide = _wide.Handle;
-            Av.Check(ffmpeg.av_frame_make_writable(wide), "av_frame_make_writable");
-            Av.Check(
-                ffmpeg.sws_scale(_widen, sent->data, sent->linesize, 0, Settings.Height, wide->data, wide->linesize),
-                "sws_scale");
-            sent = wide;
+            _palette.Send(sent);
+            _sent++;
+            return;
         }
 
-        sent->pts = index;
+        if (_converted is not null)
+        {
+            AVFrame* converted = _converted.Handle;
+            Av.Check(ffmpeg.av_frame_make_writable(converted), "av_frame_make_writable");
+            Av.Check(
+                ffmpeg.sws_scale(_convert, sent->data, sent->linesize, 0, Settings.Height, converted->data, converted->linesize),
+                "sws_scale");
+            converted->pts = index;
+            sent = converted;
+        }
+
         Av.Check(ffmpeg.avcodec_send_frame(_context.Handle, sent), "avcodec_send_frame", Name);
         _sent++;
         Drain(muxer, stream);
@@ -217,6 +253,17 @@ public sealed unsafe class VideoEncoder : IDisposable
     public void Flush(Muxer muxer, int stream)
     {
         ArgumentNullException.ThrowIfNull(muxer);
+
+        if (_palette is not null)
+        {
+            // Every frame has been seen, so the palette can be made and the frames drawn with it.
+            _palette.Finish();
+            for (AVFrame* frame = _palette.Receive(); frame != null; frame = _palette.Receive())
+            {
+                Av.Check(ffmpeg.avcodec_send_frame(_context.Handle, frame), "avcodec_send_frame", Name);
+                Drain(muxer, stream);
+            }
+        }
 
         int result = ffmpeg.avcodec_send_frame(_context.Handle, null);
         if (result != Av.EndOfFile)
@@ -233,19 +280,287 @@ public sealed unsafe class VideoEncoder : IDisposable
     {
         _packet.Dispose();
         _context.Dispose();
-        _wide?.Dispose();
+        _converted?.Dispose();
+        _palette?.Dispose();
 
-        if (_widen is not null)
+        if (_convert is not null)
         {
-            ffmpeg.sws_freeContext(_widen);
+            ffmpeg.sws_freeContext(_convert);
         }
     }
 
-    /// <summary>The pixel format an encoder is opened with: planar 4:2:0 for x265, 4:2:2 for DNxHR, NV12 for the rest.</summary>
-    private static AVPixelFormat EncodedFormat(string name) =>
-        name.StartsWith("libx265", StringComparison.Ordinal) ? AVPixelFormat.AV_PIX_FMT_YUV420P
-        : name.Equals("dnxhd", StringComparison.Ordinal) ? AVPixelFormat.AV_PIX_FMT_YUV422P
-        : AVPixelFormat.AV_PIX_FMT_NV12;
+    /// <summary>
+    /// The encoder's private options for these settings, by FFmpeg option name.
+    /// </summary>
+    /// <remarks>
+    /// Public so the ffmpeg.exe fallback passes exactly what the in-process encoder would have
+    /// been given. If the two ever differed, bisecting an encoder problem with it would compare
+    /// two different encodes.
+    /// </remarks>
+    public static IReadOnlyList<KeyValuePair<string, string>> EncoderOptions(string name, VideoEncoderSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(settings);
+        var options = new List<KeyValuePair<string, string>>();
+        string quality = settings.Quality.ToString(CultureInfo.InvariantCulture);
+
+        if (name.Contains("nvenc", StringComparison.Ordinal))
+        {
+            Nvenc(options, settings, quality);
+        }
+        else if (name.StartsWith("libx264", StringComparison.Ordinal))
+        {
+            Set(options, "preset", settings.Speed switch
+            {
+                EncoderSpeed.Fast => "veryfast",
+                EncoderSpeed.Slow => "slow",
+                _ => "medium",
+            });
+
+            if (settings.Lossless)
+            {
+                Set(options, "qp", "0");
+            }
+            else if (settings.Bitrate <= 0)
+            {
+                Set(options, "crf", quality);
+            }
+        }
+        else if (name.StartsWith("libx265", StringComparison.Ordinal))
+        {
+            Set(options, "preset", settings.Speed switch
+            {
+                EncoderSpeed.Fast => "veryfast",
+                EncoderSpeed.Slow => "slow",
+                _ => "medium",
+            });
+
+            if (settings.Lossless)
+            {
+                Set(options, "x265-params", "lossless=1:log-level=error");
+            }
+            else
+            {
+                if (settings.Bitrate <= 0)
+                {
+                    Set(options, "crf", quality);
+                }
+
+                Set(options, "x265-params", "log-level=error");
+            }
+        }
+        else if (name == "libsvtav1")
+        {
+            // SVT-AV1's presets run 0 (slowest) to 13; 8 is its own default and about real time
+            // at 1080p on a desktop CPU.
+            Set(options, "preset", settings.Speed switch
+            {
+                EncoderSpeed.Fast => "10",
+                EncoderSpeed.Slow => "5",
+                _ => "8",
+            });
+
+            if (settings.Bitrate <= 0)
+            {
+                Set(options, "crf", settings.Lossless ? "0" : quality);
+            }
+
+            Set(options, "svtav1-params", "enable-overlays=1:scd=1");
+        }
+        else if (name == "libvpx-vp9")
+        {
+            Set(options, "deadline", "good");
+            Set(options, "cpu-used", settings.Speed switch
+            {
+                EncoderSpeed.Fast => "5",
+                EncoderSpeed.Slow => "1",
+                _ => "2",
+            });
+            Set(options, "row-mt", "1");
+
+            if (settings.Lossless)
+            {
+                Set(options, "lossless", "1");
+            }
+            else if (settings.Bitrate <= 0)
+            {
+                // Constant quality in libvpx is a CRF with no bitrate at all.
+                Set(options, "crf", quality);
+                Set(options, "b", "0");
+            }
+        }
+        else if (name == "dnxhd")
+        {
+            // DNxHR's lightest profile by default, which is what an editing proxy wants: intra
+            // only, about 45 Mb/s at 1080p30, decoded on a CPU faster than anything long GOP.
+            Set(options, "profile", settings.Profile ?? "dnxhr_lb");
+        }
+        else if (name == "prores_ks")
+        {
+            Set(options, "profile", settings.Profile ?? "3");
+
+            // What Apple's own encoder writes, so Final Cut and QuickTime treat the file as theirs.
+            Set(options, "vendor", "apl0");
+        }
+        else if (name == "ffv1")
+        {
+            // Version 3 with a checksum per slice, the archival setting: a damaged frame is found
+            // and the rest decode.
+            Set(options, "level", settings.Level ?? "3");
+            Set(options, "slices", "16");
+            Set(options, "slicecrc", "1");
+            Set(options, "context", "1");
+        }
+
+        if (settings.Profile is { } profile && (name.Contains("nvenc", StringComparison.Ordinal) || name.StartsWith("libx26", StringComparison.Ordinal)))
+        {
+            Set(options, "profile", profile);
+        }
+
+        if (settings.Level is { } level && (name.Contains("nvenc", StringComparison.Ordinal) || name.StartsWith("libx264", StringComparison.Ordinal)))
+        {
+            Set(options, "level", level);
+        }
+
+        return options;
+    }
+
+    /// <summary>
+    /// The pixel format an encoder is opened with: what was asked for if the encoder takes it, the
+    /// renderer's own NV12 or P010 where that is the same picture, and otherwise whatever FFmpeg
+    /// judges the nearest the encoder takes.
+    /// </summary>
+    private static AVPixelFormat ChooseFormat(AVCodecContext* context, AVCodec* codec, string name, VideoEncoderSettings settings)
+    {
+        AVPixelFormat wanted = settings.PixelFormat is { } requested
+            ? ffmpeg.av_get_pix_fmt(requested)
+            : name switch
+            {
+                "dnxhd" => AVPixelFormat.AV_PIX_FMT_YUV422P,
+                "prores_ks" => AVPixelFormat.AV_PIX_FMT_YUV422P10LE,
+                "png" => AVPixelFormat.AV_PIX_FMT_RGB24,
+                "gif" => AVPixelFormat.AV_PIX_FMT_PAL8,
+                _ => AVPixelFormat.AV_PIX_FMT_YUV420P,
+            };
+
+        if (wanted == AVPixelFormat.AV_PIX_FMT_NONE)
+        {
+            throw new FfmpegException($"'{settings.PixelFormat}' is not a pixel format FFmpeg knows.");
+        }
+
+        AVPixelFormat[] supported = Supported(context, codec);
+        if (supported.Length == 0)
+        {
+            return wanted;
+        }
+
+        // The same picture in the layout the renderer already writes costs nothing to hand over.
+        AVPixelFormat same = wanted switch
+        {
+            AVPixelFormat.AV_PIX_FMT_YUV420P => AVPixelFormat.AV_PIX_FMT_NV12,
+            AVPixelFormat.AV_PIX_FMT_YUV420P10LE => AVPixelFormat.AV_PIX_FMT_P010LE,
+            _ => wanted,
+        };
+
+        if (supported.Contains(same))
+        {
+            return same;
+        }
+
+        if (supported.Contains(wanted))
+        {
+            return wanted;
+        }
+
+        AVPixelFormat[] terminated = [.. supported, AVPixelFormat.AV_PIX_FMT_NONE];
+        fixed (AVPixelFormat* list = terminated)
+        {
+            int loss;
+            return ffmpeg.avcodec_find_best_pix_fmt_of_list(list, wanted, 0, &loss);
+        }
+    }
+
+    private static AVPixelFormat[] Supported(AVCodecContext* context, AVCodec* codec)
+    {
+        void* configs = null;
+        int count = 0;
+        if (ffmpeg.avcodec_get_supported_config(context, codec, AVCodecConfig.AV_CODEC_CONFIG_PIX_FORMAT, 0, &configs, &count) < 0 || configs == null)
+        {
+            return [];
+        }
+
+        return [.. new ReadOnlySpan<AVPixelFormat>(configs, count)];
+    }
+
+    /// <summary>Bits a sample of a pixel format keeps.</summary>
+    private static int Depth(AVPixelFormat format)
+    {
+        AVPixFmtDescriptor* descriptor = ffmpeg.av_pix_fmt_desc_get(format);
+        return descriptor is null ? 8 : descriptor->comp[0].depth;
+    }
+
+    private static bool IsRgb(AVPixelFormat format)
+    {
+        AVPixFmtDescriptor* descriptor = ffmpeg.av_pix_fmt_desc_get(format);
+        return descriptor is not null && (descriptor->flags & (ulong)ffmpeg.AV_PIX_FMT_FLAG_RGB) != 0;
+    }
+
+    /// <summary>Tags a frame with what the compositor writes: BT.709 limited range, or full range sRGB for RGB.</summary>
+    internal static void Tag(AVFrame* frame, AVPixelFormat format)
+    {
+        frame->color_primaries = AVColorPrimaries.AVCOL_PRI_BT709;
+        if (IsRgb(format) || format == AVPixelFormat.AV_PIX_FMT_PAL8)
+        {
+            frame->color_trc = AVColorTransferCharacteristic.AVCOL_TRC_IEC61966_2_1;
+            frame->colorspace = AVColorSpace.AVCOL_SPC_RGB;
+            frame->color_range = AVColorRange.AVCOL_RANGE_JPEG;
+        }
+        else
+        {
+            frame->color_trc = AVColorTransferCharacteristic.AVCOL_TRC_BT709;
+            frame->colorspace = AVColorSpace.AVCOL_SPC_BT709;
+            frame->color_range = AVColorRange.AVCOL_RANGE_MPEG;
+            frame->chroma_location = AVChromaLocation.AVCHROMA_LOC_LEFT;
+        }
+    }
+
+    private static void Nvenc(List<KeyValuePair<string, string>> options, VideoEncoderSettings settings, string quality)
+    {
+        // The export-pipeline skill's settings: p5 with the HQ tune, adaptive quantization both
+        // ways, a 32 frame lookahead and B-frames used as references where the codec allows it.
+        Set(options, "preset", settings.Speed switch
+        {
+            EncoderSpeed.Fast => "p3",
+            EncoderSpeed.Slow => "p6",
+            _ => "p5",
+        });
+
+        if (settings.Lossless)
+        {
+            Set(options, "tune", "lossless");
+            return;
+        }
+
+        Set(options, "tune", "hq");
+        Set(options, "spatial-aq", "1");
+        Set(options, "temporal-aq", "1");
+        Set(options, "rc-lookahead", "32");
+        Set(options, "b_ref_mode", "middle");
+
+        if (settings.Bitrate > 0)
+        {
+            // Two passes over each frame at full resolution: the first finds where the bits
+            // should go, so a size target lands where it was aimed.
+            Set(options, "rc", "vbr");
+            Set(options, "multipass", "fullres");
+        }
+        else
+        {
+            Set(options, "rc", "vbr");
+            Set(options, "cq", quality);
+            Set(options, "b", "0");
+        }
+    }
 
     private void Drain(Muxer muxer, int stream)
     {
@@ -273,13 +588,17 @@ public sealed unsafe class VideoEncoder : IDisposable
         context->gop_size = settings.GopLength > 0
             ? settings.GopLength
             : (int)Math.Max(1, Math.Round(settings.FrameRate.ToDouble() * 2));
-        context->max_b_frames = Math.Max(0, settings.BFrames);
+        context->max_b_frames = context->gop_size <= 1 ? 0 : Math.Max(0, settings.BFrames);
 
+        bool rgb = IsRgb(format) || format == AVPixelFormat.AV_PIX_FMT_PAL8;
         context->color_primaries = AVColorPrimaries.AVCOL_PRI_BT709;
-        context->color_trc = AVColorTransferCharacteristic.AVCOL_TRC_BT709;
-        context->colorspace = AVColorSpace.AVCOL_SPC_BT709;
-        context->color_range = AVColorRange.AVCOL_RANGE_MPEG;
-        context->chroma_sample_location = AVChromaLocation.AVCHROMA_LOC_LEFT;
+        context->color_trc = rgb ? AVColorTransferCharacteristic.AVCOL_TRC_IEC61966_2_1 : AVColorTransferCharacteristic.AVCOL_TRC_BT709;
+        context->colorspace = rgb ? AVColorSpace.AVCOL_SPC_RGB : AVColorSpace.AVCOL_SPC_BT709;
+        context->color_range = rgb ? AVColorRange.AVCOL_RANGE_JPEG : AVColorRange.AVCOL_RANGE_MPEG;
+        if (!rgb)
+        {
+            context->chroma_sample_location = AVChromaLocation.AVCHROMA_LOC_LEFT;
+        }
 
         if (settings.Bitrate > 0 && !settings.Lossless)
         {
@@ -293,7 +612,7 @@ public sealed unsafe class VideoEncoder : IDisposable
             context->flags |= ffmpeg.AV_CODEC_FLAG_GLOBAL_HEADER;
         }
 
-        // x264 and x265 pick their thread count; NVENC has none to pick.
+        // The software encoders pick their thread count; NVENC has none to pick.
         if (!name.Contains("nvenc", StringComparison.Ordinal))
         {
             context->thread_count = 0;
@@ -315,121 +634,114 @@ public sealed unsafe class VideoEncoder : IDisposable
     }
 
     /// <summary>
-    /// The encoder's private options for these settings, by FFmpeg option name.
+    /// libavfilter's two GIF passes: palettegen reads every frame for the 256 colours that suit
+    /// them best, then paletteuse draws each with those colours and error diffusion.
     /// </summary>
-    /// <remarks>
-    /// Public so the ffmpeg.exe fallback passes exactly what the in-process encoder would have
-    /// been given. If the two ever differed, bisecting an encoder problem with it would compare
-    /// two different encodes.
-    /// </remarks>
-    public static IReadOnlyList<KeyValuePair<string, string>> EncoderOptions(string name, VideoEncoderSettings settings)
+    private sealed class PaletteGraph : IDisposable
     {
-        ArgumentNullException.ThrowIfNull(name);
-        ArgumentNullException.ThrowIfNull(settings);
-        var options = new List<KeyValuePair<string, string>>();
+        private AVFilterGraph* _graph;
+        private readonly AVFilterContext* _source;
+        private readonly AVFilterContext* _sink;
+        private readonly AvFrame _out = new();
 
-
-        string quality = settings.Quality.ToString(System.Globalization.CultureInfo.InvariantCulture);
-
-        if (name.Contains("nvenc", StringComparison.Ordinal))
+        public PaletteGraph(VideoEncoderSettings settings, AVPixelFormat input)
         {
-            // The export-pipeline skill's settings: p5 with the HQ tune, adaptive quantization
-            // both ways, a 32 frame lookahead and B-frames used as references where the codec
-            // allows it.
-            Set(options, "preset", settings.Speed switch
-            {
-                EncoderSpeed.Fast => "p3",
-                EncoderSpeed.Slow => "p6",
-                _ => "p5",
-            });
+            AVFilterGraph* graph = Av.CheckAlloc(ffmpeg.avfilter_graph_alloc(), "avfilter_graph_alloc");
+            AVFilterInOut* inputs = null;
+            AVFilterInOut* outputs = null;
 
-            if (settings.Lossless)
+            try
             {
-                Set(options, "tune", "lossless");
-                return options;
+                string arguments = string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"video_size={settings.Width}x{settings.Height}:pix_fmt={(int)input}:time_base={settings.FrameRate.Den}/{settings.FrameRate.Num}:pixel_aspect=1/1:colorspace=bt709:range=tv");
+                AVFilterContext* source = null;
+                Av.Check(
+                    ffmpeg.avfilter_graph_create_filter(&source, ffmpeg.avfilter_get_by_name("buffer"), "in", arguments, null, graph),
+                    "avfilter_graph_create_filter (buffer)",
+                    arguments);
+
+                AVFilterContext* sink = null;
+                Av.Check(
+                    ffmpeg.avfilter_graph_create_filter(&sink, ffmpeg.avfilter_get_by_name("buffersink"), "out", null, null, graph),
+                    "avfilter_graph_create_filter (buffersink)");
+
+                outputs = Av.CheckAlloc(ffmpeg.avfilter_inout_alloc(), "avfilter_inout_alloc");
+                outputs->name = ffmpeg.av_strdup("in");
+                outputs->filter_ctx = source;
+                outputs->pad_idx = 0;
+                outputs->next = null;
+
+                inputs = Av.CheckAlloc(ffmpeg.avfilter_inout_alloc(), "avfilter_inout_alloc");
+                inputs->name = ffmpeg.av_strdup("out");
+                inputs->filter_ctx = sink;
+                inputs->pad_idx = 0;
+                inputs->next = null;
+
+                // stats_mode=full weighs every frame alike, which suits the short loops GIFs are;
+                // sierra2_4a is the dither that looks best without crawling from frame to frame.
+                const string Chain = "format=rgb24,split[a][b];[a]palettegen=stats_mode=full[p];[b][p]paletteuse=dither=sierra2_4a";
+                Av.Check(ffmpeg.avfilter_graph_parse_ptr(graph, Chain, &inputs, &outputs, null), "avfilter_graph_parse_ptr", Chain);
+                Av.Check(ffmpeg.avfilter_graph_config(graph, null), "avfilter_graph_config", Chain);
+
+                _graph = graph;
+                _source = source;
+                _sink = sink;
+                graph = null;
             }
-
-            Set(options, "tune", "hq");
-            Set(options, "spatial-aq", "1");
-            Set(options, "temporal-aq", "1");
-            Set(options, "rc-lookahead", "32");
-            Set(options, "b_ref_mode", "middle");
-
-            if (settings.Bitrate > 0)
+            finally
             {
-                Set(options, "rc", "vbr");
-                Set(options, "multipass", "fullres");
-            }
-            else
-            {
-                Set(options, "rc", "vbr");
-                Set(options, "cq", quality);
-                Set(options, "b", "0");
-            }
-
-            return options;
-        }
-
-        if (name.StartsWith("libx264", StringComparison.Ordinal))
-        {
-            Set(options, "preset", settings.Speed switch
-            {
-                EncoderSpeed.Fast => "veryfast",
-                EncoderSpeed.Slow => "slow",
-                _ => "medium",
-            });
-
-            if (settings.Lossless)
-            {
-                Set(options, "qp", "0");
-            }
-            else if (settings.Bitrate <= 0)
-            {
-                Set(options, "crf", quality);
-            }
-
-            return options;
-        }
-
-        if (name.StartsWith("libx265", StringComparison.Ordinal))
-        {
-            Set(options, "preset", settings.Speed switch
-            {
-                EncoderSpeed.Fast => "veryfast",
-                EncoderSpeed.Slow => "slow",
-                _ => "medium",
-            });
-
-            if (settings.Lossless)
-            {
-                Set(options, "x265-params", "lossless=1:log-level=error");
-            }
-            else
-            {
-                if (settings.Bitrate <= 0)
+                if (inputs is not null)
                 {
-                    Set(options, "crf", quality);
+                    ffmpeg.avfilter_inout_free(&inputs);
                 }
 
-                Set(options, "x265-params", "log-level=error");
+                if (outputs is not null)
+                {
+                    ffmpeg.avfilter_inout_free(&outputs);
+                }
+
+                if (graph is not null)
+                {
+                    ffmpeg.avfilter_graph_free(&graph);
+                }
+            }
+        }
+
+        public void Send(AVFrame* frame) =>
+            Av.Check(ffmpeg.av_buffersrc_add_frame_flags(_source, frame, Av.BufferSrcKeepRef), "av_buffersrc_add_frame_flags");
+
+        public void Finish() =>
+            Av.Check(ffmpeg.av_buffersrc_add_frame_flags(_source, null, 0), "av_buffersrc_add_frame_flags (end)");
+
+        /// <summary>The next frame drawn with the palette, valid until the next call, or null when there are no more.</summary>
+        public AVFrame* Receive()
+        {
+            ffmpeg.av_frame_unref(_out.Handle);
+            int result = ffmpeg.av_buffersink_get_frame(_sink, _out.Handle);
+            if (result == Av.Again || result == Av.EndOfFile)
+            {
+                return null;
             }
 
-            return options;
+            Av.Check(result, "av_buffersink_get_frame");
+            return _out.Handle;
         }
 
-        if (name.Equals("dnxhd", StringComparison.Ordinal))
+        public void Dispose()
         {
-            // DNxHR's lightest profile, which is what an editing proxy wants: intra only, about
-            // 45 Mb/s at 1080p30, decoded on a CPU faster than anything long GOP.
-            Set(options, "profile", "dnxhr_lb");
-            return options;
+            _out.Dispose();
+            if (_graph is not null)
+            {
+                AVFilterGraph* graph = _graph;
+                _graph = null;
+                ffmpeg.avfilter_graph_free(&graph);
+            }
         }
-
-        return options;
     }
 }
 
-/// <summary>A CPU frame for an encoder, reused across frames.</summary>
+/// <summary>A CPU frame for an encoder, reused across frames: NV12, or P010 for ten bits.</summary>
 public sealed unsafe class EncoderFrame : IDisposable
 {
     private readonly AvFrame _frame = new();
@@ -440,15 +752,11 @@ public sealed unsafe class EncoderFrame : IDisposable
         frame->width = width;
         frame->height = height;
         frame->format = (int)format;
-        frame->color_primaries = AVColorPrimaries.AVCOL_PRI_BT709;
-        frame->color_trc = AVColorTransferCharacteristic.AVCOL_TRC_BT709;
-        frame->colorspace = AVColorSpace.AVCOL_SPC_BT709;
-        frame->color_range = AVColorRange.AVCOL_RANGE_MPEG;
-        frame->chroma_location = AVChromaLocation.AVCHROMA_LOC_LEFT;
+        VideoEncoder.Tag(frame, format);
         Av.Check(ffmpeg.av_frame_get_buffer(frame, 0), "av_frame_get_buffer");
         Width = width;
         Height = height;
-        IsNv12 = format == AVPixelFormat.AV_PIX_FMT_NV12;
+        IsP010 = format == AVPixelFormat.AV_PIX_FMT_P010LE;
     }
 
     /// <summary>Frame width.</summary>
@@ -457,13 +765,19 @@ public sealed unsafe class EncoderFrame : IDisposable
     /// <summary>Frame height.</summary>
     public int Height { get; }
 
-    /// <summary>True for NV12 (luma, then interleaved chroma); false for three planes.</summary>
-    public bool IsNv12 { get; }
+    /// <summary>True for P010: sixteen bit samples, luma then interleaved chroma. False for NV12, the same with bytes.</summary>
+    public bool IsP010 { get; }
+
+    /// <summary>Bytes a sample takes: one for NV12, two for P010.</summary>
+    public int BytesPerSample => IsP010 ? 2 : 1;
 
     internal AVFrame* Handle => _frame.Handle;
 
     /// <summary>An NV12 frame with its own buffers, for writing somewhere other than an in-process encoder.</summary>
     public static EncoderFrame CreateNv12(int width, int height) => new(width, height, AVPixelFormat.AV_PIX_FMT_NV12);
+
+    /// <summary>A P010 frame with its own buffers, for writing somewhere other than an in-process encoder.</summary>
+    public static EncoderFrame CreateP010(int width, int height) => new(width, height, AVPixelFormat.AV_PIX_FMT_P010LE);
 
     /// <summary>Makes sure the buffers are this frame's alone before they are written.</summary>
     public void MakeWritable() =>

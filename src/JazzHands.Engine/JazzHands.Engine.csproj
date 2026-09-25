@@ -24,6 +24,8 @@
   <ItemGroup>
     <!-- The built-in title presets, read by TitlePresetLibrary. -->
     <EmbeddedResource Include="Titles\Presets\*.json" LogicalName="JazzHands.Engine.Titles.Presets.%(Filename).json" />
+    <!-- The built-in export presets, read by ExportPresetLibrary. -->
+    <EmbeddedResource Include="Export\Presets\*.json" LogicalName="JazzHands.Engine.Export.Presets.%(Filename).json" />
   </ItemGroup>
 
   <ItemGroup>

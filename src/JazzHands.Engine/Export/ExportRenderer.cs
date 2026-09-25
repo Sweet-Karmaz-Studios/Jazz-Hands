@@ -21,10 +21,13 @@ internal interface IFrameSink
 
     /// <summary>Hands a filled frame over, at its index in the output.</summary>
     void Submit(EncoderFrame frame, long index, CancellationToken cancellationToken);
+
+    /// <summary>True when the frames are P010, for an encoder that keeps ten bits; false for NV12.</summary>
+    bool TenBit { get; }
 }
 
 /// <summary>
-/// Renders the frames of an export plan through the compositor and reads them back as 4:2:0.
+/// Renders the frames of an export plan through the compositor and reads them back as NV12 or P010.
 /// </summary>
 /// <remarks>
 /// Every frame is the frame the preview would show, rendered by a <see cref="FrameServer"/> of its
@@ -55,6 +58,7 @@ internal sealed class ExportRenderer : IDisposable
     private ID3D11RenderTargetView? _chromaView;
     private int _width;
     private int _height;
+    private bool _tenBit;
 
     public ExportRenderer(ExportEnvironment environment)
     {
@@ -100,7 +104,7 @@ internal sealed class ExportRenderer : IDisposable
             ?? throw new InvalidOperationException($"The sequence '{plan.SequenceId}' has gone.");
         ProjectSettings settings = project.SettingsFor(sequence);
 
-        Allocate(video.Width, video.Height);
+        Allocate(video.Width, video.Height, sink.TenBit);
 
         var options = new RenderOptions
         {
@@ -109,7 +113,10 @@ internal sealed class ExportRenderer : IDisposable
             CacheLayers = false,
             Subtitles = plan.Subtitles?.Delivery == SubtitleDelivery.Burn,
         };
-        var output = new OutputSettings(OutputEncoding.Bt1886, DitherLevels: 255);
+        // PNG and GIF are RGB, which is shown as sRGB; everything else is video, made for BT.1886.
+        var output = new OutputSettings(
+            video.Codec is "png" or "gif" ? OutputEncoding.Srgb : OutputEncoding.Bt1886,
+            DitherLevels: sink.TenBit ? 1023 : 255);
 
         long index = 0;
         long read = 0;
@@ -126,7 +133,7 @@ internal sealed class ExportRenderer : IDisposable
                 RenderTarget stack = _frames.Render(project, sequence, Flicks.FromFrames(frame, video.FrameRate), options, projectPath);
                 try
                 {
-                    _frames.Compositor.OutputYuv(stack, _lumaView!, _chromaView!, _width, _height, output);
+                    _frames.Compositor.OutputYuv(stack, _lumaView!, _chromaView!, _width, _height, output, _tenBit);
                 }
                 finally
                 {
@@ -159,41 +166,56 @@ internal sealed class ExportRenderer : IDisposable
 
     public void Dispose()
     {
-        foreach (Slot slot in _slots)
+        Release();
+        _frames.Dispose();
+        _hardware?.Dispose();
+        _device.Dispose();
+    }
+
+    /// <summary>Lets go of the targets and the read back ring.</summary>
+    private void Release()
+    {
+        for (int index = 0; index < _slots.Length; index++)
         {
-            slot?.Dispose();
+            _slots[index]?.Dispose();
+            _slots[index] = null!;
         }
 
         _lumaView?.Dispose();
         _chromaView?.Dispose();
         _luma?.Dispose();
         _chroma?.Dispose();
-        _frames.Dispose();
-        _hardware?.Dispose();
-        _device.Dispose();
+        _lumaView = null;
+        _chromaView = null;
+        _luma = null;
+        _chroma = null;
     }
 
-    private void Allocate(int width, int height)
+    private void Allocate(int width, int height, bool tenBit)
     {
-        if (_luma is not null && width == _width && height == _height)
+        if (_luma is not null && width == _width && height == _height && tenBit == _tenBit)
         {
             return;
         }
 
         _width = width;
         _height = height;
+        _tenBit = tenBit;
+        Release();
         ID3D11Device device = _device.Device;
+        Format lumaFormat = tenBit ? Format.R16_UNorm : Format.R8_UNorm;
+        Format chromaFormat = tenBit ? Format.R16G16_UNorm : Format.R8G8_UNorm;
 
-        _luma = device.CreateTexture2D(Target(Format.R8_UNorm, width, height));
-        _chroma = device.CreateTexture2D(Target(Format.R8G8_UNorm, width / 2, height / 2));
+        _luma = device.CreateTexture2D(Target(lumaFormat, width, height));
+        _chroma = device.CreateTexture2D(Target(chromaFormat, width / 2, height / 2));
         _lumaView = device.CreateRenderTargetView(_luma);
         _chromaView = device.CreateRenderTargetView(_chroma);
 
         for (int index = 0; index < Ring; index++)
         {
             _slots[index] = new Slot(
-                device.CreateTexture2D(Staging(Format.R8_UNorm, width, height)),
-                device.CreateTexture2D(Staging(Format.R8G8_UNorm, width / 2, height / 2)));
+                device.CreateTexture2D(Staging(lumaFormat, width, height)),
+                device.CreateTexture2D(Staging(chromaFormat, width / 2, height / 2)));
         }
     }
 
@@ -208,7 +230,7 @@ internal sealed class ExportRenderer : IDisposable
         MappedSubresource luma = context.Map(slot.Luma, 0, MapMode.Read, Vortice.Direct3D11.MapFlags.None);
         try
         {
-            CopyRows((byte*)luma.DataPointer, (int)luma.RowPitch, (byte*)frame.Plane(0), frame.Stride(0), _width, _height);
+            CopyRows((byte*)luma.DataPointer, (int)luma.RowPitch, (byte*)frame.Plane(0), frame.Stride(0), _width * frame.BytesPerSample, _height);
         }
         finally
         {
@@ -218,14 +240,8 @@ internal sealed class ExportRenderer : IDisposable
         MappedSubresource chroma = context.Map(slot.Chroma, 0, MapMode.Read, Vortice.Direct3D11.MapFlags.None);
         try
         {
-            if (frame.IsNv12)
-            {
-                CopyRows((byte*)chroma.DataPointer, (int)chroma.RowPitch, (byte*)frame.Plane(1), frame.Stride(1), _width, _height / 2);
-            }
-            else
-            {
-                Deinterleave((byte*)chroma.DataPointer, (int)chroma.RowPitch, frame, _width / 2, _height / 2);
-            }
+            // Half the width in pairs of samples is the full width in samples.
+            CopyRows((byte*)chroma.DataPointer, (int)chroma.RowPitch, (byte*)frame.Plane(1), frame.Stride(1), _width * frame.BytesPerSample, _height / 2);
         }
         finally
         {
@@ -240,26 +256,6 @@ internal sealed class ExportRenderer : IDisposable
         for (int row = 0; row < rows; row++)
         {
             Buffer.MemoryCopy(source + ((long)row * sourcePitch), target + ((long)row * targetPitch), targetPitch, bytes);
-        }
-    }
-
-    private static unsafe void Deinterleave(byte* source, int sourcePitch, EncoderFrame frame, int width, int rows)
-    {
-        byte* u = (byte*)frame.Plane(1);
-        byte* v = (byte*)frame.Plane(2);
-        int uPitch = frame.Stride(1);
-        int vPitch = frame.Stride(2);
-
-        for (int row = 0; row < rows; row++)
-        {
-            byte* line = source + ((long)row * sourcePitch);
-            byte* uLine = u + ((long)row * uPitch);
-            byte* vLine = v + ((long)row * vPitch);
-            for (int x = 0; x < width; x++)
-            {
-                uLine[x] = line[x * 2];
-                vLine[x] = line[(x * 2) + 1];
-            }
         }
     }
 

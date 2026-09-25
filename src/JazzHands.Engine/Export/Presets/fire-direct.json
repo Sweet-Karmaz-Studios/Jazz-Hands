@@ -1,0 +1,20 @@
+{
+  "name": "fire-direct",
+  "label": "Fire TV",
+  "description": "Plays on a Fire TV Cube or Stick without transcoding: H.264 High 4.2 up to 1080p60, AAC stereo, MP4.",
+  "category": "device",
+  "container": "mp4",
+  "extension": ".mp4",
+  "video": {
+    "codec": "h264",
+    "encoders": ["h264_nvenc", "libx264"],
+    "maxHeight": 1080,
+    "maxFrameRate": { "num": 60, "den": 1 },
+    "quality": 19,
+    "speed": "medium",
+    "pixelFormat": "yuv420p",
+    "profile": "high",
+    "level": "4.2"
+  },
+  "audio": { "encoder": "aac", "bitrate": 256000, "channels": 2 }
+}

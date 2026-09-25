@@ -1,0 +1,15 @@
+{
+  "name": "gif-discord",
+  "label": "GIF",
+  "description": "An animated GIF for chat: 480 wide, 15 fps, one palette made for the whole clip, no sound.",
+  "category": "image",
+  "container": "gif",
+  "extension": ".gif",
+  "video": {
+    "codec": "gif",
+    "encoders": ["gif"],
+    "maxWidth": 480,
+    "maxFrameRate": { "num": 15, "den": 1 },
+    "pixelFormat": "pal8"
+  }
+}

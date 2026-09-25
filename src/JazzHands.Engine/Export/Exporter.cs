@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.ExceptionServices;
 using JazzHands.Core.Export;
 using JazzHands.Core.Model;
@@ -14,17 +15,30 @@ namespace JazzHands.Engine.Export;
 /// Runs an export plan: a stream copy, an encode in process, or an encode through ffmpeg.exe.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The file is written beside the output under a temporary name and moved into place only when
 /// it is complete, so a failed or cancelled export never leaves half a file where a whole one is
-/// expected, and never destroys an older file of the same name before the new one exists.
-///
+/// expected, and never destroys an older file of the same name before the new one exists. An image
+/// sequence is written into a temporary folder beside its frames and moved frame by frame.
+/// </para>
+/// <para>
 /// An encode renders on the calling thread and encodes on a writer thread, joined by a bounded
 /// queue of four frames: rendering, reading back and encoding overlap, and a slow encoder holds
 /// the renderer back rather than filling memory. The writer owns the muxer, both encoders and the
-/// sound, so nothing FFmpeg holds is touched by two threads.
+/// sound, so nothing FFmpeg holds is touched by two threads. A sound-only export has no renderer
+/// and mixes straight into the encoder.
+/// </para>
+/// <para>
+/// A plan with a size target is checked when it is done. A file over the target is encoded again
+/// at a bitrate scaled by how far over it came, less five percent, up to three times; the second
+/// try almost always lands, since a rate controlled encoder misses by a steady proportion on the
+/// same pictures.
+/// </para>
 /// </remarks>
 public static class Exporter
 {
+    private const int SizeRetries = 3;
+
     private static readonly ILogger Log = Serilog.Log.ForContext(typeof(Exporter));
 
     /// <summary>Runs a plan to completion.</summary>
@@ -48,20 +62,57 @@ public static class Exporter
         environment ??= ExportEnvironment.Default;
         string folder = Path.GetDirectoryName(plan.OutputPath) ?? ".";
         Directory.CreateDirectory(folder);
-        string temporary = Path.Combine(
-            folder,
-            $".{Path.GetFileNameWithoutExtension(plan.OutputPath)}.{Guid.NewGuid():N}.partial{Path.GetExtension(plan.OutputPath)}");
+        bool sequence = ExportPresets.Container(plan.Container) is { Sequence: true };
+
+        // An image sequence goes into a folder of its own and its frames move out of it; a file
+        // gets a hidden name beside where it is going.
+        string scratch = Path.Combine(folder, $".{Path.GetFileNameWithoutExtension(plan.OutputPath).Replace("%", string.Empty, StringComparison.Ordinal)}.{Guid.NewGuid():N}.partial");
+        string temporary = sequence
+            ? Path.Combine(scratch, Path.GetFileName(plan.OutputPath))
+            : scratch + Path.GetExtension(plan.OutputPath);
 
         try
         {
-            ExportResult result = plan.Mode switch
+            if (sequence)
             {
-                ExportMode.Copy => Copy(plan, project, temporary, progress, cancellationToken),
-                _ when plan.External => ExternalFfmpegExporter.Run(plan, project, projectPath, temporary, environment, progress, cancellationToken),
-                _ => Encode(plan, project, projectPath, temporary, environment, progress, cancellationToken),
-            };
+                Directory.CreateDirectory(scratch);
+            }
 
-            File.Move(temporary, plan.OutputPath, overwrite: true);
+            ExportResult result = Attempt(plan, project, projectPath, temporary, environment, progress, cancellationToken);
+            var notes = new List<string>(result.Notes);
+
+            for (int attempt = 1; plan.TargetBytes > 0 && result.Bytes > plan.TargetBytes && plan.Video is { Bitrate: > 0 } video; attempt++)
+            {
+                if (attempt > SizeRetries)
+                {
+                    throw new ExportException(string.Create(
+                        CultureInfo.InvariantCulture,
+                        $"The file came to {ExportPresets.FormatBytes(result.Bytes)}, over {ExportPresets.FormatBytes(plan.TargetBytes)}, after {SizeRetries} tries. Export a shorter stretch or a smaller size."));
+                }
+
+                long bitrate = (long)(video.Bitrate * ((double)plan.TargetBytes / result.Bytes) * 0.95);
+                notes.Add(string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"Came to {ExportPresets.FormatBytes(result.Bytes)}, over {ExportPresets.FormatBytes(plan.TargetBytes)}; encoded again at {bitrate / 1000} kb/s."));
+                Log.Information("Export {Path} is {Bytes} bytes, over its {Target} byte target; encoding again at {Bitrate} b/s", plan.OutputPath, result.Bytes, plan.TargetBytes, bitrate);
+
+                TryDelete(temporary);
+                plan = plan with { Video = video with { Bitrate = bitrate } };
+                ExportResult again = Attempt(plan, project, projectPath, temporary, environment, progress, cancellationToken);
+                result = again with { Elapsed = result.Elapsed + again.Elapsed };
+            }
+
+            result = result with { Notes = [.. notes, .. result.Notes.Except(notes)] };
+
+            if (sequence)
+            {
+                MoveFrames(scratch, folder);
+            }
+            else
+            {
+                File.Move(temporary, plan.OutputPath, overwrite: true);
+            }
+
             WriteSidecars(plan, project);
             Log.Information(
                 "Exported {Path}: {Mode} with {Encoder}, {Bytes} bytes, {Duration} in {Seconds:F1} s ({Speed:F1}x real time)",
@@ -77,7 +128,14 @@ public static class Exporter
         }
         finally
         {
-            TryDelete(temporary);
+            if (sequence)
+            {
+                TryDeleteFolder(scratch);
+            }
+            else
+            {
+                TryDelete(temporary);
+            }
         }
     }
 
@@ -99,6 +157,36 @@ public static class Exporter
         return subtitles.Length == 0 && chapters.Length == 0 ? null : new MuxExtras(subtitles, chapters);
     }
 
+    /// <summary>The bytes an export wrote: one file's size, or every frame of an image sequence.</summary>
+    internal static long SizeOf(string path)
+    {
+        if (!path.Contains('%', StringComparison.Ordinal))
+        {
+            return File.Exists(path) ? new FileInfo(path).Length : 0;
+        }
+
+        string folder = Path.GetDirectoryName(path) ?? ".";
+        string name = Path.GetFileName(path);
+        string pattern = name[..name.IndexOf('%', StringComparison.Ordinal)] + "*" + Path.GetExtension(name);
+        return Directory.Exists(folder) ? Directory.EnumerateFiles(folder, pattern).Sum(file => new FileInfo(file).Length) : 0;
+    }
+
+    /// <summary>Makes the file once: a copy, a sound-only encode, an encode through ffmpeg.exe, or one in process.</summary>
+    private static ExportResult Attempt(
+        ExportPlan plan,
+        Project project,
+        string projectPath,
+        string temporary,
+        ExportEnvironment environment,
+        IProgress<ExportProgress>? progress,
+        CancellationToken cancellationToken) => plan.Mode switch
+        {
+            ExportMode.Copy => Copy(plan, project, temporary, progress, cancellationToken),
+            _ when plan.Video is null => EncodeSound(plan, project, projectPath, temporary, progress, cancellationToken),
+            _ when plan.External => ExternalFfmpegExporter.Run(plan, project, projectPath, temporary, environment, progress, cancellationToken),
+            _ => Encode(plan, project, projectPath, temporary, environment, progress, cancellationToken),
+        };
+
     /// <summary>Writes the subtitle files a plan puts beside its video, at their times in the output.</summary>
     private static void WriteSidecars(ExportPlan plan, Project project)
     {
@@ -118,6 +206,25 @@ public static class Exporter
             File.WriteAllText(path, text, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
             Log.Information("Wrote subtitles for {Track} to {Path}", track.Name, path);
         }
+    }
+
+    /// <summary>
+    /// The gain that brings a plan's mix to its loudness target, measured by playing the whole mix
+    /// through a meter first, and what was done; 1 and no note for a plan without a target.
+    /// </summary>
+    internal static float Loudness(ExportPlan plan, Project project, string projectPath, List<string> notes, CancellationToken cancellationToken)
+    {
+        if (plan.Audio is not { Loudness: { } target } audio)
+        {
+            return 1.0f;
+        }
+
+        Sequence sequence = project.Sequence(plan.SequenceId)!;
+        (float integrated, float peak) = ExportSound.Measure(project, sequence, projectPath, [.. plan.Ranges], audio.SampleRate, audio.Channels, cancellationToken);
+        float gain = ExportSound.GainFor(target, integrated, peak, out string note);
+        notes.Add(note);
+        Log.Information("Loudness: {Note}", note);
+        return gain;
     }
 
     private static ExportResult Copy(ExportPlan plan, Project project, string temporary, IProgress<ExportProgress>? progress, CancellationToken cancellationToken)
@@ -141,6 +248,53 @@ public static class Exporter
 
         StreamCopyResult copied = StreamCopier.Copy(job, relay, cancellationToken);
         return new ExportResult(temporary, copied.Bytes, copied.Duration, "copy", 0, copied.Elapsed, []);
+    }
+
+    /// <summary>A sound-only export: the mix straight into the encoder, with no picture to render.</summary>
+    private static ExportResult EncodeSound(
+        ExportPlan plan,
+        Project project,
+        string projectPath,
+        string temporary,
+        IProgress<ExportProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        ExportAudio audio = plan.Audio ?? throw new ArgumentException("A sound-only plan has a sound side.", nameof(plan));
+        var clock = Stopwatch.StartNew();
+        var notes = new List<string>();
+        float gain = Loudness(plan, project, projectPath, notes, cancellationToken);
+
+        using Muxer muxer = Muxer.Create(temporary, plan.Container);
+        using AudioEncoder sound = AudioEncoder.Open(new AudioEncoderSettings(audio.Encoder, audio.SampleRate, audio.Channels, audio.Bitrate), muxer.NeedsGlobalHeader);
+        using var mix = new ExportSound(project, project.Sequence(plan.SequenceId)!, projectPath, [.. plan.Ranges], audio.SampleRate, audio.Channels) { Gain = gain };
+        using MuxExtras? extras = Extras(plan, project);
+
+        int stream = muxer.AddStream(sound);
+        extras?.Open(muxer);
+        muxer.WriteHeader(fastStart: plan.Container is "mp4" or "mov");
+
+        long step = audio.SampleRate;
+        long reported = 0;
+        for (long written = 0; written < mix.Total; written = Math.Min(mix.Total, written + step))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            mix.WriteUpTo(written + step, sound, muxer, stream);
+            extras?.WriteUpTo(muxer, Flicks.FromTimebase(Math.Min(mix.Total, written + step), new Rational(1, audio.SampleRate)));
+
+            long now = clock.ElapsedMilliseconds;
+            if (progress is not null && now - reported >= 250)
+            {
+                reported = now;
+                progress.Report(new ExportProgress((double)written / Math.Max(1, mix.Total), 0, 0, 0, muxer.BytesWritten, audio.Encoder));
+            }
+        }
+
+        sound.Flush(muxer, stream);
+        extras?.Close(muxer);
+        muxer.Finish();
+        progress?.Report(new ExportProgress(1.0, 0, 0, 0, muxer.BytesWritten, audio.Encoder));
+
+        return new ExportResult(temporary, SizeOf(temporary), plan.Duration, audio.Encoder, 0, clock.Elapsed, notes);
     }
 
     private static ExportResult Encode(
@@ -180,12 +334,40 @@ public static class Exporter
 
         return new ExportResult(
             temporary,
-            new FileInfo(temporary).Length,
+            SizeOf(temporary),
             plan.Duration,
             writer.EncoderName ?? "unknown",
             total,
             clock.Elapsed,
             writer.Notes);
+    }
+
+    /// <summary>Moves an image sequence's frames out of the folder they were written into.</summary>
+    private static void MoveFrames(string from, string to)
+    {
+        foreach (string file in Directory.EnumerateFiles(from))
+        {
+            File.Move(file, Path.Combine(to, Path.GetFileName(file)), overwrite: true);
+        }
+    }
+
+    private static void TryDeleteFolder(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+            {
+                Directory.Delete(path, recursive: true);
+            }
+        }
+        catch (IOException error)
+        {
+            Log.Warning(error, "Could not delete the partial export folder {Path}", path);
+        }
+        catch (UnauthorizedAccessException error)
+        {
+            Log.Warning(error, "Could not delete the partial export folder {Path}", path);
+        }
     }
 
     private static void TryDelete(string path)
@@ -255,6 +437,8 @@ public static class Exporter
         }
 
         public string? EncoderName { get; private set; }
+
+        public bool TenBit { get; private set; }
 
         public IReadOnlyList<string> Notes => _notes;
 
@@ -350,6 +534,7 @@ public static class Exporter
                 muxer = Muxer.Create(_path, _plan.Container);
                 encoder = VideoEncoder.Open(Settings(video), muxer.NeedsGlobalHeader);
                 EncoderName = encoder.Name;
+                TenBit = encoder.TakesP010;
                 _notes.AddRange(encoder.Skipped.Select(skipped => $"Skipped {skipped}."));
 
                 if (_plan.Audio is { } audio)
@@ -358,7 +543,8 @@ public static class Exporter
                         new AudioEncoderSettings(audio.Encoder, audio.SampleRate, audio.Channels, audio.Bitrate),
                         muxer.NeedsGlobalHeader);
                     Sequence sequence = _project.Sequence(_plan.SequenceId)!;
-                    mix = new ExportSound(_project, sequence, _projectPath, [.. _plan.Ranges], audio.SampleRate, audio.Channels);
+                    float gain = Loudness(_plan, _project, _projectPath, _notes, _cancellation.Token);
+                    mix = new ExportSound(_project, sequence, _projectPath, [.. _plan.Ranges], audio.SampleRate, audio.Channels) { Gain = gain };
                 }
 
                 int videoStream = muxer.AddStream(encoder);
@@ -466,7 +652,10 @@ public static class Exporter
             },
             video.GopLength,
             video.BFrames,
-            video.Lossless);
+            video.Lossless,
+            video.PixelFormat,
+            video.Profile,
+            video.Level);
 
         internal static VideoEncoderSettings SettingsFor(ExportVideo video) => Settings(video);
     }

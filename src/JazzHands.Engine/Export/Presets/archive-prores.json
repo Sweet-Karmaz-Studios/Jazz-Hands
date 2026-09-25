@@ -1,0 +1,16 @@
+{
+  "name": "archive-prores",
+  "label": "ProRes 422 HQ",
+  "description": "A master to keep or hand on: ProRes 422 HQ, 10 bit, every frame a keyframe, 24 bit PCM, QuickTime.",
+  "category": "archive",
+  "container": "mov",
+  "extension": ".mov",
+  "video": {
+    "codec": "prores",
+    "encoders": ["prores_ks"],
+    "pixelFormat": "yuv422p10le",
+    "profile": "3",
+    "keyframeSeconds": 0
+  },
+  "audio": { "encoder": "pcm_s24le" }
+}

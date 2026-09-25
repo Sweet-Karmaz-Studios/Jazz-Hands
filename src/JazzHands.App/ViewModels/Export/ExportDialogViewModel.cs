@@ -38,7 +38,7 @@ public sealed partial class ExportDialogViewModel : ObservableObject
     private string _outputPath = string.Empty;
 
     [ObservableProperty]
-    private ExportPresetInfo? _preset;
+    private ExportPresetSummary? _preset;
 
     [ObservableProperty]
     private ExportMode _mode = ExportMode.Auto;
@@ -90,7 +90,8 @@ public sealed partial class ExportDialogViewModel : ObservableObject
         _session = session;
         _files = files;
         _ui = ui;
-        _preset = Presets[0];
+        Presets = session.Query(new ListPresetsQuery());
+        _preset = Presets.FirstOrDefault(preset => preset.Name == ExportPresets.Default) ?? Presets[0];
     }
 
     /// <summary>Raised when the dialog should close.</summary>
@@ -103,7 +104,7 @@ public sealed partial class ExportDialogViewModel : ObservableObject
     public string Heading { get; private set; } = "Export";
 
     /// <summary>Every preset.</summary>
-    public IReadOnlyList<ExportPresetInfo> Presets { get; } = [.. ExportPresets.All];
+    public IReadOnlyList<ExportPresetSummary> Presets { get; }
 
     /// <summary>The three modes, in the order the dialog offers them.</summary>
     public IReadOnlyList<ExportMode> Modes { get; } = [ExportMode.Auto, ExportMode.Copy, ExportMode.Encode];
@@ -181,7 +182,7 @@ public sealed partial class ExportDialogViewModel : ObservableObject
 
     partial void OnOutputPathChanged(string value) => RefreshPlan();
 
-    partial void OnPresetChanged(ExportPresetInfo? value)
+    partial void OnPresetChanged(ExportPresetSummary? value)
     {
         // Keep the file name and change the extension to the one the preset writes.
         if (value is not null && OutputPath.Length > 0 && !string.Equals(Path.GetExtension(OutputPath), value.Extension, StringComparison.OrdinalIgnoreCase))
@@ -276,7 +277,9 @@ public sealed partial class ExportDialogViewModel : ObservableObject
 
         string what = plan.Mode == ExportMode.Copy
             ? $"Copy, {(plan.Copy!.AudioStreams.IsEmpty ? "no sound" : $"{plan.Copy.AudioStreams.Length} sound stream(s)")}"
-            : $"Encode {plan.Video!.Width}x{plan.Video.Height} {plan.Video.Codec}{(plan.Audio is null ? string.Empty : $" with {plan.Audio.Encoder}")}";
+            : plan.Video is { } video
+                ? $"Encode {video.Width}x{video.Height} {video.Codec}{(plan.Audio is null ? string.Empty : $" with {plan.Audio.Encoder}")}"
+                : $"Sound only, {plan.Audio!.Encoder}";
 
         string extras = string.Concat(
             plan.Subtitles is { } subtitles

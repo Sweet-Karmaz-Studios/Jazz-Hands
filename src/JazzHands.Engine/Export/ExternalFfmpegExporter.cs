@@ -15,7 +15,7 @@ namespace JazzHands.Engine.Export;
 /// </summary>
 /// <remarks>
 /// It exists to tell an encoder problem from ours. The frames are rendered exactly as the
-/// in-process path renders them and piped to ffmpeg.exe's standard input as raw NV12; the sound
+/// in-process path renders them and piped to ffmpeg.exe's standard input as raw NV12 or P010; the sound
 /// is mixed first into a raw float file beside the output, because two pipes into one process
 /// that reads them at its own pace is a deadlock waiting for a long export. The encoder and its
 /// options are the ones <see cref="VideoEncoder.EncoderOptions"/> gives the in-process encoder,
@@ -49,7 +49,7 @@ internal static class ExternalFfmpegExporter
 
         var clock = Stopwatch.StartNew();
         VideoEncoderSettings settings = Exporter.EncoderSettings(video);
-        string encoder = ChooseEncoder(settings, out List<string> notes);
+        (string encoder, bool tenBit, string format) = ChooseEncoder(settings, out List<string> notes);
         string? soundFile = null;
 
         try
@@ -60,14 +60,14 @@ internal static class ExternalFfmpegExporter
                 MixToFile(project, projectPath, plan, audio, soundFile, cancellationToken);
             }
 
-            string arguments = Arguments(plan, video, settings, encoder, soundFile, temporary);
+            string arguments = Arguments(plan, video, settings, encoder, tenBit, format, soundFile, temporary);
             Log.Information("Encoding through ffmpeg.exe: {Arguments}", arguments);
 
             long total = ExportRenderer.CountFrames(plan);
-            RenderInto(executable, arguments, project, projectPath, plan, environment, total, encoder, progress, cancellationToken);
+            RenderInto(executable, arguments, project, projectPath, plan, environment, total, encoder, tenBit, progress, cancellationToken);
 
             notes.Add("Encoded by ffmpeg.exe.");
-            return new ExportResult(temporary, new FileInfo(temporary).Length, plan.Duration, encoder, total, clock.Elapsed, notes);
+            return new ExportResult(temporary, Exporter.SizeOf(temporary), plan.Duration, encoder, total, clock.Elapsed, notes);
         }
         finally
         {
@@ -79,11 +79,11 @@ internal static class ExternalFfmpegExporter
     }
 
     /// <summary>The first encoder in the chain that opens here, which is the one ffmpeg.exe will be able to open too.</summary>
-    private static string ChooseEncoder(VideoEncoderSettings settings, out List<string> notes)
+    private static unsafe (string Name, bool TenBit, string Format) ChooseEncoder(VideoEncoderSettings settings, out List<string> notes)
     {
         using VideoEncoder probe = VideoEncoder.Open(settings, globalHeader: false);
         notes = [.. probe.Skipped.Select(skipped => $"Skipped {skipped}.")];
-        return probe.Name;
+        return (probe.Name, probe.TakesP010, FFmpeg.AutoGen.ffmpeg.av_get_pix_fmt_name(probe.EncodedFormat));
     }
 
     private static void MixToFile(Project project, string projectPath, ExportPlan plan, ExportAudio audio, string path, CancellationToken cancellationToken)
@@ -110,7 +110,7 @@ internal static class ExternalFfmpegExporter
         }
     }
 
-    private static string Arguments(ExportPlan plan, ExportVideo video, VideoEncoderSettings settings, string encoder, string? soundFile, string output)
+    private static string Arguments(ExportPlan plan, ExportVideo video, VideoEncoderSettings settings, string encoder, bool tenBit, string format, string? soundFile, string output)
     {
         var arguments = new StringBuilder();
         void Add(params string[] parts)
@@ -122,7 +122,8 @@ internal static class ExternalFfmpegExporter
         }
 
         Add("-hide_banner", "-loglevel", "error", "-nostdin", "-y");
-        Add("-f", "rawvideo", "-pix_fmt", "nv12", "-s", $"{video.Width}x{video.Height}", "-framerate", video.FrameRate.ToString(), "-i", "pipe:0");
+        Add("-f", "rawvideo", "-pix_fmt", tenBit ? "p010le" : "nv12", "-s", $"{video.Width}x{video.Height}", "-framerate", video.FrameRate.ToString());
+        Add("-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv", "-i", "pipe:0");
 
         if (soundFile is not null)
         {
@@ -130,7 +131,16 @@ internal static class ExternalFfmpegExporter
             Add("-f", "f32le", "-ar", Invariant(audio.SampleRate), "-ac", Invariant(audio.Channels), "-i", soundFile);
         }
 
-        Add("-map", "0:v");
+        if (encoder == "gif")
+        {
+            // The same two passes the in-process encoder runs: one palette for the whole clip.
+            Add("-filter_complex", "[0:v]format=rgb24,split[a][b];[a]palettegen=stats_mode=full[p];[b][p]paletteuse=dither=sierra2_4a[out]");
+            Add("-map", "[out]");
+        }
+        else
+        {
+            Add("-map", "0:v");
+        }
         if (soundFile is not null)
         {
             Add("-map", "1:a");
@@ -139,7 +149,7 @@ internal static class ExternalFfmpegExporter
         Add("-c:v", encoder);
         foreach ((string key, string value) in VideoEncoder.EncoderOptions(encoder, settings))
         {
-            Add($"-{key}", value);
+            Add($"-{key}:v", value);
         }
 
         Add("-g", Invariant(settings.GopLength), "-bf", Invariant(settings.BFrames));
@@ -148,17 +158,25 @@ internal static class ExternalFfmpegExporter
             Add("-b:v", Invariant(settings.Bitrate));
         }
 
-        Add("-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-color_range", "tv");
-        if (encoder.StartsWith("libx265", StringComparison.Ordinal))
+        if (encoder != "gif")
         {
-            Add("-pix_fmt", "yuv420p");
+            Add("-pix_fmt", format);
+        }
+
+        if (format is "rgb24" or "pal8")
+        {
+            Add("-color_primaries", "bt709", "-color_trc", "iec61966-2-1", "-colorspace", "rgb", "-color_range", "pc");
+        }
+        else
+        {
+            Add("-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-color_range", "tv");
         }
 
         if (soundFile is not null)
         {
             ExportAudio audio = plan.Audio!;
             Add("-c:a", audio.Encoder);
-            if (audio.Encoder != "flac")
+            if (audio.Bitrate > 0)
             {
                 Add("-b:a", Invariant(audio.Bitrate));
             }
@@ -183,6 +201,7 @@ internal static class ExternalFfmpegExporter
         ExportEnvironment environment,
         long total,
         string encoder,
+        bool tenBit,
         IProgress<ExportProgress>? progress,
         CancellationToken cancellationToken)
     {
@@ -222,7 +241,7 @@ internal static class ExternalFfmpegExporter
         try
         {
             using var renderer = new ExportRenderer(environment);
-            using var sink = new PipeSink(process.StandardInput.BaseStream, plan.Video!.Width, plan.Video.Height, total, encoder, progress);
+            using var sink = new PipeSink(process.StandardInput.BaseStream, plan.Video!.Width, plan.Video.Height, tenBit, total, encoder, progress);
             renderer.Render(project, projectPath, plan, sink, cancellationToken);
         }
         catch (IOException error) when (!cancellationToken.IsCancellationRequested)
@@ -268,11 +287,13 @@ internal static class ExternalFfmpegExporter
             : part;
 
     /// <summary>Writes each frame's planes to ffmpeg.exe's standard input as they come.</summary>
-    private sealed class PipeSink(Stream pipe, int width, int height, long total, string encoder, IProgress<ExportProgress>? progress)
+    private sealed class PipeSink(Stream pipe, int width, int height, bool tenBit, long total, string encoder, IProgress<ExportProgress>? progress)
         : IFrameSink, IDisposable
     {
-        private readonly EncoderFrame _frame = EncoderFrame.CreateNv12(width, height);
-        private readonly byte[] _row = new byte[width];
+        private readonly EncoderFrame _frame = tenBit ? EncoderFrame.CreateP010(width, height) : EncoderFrame.CreateNv12(width, height);
+        private readonly byte[] _row = new byte[width * (tenBit ? 2 : 1)];
+
+        public bool TenBit => tenBit;
         private readonly Stopwatch _clock = Stopwatch.StartNew();
         private long _reported;
 
@@ -304,8 +325,8 @@ internal static class ExternalFfmpegExporter
         {
             for (int row = 0; row < rows; row++)
             {
-                new ReadOnlySpan<byte>(plane + ((long)row * stride), width).CopyTo(_row);
-                pipe.Write(_row, 0, width);
+                new ReadOnlySpan<byte>(plane + ((long)row * stride), _row.Length).CopyTo(_row);
+                pipe.Write(_row, 0, _row.Length);
             }
         }
     }

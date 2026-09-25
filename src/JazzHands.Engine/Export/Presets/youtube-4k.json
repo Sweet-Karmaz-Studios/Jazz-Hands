@@ -1,0 +1,16 @@
+{
+  "name": "youtube-4k",
+  "label": "YouTube 4K",
+  "description": "For uploading 4K: HEVC up to 2160p at the sequence's rate, AAC 320 kb/s, MP4.",
+  "category": "youtube",
+  "container": "mp4",
+  "extension": ".mp4",
+  "video": {
+    "codec": "hevc",
+    "encoders": ["hevc_nvenc", "libx265"],
+    "maxHeight": 2160,
+    "quality": 21,
+    "speed": "medium"
+  },
+  "audio": { "encoder": "aac", "bitrate": 320000 }
+}
