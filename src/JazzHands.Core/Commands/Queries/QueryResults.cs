@@ -178,10 +178,12 @@ public sealed record MarkerInfo(
 /// <param name="Label">A short description, for the undo menu.</param>
 /// <param name="IsUndone">True when it has been taken back and could be redone.</param>
 /// <param name="At">When it ran.</param>
+/// <param name="Origin">Who asked for it: gui, cli, mcp, script, rpc:&lt;client&gt;, or empty when nobody said.</param>
 public sealed record HistoryInfo(
     int Index,
     string Command,
     JsonObject Args,
     string Label,
     bool IsUndone,
-    DateTimeOffset At);
+    DateTimeOffset At,
+    string Origin = "");

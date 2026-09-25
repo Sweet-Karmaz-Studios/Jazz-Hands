@@ -10,12 +10,14 @@ namespace JazzHands.Engine.Commands;
 /// <param name="After">The project after it ran.</param>
 /// <param name="ChangedIds">What it touched.</param>
 /// <param name="At">When it ran.</param>
+/// <param name="Issuer">Who asked for it, or empty when nobody said.</param>
 public sealed record UndoEntry(
     ICommand Command,
     Project Before,
     Project After,
     ImmutableArray<string> ChangedIds,
-    DateTimeOffset At);
+    DateTimeOffset At,
+    string Issuer = "");
 
 /// <summary>
 /// Linear undo, by keeping the project on both sides of every command.
@@ -29,11 +31,17 @@ public sealed record UndoEntry(
 ///
 /// Doing something after undoing throws away what was undone, as every editor does. The
 /// alternative, a tree of histories, is a feature nobody has ever been able to explain in a UI.
+///
+/// The dispatcher's queue is the only writer, but the history is read from anywhere: the undo
+/// menu, <c>history.list</c> over the control server, the Command Console. A lock keeps a reader
+/// from seeing the list half way through a push.
 /// </remarks>
 public sealed class UndoStack
 {
+    private readonly Lock _gate = new();
     private readonly List<UndoEntry> _entries = [];
     private readonly int _limit;
+    private int _undoCount;
 
     /// <summary>Creates a stack.</summary>
     /// <param name="limit">
@@ -50,10 +58,28 @@ public sealed class UndoStack
     public static TimeSpan MergeWindow { get; } = TimeSpan.FromSeconds(1.5);
 
     /// <summary>How many commands could be taken back.</summary>
-    public int UndoCount { get; private set; }
+    public int UndoCount
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _undoCount;
+            }
+        }
+    }
 
     /// <summary>How many commands could be put back.</summary>
-    public int RedoCount => _entries.Count - UndoCount;
+    public int RedoCount
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _entries.Count - _undoCount;
+            }
+        }
+    }
 
     /// <summary>True when there is something to take back.</summary>
     public bool CanUndo => UndoCount > 0;
@@ -62,77 +88,131 @@ public sealed class UndoStack
     public bool CanRedo => RedoCount > 0;
 
     /// <summary>Everything remembered, oldest first, including what has been undone.</summary>
-    public ImmutableArray<UndoEntry> Entries => [.. _entries];
+    public ImmutableArray<UndoEntry> Entries
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return [.. _entries];
+            }
+        }
+    }
 
     /// <summary>The command that undo would take back, or null.</summary>
-    public UndoEntry? NextUndo => CanUndo ? _entries[UndoCount - 1] : null;
+    public UndoEntry? NextUndo
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _undoCount > 0 ? _entries[_undoCount - 1] : null;
+            }
+        }
+    }
 
     /// <summary>The command that redo would put back, or null.</summary>
-    public UndoEntry? NextRedo => CanRedo ? _entries[UndoCount] : null;
+    public UndoEntry? NextRedo
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _undoCount < _entries.Count ? _entries[_undoCount] : null;
+            }
+        }
+    }
 
     /// <summary>Records a command that has just run.</summary>
     public void Push(UndoEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
 
-        // A slider drag is many commands and one edit: a command that continues the last one,
-        // straight after it, becomes part of its step. Its Before stays the first command's.
-        if (RedoCount == 0
-            && NextUndo is { } top
-            && entry.Command is IMergeableCommand merging
-            && merging.Continues(top.Command)
-            && ReferenceEquals(top.After, entry.Before)
-            && entry.At - top.At <= MergeWindow)
+        lock (_gate)
         {
-            _entries[UndoCount - 1] = entry with { Before = top.Before, ChangedIds = [.. top.ChangedIds.Union(entry.ChangedIds, StringComparer.Ordinal)] };
-            return;
-        }
+            // A slider drag is many commands and one edit: a command that continues the last one,
+            // straight after it, becomes part of its step. Its Before stays the first command's.
+            if (_undoCount == _entries.Count
+                && _undoCount > 0
+                && _entries[_undoCount - 1] is { } top
+                && entry.Command is IMergeableCommand merging
+                && merging.Continues(top.Command)
+                && ReferenceEquals(top.After, entry.Before)
+                && entry.At - top.At <= MergeWindow)
+            {
+                _entries[_undoCount - 1] = entry with { Before = top.Before, ChangedIds = [.. top.ChangedIds.Union(entry.ChangedIds, StringComparer.Ordinal)] };
+                return;
+            }
 
-        // Doing something new after undoing abandons the branch that was undone.
-        if (RedoCount > 0)
-        {
-            _entries.RemoveRange(UndoCount, RedoCount);
-        }
+            // Doing something new after undoing abandons the branch that was undone.
+            if (_undoCount < _entries.Count)
+            {
+                _entries.RemoveRange(_undoCount, _entries.Count - _undoCount);
+            }
 
-        _entries.Add(entry);
-        UndoCount = _entries.Count;
+            _entries.Add(entry);
+            _undoCount = _entries.Count;
 
-        if (_entries.Count > _limit)
-        {
-            int excess = _entries.Count - _limit;
-            _entries.RemoveRange(0, excess);
-            UndoCount -= excess;
+            if (_entries.Count > _limit)
+            {
+                int excess = _entries.Count - _limit;
+                _entries.RemoveRange(0, excess);
+                _undoCount -= excess;
+            }
         }
     }
 
     /// <summary>Takes back the last command and returns the project as it was.</summary>
-    public UndoEntry Undo() => CanUndo
-        ? _entries[--UndoCount]
-        : throw new CommandException("nothing-to-undo", "There is nothing to undo.");
+    public UndoEntry Undo()
+    {
+        lock (_gate)
+        {
+            return _undoCount > 0
+                ? _entries[--_undoCount]
+                : throw new CommandException("nothing-to-undo", "There is nothing to undo.");
+        }
+    }
 
     /// <summary>Puts back the last undone command and returns the project it produced.</summary>
-    public UndoEntry Redo() => CanRedo
-        ? _entries[UndoCount++]
-        : throw new CommandException("nothing-to-redo", "There is nothing to redo.");
+    public UndoEntry Redo()
+    {
+        lock (_gate)
+        {
+            return _undoCount < _entries.Count
+                ? _entries[_undoCount++]
+                : throw new CommandException("nothing-to-redo", "There is nothing to redo.");
+        }
+    }
 
     /// <summary>Forgets everything, which is what opening another project does.</summary>
     public void Clear()
     {
-        _entries.Clear();
-        UndoCount = 0;
+        lock (_gate)
+        {
+            _entries.Clear();
+            _undoCount = 0;
+        }
     }
 
     /// <summary>The history as a query returns it, oldest first.</summary>
     public ImmutableArray<HistoryInfo> History(int limit)
     {
-        int take = Math.Clamp(limit, 0, _entries.Count);
-        int from = _entries.Count - take;
+        UndoEntry[] entries;
+        int undoCount;
+        lock (_gate)
+        {
+            entries = [.. _entries];
+            undoCount = _undoCount;
+        }
+
+        int take = Math.Clamp(limit, 0, entries.Length);
+        int from = entries.Length - take;
 
         var history = ImmutableArray.CreateBuilder<HistoryInfo>(take);
 
-        for (int index = from; index < _entries.Count; index++)
+        for (int index = from; index < entries.Length; index++)
         {
-            UndoEntry entry = _entries[index];
+            UndoEntry entry = entries[index];
             CommandMetadata metadata = CommandRegistry.Describe(entry.Command);
 
             history.Add(new HistoryInfo(
@@ -140,8 +220,9 @@ public sealed class UndoStack
                 metadata.Name,
                 CommandRegistry.ArgsToJson(entry.Command, metadata),
                 metadata.Description.Length > 0 ? metadata.Description : metadata.Name,
-                index >= UndoCount,
-                entry.At));
+                index >= undoCount,
+                entry.At,
+                entry.Issuer));
         }
 
         return history.ToImmutable();

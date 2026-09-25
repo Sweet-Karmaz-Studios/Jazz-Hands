@@ -27,7 +27,10 @@ public sealed class Session : ISessionState, IAsyncDisposable
     private readonly AutosaveService? _autosave;
     private readonly HistoryLog? _history;
     private readonly bool _ownsRecovery;
+    private readonly TimeProvider _clock;
+    private readonly Lock _lockGate = new();
 
+    private SessionLock? _lock;
     private long _savedVersion;
     private bool _disposed;
 
@@ -55,6 +58,7 @@ public sealed class Session : ISessionState, IAsyncDisposable
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(services);
 
+        _clock = clock ?? TimeProvider.System;
         _dispatcher = new CommandDispatcher(project, services, clock, undoLimit) { ProjectPath = path };
         _dispatcher.ProjectChanged += OnProjectChanged;
 
@@ -73,6 +77,30 @@ public sealed class Session : ISessionState, IAsyncDisposable
 
     /// <summary>Raised after every change.</summary>
     public event EventHandler<ProjectChangedEventArgs>? ProjectChanged;
+
+    /// <summary>
+    /// Raised after every command, whether it changed anything or was refused, with who asked and
+    /// what came back: what the Command Console shows.
+    /// </summary>
+    public event EventHandler<CommandCompletedEventArgs>? CommandCompleted;
+
+    /// <summary>
+    /// Who a command is from when the caller does not say: <c>gui</c> in the editor, <c>cli</c>
+    /// in a jazz process. The history and the change events carry it.
+    /// </summary>
+    public string DefaultIssuer { get; set; } = "local";
+
+    /// <summary>Who holds the session for a batch of their own, or null; see <see cref="TryLock"/>.</summary>
+    public SessionLock? Lock
+    {
+        get
+        {
+            lock (_lockGate)
+            {
+                return Held();
+            }
+        }
+    }
 
     /// <summary>The project as it now is.</summary>
     public Project Project => _dispatcher.Project;
@@ -95,32 +123,141 @@ public sealed class Session : ISessionState, IAsyncDisposable
     /// because they are about the session rather than about the project: which file is open, and
     /// whether what is open matches what is on disk.
     /// </remarks>
-    public async Task<CommandResult> ExecuteAsync(ICommand command, CancellationToken cancellationToken = default)
+    public Task<CommandResult> ExecuteAsync(ICommand command, CancellationToken cancellationToken = default) =>
+        ExecuteAsync(command, DefaultIssuer, cancellationToken);
+
+    /// <summary>Runs a command for someone.</summary>
+    /// <param name="command">What to run.</param>
+    /// <param name="issuer">Who asked: <c>gui</c>, <c>cli</c>, <c>mcp</c>, <c>rpc:&lt;client&gt;</c>.</param>
+    /// <param name="cancellationToken">Gives up while it is still queued.</param>
+    /// <remarks>
+    /// Refused with <c>locked</c> while someone else holds the session. Opening, creating and
+    /// saving are queued with everything else, so they never land in the middle of another
+    /// client's command.
+    /// </remarks>
+    public async Task<CommandResult> ExecuteAsync(ICommand command, string issuer, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
         ObjectDisposedException.ThrowIf(_disposed, this);
+        issuer ??= string.Empty;
+        long started = System.Diagnostics.Stopwatch.GetTimestamp();
 
-        switch (command)
+        CommandResult result;
+        if (HeldByAnother(issuer) is { } held)
         {
-            case NewProjectCommand or OpenProjectCommand:
-                return Replace(command);
-
-            case SaveProjectCommand save:
-                return Save(save);
-
-            default:
-                CommandResult result = await _dispatcher.ExecuteAsync(command, cancellationToken)
-                    .ConfigureAwait(false);
-
-                // Only what changes the project goes in the log. It is replayed after a crash, and
-                // replaying undo, redo or a press of play would do something other than rebuild
-                // the edit.
-                if (result.Ok && _history is not null && CommandRegistry.Describe(command).Undoable)
+            result = CommandResult.Failure(Version, new CommandException(
+                "locked",
+                $"{held.Owner} holds the session ({held.Reason}) until {held.Until:HH:mm:ss}. Try again when it lets go."));
+        }
+        else
+        {
+            try
+            {
+                result = command switch
                 {
-                    _history.Append(CommandRegistry.NameOf(command), CommandRegistry.ArgsToJson(command));
-                }
+                    NewProjectCommand or OpenProjectCommand => await _dispatcher.RunExclusiveAsync(() => Replace(command, issuer), cancellationToken).ConfigureAwait(false),
+                    SaveProjectCommand save => await _dispatcher.RunExclusiveAsync(() => Save(save), cancellationToken).ConfigureAwait(false),
+                    _ => await _dispatcher.ExecuteAsync(command, issuer, cancellationToken).ConfigureAwait(false),
+                };
+            }
+            catch (CommandException refused)
+            {
+                // Opening over unsaved changes throws, as it always has; the console still hears.
+                RaiseCompleted(command, issuer, CommandResult.Failure(Version, refused), System.Diagnostics.Stopwatch.GetElapsedTime(started));
+                throw;
+            }
 
-                return result;
+            // Only what changes the project goes in the log. It is replayed after a crash, and
+            // replaying undo, redo or a press of play would do something other than rebuild the
+            // edit.
+            if (result.Ok && _history is not null && command is not (NewProjectCommand or OpenProjectCommand or SaveProjectCommand) && CommandRegistry.Describe(command).Undoable)
+            {
+                _history.Append(CommandRegistry.NameOf(command), CommandRegistry.ArgsToJson(command));
+            }
+        }
+
+        RaiseCompleted(command, issuer, result, System.Diagnostics.Stopwatch.GetElapsedTime(started));
+        return result;
+    }
+
+    /// <summary>
+    /// Holds the session for one issuer, for a batch of their own: every other issuer's commands
+    /// are refused with <c>locked</c> until it lets go or the time runs out. Queries still work.
+    /// </summary>
+    /// <param name="owner">Who holds it, as they issue commands.</param>
+    /// <param name="reason">Why, for the people who are refused.</param>
+    /// <param name="duration">How long at most; it lets go by itself after.</param>
+    /// <param name="held">The lock held, the new one or the other issuer's.</param>
+    /// <returns>True when the owner now holds it; false when someone else does.</returns>
+    public bool TryLock(string owner, string reason, TimeSpan duration, out SessionLock held)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(owner);
+        lock (_lockGate)
+        {
+            if (Held() is { } current && !string.Equals(current.Owner, owner, StringComparison.Ordinal))
+            {
+                held = current;
+                return false;
+            }
+
+            held = new SessionLock(owner, reason ?? string.Empty, _clock.GetUtcNow() + duration);
+            _lock = held;
+            return true;
+        }
+    }
+
+    /// <summary>Lets go of the session. False when the owner did not hold it.</summary>
+    public bool Unlock(string owner)
+    {
+        lock (_lockGate)
+        {
+            if (Held() is not { } current || !string.Equals(current.Owner, owner, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            _lock = null;
+            return true;
+        }
+    }
+
+    /// <summary>The lock, unless it has run out; called under the gate.</summary>
+    private SessionLock? Held()
+    {
+        if (_lock is { } current && current.Until <= _clock.GetUtcNow())
+        {
+            _lock = null;
+        }
+
+        return _lock;
+    }
+
+    private SessionLock? HeldByAnother(string issuer)
+    {
+        lock (_lockGate)
+        {
+            return Held() is { } current && !string.Equals(current.Owner, issuer, StringComparison.Ordinal) ? current : null;
+        }
+    }
+
+    private void RaiseCompleted(ICommand command, string issuer, CommandResult result, TimeSpan elapsed)
+    {
+        if (CommandCompleted is null)
+        {
+            return;
+        }
+
+        var args = new CommandCompletedEventArgs(CommandRegistry.NameOf(command), CommandRegistry.ArgsToJson(command), issuer, result, _clock.GetUtcNow(), elapsed);
+        foreach (Delegate subscriber in CommandCompleted.GetInvocationList())
+        {
+            try
+            {
+                ((EventHandler<CommandCompletedEventArgs>)subscriber)(this, args);
+            }
+            catch (Exception error)
+            {
+                _log.Error(error, "A CommandCompleted subscriber threw");
+            }
         }
     }
 
@@ -183,7 +320,7 @@ public sealed class Session : ISessionState, IAsyncDisposable
     /// an afternoon to a mistyped <c>jazz project open</c> is exactly the kind of thing an editor
     /// has no excuse for.
     /// </remarks>
-    private CommandResult Replace(ICommand command)
+    private CommandResult Replace(ICommand command, string issuer)
     {
         bool discard = command switch
         {
@@ -210,7 +347,7 @@ public sealed class Session : ISessionState, IAsyncDisposable
         string path = command is OpenProjectCommand opened ? System.IO.Path.GetFullPath(opened.Path) : string.Empty;
 
         ProjectPath = path;
-        _dispatcher.Load(replacement, path);
+        _dispatcher.Load(replacement, path, issuer);
         Interlocked.Exchange(ref _savedVersion, _dispatcher.Version);
 
         _autosave?.Clear();
@@ -234,7 +371,7 @@ public sealed class Session : ISessionState, IAsyncDisposable
         // what was actually written or the next save would write something different again.
         if (written != Project)
         {
-            _dispatcher.Load(written, ProjectPath);
+            _dispatcher.Load(written, ProjectPath, DefaultIssuer);
             _dispatcher.Undo.Clear();
         }
 

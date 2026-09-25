@@ -30,12 +30,16 @@ public enum ChangeOrigin
 /// <param name="CommandName">What ran, or empty when the project was replaced.</param>
 /// <param name="ChangedIds">The ids of everything that was touched.</param>
 /// <param name="Origin">Whether this was a command, an undo, a redo, or a load.</param>
+/// <param name="Issuer">Who asked for it: <c>gui</c>, <c>cli</c>, <c>mcp</c>, <c>rpc:&lt;client&gt;</c>, or empty when nobody said.</param>
+/// <param name="Command">The command that ran, or null for a load.</param>
 public sealed record ProjectChangedEventArgs(
     long Version,
     Project Project,
     string CommandName,
     ImmutableArray<string> ChangedIds,
-    ChangeOrigin Origin);
+    ChangeOrigin Origin,
+    string Issuer = "",
+    ICommand? Command = null);
 
 /// <summary>
 /// The one place a project is allowed to change.
@@ -113,13 +117,38 @@ public sealed class CommandDispatcher : IAsyncDisposable
 
     /// <summary>Runs a command and waits for it.</summary>
     /// <exception cref="CommandException">The command could not be done.</exception>
-    public async Task<CommandResult> ExecuteAsync(ICommand command, CancellationToken cancellationToken = default)
+    public Task<CommandResult> ExecuteAsync(ICommand command, CancellationToken cancellationToken = default) =>
+        ExecuteAsync(command, string.Empty, cancellationToken);
+
+    /// <summary>Runs a command for someone and waits for it.</summary>
+    /// <param name="command">What to run.</param>
+    /// <param name="issuer">Who asked, as the history and the change event will say it.</param>
+    /// <param name="cancellationToken">Gives up while it is still queued.</param>
+    public Task<CommandResult> ExecuteAsync(ICommand command, string issuer, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        return Enqueue(new Job(command, NewCompletion(), issuer ?? string.Empty), cancellationToken);
+    }
 
-        var job = new Job(command, new TaskCompletionSource<CommandResult>(
-            TaskCreationOptions.RunContinuationsAsynchronously));
+    /// <summary>
+    /// Runs something that is about the session rather than a command on the project, such as
+    /// opening another project or saving this one, in its turn in the queue, so it never lands in
+    /// the middle of a command from another client.
+    /// </summary>
+    /// <param name="action">What to run, on the queue's thread.</param>
+    /// <param name="cancellationToken">Gives up while it is still queued.</param>
+    public Task<CommandResult> RunExclusiveAsync(Func<CommandResult> action, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        return Enqueue(new Job(null, NewCompletion(), string.Empty, action), cancellationToken);
+    }
+
+    private static TaskCompletionSource<CommandResult> NewCompletion() =>
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    private async Task<CommandResult> Enqueue(Job job, CancellationToken cancellationToken)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
 
         if (!_queue.Writer.TryWrite(job))
         {
@@ -164,7 +193,7 @@ public sealed class CommandDispatcher : IAsyncDisposable
     /// version keeps counting, so a client that saw version 12 of the old project does not
     /// mistake version 3 of the new one for something it already has.
     /// </remarks>
-    public void Load(Project project, string path = "")
+    public void Load(Project project, string path = "", string issuer = "")
     {
         ArgumentNullException.ThrowIfNull(project);
 
@@ -177,7 +206,8 @@ public sealed class CommandDispatcher : IAsyncDisposable
             project,
             string.Empty,
             [],
-            ChangeOrigin.Load));
+            ChangeOrigin.Load,
+            issuer));
     }
 
     /// <inheritdoc />
@@ -203,34 +233,50 @@ public sealed class CommandDispatcher : IAsyncDisposable
                 continue;
             }
 
+            if (job.Exclusive is { } exclusive)
+            {
+                // Session work: its own exceptions are its caller's to see, as they were before
+                // it was queued.
+                try
+                {
+                    job.Completion.TrySetResult(exclusive());
+                }
+                catch (Exception error)
+                {
+                    job.Completion.TrySetException(error);
+                }
+
+                continue;
+            }
+
             try
             {
-                job.Completion.TrySetResult(Run(job.Command));
+                job.Completion.TrySetResult(Run(job.Command!, job.Issuer));
             }
             catch (CommandException error)
             {
-                _log.Debug("{Command} refused: {Code}", CommandRegistry.NameOf(job.Command), error.Code);
+                _log.Debug("{Command} refused: {Code}", CommandRegistry.NameOf(job.Command!), error.Code);
                 job.Completion.TrySetResult(CommandResult.Failure(Version, error));
             }
             catch (Exception error)
             {
                 // A real bug. The project is untouched, because it is only replaced once a
                 // handler has returned, but the caller has to hear about it.
-                _log.Error(error, "{Command} threw", CommandRegistry.NameOf(job.Command));
+                _log.Error(error, "{Command} threw", CommandRegistry.NameOf(job.Command!));
                 job.Completion.TrySetException(error);
             }
         }
     }
 
-    private CommandResult Run(ICommand command) => command switch
+    private CommandResult Run(ICommand command, string issuer) => command switch
     {
-        UndoCommand undo => RunUndo(undo.Steps),
-        RedoCommand redo => RunRedo(redo.Steps),
-        BatchCommand batch => RunBatch(batch),
-        _ => RunOne(command),
+        UndoCommand undo => RunUndo(undo, issuer),
+        RedoCommand redo => RunRedo(redo, issuer),
+        BatchCommand batch => RunBatch(batch, issuer),
+        _ => RunOne(command, issuer),
     };
 
-    private CommandResult RunOne(ICommand command)
+    private CommandResult RunOne(ICommand command, string issuer)
     {
         CommandMetadata metadata = CommandRegistry.Describe(command);
         Project before = _project;
@@ -238,7 +284,7 @@ public sealed class CommandDispatcher : IAsyncDisposable
         var context = new HandlerContext(_services, _clock, ProjectPath);
         Project after = SettleTitles(before, SettleTransitions(before, Magnetize(before, Apply(before, command, context), context), context), context);
 
-        return Commit(command, metadata, before, after, context.ChangedIds, ChangeOrigin.Command);
+        return Commit(command, metadata, before, after, context.ChangedIds, ChangeOrigin.Command, issuer);
     }
 
     /// <summary>
@@ -249,7 +295,7 @@ public sealed class CommandDispatcher : IAsyncDisposable
     /// it works. Nothing is committed until all of them have returned, so a failure half way
     /// through takes the whole batch with it.
     /// </remarks>
-    private CommandResult RunBatch(BatchCommand batch)
+    private CommandResult RunBatch(BatchCommand batch, string issuer)
     {
         Project before = _project;
         Project working = before;
@@ -271,7 +317,7 @@ public sealed class CommandDispatcher : IAsyncDisposable
 
         working = SettleTitles(before, SettleTransitions(before, Magnetize(before, working, context), context), context);
         CommandMetadata metadata = CommandRegistry.Describe(batch);
-        return Commit(batch, metadata, before, working, context.ChangedIds, ChangeOrigin.Command);
+        return Commit(batch, metadata, before, working, context.ChangedIds, ChangeOrigin.Command, issuer);
     }
 
     private Project Apply(Project project, ICommand command, HandlerContext context)
@@ -430,7 +476,8 @@ public sealed class CommandDispatcher : IAsyncDisposable
         Project before,
         Project after,
         ImmutableArray<string> changed,
-        ChangeOrigin origin)
+        ChangeOrigin origin,
+        string issuer)
     {
         if (ReferenceEquals(before, after))
         {
@@ -445,15 +492,16 @@ public sealed class CommandDispatcher : IAsyncDisposable
 
         if (metadata.Undoable)
         {
-            Undo.Push(new UndoEntry(command, before, after, changed, _clock.GetUtcNow()));
+            Undo.Push(new UndoEntry(command, before, after, changed, _clock.GetUtcNow(), issuer));
         }
 
-        Raise(new ProjectChangedEventArgs(version, after, metadata.Name, changed, origin));
+        Raise(new ProjectChangedEventArgs(version, after, metadata.Name, changed, origin, issuer, command));
         return CommandResult.Success(version, changed);
     }
 
-    private CommandResult RunUndo(int steps)
+    private CommandResult RunUndo(UndoCommand command, string issuer)
     {
+        int steps = command.Steps;
         ArgumentOutOfRangeException.ThrowIfLessThan(steps, 1);
 
         var changed = ImmutableArray.CreateBuilder<string>();
@@ -466,11 +514,12 @@ public sealed class CommandDispatcher : IAsyncDisposable
             changed.AddRange(entry.ChangedIds);
         }
 
-        return Settle(project, changed.ToImmutable(), ChangeOrigin.Undo);
+        return Settle(project, changed.ToImmutable(), ChangeOrigin.Undo, issuer, command);
     }
 
-    private CommandResult RunRedo(int steps)
+    private CommandResult RunRedo(RedoCommand command, string issuer)
     {
+        int steps = command.Steps;
         ArgumentOutOfRangeException.ThrowIfLessThan(steps, 1);
 
         var changed = ImmutableArray.CreateBuilder<string>();
@@ -483,15 +532,15 @@ public sealed class CommandDispatcher : IAsyncDisposable
             changed.AddRange(entry.ChangedIds);
         }
 
-        return Settle(project, changed.ToImmutable(), ChangeOrigin.Redo);
+        return Settle(project, changed.ToImmutable(), ChangeOrigin.Redo, issuer, command);
     }
 
-    private CommandResult Settle(Project project, ImmutableArray<string> changed, ChangeOrigin origin)
+    private CommandResult Settle(Project project, ImmutableArray<string> changed, ChangeOrigin origin, string issuer, ICommand command)
     {
         Volatile.Write(ref _project, project);
         long version = Interlocked.Increment(ref _version);
 
-        Raise(new ProjectChangedEventArgs(version, project, origin.ToString().ToLowerInvariant(), changed, origin));
+        Raise(new ProjectChangedEventArgs(version, project, origin.ToString().ToLowerInvariant(), changed, origin, issuer, command));
         return CommandResult.Success(version, changed);
     }
 
@@ -512,7 +561,8 @@ public sealed class CommandDispatcher : IAsyncDisposable
         }
     }
 
-    private sealed record Job(ICommand Command, TaskCompletionSource<CommandResult> Completion);
+    /// <summary>A command to run for someone, or session work to run in its turn.</summary>
+    private sealed record Job(ICommand? Command, TaskCompletionSource<CommandResult> Completion, string Issuer, Func<CommandResult>? Exclusive = null);
 
     private interface IHandlerAdapter
     {
