@@ -61,6 +61,7 @@ public sealed unsafe class VideoDecoder : IVideoSource
     private readonly ColorInfo _color;
     private bool _disposed;
     private bool _flushed;
+    private long _skipBefore = long.MinValue;
 
     /// <summary>Opens a decoder for a stream of an already-open file.</summary>
     /// <param name="demuxer">The demuxer to pull packets from. Not owned.</param>
@@ -188,6 +189,15 @@ public sealed unsafe class VideoDecoder : IVideoSource
     public int PooledFrames => _pool.Allocated;
 
     /// <summary>
+    /// Until this is cleared, a picture that presents before <paramref name="time"/> and that no
+    /// other picture refers to is not decoded at all: a seek wants the frames before its target
+    /// only as references, and in a stream with B-frames half of them are not (Phase 32).
+    /// </summary>
+    /// <param name="time">The presentation time to skip before, or null to decode everything again.</param>
+    public void SkipUnreferencedBefore(Flicks? time) =>
+        _skipBefore = time is { } until ? until.ToTimebase(_timeBase.Num, _timeBase.Den, RoundingMode.Floor) : long.MinValue;
+
+    /// <summary>
     /// Decodes the next frame, reading packets as needed.
     /// </summary>
     /// <returns>The frame, which the caller must dispose, or null at end of stream.</returns>
@@ -232,6 +242,10 @@ public sealed unsafe class VideoDecoder : IVideoSource
                 _flushed = true;
                 continue;
             }
+
+            // Set on every packet, so a seek's skipping never outlives it.
+            bool skippable = _skipBefore != long.MinValue && packet->pts != ffmpeg.AV_NOPTS_VALUE && packet->pts < _skipBefore;
+            context->skip_frame = skippable ? AVDiscard.AVDISCARD_NONREF : AVDiscard.AVDISCARD_DEFAULT;
 
             int send = ffmpeg.avcodec_send_packet(context, packet);
             if (send != Av.Again && send != ffmpeg.AVERROR(ffmpeg.EAGAIN))

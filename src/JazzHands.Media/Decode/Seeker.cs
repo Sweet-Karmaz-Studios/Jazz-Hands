@@ -144,7 +144,19 @@ public sealed class Seeker : IVideoSource
             && targetFrame > _currentFrameIndex
             && targetFrame - _currentFrameIndex <= window;
 
-        return canDecodeForward ? ScanForwardTo(targetFrame) : SeekBackThenScan(target, targetFrame);
+        // The pictures on the way are wanted only as references, so the ones nothing refers to
+        // are not decoded. Half a frame short of the target, so a timestamp rounded a little low
+        // never skips the target itself.
+        Flicks halfFrame = Flicks.FromFrames(1, _frameRate) / 2;
+        _decoder.SkipUnreferencedBefore(Flicks.FromFrames(targetFrame, _frameRate) - halfFrame);
+        try
+        {
+            return canDecodeForward ? ScanForwardTo(targetFrame) : SeekBackThenScan(target, targetFrame);
+        }
+        finally
+        {
+            _decoder.SkipUnreferencedBefore(null);
+        }
     }
 
     /// <summary>
