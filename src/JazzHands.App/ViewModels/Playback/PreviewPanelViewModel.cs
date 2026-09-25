@@ -279,7 +279,7 @@ public sealed partial class PreviewPanelViewModel : ToolViewModel
             Quality = state.Quality;
             UseProxies = state.ProxiesEnabled;
             DroppedFrames = _engine.DroppedFrames;
-            RenderStats = DescribeRender(state.Render);
+            RenderStats = string.Join(" ", new[] { DescribeRender(state.Render), DescribeTimings(state.Timings) }.Where(part => part.Length > 0));
 
             if (sequence is not null)
             {
@@ -318,6 +318,19 @@ public sealed partial class PreviewPanelViewModel : ToolViewModel
                 System.Globalization.CultureInfo.InvariantCulture,
                 $"Render targets: {stats.TargetsCreated} created, {stats.TargetsOutstanding} in use, {stats.TargetsRented:N0} rented. "
                 + $"Frame textures: {stats.FrameTexturesCreated} created. Layers cached: {stats.LayersCached}.");
+
+    /// <summary>
+    /// Where each played frame's time went, in a line for the same tooltip: how late frames began,
+    /// the render, the present and decoding ahead, and how many pictures a render had to wait for.
+    /// </summary>
+    public static string DescribeTimings(FrameTimingsInfo? timings) =>
+        timings is not { Frames: > 0 } t
+            ? string.Empty
+            : string.Create(
+                System.Globalization.CultureInfo.InvariantCulture,
+                $"Per frame over {t.Frames:N0} played: began {t.Late.P50:F1} ms late (p99 {t.Late.P99:F1}), render {t.Render.P50:F2} ms (p99 {t.Render.P99:F2}), "
+                + $"present {t.Present.P50:F2} ms (p99 {t.Present.P99:F2}), decoding ahead {t.Ahead.P50:F1} ms. "
+                + $"Pictures decoded ahead {t.DecodedAhead:N0}, while a frame waited {t.DecodedInRender:N0}.");
 
     partial void OnQualityChanged(PreviewQuality value)
     {
