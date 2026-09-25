@@ -17,6 +17,9 @@ public enum EffectKind
 
     /// <summary>Mixes the sound of two adjacent clips across the cut between them: a crossfade.</summary>
     AudioTransition,
+
+    /// <summary>Makes sound from nothing, on a sound track: a test tone, pink noise. Its parameters live on the generator clip itself.</summary>
+    AudioGenerator,
 }
 
 /// <summary>The kind of value a parameter holds, which decides how it is typed, stored and drawn.</summary>
@@ -114,6 +117,14 @@ public sealed class GeneratorAttribute(string typeId) : EffectAttribute(typeId)
 {
     /// <inheritdoc />
     public override EffectKind Kind => EffectKind.Generator;
+}
+
+/// <summary>Marks a sound generator: a clip on a sound track that makes its sound, such as a test tone.</summary>
+/// <param name="typeId">The stable identifier, which starts <c>audio.gen.</c>.</param>
+public sealed class AudioGeneratorAttribute(string typeId) : EffectAttribute(typeId)
+{
+    /// <inheritdoc />
+    public override EffectKind Kind => EffectKind.AudioGenerator;
 }
 
 /// <summary>

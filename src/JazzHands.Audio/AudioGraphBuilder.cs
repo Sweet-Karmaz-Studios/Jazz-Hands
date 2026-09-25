@@ -57,7 +57,7 @@ public static class AudioGraphBuilder
             Dictionary<string, Joins> joins = Crossfades(project, track, settings.FrameRate, rate);
             foreach (Clip clip in track.Clips)
             {
-                if (BuildClip(project, clip, rate, effects, used, joins.GetValueOrDefault(clip.Id)) is { } built)
+                if ((Generated(clip, rate, channels, effects, used) ?? BuildClip(project, clip, rate, effects, used, joins.GetValueOrDefault(clip.Id))) is { } built)
                 {
                     clips.Add(built);
                 }
@@ -196,6 +196,50 @@ public static class AudioGraphBuilder
             joins.CrossIn,
             joins.CrossOut,
             remap);
+    }
+
+    /// <summary>
+    /// The mix form of a sound generator's clip (a test tone, pink noise), made with the clip's own
+    /// parameters, writing the mix's channels; null when the clip is not a sound generator's.
+    /// </summary>
+    internal static ClipMix? Generated(Clip clip, int rate, int channels, AudioEffectHost? effects = null, ISet<string>? used = null)
+    {
+        if (!clip.Enabled || clip.GeneratorId is not { } generatorId || clip.Duration <= Flicks.Zero
+            || AudioEffects.Registry.Find(generatorId) is not { Kind: Core.Effects.EffectKind.AudioGenerator, Implementation: { } type } descriptor
+            || !typeof(AudioGenerator).IsAssignableFrom(type))
+        {
+            return null;
+        }
+
+        Effect? own = clip.Effects.FirstOrDefault(effect => string.Equals(effect.TypeId, generatorId, StringComparison.Ordinal));
+        var generator = (AudioGenerator)Activator.CreateInstance(type)!;
+        generator.Configure(
+            descriptor.Params.ToDictionary(
+                parameter => parameter.Name,
+                parameter => AudioEffectHost.Numeric(parameter, own?.Parameter(parameter.Name) is StaticValue { } set ? set.Value : parameter.Default),
+                StringComparer.Ordinal),
+            rate);
+
+        Fade fadeIn = clip.FadeIn ?? Fade.None;
+        Fade fadeOut = clip.FadeOut ?? Fade.None;
+        EquatableArray<Effect> chain = EquatableArray.Create([.. clip.Effects.Where(effect => !ReferenceEquals(effect, own))]);
+        return new ClipMix(
+            clip.Id,
+            new AudioSourceRef(generatorId, 0, channels),
+            clip.Start.ToSamples(rate, RoundingMode.Nearest),
+            clip.End.ToSamples(rate, RoundingMode.Nearest),
+            clip.SourceIn.ToSamples(rate, RoundingMode.Nearest),
+            clip.SourceOut.ToSamples(rate, RoundingMode.Nearest),
+            fadeInLength: fadeIn.Duration.ToSamples(rate, RoundingMode.Nearest),
+            fadeInCurve: fadeIn.Curve,
+            fadeOutLength: fadeOut.Duration.ToSamples(rate, RoundingMode.Nearest),
+            fadeOutCurve: fadeOut.Curve,
+            volume: ScalarCurve.From(clip.Volume, 0.0f, rate),
+            pan: ScalarCurve.From(clip.Pan, 0.0f, rate),
+            effects: effects?.Chain(chain, rate, channels, used ?? new HashSet<string>(StringComparer.Ordinal)))
+        {
+            Generator = generator,
+        };
     }
 
     /// <summary>

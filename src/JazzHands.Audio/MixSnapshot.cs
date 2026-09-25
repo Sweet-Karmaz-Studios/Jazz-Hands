@@ -92,6 +92,11 @@ public sealed class MixSnapshot
 
             foreach (ClipMix clip in track.ClipArray)
             {
+                if (clip.Generator is not null)
+                {
+                    continue;
+                }
+
                 long from = Math.Max(startSample, clip.PlayStart);
                 long to = Math.Min(end, clip.PlayEnd);
 
@@ -324,6 +329,9 @@ public sealed class ClipMix
 
     /// <summary>How many samples late its effects hand the sound back, together: the mixer reads its file this far ahead.</summary>
     public int Latency { get; }
+
+    /// <summary>What makes the clip's sound when it is a generator (a test tone) rather than a file; null for a file.</summary>
+    public AudioGenerator? Generator { get; init; }
 
     /// <summary>The clip identifier.</summary>
     public string Id { get; }

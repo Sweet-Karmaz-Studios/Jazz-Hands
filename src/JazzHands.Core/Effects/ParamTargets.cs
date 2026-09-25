@@ -193,7 +193,10 @@ public static class ParamTargets
                 registry.Find(owner.Clip!.GeneratorId) is { Kind: EffectKind.Generator } generator
                     ? [generator, Transform, Opacity, Crop]
                     : owner.Clip.IsMedia && owner.Clip.IsRemapped ? [Transform, Opacity, Crop, RemapParams] : [Transform, Opacity, Crop],
-            ParamOwnerKind.Clip when owner.Track.Kind == TrackKind.Audio => owner.Clip!.IsRemapped ? [Audio, RemapParams] : [Audio],
+            ParamOwnerKind.Clip when owner.Track.Kind == TrackKind.Audio =>
+                registry.Find(owner.Clip!.GeneratorId) is { Kind: EffectKind.AudioGenerator } sound
+                    ? [sound, Audio]
+                    : owner.Clip.IsRemapped ? [Audio, RemapParams] : [Audio],
             ParamOwnerKind.Track when owner.Track.Kind == TrackKind.Audio => [Audio],
             ParamOwnerKind.Effect => registry.Find(owner.Effect!.TypeId) is { } descriptor ? [descriptor] : [],
             ParamOwnerKind.Mask => [MaskParams],

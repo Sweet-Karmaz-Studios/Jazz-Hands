@@ -535,6 +535,12 @@ public sealed class AudioGraph
     /// </remarks>
     private bool FetchSource(ClipMix clip, long clipSample, int frames)
     {
+        if (clip.Generator is { } generator)
+        {
+            generator.Fill(_clipSource, clip.Source.Channels, clip.SourceIn + clipSample, frames);
+            return true;
+        }
+
         if (clip.IsStraight)
         {
             return _source.Read(clip.Source, clip.SourceIn + clipSample, _clipSource, 0, frames);

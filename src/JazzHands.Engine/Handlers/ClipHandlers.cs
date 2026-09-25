@@ -30,6 +30,22 @@ public sealed class AddClipHandler : ICommandHandler<AddClipCommand>
                 "A clip plays exactly one of --media, --generator or --sequence.");
         }
 
+        if (command.GeneratorId is { } generatorId && EffectCatalog.Registry.Find(generatorId) is { } generator)
+        {
+            bool sound = generator.Kind == Core.Effects.EffectKind.AudioGenerator;
+            if (generator.Kind is not (Core.Effects.EffectKind.Generator or Core.Effects.EffectKind.AudioGenerator))
+            {
+                throw new CommandException("not-a-generator", $"'{generator.Name}' changes a clip rather than making one; add it to a clip with effect.add.");
+            }
+
+            if (sound != (track.Kind == TrackKind.Audio))
+            {
+                throw new CommandException(
+                    "wrong-track-kind",
+                    sound ? $"'{generator.Name}' makes sound, so it goes on a sound track." : $"'{generator.Name}' makes a picture, so it goes on a video track.");
+            }
+        }
+
         if (command.MediaId is { } mediaId && project.MediaItem(mediaId) is null)
         {
             throw new CommandException("missing-media-reference", $"No media with id '{mediaId}' in this project.");

@@ -1656,7 +1656,7 @@ List the effect types and their parameters.
 | Option | Meaning |
 |---|---|
 | `--project <project>` | A .jazz file to read alongside, for its fonts folder and relative paths. |
-| `--kind <video|audio|generator|transition|audio-transition>` | Only video, audio or generator. |
+| `--kind <video|audio|generator|transition|audio-transition|audio-generator>` | Only video, audio or generator. |
 | `--search <search>` | Only types whose id, name or category contain this. |
 
 ### `jazz effect list-presets <project>`
