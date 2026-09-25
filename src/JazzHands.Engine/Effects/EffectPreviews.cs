@@ -177,7 +177,7 @@ public sealed class EffectPreviews : IDisposable
             Range = TimeRange.FromBounds(cut, Length),
         };
 
-        var transition = new Transition(Id.New(), descriptor.TypeId, outgoing.Id, incoming.Id, Flicks.OneSecond, TransitionAlignment.Centered, EquatableArray<EffectParameter>.Empty);
+        var transition = new Transition(PreviewEffectId, descriptor.TypeId, outgoing.Id, incoming.Id, Flicks.OneSecond, TransitionAlignment.Centered, EquatableArray<EffectParameter>.Empty);
         Track first = sequence.Tracks.First(track => track.Kind == TrackKind.Video);
         first = first.AddClip(outgoing).AddClip(incoming) with { Transitions = EquatableArray.Create(transition) };
         sequence = sequence.ReplaceTrack(first);
@@ -258,7 +258,14 @@ public sealed class EffectPreviews : IDisposable
 
     /// <summary>An effect at its defaults, or at its showcase settings when it has some.</summary>
     private static Effect Configured(EffectDescriptor descriptor) =>
-        Set(Effect.Create(descriptor.TypeId), descriptor, Showcase.TryGetValue(descriptor.TypeId, out (string, string)[]? settings) ? settings : []);
+        Set(Effect.Create(descriptor.TypeId) with { Id = PreviewEffectId }, descriptor, Showcase.TryGetValue(descriptor.TypeId, out (string, string)[]? settings) ? settings : []);
+
+    /// <summary>
+    /// One id for every previewed effect and transition, so a seeded one (flicker, grain, glitch) is seeded the
+    /// same each time and its preview is the same picture, rather than one that by chance barely
+    /// shows it.
+    /// </summary>
+    private const string PreviewEffectId = "01M3B0000000000000000PREV0";
 
     private static Effect Set(Effect effect, EffectDescriptor descriptor, (string Name, string Value)[] settings)
     {

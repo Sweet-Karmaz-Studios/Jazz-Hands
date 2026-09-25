@@ -362,6 +362,9 @@ jazz export trailer.jazz --out renders/trailer.mp4 --preset youtube-1080p
 | `--snap-to-keyframes` | For a copy, move cuts to the nearest keyframe instead of refusing. |
 | `--use-in-out` | Export only between the sequence's in and out points. |
 | `--use-external-ffmpeg` | Encode through ffmpeg.exe. |
+| `--subtitles soft\|burn\|sidecar\|none` | What subtitle tracks become. `soft` (the default): a stream per track that players turn on and off, mov_text in MP4, SubRip or ASS (for a styled track or placed cues) in Matroska, the first on by default. `burn`: drawn into the picture, which makes the export an encode. `sidecar`: a file per track beside the video, `trailer.eng.srt`. `none`: left out. ffmpeg.exe exports write sidecars for `soft`. |
+| `--sidecar-format srt\|vtt\|ass` | The format of sidecar files. |
+| `--no-chapters` | Leave the chapter marks out. They go in by default: Matroska chapters, and an MP4 chapter track and `chpl` box, which YouTube reads. |
 | `--dry-run` | Print the plan, with the reasons for the mode, and write nothing. |
 
 A Quick Trim sequence exports its kept stretches back to back; any other sequence exports from its
@@ -941,6 +944,50 @@ Errors: `unknown-preset`, `not-a-title`, `param-animated`, `invalid-value`, `wou
 `wrong-track-kind`, `empty-clip`, `empty-title` (measuring a title with no text),
 `time-out-of-range`, `track-locked`. `timeline describe --detail full` shows each title's text,
 font, size and animations.
+
+### Subtitles and chapters (Phase 21)
+
+A subtitle track holds cues: text in title markup (`[i]`, `[b]`, `[color=#FFCC00]`, `\n`), a time
+and a place (bottom unless said). Cues may overlap; overlapping ones stack. The track has a style,
+sizes as fractions of the frame's height, and a language. The preview draws subtitle tracks; an
+export carries them as `--subtitles` says.
+
+```bash
+jazz subtitle read trailer.jazz captions.srt
+jazz subtitle import trailer.jazz captions.srt --language eng
+jazz subtitle import trailer.jazz --media <capture-id> --stream 3
+jazz subtitle add trailer.jazz <track-id> --at 4s --dur 2s --text "[i]Wishlist now[/i]" --align top
+jazz subtitle set-style trailer.jazz <track-id> --font Bahnschrift --size 0.05 --box "#000000A0"
+jazz subtitle split-long trailer.jazz <track-id> --max-chars 42 --max-lines 2
+jazz subtitle export trailer.jazz <track-id> --out captions.vtt
+jazz chapter add trailer.jazz "Boss fight" --at 01:12
+jazz chapter import trailer.jazz <capture-id> --at 0
+```
+
+| Verb | Does |
+|---|---|
+| `subtitle read [file] [--media m] [--stream n]` | What a file or embedded stream holds: its cues, style, language, and warnings for what will not come across (ASS tags kept but not drawn, WebVTT regions). Changes nothing. |
+| `subtitle import [file] [--media m] [--stream n] [--track t] [--language l] [--offset t]` | SubRip, WebVTT or ASS, or a text stream inside a Matroska or MP4 file in the project. Without `--track`, a new subtitle track on top with the file's style and the stream's language. Cues with no length are left out. |
+| `subtitle add <track> --at --dur --text [--align] [--id]` | One cue. `--align` is `bottom`, `top`, `middle`, `bottom-left`, `top-right` and so on. |
+| `subtitle set-text <cue> --text` | What it says. Typing merges into one undo step. |
+| `subtitle set-time <cue> [--at] [--dur \| --end]` | When it shows. |
+| `subtitle set-align <cue> <align>` | Where it sits. |
+| `subtitle split-long <track> [--max-chars] [--max-lines]` | Wraps cues at word breaks and cuts ones too long into several, at a sentence end near the middle when there is one, sharing the time by length. Formatting stays on its words. |
+| `subtitle shift <track> --by t [--from t]` | Moves cues later, or earlier with a negative time. |
+| `subtitle replace <track> --find --with [--match-case]` | Find and replace in the text as it reads; a match half in italics is found. |
+| `subtitle set-style <track> [--font] [--weight] [--italic] [--size] [--color] [--outline] [--outline-width] [--box] [--shadow] [--margin] [--max-lines] [--max-chars]` | The track's look. Sizes are fractions of the frame's height (0.045 is 49 px at 1080). |
+| `subtitle list <track>` | The cues, with their text as markup and as it reads. |
+| `subtitle export <track> [--format srt\|vtt\|ass] [--out file]` | The track as a file (UTF-8), or its text. The format comes from `--format`, the extension, or SubRip. |
+| `track set-language <track> <code>` | ISO 639-2, such as `eng`; `und` clears it. Also for audio tracks. |
+| `chapter add <name> --at t` | A chapter mark: a marker with its chapter flag, which runs to the next chapter or the end. |
+| `chapter list` | The chapters with where each starts and ends. |
+| `chapter import <media> [--at t]` | A file's own chapters as chapter marks, its start at `--at`. |
+| `chapter from-markers` | Every marker on the sequence becomes a chapter. |
+
+Errors: `not-subtitles`, `not-a-cue`, `no-subtitles`, `stream-not-found`, `cannot-read`,
+`nothing-to-import`, `no-chapters`, `invalid-value`, `value-out-of-range`, `time-out-of-range`,
+`invalid-duration`, `track-locked`. Validation warns `not-a-cue` (a clip on a subtitle track that
+says nothing) and `cue-off-subtitle-track`.
 
 ### Keys
 
