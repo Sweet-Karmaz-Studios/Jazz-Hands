@@ -61,6 +61,18 @@ public sealed class EffectContext : IDisposable
     /// <summary>The time the frame is at, relative to the effect's owner: clip time for a clip's effects.</summary>
     public Flicks Time => _node?.LocalTime ?? Flicks.Zero;
 
+    /// <summary>
+    /// Where the layer's picture is: the matrix from its own pixels to the target's texels. The
+    /// identity for an adjustment layer or a generator, whose picture is the frame.
+    /// </summary>
+    public Matrix3x2 Placement { get; private set; } = Matrix3x2.Identity;
+
+    /// <summary>The layer's picture in its own pixels.</summary>
+    public Vector2 PictureSize { get; private set; } = Vector2.One;
+
+    /// <summary>The part of the picture kept, left, top, right, bottom as fractions of it.</summary>
+    public Vector4 PictureCrop { get; private set; } = LayerNode.NoCrop;
+
     /// <summary>The folder the project file is in, which relative paths in parameters are from; empty for none.</summary>
     public string ProjectFolder { get; internal set; } = string.Empty;
 
@@ -193,13 +205,16 @@ public sealed class EffectContext : IDisposable
         _common.Dispose();
     }
 
-    /// <summary>Aims the context at the next effect, on a frame of a size.</summary>
-    internal void Begin(EffectNode node, float qualityScale, int frameWidth, int frameHeight)
+    /// <summary>Aims the context at the next effect, on a frame of a size, for a layer placed as given.</summary>
+    internal void Begin(EffectNode node, float qualityScale, int frameWidth, int frameHeight, LayerNode? layer = null)
     {
         _node = node;
         QualityScale = qualityScale;
         FrameWidth = frameWidth;
         FrameHeight = frameHeight;
+        Placement = layer?.Transform ?? Matrix3x2.Identity;
+        PictureSize = layer is null ? new Vector2(frameWidth, frameHeight) : new Vector2(layer.SourceWidth, layer.SourceHeight);
+        PictureCrop = layer?.Crop ?? LayerNode.NoCrop;
     }
 
     /// <summary>Compiles every pass of an effect, so a shader that does not compile fails before the frame does.</summary>

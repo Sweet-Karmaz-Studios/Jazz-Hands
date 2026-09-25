@@ -429,7 +429,7 @@ public sealed class Compositor : IDisposable
             }
 
             RenderTarget output = Pool.Rent(graph.Width, graph.Height);
-            _effectContext.Begin(node, layer.Scale, graph.Width, graph.Height);
+            _effectContext.Begin(node, layer.Scale, graph.Width, graph.Height, layer);
 
             if (custom is not null)
             {

@@ -2078,6 +2078,37 @@ Change a keyframe's value.
 | `--local` | Read --at from the clip's start rather than the sequence's. |
 | `--no-save` | Do not write the project back. |
 
+## `jazz layout`
+
+Commands and queries about layout.
+
+### `jazz layout apply <project> <layout>`
+
+Lay clips out on the frame: facecam corner, side by side, before and after, grids of 2, 3 and 4.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<layout>` | facecam, side-by-side, before-after, grid-2, grid-3 or grid-4. |
+
+| Option | Meaning |
+|---|---|
+| `--clips <list>` | Required. The clips, in the order the layout fills. |
+| `--corner <corner>` | facecam: top-left, top-right, bottom-left or bottom-right. Default: bottom-right. Default: bottom-right. |
+| `--size <number>` | facecam: its width as a fraction of the frame. Default: 0.28. Default: 0.28. |
+| `--margin <number>` | facecam: distance from the edges, in pixels. Default: 40. Default: 40. |
+| `--split <number>` | before-after: where the second clip starts, 0 to 1. Default: 0.5. Default: 0.5. |
+| `--gap <number>` | Pixels between cells. Default: 0. Default: 0. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz layout list <project>`
+
+The layouts layout.apply knows, with how many clips each takes.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
 ## `jazz marker`
 
 Markers on a sequence or a clip: points and ranges, names, colours, chapters.

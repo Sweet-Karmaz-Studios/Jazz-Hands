@@ -112,31 +112,7 @@ public static class ImpactCurves
     /// Smooth one dimensional gradient noise from -1 to 1, a different stream for each seed and
     /// channel, whole numbers of <paramref name="x"/> being where it passes through zero.
     /// </summary>
-    public static double Noise(double x, uint seed, uint channel)
-    {
-        double cell = Math.Floor(x);
-        double f = x - cell;
-        long whole = (long)cell;
-        double g0 = Gradient(whole, seed, channel);
-        double g1 = Gradient(whole + 1, seed, channel);
-        double fade = f * f * f * ((f * ((f * 6) - 15)) + 10);
-
-        // Two gradients meeting in the middle of the cell peak at a quarter; doubling brings it near one.
-        return Math.Clamp(2.0 * ((g0 * f) + ((g1 * (f - 1)) - (g0 * f)) * fade), -1.0, 1.0);
-    }
-
-    private static double Gradient(long cell, uint seed, uint channel)
-    {
-        uint hash = Pcg((uint)cell ^ Pcg((uint)(cell >> 32) ^ Pcg(seed ^ Pcg(channel))));
-        return ((hash & 0xFFFFFF) / (double)0xFFFFFF * 2.0) - 1.0;
-    }
-
-    private static uint Pcg(uint value)
-    {
-        uint state = (value * 747796405u) + 2891336453u;
-        uint word = ((state >> (int)((state >> 28) + 4u)) ^ state) * 277803737u;
-        return (word >> 22) ^ word;
-    }
+    public static double Noise(double x, uint seed, uint channel) => Core.Drivers.DriverNoise.Noise(x, seed, channel);
 
     private static double SmoothOut(double v) => 1.0 - (v * v * (3 - (2 * v)));
 
