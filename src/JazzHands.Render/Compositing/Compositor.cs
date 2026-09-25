@@ -703,8 +703,8 @@ public sealed class Compositor : IDisposable
 
     /// <summary>
     /// A layer with motion blur: each moment drawn over nothing, frame sized, with its own place,
-    /// opacity, masks and effects, and added in at an equal share, which is their average in
-    /// premultiplied linear light.
+    /// opacity, masks and effects, and added in at its share (equal, or an echo's fading weights),
+    /// which is their average in premultiplied linear light.
     /// </summary>
     private RenderTarget Average(RenderGraph graph, MotionBlurLayerSource source)
     {
@@ -717,10 +717,10 @@ public sealed class Compositor : IDisposable
         // Bilinear, not bicubic: at an exact texel an identity draw then copies it unchanged.
         RenderGraph exact = graph with { Bicubic = false };
         var whole = new LayerNode(new SolidLayerSource(Vector4.Zero), graph.Width, graph.Height, Matrix3x2.Identity, LayerNode.NoCrop, 1.0f, BlendMode.Normal, []);
-        float share = 1.0f / source.Samples.Length;
-        foreach (LayerNode sample in source.Samples)
+        for (int index = 0; index < source.Samples.Length; index++)
         {
-            RenderTarget placed = Alone(graph, sample);
+            float share = source.Weights.IsDefault ? 1.0f / source.Samples.Length : source.Weights[index];
+            RenderTarget placed = Alone(graph, source.Samples[index]);
             DrawQuad(exact, whole, placed, sum.View, share, _add);
             Pool.Return(placed);
         }

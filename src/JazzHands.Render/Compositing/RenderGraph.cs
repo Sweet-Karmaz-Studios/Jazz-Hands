@@ -42,10 +42,12 @@ public sealed record TransitionLayerSource(LayerNode? Outgoing, LayerNode? Incom
 
 /// <summary>
 /// A layer with motion blur: the same layer placed at moments across the shutter, each drawn over
-/// nothing, averaged into one frame-sized picture in linear light.
+/// nothing, averaged into one frame-sized picture in linear light. An echo is the same with the
+/// layer at earlier frames and weights that fade with age.
 /// </summary>
 /// <param name="Samples">The layer at each moment, each with its own place, opacity, masks and effects.</param>
-public sealed record MotionBlurLayerSource(ImmutableArray<LayerNode> Samples) : LayerSource;
+/// <param name="Weights">Each sample's share, summing to one; equal shares when not given.</param>
+public sealed record MotionBlurLayerSource(ImmutableArray<LayerNode> Samples, ImmutableArray<float> Weights = default) : LayerSource;
 
 /// <summary>A track matte at one moment: the matte track drawn alone, and what of it the layer keeps.</summary>
 /// <param name="Graph">The matte track's layers at this moment, at the frame's size.</param>

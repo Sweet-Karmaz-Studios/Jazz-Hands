@@ -9,6 +9,7 @@ using JazzHands.Core.Time;
 using JazzHands.Core.Titles;
 using JazzHands.Render.Color;
 using JazzHands.Render.Effects;
+using JazzHands.Render.Effects.Looks;
 using JazzHands.Render.Effects.Stabilize;
 using JazzHands.Render.Frames;
 
@@ -254,7 +255,9 @@ public static class RenderGraphBuilder
 
             LayerNode layer = Layer(clip, local, source, frameSize, options, Steady(project, clip, time, source.Size, frames, options)) with { Effects = effects };
             TrackMatteNode? matte = Matted(project, sequence, TrackMatte.For(clip, track), time, frames, options, depth);
-            layers.Add((Blurred(project, sequence, track, clip, time, source, layer, frameSize, (width, height), frames, options, depth, settings.FrameRate) ?? layer) with { TrackMatte = matte });
+            layers.Add((Echoed(project, track, clip, time, source, layer, frameSize, (width, height), frames, options, depth, settings.FrameRate)
+                ?? Blurred(project, sequence, track, clip, time, source, layer, frameSize, (width, height), frames, options, depth, settings.FrameRate)
+                ?? layer) with { TrackMatte = matte });
         }
 
         return new RenderGraph(width, height, layers.ToImmutable())
@@ -663,6 +666,73 @@ public static class RenderGraphBuilder
         return new LayerNode(new MotionBlurLayerSource(samples.ToImmutable()), output.Width, output.Height, Matrix3x2.Identity, LayerNode.NoCrop, 1.0f, clip.BlendMode, [], options.Scale);
     }
 
+    /// <summary>
+    /// A clip with an echo: the layer at this frame and at earlier ones, spaced as the effect says,
+    /// to be averaged with weights that fade with age. Null when the clip has no echo, or no
+    /// earlier frame is inside it yet.
+    /// </summary>
+    private static LayerNode? Echoed(
+        Project project,
+        Track track,
+        Clip clip,
+        Flicks time,
+        (LayerSource Source, Vector2 Size, ConformPolicy Policy) source,
+        LayerNode layer,
+        Vector2 frameSize,
+        (int Width, int Height) output,
+        IFrameProvider frames,
+        RenderOptions options,
+        int depth,
+        Rational frameRate)
+    {
+        if (clip.Effects.IsEmpty
+            || clip.Effects.FirstOrDefault(effect => effect.Enabled && string.Equals(effect.TypeId, EchoEffect.TypeId, StringComparison.Ordinal)) is not { } effect
+            || options.Effects.Find(EchoEffect.TypeId) is not { } descriptor)
+        {
+            return null;
+        }
+
+        ParameterSet parameters = ParameterSet.Evaluate(descriptor, effect, time - clip.Start);
+        int spacing = parameters.Int(EchoEffect.Spacing);
+        float[] weights = EchoEffect.Weights(parameters.Int(EchoEffect.Count), parameters.Float(EchoEffect.Decay));
+        var samples = ImmutableArray.CreateBuilder<LayerNode>();
+        var shares = ImmutableArray.CreateBuilder<float>();
+        for (int index = 0; index < weights.Length; index++)
+        {
+            Flicks at = time - Flicks.FromFrames(index * spacing, frameRate);
+            if (at < clip.Start)
+            {
+                break;
+            }
+
+            (LayerSource Source, Vector2 Size, ConformPolicy Policy)? picture = index == 0
+                ? source
+                : Source(project, clip, at, track.Order, frameSize, output, frames, options, depth, frameRate);
+            if (picture is not { } drawn)
+            {
+                break;
+            }
+
+            samples.Add(Layer(clip, at - clip.Start, drawn, frameSize, options, Steady(project, clip, at, drawn.Size, frames, options))
+                with { Effects = layer.Effects, Blend = BlendMode.Normal });
+            shares.Add(weights[index]);
+        }
+
+        if (samples.Count <= 1)
+        {
+            return null;
+        }
+
+        // The frames before the clip's start are missing, so what is there shares the whole weight.
+        float sum = shares.Sum();
+        for (int index = 0; index < shares.Count; index++)
+        {
+            shares[index] /= sum;
+        }
+
+        return new LayerNode(new MotionBlurLayerSource(samples.ToImmutable(), shares.ToImmutable()), output.Width, output.Height, Matrix3x2.Identity, LayerNode.NoCrop, 1.0f, clip.BlendMode, [], options.Scale);
+    }
+
     /// <summary>True when something the compositor places a clip by is keyframed: what motion blur blurs.</summary>
     private static bool Moves(Clip clip)
     {
@@ -776,9 +846,11 @@ public static class RenderGraphBuilder
 
         foreach (Effect effect in clip.Effects)
         {
-            // Stabilizing moves the layer (see Steady) rather than running over its picture.
+            // Stabilizing moves the layer (see Steady) and echo draws it again at earlier frames
+            // (see Echoed), rather than either running over its picture.
             if (!string.Equals(effect.TypeId, clip.GeneratorId, StringComparison.Ordinal)
                 && !string.Equals(effect.TypeId, StabilizeEffect.TypeId, StringComparison.Ordinal)
+                && !string.Equals(effect.TypeId, EchoEffect.TypeId, StringComparison.Ordinal)
                 && Node(effect, local, clip.Duration, time, options) is { } node)
             {
                 nodes.Add(node);
