@@ -19,11 +19,17 @@ public partial class App : Application
 {
     private ServiceProvider? _services;
     private Shell.TrayHost? _tray;
+    private Shell.StartupTimes? _startup;
+    private bool _measuring;
+    private Task<Render.RenderDevice>? _device;
 
     /// <inheritdoc />
     protected override void OnStartup(StartupEventArgs e)
     {
         ArgumentNullException.ThrowIfNull(e);
+
+        _startup = new Shell.StartupTimes();
+        _startup.Mark("runtime");
 
         bool spike = e.Args.Contains("--spike", StringComparer.Ordinal);
         LogSetup.ConfigureForApp(spike ? LogEventLevel.Debug : LogEventLevel.Information);
@@ -51,6 +57,26 @@ public partial class App : Application
 
         base.OnStartup(e);
 
+        // The GPU chosen in Settings, unless JAZZ_GPU says otherwise for this run. The device is
+        // created on another thread while the rest starts: 150 ms or so that nothing waits on
+        // until the playback engine is made (Phase 32).
+        EditorSettings editor = EditorSettings.Store().Current;
+        if (Environment.GetEnvironmentVariable("JAZZ_GPU") is null && Render.GpuChoice.TryParse(editor.Gpu, out Render.GpuChoice? gpu))
+        {
+            Render.RenderDevice.Preferred = gpu;
+        }
+
+        if (!spike)
+        {
+            _device = Task.Run(() => Render.RenderDevice.Create());
+        }
+
+        if (Shell.StartupTimes.MeasurePath(e.Args) is { } measured)
+        {
+            MeasureStartup(measured);
+            return;
+        }
+
         // The taskbar, the jump list and notifications key on this; it must come before any window.
         if (!spike)
         {
@@ -59,7 +85,6 @@ public partial class App : Application
 
         // One editor at a time: a second launch hands what it was asked (a project, a Quick Trim,
         // a notification's link) to the first and goes, whatever the first's window is doing.
-        EditorSettings editor = EditorSettings.Store().Current;
         Shell.LaunchRequest launch = Shell.LaunchRequest.Parse(e.Args);
         string? project = spike ? null
             : launch.Action is Shell.LaunchAction.Show or Shell.LaunchAction.Background
@@ -68,6 +93,7 @@ public partial class App : Application
         if (!spike && !e.Args.Contains(Shell.Startup.NewInstance, StringComparer.Ordinal)
             && Shell.Startup.TryHandOffAsync(launch).GetAwaiter().GetResult())
         {
+            _device?.ContinueWith(made => made.Result.Dispose(), TaskContinuationOptions.OnlyOnRanToCompletion);
             Shutdown(0);
             return;
         }
@@ -78,18 +104,14 @@ public partial class App : Application
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
         }
 
-        // The GPU chosen in Settings, unless JAZZ_GPU says otherwise for this run.
-        if (Environment.GetEnvironmentVariable("JAZZ_GPU") is null && Render.GpuChoice.TryParse(editor.Gpu, out Render.GpuChoice? gpu))
-        {
-            Render.RenderDevice.Preferred = gpu;
-        }
-
         try
         {
             MainWindow = CreateStartupWindow(project, spike, e.Args);
             if (launch.Action != Shell.LaunchAction.Background || spike)
             {
+                MainWindow.ContentRendered += OnFirstFrame;
                 MainWindow.Show();
+                _startup.Mark("shown");
             }
 
             StartControlServer();
@@ -105,6 +127,53 @@ public partial class App : Application
                 "Jazz Hands could not start",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
+            Shutdown(1);
+        }
+    }
+
+    /// <summary>Logs how long starting took, once the window's first frame is up.</summary>
+    private void OnFirstFrame(object? sender, EventArgs e)
+    {
+        if (sender is Window window)
+        {
+            window.ContentRendered -= OnFirstFrame;
+        }
+
+        if (_startup is { } startup)
+        {
+            startup.Mark("first frame");
+            Log.ForContext<App>().Information("Jazz Hands ready: {Steps} after the process started", startup.Describe());
+        }
+    }
+
+    /// <summary>
+    /// Starts as a launch with no project does, with the window built and laid out off screen and
+    /// never shown, writes how long each step took to <paramref name="path"/>, and quits. Nothing
+    /// is handed to another editor, registered with Windows or put in the notification area.
+    /// </summary>
+    private void MeasureStartup(string path)
+    {
+        Shell.StartupTimes startup = _startup!;
+        _measuring = true;
+        try
+        {
+            Window window = CreateStartupWindow(null, spike: false, []);
+            if (window.Content is FrameworkElement content)
+            {
+                var size = new Size(2560, 1440);
+                content.Measure(size);
+                content.Arrange(new Rect(size));
+                content.UpdateLayout();
+            }
+
+            startup.Mark("layout");
+            startup.Write(path);
+            Log.ForContext<App>().Information("Measured a start without showing the window: {Steps}", startup.Describe());
+            Shutdown(0);
+        }
+        catch (Exception error)
+        {
+            Log.ForContext<App>().Fatal(error, "Measuring the start failed");
             Shutdown(1);
         }
     }
@@ -125,7 +194,9 @@ public partial class App : Application
         _tray?.Dispose();
         _services?.GetService<Control.ControlServer>()?.DisposeAsync().AsTask().GetAwaiter().GetResult();
         _services?.GetService<Session>()?.DisposeAsync().AsTask().GetAwaiter().GetResult();
-        _services?.Dispose();
+        // Asynchronously: the control server can only be disposed that way, and a synchronous
+        // dispose of the container throws for it.
+        _services?.DisposeAsync().AsTask().GetAwaiter().GetResult();
 
         LogSetup.Shutdown();
         base.OnExit(e);
@@ -377,11 +448,31 @@ public partial class App : Application
         }
 #endif
         (Project project, string path) = OpenProject(projectPath);
+        _startup?.Mark("project");
 
         var services = new ServiceCollection();
-        services.AddJazzHandsApp(project, path);
+        services.AddJazzHandsApp(project, path, _device);
         _services = services.BuildServiceProvider();
+        if (_measuring)
+        {
+            // Measuring: the heavy services one at a time first, so the times say which is slow.
+            _services.GetRequiredService<Session>();
+            _startup?.Mark("session");
+            _services.GetRequiredService<Render.RenderDevice>();
+            _startup?.Mark("device");
+            _services.GetRequiredService<Engine.Playback.Transport>();
+            _startup?.Mark("transport");
+            _services.GetRequiredService<Engine.Playback.PlaybackEngine>();
+            _startup?.Mark("playback");
+            _services.GetRequiredService<Engine.Export.ExportQueue>();
+            _startup?.Mark("export queue");
+        }
 
-        return new MainWindow(_services.GetRequiredService<ViewModels.MainViewModel>());
+        ViewModels.MainViewModel model = _services.GetRequiredService<ViewModels.MainViewModel>();
+        _startup?.Mark("services");
+
+        var window = new MainWindow(model);
+        _startup?.Mark("window");
+        return window;
     }
 }

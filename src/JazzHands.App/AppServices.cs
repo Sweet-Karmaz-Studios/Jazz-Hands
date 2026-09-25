@@ -29,7 +29,11 @@ public static class AppServices
     /// <param name="services">The collection to add to.</param>
     /// <param name="project">The project to open.</param>
     /// <param name="path">Where it lives, or empty for one that has never been saved.</param>
-    public static IServiceCollection AddJazzHandsApp(this IServiceCollection services, Project project, string path)
+    /// <param name="device">
+    /// The render device already being created, started early so the GPU comes up while WPF and the
+    /// rest of the services do; null creates it when first asked for.
+    /// </param>
+    public static IServiceCollection AddJazzHandsApp(this IServiceCollection services, Project project, string path, Task<RenderDevice>? device = null)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(project);
@@ -117,7 +121,7 @@ public static class AppServices
 
         // One device for decode, the preview and everything else that touches the GPU. WARP when
         // there is no hardware adapter, so the editor still opens on a machine without one.
-        services.AddSingleton(_ => RenderDevice.Create());
+        services.AddSingleton(_ => device?.GetAwaiter().GetResult() ?? RenderDevice.Create());
 
         // The playback engine is what the playback.* commands drive: the session finds it among
         // these services as IPlaybackController, which is what makes a command from the CLI or

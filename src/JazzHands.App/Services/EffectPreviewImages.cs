@@ -35,6 +35,7 @@ public sealed class EffectPreviewImages : IEffectPreviewImages, IDisposable
     private readonly EffectRegistry _registry;
     private readonly CancellationTokenSource _stop = new();
     private Thread? _worker;
+    private bool _disposed;
 
     /// <summary>Creates the service; <see cref="Start"/> begins rendering.</summary>
     public EffectPreviewImages(IUiDispatcher ui, EffectRegistry? registry = null)
@@ -66,6 +67,13 @@ public sealed class EffectPreviewImages : IEffectPreviewImages, IDisposable
     /// <inheritdoc />
     public void Dispose()
     {
+        // The container holds it as itself and as IEffectPreviewImages, and disposes both.
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
         _stop.Cancel();
         _worker?.Join(TimeSpan.FromSeconds(5));
         _stop.Dispose();
