@@ -159,7 +159,7 @@ public sealed class AddTitleHandler : ICommandHandler<AddTitleCommand>
         (Sequence sequence, Track track, bool made) = Place(project, command, range);
         Vector2 frame = TitleHelp.Frame(project, sequence);
 
-        string text = command.Text ?? TitleMarkup.ScaleSizes(preset.Text, frame.Y / TitlePreset.ReferenceHeight);
+        string text = command.Text ?? TitleMarkup.ScaleSizes(preset.Text, TitlePreset.SizeScale(frame));
         Effect own = preset.Style(Effect.Create(TitleParams.GeneratorId), TitleHelp.Descriptor, frame);
         own = TitleHelp.Set(own, TitleParams.Text, text);
         own = TitleHelp.Set(own, TitleParams.Font, command.Font);

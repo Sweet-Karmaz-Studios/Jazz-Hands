@@ -1,0 +1,17 @@
+{
+  "name": "tiktok",
+  "label": "TikTok",
+  "description": "For a vertical sequence: H.264 up to 1080 by 1920 at the sequence's rate, AAC 256 kb/s, MP4. Make the sequence with sequence.reframe.",
+  "category": "web",
+  "container": "mp4",
+  "extension": ".mp4",
+  "video": {
+    "codec": "h264",
+    "encoders": ["h264_nvenc", "libx264"],
+    "maxWidth": 1080,
+    "maxHeight": 1920,
+    "quality": 20,
+    "speed": "medium"
+  },
+  "audio": { "encoder": "aac", "bitrate": 256000 }
+}

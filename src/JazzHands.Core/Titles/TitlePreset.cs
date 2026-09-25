@@ -28,7 +28,10 @@ public sealed record TitlePresetAnimation(
 /// <c>"box": "#00000099"</c>), so a preset file reads like the <c>jazz title add</c> that would
 /// make the same title, and <c>jazz effect list gen.title</c> documents every key. It is written
 /// for a 1080 line frame: every distance (size, position, padding, outline, shadow) is scaled to
-/// the sequence's height when used, so a lower third sits in the same place at 720p and at 4K.
+/// the sequence's height when used, so a lower third sits in the same place at 720p and at 4K. In
+/// a portrait frame (Shorts, Reels) sizes follow the width, its short side, and the 16:9 frame the
+/// preset was placed in is laid across the width and the middle 70% of the height, clear of the
+/// buttons and captions those apps draw over the top and bottom.
 /// </para>
 /// <para>
 /// Built-in presets ship inside the engine; a person's own are <c>.json</c> files in
@@ -53,6 +56,12 @@ public sealed record TitlePreset(
 {
     /// <summary>The frame height presets are written for.</summary>
     public const float ReferenceHeight = 1080.0f;
+
+    /// <summary>The frame width presets are written for.</summary>
+    public const float ReferenceWidth = 1920.0f;
+
+    /// <summary>How much of a portrait frame's height a preset's frame is laid across, clear of the apps' buttons.</summary>
+    public const float PortraitBand = 0.7f;
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
@@ -166,19 +175,24 @@ public sealed record TitlePreset(
         ArgumentNullException.ThrowIfNull(own);
         ArgumentNullException.ThrowIfNull(title);
 
-        float scale = frame.Y / ReferenceHeight;
+        float scale = SizeScale(frame);
         Effect result = own;
         foreach ((string name, string text) in Values)
         {
             if (title.Param(name) is { } parameter)
             {
-                ParamValue value = Scale(name, ParamValues.Parse(parameter, text), scale);
+                ParamValue value = name == TitleParams.Position && frame.X < frame.Y && ParamValues.Parse(parameter, text) is ParamValue.Float2 place
+                    ? new ParamValue.Float2(place.Value * new Vector2(frame.X / ReferenceWidth, frame.Y * PortraitBand / ReferenceHeight))
+                    : Scale(name, ParamValues.Parse(parameter, text), name == TitleParams.Width && frame.X < frame.Y ? frame.X / ReferenceWidth : scale);
                 result = result.WithParameter(name, AnimatedValue.Constant(value));
             }
         }
 
         return result;
     }
+
+    /// <summary>How much a preset's sizes grow for a frame: by its short side, the height of a landscape frame and the width of a portrait one.</summary>
+    public static float SizeScale(Vector2 frame) => MathF.Min(frame.X, frame.Y) / ReferenceHeight;
 
     /// <summary>How long a title from this preset lasts when nothing says.</summary>
     [JsonIgnore]

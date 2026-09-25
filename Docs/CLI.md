@@ -3260,6 +3260,25 @@ List the sequences in the project.
 |---|---|
 | `<project>` | The .jazz file to work on. |
 
+### `jazz sequence reframe <project>`
+
+Make a vertical version of a sequence (for Shorts, Reels, TikTok): a cropped or fitted picture over a blurred copy, the crop panned or following a tracked point.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--size <size>` | The new frame. Default: 1080x1920. |
+| `--from <id>` | The sequence to reframe; the active one when not given. |
+| `--mode <crop|fit>` | crop or fit. Default: crop. Default: crop. |
+| `--window <number>` | crop: the window's width over its height. Default: 0.8. Default: 0.8. |
+| `--follow <follow>` | crop: a point track to keep in the middle. |
+| `--blur <number>` | The background's blur in pixels. Default: 40. Default: 40. |
+| `--name <name>` | What to call the new sequence. |
+| `--no-save` | Do not write the project back. |
+
 ### `jazz sequence remove <project> <sequence-id>`
 
 Remove a sequence.
