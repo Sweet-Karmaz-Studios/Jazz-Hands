@@ -938,6 +938,24 @@ Paste copied clips at a time, over what is there or pushing it on.
 | `--sequence <id>` | Which sequence. |
 | `--no-save` | Do not write the project back. |
 
+### `jazz clip ramp-speed <project> <clip-id>`
+
+Ramp a clip from one speed to another.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The clip id. |
+
+| Option | Meaning |
+|---|---|
+| `--from <number>` | Required. The speed it starts at: 1 is normal. |
+| `--to <number>` | Required. The speed it ends at. |
+| `--at <time>` | Required. When the ramp starts, on the sequence. |
+| `--dur <time>` | Required. How long the ramp takes. |
+| `--linear` | A constant change rather than an ease. |
+| `--no-save` | Do not write the project back. |
+
 ### `jazz clip rate-stretch <project> <clip-id>`
 
 Stretch a clip to a new duration by changing its speed.
@@ -1068,6 +1086,34 @@ Set how opaque a clip's picture is.
 | `--opacity <number>` | Required. 0 invisible to 1 opaque. |
 | `--no-save` | Do not write the project back. |
 
+### `jazz clip set-remap <project> <clip-id>`
+
+Turn time remapping (a speed curve) on or off for a clip.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The clip id. |
+
+| Option | Meaning |
+|---|---|
+| `--off` | Turn it off instead. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz clip set-retime <project> <clip-id> <mode>`
+
+Set how a clip shows moments between source frames: nearest frame or a blend.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The clip id. |
+| `<mode>` | nearest, blend or optical-flow (which blends in this version). |
+
+| Option | Meaning |
+|---|---|
+| `--no-save` | Do not write the project back. |
+
 ### `jazz clip set-reverse <project> <clip-id> <reverse>`
 
 Play a clip backwards.
@@ -1176,6 +1222,24 @@ Cut a clip in two at a timeline time.
 |---|---|
 | `--at <time>` | Required. Where to cut, on the timeline. |
 | `--id <id>` | The identifier for the right half. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz clip stabilize <project> <clip-id>`
+
+Steady a shaky clip (analyses its motion the first time).
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The clip id. |
+
+| Option | Meaning |
+|---|---|
+| `--smoothing <n>` | Frames either side the camera path is smoothed over. Default: 15. Default: 15. |
+| `--zoom <number>` | Extra zoom in percent. Default: 0. Default: 0. |
+| `--no-auto-zoom` | Do not zoom in to hide the moving edges. |
+| `--reanalyze` | Analyse the file again. |
+| `--off` | Remove the stabilization instead. |
 | `--no-save` | Do not write the project back. |
 
 ### `jazz clip storyline-move <project> <clip-ids>`
@@ -2095,6 +2159,20 @@ Import files, folders or globs into the project.
 | `--vfr-conform <auto|on|off>` | auto, on or off. Default: auto. |
 | `--recursive` | Look inside sub-folders. |
 | `--fps <rate>` | The rate an image sequence plays at. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz media analyze-motion <project> <media-id>`
+
+Analyse a video's camera motion for stabilization.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<media-id>` | The media id. |
+
+| Option | Meaning |
+|---|---|
+| `--stream <n>` | The video stream's index in the file. |
 | `--no-save` | Do not write the project back. |
 
 ### `jazz media check <project>`

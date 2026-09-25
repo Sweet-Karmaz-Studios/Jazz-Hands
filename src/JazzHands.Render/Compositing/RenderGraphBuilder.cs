@@ -3,11 +3,13 @@ using System.Numerics;
 using JazzHands.Core.Effects;
 using JazzHands.Core.Model;
 using JazzHands.Core.Queries;
+using JazzHands.Core.Stabilization;
 using JazzHands.Core.Subtitles;
 using JazzHands.Core.Time;
 using JazzHands.Core.Titles;
 using JazzHands.Render.Color;
 using JazzHands.Render.Effects;
+using JazzHands.Render.Effects.Stabilize;
 using JazzHands.Render.Frames;
 
 namespace JazzHands.Render.Compositing;
@@ -49,6 +51,12 @@ public interface IFrameProvider
     /// "Media offline"; null when it is fine, and then a missing picture is only a gap.
     /// </summary>
     string? Offline(Project project, Clip clip) => null;
+
+    /// <summary>
+    /// How the camera moved through a media clip's file, when its motion has been analysed for
+    /// stabilization; null when it has not.
+    /// </summary>
+    CameraMotion? Motion(Project project, Clip clip) => null;
 }
 
 /// <summary>How a frame is built.</summary>
@@ -234,7 +242,7 @@ public static class RenderGraphBuilder
                 continue;
             }
 
-            layers.Add(Layer(clip, local, source, frameSize, options) with { Effects = effects });
+            layers.Add(Layer(clip, local, source, frameSize, options, Steady(project, clip, time, source.Size, frames, options)) with { Effects = effects });
         }
 
         return new RenderGraph(width, height, layers.ToImmutable())
@@ -287,7 +295,7 @@ public static class RenderGraphBuilder
                 return null;
             }
 
-            return Layer(clip, local, source, frameSize, options) with { Effects = Effects(clip, track, local, time, sequence, options) };
+            return Layer(clip, local, source, frameSize, options, Steady(project, clip, shown, source.Size, frames, options)) with { Effects = Effects(clip, track, local, time, sequence, options) };
         }
 
         Transition transition = span.Transition;
@@ -345,7 +353,7 @@ public static class RenderGraphBuilder
                 FrameRate = settings.FrameRate,
             };
 
-            yield return Layer(first, local, (new GeneratorLayerSource(node), frameSize, ConformPolicy.Stretch), frameSize, options);
+            yield return Layer(first, local, (new GeneratorLayerSource(node), frameSize, ConformPolicy.Stretch), frameSize, options, Matrix3x2.Identity);
         }
     }
 
@@ -465,8 +473,7 @@ public static class RenderGraphBuilder
     {
         if (clip.Retime == RetimeMode.Nearest
             || clip.IsHold
-            || clip.MediaId is not { } mediaId
-            || project.MediaItem(mediaId)?.Info?.Streams.FirstOrDefault(stream => stream.Index == clip.SourceStreamIndex)?.FrameRate is not { Num: > 0 } rate
+            || SourceRate(project, clip) is not { } rate
             || options.Effects.Find(Crossfade) is not { Kind: EffectKind.Transition } crossfade)
         {
             return null;
@@ -549,16 +556,68 @@ public static class RenderGraphBuilder
             1.0f);
     }
 
+    /// <summary>
+    /// A stabilized clip's correction at a moment, as a matrix in its picture's pixels to go
+    /// before its placement: the move and turn that put the camera back on its smoothed path, and
+    /// the zoom that hides the edges. The identity when the clip is not stabilized or its motion has
+    /// not been analysed.
+    /// </summary>
+    private static Matrix3x2 Steady(Project project, Clip clip, Flicks time, Vector2 size, IFrameProvider frames, RenderOptions options)
+    {
+        if (clip.Effects.IsEmpty
+            || clip.Effects.FirstOrDefault(effect => effect.Enabled && string.Equals(effect.TypeId, StabilizeEffect.TypeId, StringComparison.Ordinal)) is not { } effect
+            || options.Effects.Find(StabilizeEffect.TypeId) is not { } descriptor
+            || SourceRate(project, clip) is not { } rate
+            || frames.Motion(project, clip) is not { Count: > 0, Width: > 0, Height: > 0 } motion)
+        {
+            return Matrix3x2.Identity;
+        }
+
+        ParameterSet parameters = ParameterSet.Evaluate(descriptor, effect, time - clip.Start);
+        int smoothing = parameters.Int(StabilizeEffect.Smoothing);
+        StabilizeCorrection correction = motion.Correction(SourceFrameAt(clip, time, rate), smoothing);
+
+        float zoom = 1.0f + (parameters.Float(StabilizeEffect.Zoom) / 100.0f);
+        if (parameters.Bool(StabilizeEffect.AutoZoom))
+        {
+            zoom *= motion.CoveringZoom(SourceFrameAt(clip, clip.Start, rate), SourceFrameAt(clip, clip.End - new Flicks(1), rate), smoothing);
+        }
+
+        var ratio = new Vector2(size.X / motion.Width, size.Y / motion.Height);
+        Vector2 centre = size / 2.0f;
+        return Matrix3x2.CreateTranslation(correction.Shift * ratio)
+            * Matrix3x2.CreateTranslation(-centre)
+            * Matrix3x2.CreateRotation(correction.Angle)
+            * Matrix3x2.CreateScale(zoom)
+            * Matrix3x2.CreateTranslation(centre);
+    }
+
+    /// <summary>The nominal frame rate of a media clip's video stream, or null when it has none.</summary>
+    private static Rational? SourceRate(Project project, Clip clip) =>
+        clip.MediaId is { } mediaId
+        && project.MediaItem(mediaId)?.Info?.Streams.FirstOrDefault(stream => stream.Index == clip.SourceStreamIndex)?.FrameRate is { Num: > 0 } rate
+            ? rate
+            : null;
+
+    /// <summary>The source frame a media clip shows at a moment, from zero, as the frame server picks it.</summary>
+    private static long SourceFrameAt(Clip clip, Flicks time, Rational rate)
+    {
+        Flicks position = clip.SourceTimeAt(time);
+        long frame = position < Flicks.Zero ? 0 : (long)((Int128)position.Value * rate.Num / ((Int128)rate.Den * Flicks.PerSecond));
+        return Math.Max(0, frame - (clip.Reverse ? 1 : 0));
+    }
+
     private static LayerNode Layer(
         Clip clip,
         Flicks local,
         (LayerSource Source, Vector2 Size, ConformPolicy Policy) source,
         Vector2 frameSize,
-        RenderOptions options)
+        RenderOptions options,
+        Matrix3x2 steady)
     {
         Transform transform = clip.Transform ?? Transform.Identity;
 
-        Matrix3x2 placement = Placement(
+        Matrix3x2 placement = steady * Placement(
             source.Size,
             frameSize,
             source.Policy,
@@ -597,7 +656,10 @@ public static class RenderGraphBuilder
 
         foreach (Effect effect in clip.Effects)
         {
-            if (!string.Equals(effect.TypeId, clip.GeneratorId, StringComparison.Ordinal) && Node(effect, local, clip.Duration, time, options) is { } node)
+            // Stabilizing moves the layer (see Steady) rather than running over its picture.
+            if (!string.Equals(effect.TypeId, clip.GeneratorId, StringComparison.Ordinal)
+                && !string.Equals(effect.TypeId, StabilizeEffect.TypeId, StringComparison.Ordinal)
+                && Node(effect, local, clip.Duration, time, options) is { } node)
             {
                 nodes.Add(node);
             }

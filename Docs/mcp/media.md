@@ -8,6 +8,7 @@ Media is the files a project uses: movies, sound, images and image sequences. `m
 - `media_check` says which files are there, missing or changed on disk. `media_missing` looks for the missing ones (by hash, then by name and size, then by name) and lists candidates; `media_relink` with `auto` relinks every one found, as one undo, and with an id and a path relinks one by hand. `media_reprobe` reads a changed file again. A clip whose file is missing shows a red "Media offline" slate in frames and exports.
 - `media_usage` says which clips and sequences use each item and how much of it; `media_remove_unused` takes out what nothing uses. `media_replace` swaps an item's file for another (a better take) keeping its clips.
 - `media_watch` watches a captures folder in a running editor and brings in each new recording once it has finished being written, tagged by subfolder and day; `media_watches` lists them, `media_unwatch` stops.
+- `media_analyze_motion` analyses how the camera moves through a video, for `clip_stabilize`, ahead of time or again.
 - `media_remove` takes an item out; with `withClips` the clips that play it go too, otherwise it is refused while clips use it.
 
 A clip refers to its media by id, so import first, then place: `media_add` answers with the new ids in `changedIds`.

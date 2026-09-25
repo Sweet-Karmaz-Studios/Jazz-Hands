@@ -314,6 +314,12 @@ public sealed class FrameServer : IFrameProvider, IDisposable
             : null;
     }
 
+    /// <inheritdoc />
+    Core.Stabilization.CameraMotion? IFrameProvider.Motion(Project project, Clip clip) =>
+        clip.MediaId is { } mediaId && project.MediaItem(mediaId) is { Hash.Length: > 0 } item
+            ? Effects.MotionStore.For(_projectPath).Load(item.Hash, clip.SourceStreamIndex)
+            : null;
+
     /// <summary>
     /// What to decode in place of a media item, or null for the item itself: the proxy service's
     /// <see cref="Caching.ProxyService.Substitute"/> for playback, nothing for export.

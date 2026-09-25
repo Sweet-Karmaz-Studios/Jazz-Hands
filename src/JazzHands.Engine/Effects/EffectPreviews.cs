@@ -77,11 +77,15 @@ public sealed class EffectPreviews : IDisposable
         _registry = registry ?? EffectCatalog.Registry;
     }
 
-    /// <summary>True for the types that have a preview: picture effects, generators and picture transitions.</summary>
+    /// <summary>
+    /// True for the types that have a preview: picture effects, generators and picture transitions.
+    /// Not Stabilize, which only does anything to a shaking camera.
+    /// </summary>
     public static bool HasPreview(EffectDescriptor descriptor)
     {
         ArgumentNullException.ThrowIfNull(descriptor);
-        return descriptor.Kind is EffectKind.Video or EffectKind.Generator or EffectKind.Transition;
+        return descriptor.Kind is EffectKind.Video or EffectKind.Generator or EffectKind.Transition
+            && !string.Equals(descriptor.TypeId, JazzHands.Render.Effects.Stabilize.StabilizeEffect.TypeId, StringComparison.Ordinal);
     }
 
     /// <summary>
