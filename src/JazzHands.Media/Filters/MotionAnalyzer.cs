@@ -34,18 +34,20 @@ public static unsafe class MotionAnalyzer
     /// <param name="shakiness">vid.stab's shakiness, 1 (little, fast) to 10 (very shaky).</param>
     /// <param name="progress">Told the fraction done, 0 to 1.</param>
     /// <param name="cancellationToken">Stops the analysis.</param>
+    /// <param name="workFolder">Where vid.stab writes its transforms while it works, removed after; the temporary folder when not given.</param>
     public static CameraMotion Analyze(
         string path,
         int streamIndex,
         long expectedFrames = 0,
         int shakiness = 5,
         IProgress<double>? progress = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? workFolder = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         FfmpegLoader.Initialize();
 
-        string transforms = Path.Combine(Path.GetTempPath(), $"jazz-motion-{Guid.NewGuid():N}.trf");
+        string transforms = Path.Combine(workFolder ?? Path.GetTempPath(), $"jazz-motion-{Guid.NewGuid():N}.trf");
         AVFilterGraph* graph = Av.CheckAlloc(ffmpeg.avfilter_graph_alloc(), "avfilter_graph_alloc");
         AVFrame* frame = Av.CheckAlloc(ffmpeg.av_frame_alloc(), "av_frame_alloc");
 

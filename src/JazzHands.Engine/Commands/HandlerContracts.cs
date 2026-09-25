@@ -47,6 +47,13 @@ public sealed class HandlerContext
     /// </summary>
     public Func<ICommand, string, Task<CommandResult>>? Later { get; init; }
 
+    /// <summary>
+    /// Stops a handler doing long work (an analysis, a gather, a proxy) part way: Ctrl+C in jazz,
+    /// a client giving up. Such a handler passes it on and leaves nothing behind when it fires; the
+    /// project is untouched, because a handler that throws commits nothing (Phase 33).
+    /// </summary>
+    public CancellationToken Cancellation { get; init; }
+
     /// <summary>Everything the handler touched, in the order it said so.</summary>
     public ImmutableArray<string> ChangedIds { get; private set; } = [];
 

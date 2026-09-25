@@ -52,7 +52,8 @@ public sealed class GenerateProxyHandler : ICommandHandler<GenerateProxyCommand>
                 continue;
             }
 
-            string? job = proxies.Generate(item, path, preset, command.Scale, queue, environment);
+            context.Cancellation.ThrowIfCancellationRequested();
+            string? job = proxies.Generate(item, path, preset, command.Scale, queue, environment, context.Cancellation);
             context.Changed(job ?? item.Id);
         }
 

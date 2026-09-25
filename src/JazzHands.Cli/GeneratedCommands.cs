@@ -300,7 +300,28 @@ public static class GeneratedCommands
                 .AddJazzHandsControlSettings()
                 .AddSingleton<Engine.Export.IExportService>(new Engine.Export.ForegroundExportService())
                 .BuildServiceProvider();
-            return Execute(metadata, built, load, path, services, json, !metadata.Standalone && !parse.GetValue(noSave)).GetAwaiter().GetResult();
+            // Ctrl+C stops a long command (an analysis, a gather, a proxy) part way rather than
+            // killing the process, so it tidies up after itself and the project is not saved.
+            using var cancel = new CancellationTokenSource();
+            ConsoleCancelEventHandler stop = (_, press) =>
+            {
+                press.Cancel = true;
+                cancel.Cancel();
+            };
+            Console.CancelKeyPress += stop;
+            try
+            {
+                return Execute(metadata, built, load, path, services, json, !metadata.Standalone && !parse.GetValue(noSave), cancel.Token).GetAwaiter().GetResult();
+            }
+            finally
+            {
+                Console.CancelKeyPress -= stop;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            Console.Error.WriteLine("Cancelled. Nothing was changed or saved.");
+            return ExitCode.Cancelled;
         }
         catch (CommandException error)
         {
@@ -321,7 +342,8 @@ public static class GeneratedCommands
         string path,
         ServiceProvider services,
         bool json,
-        bool save)
+        bool save,
+        CancellationToken cancellationToken)
     {
         // A headless invocation is one session, so its undo history is empty before the command
         // runs and gone after it. Saying that is better than "nothing to undo", which sounds like
@@ -343,7 +365,7 @@ public static class GeneratedCommands
             return ExitCode.Ok;
         }
 
-        CommandResult result = await session.ExecuteAsync((ICommand)built).ConfigureAwait(false);
+        CommandResult result = await session.ExecuteAsync((ICommand)built, cancellationToken).ConfigureAwait(false);
 
         if (!result.Ok)
         {

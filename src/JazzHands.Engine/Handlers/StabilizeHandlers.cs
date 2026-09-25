@@ -41,7 +41,7 @@ internal static class StabilizeHelp
         var progress = new Progress<double>(done => Logger.Debug("Analysing the motion of {Media}: {Done:P0}", item.Name, done));
         try
         {
-            return store.Analyze(item, path, streamIndex, progress);
+            return store.Analyze(item, path, streamIndex, progress, context.Cancellation);
         }
         catch (Media.Interop.FfmpegException exception)
         {

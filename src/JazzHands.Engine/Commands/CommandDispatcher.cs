@@ -138,7 +138,7 @@ public sealed class CommandDispatcher : IAsyncDisposable
     public Task<CommandResult> ExecuteAsync(ICommand command, string issuer, IdScope? ids, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
-        return Enqueue(new Job(command, NewCompletion(), issuer ?? string.Empty, Ids: ids), cancellationToken);
+        return Enqueue(new Job(command, NewCompletion(), issuer ?? string.Empty, Ids: ids, Token: cancellationToken), cancellationToken);
     }
 
     /// <summary>
@@ -264,13 +264,19 @@ public sealed class CommandDispatcher : IAsyncDisposable
             {
                 using (job.Ids?.Enter())
                 {
-                    job.Completion.TrySetResult(Run(job.Command!, job.Issuer));
+                    job.Completion.TrySetResult(Run(job.Command!, job.Issuer, job.Token));
                 }
             }
             catch (CommandException error)
             {
                 _log.Debug("{Command} refused: {Code}", CommandRegistry.NameOf(job.Command!), error.Code);
                 job.Completion.TrySetResult(CommandResult.Failure(Version, error));
+            }
+            catch (OperationCanceledException) when (job.Token.IsCancellationRequested)
+            {
+                // Stopped part way by whoever asked; the project is untouched.
+                _log.Information("{Command} was cancelled", CommandRegistry.NameOf(job.Command!));
+                job.Completion.TrySetCanceled(job.Token);
             }
             catch (Exception error)
             {
@@ -282,20 +288,20 @@ public sealed class CommandDispatcher : IAsyncDisposable
         }
     }
 
-    private CommandResult Run(ICommand command, string issuer) => command switch
+    private CommandResult Run(ICommand command, string issuer, CancellationToken cancellation) => command switch
     {
         UndoCommand undo => RunUndo(undo, issuer),
         RedoCommand redo => RunRedo(redo, issuer),
-        BatchCommand batch => RunBatch(batch, issuer),
-        _ => RunOne(command, issuer),
+        BatchCommand batch => RunBatch(batch, issuer, cancellation),
+        _ => RunOne(command, issuer, cancellation),
     };
 
-    private CommandResult RunOne(ICommand command, string issuer)
+    private CommandResult RunOne(ICommand command, string issuer, CancellationToken cancellation)
     {
         CommandMetadata metadata = CommandRegistry.Describe(command);
         Project before = _project;
 
-        var context = new HandlerContext(_services, _clock, ProjectPath) { Later = Later };
+        var context = new HandlerContext(_services, _clock, ProjectPath) { Later = Later, Cancellation = cancellation };
         Project after = SettleTitles(before, SettleTransitions(before, Magnetize(before, Apply(before, command, context), context), context), context);
 
         return Commit(command, metadata, before, after, context.ChangedIds, ChangeOrigin.Command, issuer);
@@ -309,11 +315,11 @@ public sealed class CommandDispatcher : IAsyncDisposable
     /// it works. Nothing is committed until all of them have returned, so a failure half way
     /// through takes the whole batch with it.
     /// </remarks>
-    private CommandResult RunBatch(BatchCommand batch, string issuer)
+    private CommandResult RunBatch(BatchCommand batch, string issuer, CancellationToken cancellation)
     {
         Project before = _project;
         Project working = before;
-        var context = new HandlerContext(_services, _clock, ProjectPath) { Later = Later };
+        var context = new HandlerContext(_services, _clock, ProjectPath) { Later = Later, Cancellation = cancellation };
 
         foreach (ICommand step in batch.Commands)
         {
@@ -576,7 +582,7 @@ public sealed class CommandDispatcher : IAsyncDisposable
     }
 
     /// <summary>A command to run for someone, or session work to run in its turn.</summary>
-    private sealed record Job(ICommand? Command, TaskCompletionSource<CommandResult> Completion, string Issuer, Func<CommandResult>? Exclusive = null, IdScope? Ids = null);
+    private sealed record Job(ICommand? Command, TaskCompletionSource<CommandResult> Completion, string Issuer, Func<CommandResult>? Exclusive = null, IdScope? Ids = null, CancellationToken Token = default);
 
     private interface IHandlerAdapter
     {

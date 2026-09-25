@@ -94,6 +94,15 @@ public static class Consolidator
 
         Dictionary<string, ImmutableArray<TimeRange>> used = MediaLibrary.UsedRanges(project, command.Trim ? handles : Flicks.Zero);
         string media = Path.Combine(folder, MediaFolder);
+
+        // What was there before, so a gather that is cancelled or fails part way can put
+        // everything back: moved files returned, copies and pieces removed (Phase 33).
+        bool folderExisted = Directory.Exists(folder);
+        bool mediaExisted = Directory.Exists(media);
+        HashSet<string> before = mediaExisted
+            ? new HashSet<string>(Directory.EnumerateFileSystemEntries(media, "*", SearchOption.AllDirectories), StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var moved = new List<(string From, string To)>();
         Directory.CreateDirectory(media);
 
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -103,44 +112,53 @@ public static class Consolidator
         long bytes = 0;
         int trimmed = 0;
 
-        foreach (MediaItem item in project.Media)
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (!used.TryGetValue(item.Id, out ImmutableArray<TimeRange> ranges))
+            foreach (MediaItem item in project.Media)
             {
-                continue;
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!used.TryGetValue(item.Id, out ImmutableArray<TimeRange> ranges))
+                {
+                    continue;
+                }
+
+                string source = MediaLibrary.FullPath(projectPath, item);
+                if (command.Trim && Trimmable(item, ranges) is { } aligned
+                    && TryTrim(project, projectPath, item, source, aligned, media, names, environment, cancellationToken) is { } cut)
+                {
+                    pieces[item.Id] = cut;
+                    kept.AddRange(cut.Select(piece => piece.Item));
+                    files += cut.Count;
+                    bytes += cut.Sum(piece => new FileInfo(MediaLibrary.FullPath(target, piece.Item)).Length);
+                    trimmed++;
+                    continue;
+                }
+
+                string written = Whole(item, source, media, names, command.Move, moved);
+                kept.Add(item with { RelativePath = written });
+                files++;
+                bytes += item.Kind == MediaKind.ImageSequence ? 0 : new FileInfo(written).Length;
             }
 
-            string source = MediaLibrary.FullPath(projectPath, item);
-            if (command.Trim && Trimmable(item, ranges) is { } aligned
-                && TryTrim(project, projectPath, item, source, aligned, media, names, environment, cancellationToken) is { } cut)
+            // Every clip points where its picture went; media nothing uses is left behind.
+            Project gathered = project with
             {
-                pieces[item.Id] = cut;
-                kept.AddRange(cut.Select(piece => piece.Item));
-                files += cut.Count;
-                bytes += cut.Sum(piece => new FileInfo(MediaLibrary.FullPath(target, piece.Item)).Length);
-                trimmed++;
-                continue;
-            }
+                Media = [.. kept.Select(item => item with { RelativePath = ProjectPaths.Store(target, item.RelativePath) })],
+                Sequences = [.. project.Sequences.Select(sequence => sequence with
+                {
+                    Tracks = [.. sequence.Tracks.Select(track => track with { Clips = [.. track.Clips.Select(clip => Repoint(clip, pieces))] })],
+                })],
+            };
 
-            string written = Whole(item, source, media, names, command.Move);
-            kept.Add(item with { RelativePath = written });
-            files++;
-            bytes += item.Kind == MediaKind.ImageSequence ? 0 : new FileInfo(written).Length;
+            CopyFonts(projectPath, folder);
+            ProjectFile.Save(target, gathered);
+        }
+        catch (Exception)
+        {
+            Rollback(folder, media, folderExisted, mediaExisted, before, moved);
+            throw;
         }
 
-        // Every clip points where its picture went; media nothing uses is left behind.
-        Project gathered = project with
-        {
-            Media = [.. kept.Select(item => item with { RelativePath = ProjectPaths.Store(target, item.RelativePath) })],
-            Sequences = [.. project.Sequences.Select(sequence => sequence with
-            {
-                Tracks = [.. sequence.Tracks.Select(track => track with { Clips = [.. track.Clips.Select(clip => Repoint(clip, pieces))] })],
-            })],
-        };
-
-        CopyFonts(projectPath, folder);
-        ProjectFile.Save(target, gathered);
         Log.ForContext(typeof(Consolidator)).Information(
             "Gathered {Project} into {Folder}: {Files} file(s), {Bytes} bytes, {Trimmed} trimmed",
             project.Name,
@@ -176,6 +194,12 @@ public static class Consolidator
         }
         finally
         {
+            // A zip cut short is not left beside where the whole one would have gone.
+            if (File.Exists(zip + ".tmp"))
+            {
+                File.Delete(zip + ".tmp");
+            }
+
             try
             {
                 Directory.Delete(staging, recursive: true);
@@ -300,7 +324,64 @@ public static class Consolidator
     }
 
     /// <summary>A whole file copied (or moved) into the media folder, with its dates; its new full path.</summary>
-    private static string Whole(MediaItem item, string source, string media, HashSet<string> names, bool move)
+    /// <summary>Puts back what a gather that did not finish had done: moved files returned, everything it made removed.</summary>
+    private static void Rollback(string folder, string media, bool folderExisted, bool mediaExisted, HashSet<string> before, List<(string From, string To)> moved)
+    {
+        Serilog.ILogger log = Log.ForContext(typeof(Consolidator));
+        for (int index = moved.Count - 1; index >= 0; index--)
+        {
+            (string from, string to) = moved[index];
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(from)!);
+                File.Move(to, from);
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+            {
+                log.Error(error, "Could not move {File} back to {Place} after the gather stopped", to, from);
+            }
+        }
+
+        if (!Directory.Exists(media))
+        {
+            return;
+        }
+
+        string[] made = [.. Directory.EnumerateFileSystemEntries(media, "*", SearchOption.AllDirectories).Where(entry => !before.Contains(entry))];
+        foreach (string file in made.Where(File.Exists))
+        {
+            TryRemove(() => File.Delete(file));
+        }
+
+        foreach (string directory in made.Where(Directory.Exists).OrderByDescending(entry => entry.Length))
+        {
+            TryRemove(() => Directory.Delete(directory));
+        }
+
+        if (!mediaExisted)
+        {
+            TryRemove(() => Directory.Delete(media));
+        }
+
+        if (!folderExisted)
+        {
+            TryRemove(() => Directory.Delete(folder, recursive: false));
+        }
+
+        void TryRemove(Action remove)
+        {
+            try
+            {
+                remove();
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+            {
+                log.Warning(error, "Could not tidy up after the gather stopped");
+            }
+        }
+    }
+
+    private static string Whole(MediaItem item, string source, string media, HashSet<string> names, bool move, List<(string From, string To)> moved)
     {
         if (item.Kind == MediaKind.ImageSequence)
         {
@@ -313,6 +394,7 @@ public static class Consolidator
                 if (move)
                 {
                     File.Move(file, destination);
+                    moved.Add((file, destination));
                 }
                 else
                 {
@@ -327,6 +409,7 @@ public static class Consolidator
         if (move)
         {
             File.Move(source, target);
+            moved.Add((source, target));
         }
         else
         {

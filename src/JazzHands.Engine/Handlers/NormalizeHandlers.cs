@@ -25,7 +25,7 @@ public sealed class NormalizeAudioHandler : ICommandHandler<NormalizeAudioComman
         }
 
         AudioSubject subject = AudioSubject.Resolve(project, command.ClipId, command.TrackId, command.Mix, command.SequenceId);
-        AudioLevels levels = AudioMeasure.Measure(project, subject, context.ProjectPath);
+        AudioLevels levels = AudioMeasure.Measure(project, subject, context.ProjectPath, context.Cancellation);
         double measured = levels.Level(command.Mode)
             ?? throw new CommandException("silent", "It is silent there, or too quiet to measure, so there is no gain that would reach a level.");
         double change = Math.Round(target - measured, 2);

@@ -159,7 +159,7 @@ public sealed class ConsolidateProjectHandler : ICommandHandler<ConsolidateProje
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(context);
-        _ = Consolidator.Run(project, context.ProjectPath, command, context.Services?.GetService(typeof(Export.ExportEnvironment)) as Export.ExportEnvironment);
+        _ = Consolidator.Run(project, context.ProjectPath, command, context.Services?.GetService(typeof(Export.ExportEnvironment)) as Export.ExportEnvironment, context.Cancellation);
         return project;
     }
 }
@@ -172,7 +172,7 @@ public sealed class ArchiveProjectHandler : ICommandHandler<ArchiveProjectComman
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(context);
-        _ = Consolidator.Archive(project, context.ProjectPath, command, context.Services?.GetService(typeof(Export.ExportEnvironment)) as Export.ExportEnvironment);
+        _ = Consolidator.Archive(project, context.ProjectPath, command, context.Services?.GetService(typeof(Export.ExportEnvironment)) as Export.ExportEnvironment, context.Cancellation);
         return project;
     }
 }
