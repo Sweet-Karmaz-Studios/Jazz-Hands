@@ -1,0 +1,35 @@
+{
+  "name": "wishlist-pop",
+  "label": "Wishlist button pop",
+  "description": "A button that pops in with a spring and a shine: wishlist, subscribe, follow. Change the words and the colour, and where it sits.",
+  "params": {
+    "text": { "type": "text", "default": "Wishlist on Steam", "description": "The words on the button." },
+    "colour": { "type": "color", "default": "#1B9E4B", "description": "The button." },
+    "position": { "type": "text", "default": "0, 330", "description": "Where the button's middle goes, as x, y in sequence pixels from the frame's centre." },
+    "duration": { "type": "time", "default": "3s", "description": "How long it stays." }
+  },
+  "steps": [
+    { "command": "track.add", "args": { "kind": "video", "trackId": "${id:track}" } },
+    { "command": "clip.add", "args": { "trackId": "${id:track}", "at": "${at}", "generatorId": "gen.shape.rectangle", "duration": "${duration}", "clipId": "${id:button}", "name": "Button" } },
+    { "command": "param.set", "args": { "ownerId": "${id:button}", "param": "size", "value": "640, 124" } },
+    { "command": "param.set", "args": { "ownerId": "${id:button}", "param": "corner-radius", "value": "62" } },
+    { "command": "param.set", "args": { "ownerId": "${id:button}", "param": "fill", "value": "${colour}" } },
+    { "command": "param.set", "args": { "ownerId": "${id:button}", "param": "transform.position", "value": "${position}" } },
+    { "command": "keyframe.add", "args": { "ownerId": "${id:button}", "param": "transform.scale", "at": "${at}", "value": "0.1, 0.1", "interp": "ease-out" } },
+    { "command": "keyframe.add", "args": { "ownerId": "${id:button}", "param": "transform.scale", "at": "${at+0.25}", "value": "1.12, 1.12", "interp": "ease-in-out" } },
+    { "command": "keyframe.add", "args": { "ownerId": "${id:button}", "param": "transform.scale", "at": "${at+0.45}", "value": "1, 1" } },
+    { "command": "effect.add", "args": { "ownerId": "${id:button}", "typeId": "video.light-sweep", "effectId": "${id:shine}" } },
+    { "command": "param.set", "args": { "ownerId": "${id:shine}", "param": "trigger", "value": "0.6" } },
+    { "command": "param.set", "args": { "ownerId": "${id:shine}", "param": "repeat", "value": "2" } },
+    { "command": "track.add", "args": { "kind": "video", "trackId": "${id:label-track}" } },
+    { "command": "title.add", "args": { "at": "${at}", "text": "${text}", "preset": "caption-bold", "duration": "${duration}", "clipId": "${id:label}", "trackId": "${id:label-track}", "animationIn": "none" } },
+    { "command": "param.set", "args": { "ownerId": "${id:label}", "param": "position", "value": "0, 0" } },
+    { "command": "param.set", "args": { "ownerId": "${id:label}", "param": "box", "value": "#00000000" } },
+    { "command": "param.set", "args": { "ownerId": "${id:label}", "param": "colour", "value": "#FFFFFF" } },
+    { "command": "param.set", "args": { "ownerId": "${id:label}", "param": "size", "value": "50" } },
+    { "command": "param.set", "args": { "ownerId": "${id:label}", "param": "transform.position", "value": "${position}" } },
+    { "command": "keyframe.add", "args": { "ownerId": "${id:label}", "param": "transform.scale", "at": "${at}", "value": "0.1, 0.1", "interp": "ease-out" } },
+    { "command": "keyframe.add", "args": { "ownerId": "${id:label}", "param": "transform.scale", "at": "${at+0.25}", "value": "1.12, 1.12", "interp": "ease-in-out" } },
+    { "command": "keyframe.add", "args": { "ownerId": "${id:label}", "param": "transform.scale", "at": "${at+0.45}", "value": "1, 1" } }
+  ]
+}

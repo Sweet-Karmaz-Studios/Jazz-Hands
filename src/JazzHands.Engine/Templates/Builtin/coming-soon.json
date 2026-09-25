@@ -1,0 +1,25 @@
+{
+  "name": "coming-soon",
+  "label": "Coming soon sting",
+  "description": "A short sting: the words punch in with a spring, glow, and flash, with a date under them. For the end of a teaser or between beats.",
+  "params": {
+    "text": { "type": "text", "default": "Coming soon", "description": "The words, large." },
+    "date": { "type": "text", "default": "2027", "description": "A line under them." },
+    "accent": { "type": "color", "default": "#FF8A3D", "description": "The date's colour and the glow's." },
+    "duration": { "type": "time", "default": "3s", "description": "How long it stays." }
+  },
+  "steps": [
+    { "command": "track.add", "args": { "kind": "video", "trackId": "${id:title-track}" } },
+    { "command": "title.add", "args": { "trackId": "${id:title-track}", "at": "${at}", "text": "[size=150]${text}[/size]\n[color=${accent}]${date}[/color]", "preset": "title-card", "duration": "${duration}", "clipId": "${id:title}", "animationIn": "none" } },
+    { "command": "effect.add", "args": { "ownerId": "${id:title}", "typeId": "video.zoom-punch", "effectId": "${id:punch}" } },
+    { "command": "param.set", "args": { "ownerId": "${id:punch}", "param": "amount", "value": "1.3" } },
+    { "command": "param.set", "args": { "ownerId": "${id:punch}", "param": "attack", "value": "0.08" } },
+    { "command": "param.set", "args": { "ownerId": "${id:punch}", "param": "settle", "value": "0.9" } },
+    { "command": "param.set", "args": { "ownerId": "${id:punch}", "param": "curve", "value": "elastic" } },
+    { "command": "effect.add", "args": { "ownerId": "${id:title}", "typeId": "video.glow", "effectId": "${id:glow}" } },
+    { "command": "param.set", "args": { "ownerId": "${id:glow}", "param": "tint", "value": "${accent}" } },
+    { "command": "param.set", "args": { "ownerId": "${id:glow}", "param": "threshold", "value": "0.5" } },
+    { "command": "effect.add", "args": { "ownerId": "${id:title}", "typeId": "video.flash", "effectId": "${id:flash}" } },
+    { "command": "param.set", "args": { "ownerId": "${id:flash}", "param": "mode", "value": "add" } }
+  ]
+}

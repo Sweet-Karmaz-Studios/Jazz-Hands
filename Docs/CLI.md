@@ -183,7 +183,7 @@ With `--json`: the `actions` taken and what is `remaining`.
 
 ### `jazz frame <project>`
 
-Draw one frame of a sequence to a PNG exactly as the editor's preview shows it, to look at. 'jazz export still' writes the frame an export would.
+Draw one frame of a sequence to a PNG exactly as the editor's preview shows it, to look at, or with --sheet several across a clip. 'jazz export still' writes the frame an export would.
 
 | Argument | Meaning |
 |---|---|
@@ -191,10 +191,13 @@ Draw one frame of a sequence to a PNG exactly as the editor's preview shows it, 
 
 | Option | Meaning |
 |---|---|
-| `--at <at>` | Required. The sequence time to draw: 00:00:12.500, 750f or 12.5s. |
+| `--at <at>` | The sequence time to draw: 00:00:12.500, 750f or 12.5s. Required without --sheet. |
 | `--out <out>` | Required. The .png to write, relative to the current folder. |
-| `--size <size>` | How wide to draw it, as a size: 960x540 or 1080p; the height follows the sequence's shape. The sequence's own when left out. |
+| `--size <size>` | How wide to draw it, as a size: 960x540 or 1080p; the height follows the sequence's shape. The sequence's own when left out; 1920 wide for a sheet. |
 | `--sequence <sequence>` | Which sequence; the active one when left out. |
+| `--sheet` | Draw several frames side by side, labelled with their times: an animated effect or a template judged from one picture. |
+| `--times <times>` | With --sheet: fractions of the way through, 0 the start and 1 the last frame. Default: 0,0.25,0.5,0.75,1. |
+| `--clip <clip>` | With --sheet: through this clip rather than the whole sequence. |
 
 ### `jazz frames <project>`
 
@@ -1773,6 +1776,8 @@ Write a contact sheet of frames across a sequence.
 | `--sequence <id>` | Which sequence. |
 | `--start <time>` | From here. |
 | `--end <time>` | To here. |
+| `--times <times>` | Fractions of the way through, 0 to 1, rather than even steps. |
+| `--clip <id>` | Through this clip rather than the sequence. |
 | `--no-save` | Do not write the project back. |
 
 ### `jazz export enqueue <project> <output>`
@@ -3576,6 +3581,52 @@ Break long subtitle cues into lines and shorter cues.
 |---|---|
 | `--max-chars <n>` | The most characters a line. |
 | `--max-lines <n>` | The most lines a cue. |
+| `--no-save` | Do not write the project back. |
+
+## `jazz template`
+
+Commands and queries about template.
+
+### `jazz template apply <project> <name>`
+
+Place a motion template (hero intro, feature callout, end card, countdown, coming soon, wishlist pop) with its parameters filled in: the way to build a trailer from a brief.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<name>` | The template; template.list names them. |
+
+| Option | Meaning |
+|---|---|
+| `--at <time>` | Required. The moment on the sequence it is placed. |
+| `--param <list>` | Values as name=value, several separated by commas: text=Out now,accent=#FF8800. |
+| `--sequence <id>` | Which sequence. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz template list <project>`
+
+The motion templates, their parameters and what each makes.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+### `jazz template save-selection <project> <name>`
+
+Save clips and their effects as a motion template, with chosen values as parameters.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<name>` | What to call it, in kebab case. |
+
+| Option | Meaning |
+|---|---|
+| `--clips <list>` | The clips; the selection when not given. |
+| `--promote <list>` | Parameter names that become the template's parameters. |
+| `--label <label>` | What the editor calls it. |
+| `--description <description>` | What it makes. |
+| `--force` | Replace a template of the same name. |
 | `--no-save` | Do not write the project back. |
 
 ## `jazz timeline`

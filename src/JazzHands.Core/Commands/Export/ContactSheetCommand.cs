@@ -4,7 +4,10 @@ namespace JazzHands.Core.Commands;
 
 /// <summary>
 /// Writes a contact sheet: frames at even steps through what an export would play, tiled with the
-/// sequence time under each, as one PNG. For looking at a whole cut at once.
+/// sequence time under each, as one PNG. For looking at a whole cut at once. With <c>--times</c>,
+/// the frames at those fractions of the way through instead (0 the start, 1 the last frame), and
+/// with <c>--clip</c> through that clip rather than the sequence: an animated effect or a
+/// template judged from one picture.
 /// </summary>
 /// <param name="Output">The .png file to write.</param>
 /// <param name="Columns">Tiles across.</param>
@@ -13,6 +16,8 @@ namespace JazzHands.Core.Commands;
 /// <param name="SequenceId">Which sequence. Defaults to the active one.</param>
 /// <param name="Start">From here, in sequence time.</param>
 /// <param name="End">To here, in sequence time.</param>
+/// <param name="Times">Fractions of the way through, 0 to 1, rather than even steps.</param>
+/// <param name="ClipId">Through this clip rather than the sequence.</param>
 [Command("export.contact-sheet",
     Description = "Write a contact sheet of frames across a sequence",
     Undoable = false,
@@ -24,4 +29,6 @@ public sealed record ContactSheetCommand(
     [property: Option("width", "The sheet's width in pixels")] int Width = 1920,
     [property: Option("sequence", "Which sequence")] string? SequenceId = null,
     [property: Option("start", "From here")] Flicks? Start = null,
-    [property: Option("end", "To here")] Flicks? End = null) : ICommand;
+    [property: Option("end", "To here")] Flicks? End = null,
+    [property: Option("times", "Fractions of the way through, 0 to 1, rather than even steps")] double[]? Times = null,
+    [property: Option("clip", "Through this clip rather than the sequence")] string? ClipId = null) : ICommand;

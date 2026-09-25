@@ -1,0 +1,27 @@
+{
+  // The boss entrance: the action stops on the character, the colour drains, and their name comes up.
+  "name": "hero-intro",
+  "label": "Hero intro",
+  "description": "Stops the action on a character: freezes the clip at the moment, drains and darkens it, pushes in with a flash, and lays their name and role over it. Give the clip the character is in and the moment to freeze on (--at, inside the clip).",
+  "params": {
+    "clip": { "type": "clip", "description": "The clip the character is in; it is frozen at --at." },
+    "name": { "type": "text", "default": "The Warden", "description": "The character's name, large." },
+    "role": { "type": "text", "default": "Keeper of the Sunken Gate", "description": "A line under the name." },
+    "hold": { "type": "time", "default": "2.5s", "description": "How long the freeze lasts; the rest of the clip plays on after it." },
+    "accent": { "type": "color", "default": "#E8B34A", "description": "The name's colour." }
+  },
+  "steps": [
+    { "command": "clip.freeze-frame", "args": { "clipId": "${clip}", "at": "${at}", "duration": "${hold}", "newClipId": "${id:freeze}" } },
+    { "command": "effect.add", "args": { "ownerId": "${id:freeze}", "typeId": "color.basic", "effectId": "${id:grade}" } },
+    { "command": "param.set", "args": { "ownerId": "${id:grade}", "param": "saturation", "value": "0.2" } },
+    { "command": "param.set", "args": { "ownerId": "${id:grade}", "param": "exposure", "value": "-0.7" } },
+    { "command": "effect.add", "args": { "ownerId": "${id:freeze}", "typeId": "video.zoom-punch", "effectId": "${id:push}" } },
+    { "command": "param.set", "args": { "ownerId": "${id:push}", "param": "amount", "value": "1.1" } },
+    { "command": "param.set", "args": { "ownerId": "${id:push}", "param": "attack", "value": "0.12" } },
+    { "command": "param.set", "args": { "ownerId": "${id:push}", "param": "settle", "value": "4" } },
+    { "command": "effect.add", "args": { "ownerId": "${id:freeze}", "typeId": "video.flash", "effectId": "${id:flash}" } },
+    { "command": "param.set", "args": { "ownerId": "${id:flash}", "param": "strength", "value": "0.7" } },
+    { "command": "track.add", "args": { "kind": "video", "trackId": "${id:card-track}" } },
+    { "command": "title.add", "args": { "trackId": "${id:card-track}", "at": "${at+0.2}", "text": "[size=110][color=${accent}]${name}[/color][/size]\n${role}", "preset": "lower-third", "duration": "${hold}", "clipId": "${id:card}" } }
+  ]
+}

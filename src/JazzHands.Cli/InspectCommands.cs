@@ -40,14 +40,17 @@ public static class InspectCommands
     private static Command BuildFrame()
     {
         var project = new Argument<string>("project") { Description = "The .jazz file." };
-        var at = new Option<string>("--at") { Description = "The sequence time to draw: 00:00:12.500, 750f or 12.5s.", Required = true };
+        var at = new Option<string?>("--at") { Description = "The sequence time to draw: 00:00:12.500, 750f or 12.5s. Required without --sheet." };
         var output = new Option<string>("--out") { Description = "The .png to write, relative to the current folder.", Required = true };
-        var size = new Option<string?>("--size") { Description = "How wide to draw it, as a size: 960x540 or 1080p; the height follows the sequence's shape. The sequence's own when left out." };
+        var size = new Option<string?>("--size") { Description = "How wide to draw it, as a size: 960x540 or 1080p; the height follows the sequence's shape. The sequence's own when left out; 1920 wide for a sheet." };
         var sequence = new Option<string?>("--sequence") { Description = "Which sequence; the active one when left out." };
+        var sheet = new Option<bool>("--sheet") { Description = "Draw several frames side by side, labelled with their times: an animated effect or a template judged from one picture." };
+        var times = new Option<string>("--times") { Description = "With --sheet: fractions of the way through, 0 the start and 1 the last frame.", DefaultValueFactory = _ => "0,0.25,0.5,0.75,1" };
+        var clip = new Option<string?>("--clip") { Description = "With --sheet: through this clip rather than the whole sequence." };
 
-        var command = new Command("frame", "Draw one frame of a sequence to a PNG exactly as the editor's preview shows it, to look at. 'jazz export still' writes the frame an export would.")
+        var command = new Command("frame", "Draw one frame of a sequence to a PNG exactly as the editor's preview shows it, to look at, or with --sheet several across a clip. 'jazz export still' writes the frame an export would.")
         {
-            project, at, output, size, sequence,
+            project, at, output, size, sequence, sheet, times, clip,
         };
 
         command.SetAction(parse => ExportCommands.Guard(parse, token =>
@@ -55,8 +58,24 @@ public static class InspectCommands
             (Project loaded, string path) = Load(parse.GetValue(project)!);
             Sequence chosen = SequenceOf(loaded, parse.GetValue(sequence));
             Rational rate = loaded.SettingsFor(chosen).FrameRate;
-            var time = (Flicks)CommandValues.Parse(typeof(Flicks), parse.GetValue(at)!, rate, "at")!;
             string file = Path.GetFullPath(parse.GetValue(output)!);
+            if (parse.GetValue(sheet))
+            {
+                double[] fractions = [.. parse.GetValue(times)!.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Select(text => double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double value)
+                        ? value
+                        : throw new CommandException("invalid-value", $"'{text}' is not a fraction; --times takes numbers from 0 to 1, as 0,0.5,1."))];
+                int across = Math.Min(fractions.Length, 5);
+                int sheetWidth = ParseSize(parse.GetValue(size), rate)?.Width ?? 1920;
+                Send(loaded, path, new ContactSheetCommand(file, across, Rows: 1, Width: sheetWidth, SequenceId: chosen.Id, Times: fractions, ClipId: parse.GetValue(clip)), token);
+                return Wrote(parse, file, $"{fractions.Length} frames", new { frames = fractions.Length });
+            }
+
+            var time = (Flicks)CommandValues.Parse(
+                typeof(Flicks),
+                parse.GetValue(at) ?? throw new CommandException("missing-argument", "Give --at, the time to draw, or --sheet for several."),
+                rate,
+                "at")!;
             int width = ParseSize(parse.GetValue(size), rate)?.Width ?? loaded.SettingsFor(chosen).Width;
 
             using RenderDevice device = RenderDevice.Create();

@@ -1,0 +1,25 @@
+{
+  // A devlog's pointer: this small thing, bigger, with a word about it.
+  "name": "feature-callout",
+  "label": "Feature callout",
+  "description": "Points at something small on screen: a magnified inset of the region round a point, ringed and joined to it by a line, with a label under the inset, over whatever plays there. Give the point in sequence pixels from the frame's centre.",
+  "params": {
+    "target": { "type": "text", "default": "0, 0", "description": "The point to magnify, as x, y in sequence pixels from the frame's centre." },
+    "label": { "type": "text", "default": "New: crafting", "description": "What it is, under the inset." },
+    "inset": { "type": "text", "default": "520, -220", "description": "Where the inset's middle goes, as x, y from the frame's centre." },
+    "zoom": { "type": "number", "default": "2.5", "description": "How much bigger the inset shows it." },
+    "duration": { "type": "time", "default": "3s", "description": "How long it stays." }
+  },
+  "steps": [
+    { "command": "track.add", "args": { "kind": "adjustment", "trackId": "${id:fx}" } },
+    { "command": "clip.add", "args": { "trackId": "${id:fx}", "at": "${at}", "generatorId": "gen.solid", "duration": "${duration}", "clipId": "${id:over}", "name": "Callout" } },
+    { "command": "effect.add", "args": { "ownerId": "${id:over}", "typeId": "video.callout", "effectId": "${id:callout}" } },
+    { "command": "param.set", "args": { "ownerId": "${id:callout}", "param": "target", "value": "${target}" } },
+    { "command": "param.set", "args": { "ownerId": "${id:callout}", "param": "position", "value": "${inset}" } },
+    { "command": "param.set", "args": { "ownerId": "${id:callout}", "param": "zoom", "value": "${zoom}" } },
+    { "command": "track.add", "args": { "kind": "video", "trackId": "${id:label-track}" } },
+    { "command": "title.add", "args": { "at": "${at+0.15}", "text": "${label}", "preset": "caption-bold", "duration": "${duration}", "clipId": "${id:label}", "trackId": "${id:label-track}", "animationIn": "fade" } },
+    { "command": "param.set", "args": { "ownerId": "${id:label}", "param": "position", "value": "0, 210" } },
+    { "command": "param.set", "args": { "ownerId": "${id:label}", "param": "transform.position", "value": "${inset}" } }
+  ]
+}

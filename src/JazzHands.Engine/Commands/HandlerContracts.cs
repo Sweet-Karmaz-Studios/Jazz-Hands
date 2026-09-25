@@ -70,6 +70,29 @@ public sealed class HandlerContext
         }
     }
 
+    /// <summary>
+    /// Runs another command's handler against a project, for a handler made of other commands (a
+    /// motion template): its changes are reported here, and the whole is one undo.
+    /// </summary>
+    public Project Run(Project project, ICommand command)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+
+        Type handlerType = typeof(ICommandHandler<>).MakeGenericType(command.GetType());
+        object handler = Services?.GetService(handlerType)
+            ?? throw new CommandException("no-handler", $"Nothing handles '{CommandRegistry.NameOf(command)}' here.");
+        try
+        {
+            return (Project)handlerType.GetMethod(nameof(ICommandHandler<ICommand>.Handle))!.Invoke(handler, [project, command, this])!;
+        }
+        catch (System.Reflection.TargetInvocationException error) when (error.InnerException is not null)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(error.InnerException);
+            throw;
+        }
+    }
+
     /// <summary>Unwraps an editing result, turning its error into a coded command failure.</summary>
     /// <remarks>
     /// <see cref="EditOps"/> reports ordinary failures as values rather than exceptions, because

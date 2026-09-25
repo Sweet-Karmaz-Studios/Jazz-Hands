@@ -96,6 +96,8 @@ public static class StillExport
     /// <param name="sequenceId">The sequence, or null for the active one.</param>
     /// <param name="range">Only this stretch, or null for all of it.</param>
     /// <param name="cancellationToken">Stops it between frames.</param>
+    /// <param name="fractions">Frames at these fractions of the way through, 0 to 1, instead of even steps.</param>
+    /// <param name="clipId">Through this clip instead of the sequence or the range.</param>
     public static ContactSheetResult ContactSheet(
         Project project,
         string projectPath,
@@ -106,7 +108,9 @@ public static class StillExport
         int width = 1920,
         string? sequenceId = null,
         TimeRange? range = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IReadOnlyList<double>? fractions = null,
+        string? clipId = null)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(renderer);
@@ -122,6 +126,23 @@ public static class StillExport
 
         Sequence sequence = Require(project, sequenceId);
         ProjectSettings settings = project.SettingsFor(sequence);
+        if (clipId is { } id)
+        {
+            range = sequence.Tracks.SelectMany(track => track.Clips).FirstOrDefault(clip => clip.Id == id)?.Range
+                ?? throw new CommandException("clip-not-found", $"No clip with id '{id}' in '{sequence.Name}'.", "clip");
+        }
+
+        if (fractions is { Count: > 0 })
+        {
+            if (fractions.Count > 64 || fractions.Any(fraction => fraction is < 0 or > 1 || double.IsNaN(fraction)))
+            {
+                throw new CommandException("invalid-value", "--times takes up to 64 fractions from 0 to 1.", "times");
+            }
+
+            columns = Math.Min(columns, fractions.Count);
+            rows = (fractions.Count + columns - 1) / columns;
+        }
+
         ImmutableArray<TimeRange> ranges = ExportPlanner.Ranges(sequence, false, range);
         if (ranges.IsEmpty)
         {
@@ -141,7 +162,7 @@ public static class StillExport
         byte[] sheet = new byte[width * height * 4];
         Fill(sheet, 0x1E, 0x1E, 0x1E);
 
-        Flicks[] times = Times(ranges, columns * rows, settings.FrameRate);
+        Flicks[] times = fractions is { Count: > 0 } ? At(ranges, fractions, settings.FrameRate) : Times(ranges, columns * rows, settings.FrameRate);
         for (int index = 0; index < times.Length; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -186,6 +207,33 @@ public static class StillExport
                 }
 
                 into -= stretch.Duration;
+            }
+        }
+
+        return times;
+    }
+
+    /// <summary>The sequence times at fractions of the way through the stretches played back to back, on a frame, the last at the last frame.</summary>
+    public static Flicks[] At(IReadOnlyList<TimeRange> ranges, IReadOnlyList<double> fractions, Rational rate)
+    {
+        ArgumentNullException.ThrowIfNull(ranges);
+        ArgumentNullException.ThrowIfNull(fractions);
+        long total = ranges.Sum(stretch => stretch.Duration.ToFrames(rate, RoundingMode.Floor));
+        var times = new Flicks[fractions.Count];
+        for (int index = 0; index < times.Length; index++)
+        {
+            long into = Math.Min(Math.Max(total - 1, 0), (long)Math.Round(fractions[index] * Math.Max(total - 1, 0)));
+            for (int part = 0; part < ranges.Count; part++)
+            {
+                TimeRange stretch = ranges[part];
+                long frames = stretch.Duration.ToFrames(rate, RoundingMode.Floor);
+                if (into < frames || part == ranges.Count - 1)
+                {
+                    times[index] = Flicks.FromFrames(stretch.Start.ToFrames(rate, RoundingMode.Ceiling) + into, rate);
+                    break;
+                }
+
+                into -= frames;
             }
         }
 

@@ -1,0 +1,18 @@
+{
+  "name": "countdown",
+  "label": "Countdown",
+  "description": "A film leader countdown over the frame, a number a second with a sweeping hand: before a reveal or a release time.",
+  "params": {
+    "from": { "type": "number", "default": "5", "description": "The number it counts down from, one a second." },
+    "seconds": { "type": "time", "default": "5s", "description": "How long it lasts; the same as from, in seconds." },
+    "colour": { "type": "color", "default": "#FFFFFF", "description": "The number and the rings." },
+    "background": { "type": "color", "default": "#202020", "description": "Behind them." }
+  },
+  "steps": [
+    { "command": "track.add", "args": { "kind": "video", "trackId": "${id:track}" } },
+    { "command": "clip.add", "args": { "trackId": "${id:track}", "at": "${at}", "generatorId": "gen.countdown", "duration": "${seconds}", "clipId": "${id:count}", "name": "Countdown" } },
+    { "command": "param.set", "args": { "ownerId": "${id:count}", "param": "from", "value": "${from}" } },
+    { "command": "param.set", "args": { "ownerId": "${id:count}", "param": "colour", "value": "${colour}" } },
+    { "command": "param.set", "args": { "ownerId": "${id:count}", "param": "background", "value": "${background}" } }
+  ]
+}
