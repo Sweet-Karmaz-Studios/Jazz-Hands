@@ -214,6 +214,12 @@ public sealed unsafe class Muxer : IDisposable
                 ffmpeg.av_dict_set(&options, "movflags", "+faststart", 0);
             }
 
+            // One picture to one name, which image2 otherwise takes for a sequence with no pattern.
+            if (FormatName == "image2" && !Path.Contains('%', StringComparison.Ordinal))
+            {
+                ffmpeg.av_dict_set(&options, "update", "1", 0);
+            }
+
             Av.Check(ffmpeg.avformat_write_header(_context, &options), "avformat_write_header", Path);
         }
         finally

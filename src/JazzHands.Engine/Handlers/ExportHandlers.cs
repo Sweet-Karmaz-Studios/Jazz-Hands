@@ -199,3 +199,90 @@ public sealed class ExportLogHandler : IQueryHandler<ExportLogQuery, string[]>
                 $"There is no export '{query.JobId}'. 'jazz export list' shows the queue.");
     }
 }
+
+/// <summary>Writes the frame at a time as a PNG, straight away.</summary>
+public sealed class ExportStillHandler : ICommandHandler<ExportStillCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, ExportStillCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        ExportResult result = StillExport.Still(
+            project,
+            context.ProjectPath,
+            command.Output,
+            command.At,
+            command.SequenceId,
+            command.Size,
+            context.Services?.GetService<ExportEnvironment>());
+        context.Changed(result.Path);
+        return project;
+    }
+}
+
+/// <summary>Writes a contact sheet, straight away.</summary>
+public sealed class ContactSheetHandler : ICommandHandler<ContactSheetCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, ContactSheetCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        Frames.StillRenderer? shared = context.Services?.GetService<Frames.StillRenderer>();
+        using Frames.StillRenderer? own = shared is null ? new Frames.StillRenderer() : null;
+        ContactSheetResult sheet = StillExport.ContactSheet(
+            project,
+            context.ProjectPath,
+            command.Output,
+            shared ?? own!,
+            command.Columns,
+            command.Rows,
+            command.Width,
+            command.SequenceId,
+            ExportOverrideText.Range(command.Start, command.End));
+        context.Changed(sheet.Path);
+        return project;
+    }
+}
+
+/// <summary>Plans an export for each range marker or stretch and queues them all, or none.</summary>
+public sealed class BatchExportHandler : ICommandHandler<BatchExportCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, BatchExportCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        IExportService queue = ExportHelp.Queue(context.Services);
+        Sequence sequence = (command.SequenceId is { } id ? project.Sequence(id) : project.ActiveSequence)
+            ?? throw new CommandException("sequence-not-found", command.SequenceId is null ? "The project has no sequence to export." : $"No sequence with id '{command.SequenceId}'.");
+        ExportPreset preset = ExportPresetLibrary.Require(command.Preset);
+        KeyframeLookup keyframes = ExportHelp.Keyframes(context.Services);
+
+        // Every one planned first, so a refusal stops the batch before anything is queued.
+        ExportPlan[] plans = [.. ExportBatch.Items(sequence, command.Markers, command.Ranges, command.NameContains)
+            .Select(item => ExportPlanner.Plan(
+                project,
+                context.ProjectPath,
+                new ExportRequest(Path.Combine(command.Folder, item.Name + preset.Extension), preset.Name, command.Mode, sequence.Id, SnapToKeyframes: true, Range: item.Range),
+                keyframes))];
+
+        string[] busy = [.. queue.List().Where(job => !job.IsFinished).Select(job => job.OutputPath)];
+        if (plans.FirstOrDefault(plan => busy.Contains(plan.OutputPath, StringComparer.OrdinalIgnoreCase)) is { } clash)
+        {
+            throw new CommandException("output-in-use", $"Another export in the queue is already writing '{clash.OutputPath}'.");
+        }
+
+        foreach (ExportPlan plan in plans)
+        {
+            context.Changed(queue.Enqueue(plan, project, context.ProjectPath, options: new ExportJobOptions(command.Priority)));
+        }
+
+        return project;
+    }
+}
