@@ -14,6 +14,9 @@ EffectCatalog.LoadUserTransitions();
 
 try
 {
+    // --attach takes an optional target, which System.CommandLine would take from the verb after it
+    // (--attach clip split ...), so it is lifted out here and the tree built for attaching.
+    args = JazzCli.LiftAttach(args);
     RootCommand root = JazzCli.BuildRootCommand();
     ParseResult parsed = root.Parse(args);
 
@@ -69,6 +72,47 @@ namespace JazzHands.Cli
             Recursive = true,
         };
 
+        /// <summary>The global --attach option, for help and the reference; Program lifts it out before parsing.</summary>
+        public static Option<string?> AttachOption { get; } = new("--attach")
+        {
+            Description = "Send the command to a running editor or 'jazz serve' instead of opening a project, which is then left out: the newest one, or --attach pipe:<name>, a process id, or 127.0.0.1:47800 for TCP.",
+            Recursive = true,
+            Arity = ArgumentArity.ZeroOrOne,
+        };
+
+        /// <summary>Where to attach, when --attach was given: empty for the newest instance. Null when not attached.</summary>
+        public static string? AttachTarget { get; set; }
+
+        /// <summary>Takes --attach and its target, if it has one, out of the arguments and remembers them.</summary>
+        public static string[] LiftAttach(string[] args)
+        {
+            ArgumentNullException.ThrowIfNull(args);
+            int at = Array.FindIndex(args, arg => arg == "--attach" || arg.StartsWith("--attach=", StringComparison.Ordinal));
+            if (at < 0)
+            {
+                AttachTarget = null;
+                return args;
+            }
+
+            var rest = new List<string>(args);
+            if (args[at].StartsWith("--attach=", StringComparison.Ordinal))
+            {
+                AttachTarget = args[at]["--attach=".Length..];
+                rest.RemoveAt(at);
+                return [.. rest];
+            }
+
+            string? next = at + 1 < args.Length ? args[at + 1] : null;
+            bool isTarget = next is not null
+                && (next.StartsWith("pipe:", StringComparison.OrdinalIgnoreCase)
+                    || next.StartsWith("tcp:", StringComparison.OrdinalIgnoreCase)
+                    || next.All(char.IsDigit)
+                    || System.Net.IPEndPoint.TryParse(next, out System.Net.IPEndPoint? endPoint) && next.Contains(':', StringComparison.Ordinal));
+            AttachTarget = isTarget ? next : string.Empty;
+            rest.RemoveRange(at, isTarget ? 2 : 1);
+            return [.. rest];
+        }
+
         /// <summary>Builds the root command with every verb attached.</summary>
         public static RootCommand BuildRootCommand()
         {
@@ -76,12 +120,26 @@ namespace JazzHands.Cli
             root.Options.Add(JsonOption);
             root.Options.Add(VerboseOption);
             root.Options.Add(GpuOption);
+            root.Options.Add(AttachOption);
+            if (AttachTarget is not null)
+            {
+                // Attached, a verb works on the running editor's project: the generated verbs, a
+                // script, a frame of what it shows, and the rpc tools.
+                GeneratedCommands.AddTo(root);
+                root.Subcommands.Add(ApplyCommand.Build());
+                root.Subcommands.Add(RpcCommands.BuildRpc());
+                root.Subcommands.Add(RpcCommands.BuildAttachedFrame());
+                return root;
+            }
+
             root.Subcommands.Add(BuildVersionCommand());
             ProjectCommands.AddTo(root);
             ExportCommands.AddTo(root);
             InspectCommands.AddTo(root);
             root.Subcommands.Add(ApplyCommand.Build());
             root.Subcommands.Add(CliDocs.Build());
+            root.Subcommands.Add(RpcCommands.BuildRpc());
+            root.Subcommands.Add(RpcCommands.BuildServe());
             GeneratedCommands.AddTo(root);
             root.Subcommands.Add(BuildPerfCommand());
             return root;

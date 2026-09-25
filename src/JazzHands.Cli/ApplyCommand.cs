@@ -49,7 +49,7 @@ public static partial class ApplyCommand
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
-    /// <summary>Builds the verb.</summary>
+    /// <summary>Builds the verb: with a project headless, or the script alone with --attach.</summary>
     public static Command Build()
     {
         var project = new Argument<string>("project") { Description = "The .jazz file to change." };
@@ -57,6 +57,16 @@ public static partial class ApplyCommand
         var keepGoing = new Option<bool>("--continue") { Description = "Run every step even after one fails, and save what worked." };
         var dryRun = new Option<bool>("--dry-run") { Description = "Run the steps that only change the project, report, and save nothing." };
         var noSave = new Option<bool>("--no-save") { Description = "Do not write the project back." };
+
+        if (JazzCli.AttachTarget is not null)
+        {
+            var attached = new Command("apply", "Run a script of commands in the editor it is attached to, step by step; the editor keeps the result, and saving is the editor's.")
+            {
+                script, keepGoing,
+            };
+            attached.SetAction(parse => RpcCommands.Attached(parse.GetValue(JazzCli.JsonOption), client => RunAttached(client, parse.GetValue(script)!, parse.GetValue(keepGoing), parse.GetValue(JazzCli.JsonOption))));
+            return attached;
+        }
 
         var command = new Command("apply", "Run a script of commands against a project in one session; save only if every step worked.")
         {
@@ -84,11 +94,6 @@ public static partial class ApplyCommand
         ProjectLoad load;
         try
         {
-            if (!File.Exists(scriptFull))
-            {
-                throw new CommandException("file-not-found", $"'{scriptFull}' does not exist.");
-            }
-
             steps = ReadScript(scriptFull);
             load = ProjectFile.Load(path);
             if (!load.IsLoadable)
@@ -111,35 +116,32 @@ public static partial class ApplyCommand
             .AddJazzHandsEngine()
             .AddSingleton<IExportService>(new ForegroundExportService())
             .BuildServiceProvider();
-        await using var session = new Session(load.Project, services, path);
+        await using var session = new Session(load.Project, services, path) { DefaultIssuer = "cli" };
 
-        var named = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        async Task<Outcome> Local(CommandMetadata metadata, object built)
+        {
+            if (metadata.IsQuery)
+            {
+                object? answer = typeof(Session).GetMethod(nameof(Session.Query))!.MakeGenericMethod(metadata.ResultType!).Invoke(session, [built]);
+                return new Outcome(true, [], JsonSerializer.SerializeToNode(answer, JazzJson.Options), null, null);
+            }
+
+            CommandResult result = await session.ExecuteAsync((ICommand)built).ConfigureAwait(false);
+            return new Outcome(result.Ok, [.. result.ChangedIds], null, result.Code, result.Error);
+        }
+
+        Task<Rational> Rate()
+        {
+            Project project = session.Project;
+            return Task.FromResult(project.ActiveSequence is { } active ? project.SettingsFor(active).FrameRate : project.Settings.FrameRate);
+        }
+
         var folders = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["scriptDir"] = Path.GetDirectoryName(scriptFull) ?? ".",
             ["projectDir"] = Path.GetDirectoryName(path) ?? ".",
         };
-        var results = new List<StepResult>();
-        bool failed = false;
-
-        for (int index = 0; index < steps.Count; index++)
-        {
-            StepResult result = await RunStep(session, steps[index], index + 1, named, folders, dryRun).ConfigureAwait(false);
-            results.Add(result);
-            if (!json)
-            {
-                Console.Out.WriteLine(result.Describe());
-            }
-
-            if (!result.Ok)
-            {
-                failed = true;
-                if (!keepGoing)
-                {
-                    break;
-                }
-            }
-        }
+        (List<StepResult> results, bool failed) = await RunSteps(steps, Local, Rate, folders, keepGoing, dryRun, json).ConfigureAwait(false);
 
         bool save = !dryRun && !noSave && (!failed || keepGoing) && results.Any(result => result.Ok && result.Changed.Length > 0);
         if (save)
@@ -163,9 +165,89 @@ public static partial class ApplyCommand
         return failed ? ExitCode.CommandError : ExitCode.Ok;
     }
 
+    /// <summary>
+    /// Runs a script in the editor a client is attached to. Each step is a command the editor
+    /// runs and remembers, so they undo there one by one; a step that fails stops the rest, and
+    /// what ran before it stays, as it would have had a person done it.
+    /// </summary>
+    private static async Task<int> RunAttached(Control.JazzClient client, string scriptPath, bool keepGoing, bool json)
+    {
+        string scriptFull = Path.GetFullPath(scriptPath);
+        JsonArray steps = ReadScript(scriptFull);
+        JsonNode? info = await client.CallAsync("session.info").ConfigureAwait(false);
+        string projectPath = info?["path"]?.GetValue<string>() ?? string.Empty;
+
+        async Task<Outcome> Remote(CommandMetadata metadata, object built)
+        {
+            JsonNode? result = await client.CallCommandAsync(metadata.Name, CommandRegistry.ArgsToJson(built)).ConfigureAwait(false);
+            return metadata.IsQuery
+                ? new Outcome(true, [], result?["data"]?.DeepClone(), null, null)
+                : new Outcome(true, [.. (result?["changedIds"] as JsonArray ?? []).Select(id => id!.GetValue<string>())], null, null, null);
+        }
+
+        var folders = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["scriptDir"] = Path.GetDirectoryName(scriptFull) ?? ".",
+            ["projectDir"] = projectPath.Length > 0 ? Path.GetDirectoryName(projectPath) ?? "." : Directory.GetCurrentDirectory(),
+        };
+        (List<StepResult> results, bool failed) = await RunSteps(steps, Remote, () => RpcCommands.FrameRateAsync(client), folders, keepGoing, dryRun: false, json).ConfigureAwait(false);
+
+        int ran = results.Count(result => result.Ok);
+        if (json)
+        {
+            Console.Out.WriteLine(JsonSerializer.Serialize(new { ok = !failed, steps = results.Select(result => result.ToJson()), attached = client.Issuer }, Text));
+        }
+        else
+        {
+            Console.Out.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{ran} of {steps.Count} step(s) worked in the editor."));
+        }
+
+        return failed ? ExitCode.CommandError : ExitCode.Ok;
+    }
+
+    private static async Task<(List<StepResult> Results, bool Failed)> RunSteps(
+        JsonArray steps,
+        Func<CommandMetadata, object, Task<Outcome>> execute,
+        Func<Task<Rational>> rate,
+        Dictionary<string, string> folders,
+        bool keepGoing,
+        bool dryRun,
+        bool json)
+    {
+        var named = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        var results = new List<StepResult>();
+        bool failed = false;
+
+        for (int index = 0; index < steps.Count; index++)
+        {
+            StepResult result = await RunStep(execute, rate, steps[index], index + 1, named, folders, dryRun).ConfigureAwait(false);
+            results.Add(result);
+            if (!json)
+            {
+                Console.Out.WriteLine(result.Describe());
+            }
+
+            if (!result.Ok)
+            {
+                failed = true;
+                if (!keepGoing)
+                {
+                    break;
+                }
+            }
+        }
+
+        return (results, failed);
+    }
+
     /// <summary>Reads a script: a JSON array, comments and trailing commas allowed.</summary>
     internal static JsonArray ReadScript(string path)
     {
+        if (!File.Exists(path))
+        {
+            throw new CommandException("file-not-found", $"'{path}' does not exist.");
+        }
+
         try
         {
             JsonNode? node = JsonNode.Parse(
@@ -181,7 +263,14 @@ public static partial class ApplyCommand
         }
     }
 
-    private static async Task<StepResult> RunStep(Session session, JsonNode? node, int index, Dictionary<string, string[]> named, Dictionary<string, string> folders, bool dryRun)
+    private static async Task<StepResult> RunStep(
+        Func<CommandMetadata, object, Task<Outcome>> execute,
+        Func<Task<Rational>> rate,
+        JsonNode? node,
+        int index,
+        Dictionary<string, string[]> named,
+        Dictionary<string, string> folders,
+        bool dryRun)
     {
         string name = node?["command"]?.GetValue<string>() ?? "?";
         try
@@ -194,33 +283,22 @@ public static partial class ApplyCommand
             CommandMetadata metadata = CommandRegistry.Find(name)
                 ?? throw new CommandException("unknown-command", $"There is no command '{name}'. 'jazz --help' lists them.");
             JsonObject args = Substitute(step["args"]?.DeepClone() as JsonObject ?? [], named, folders);
+            object built = CommandRegistry.FromJson(name, args, await rate().ConfigureAwait(false));
 
-            Project project = session.Project;
-            Rational rate = project.ActiveSequence is { } active ? project.SettingsFor(active).FrameRate : project.Settings.FrameRate;
-            object built = CommandRegistry.FromJson(name, args, rate);
-
-            if (metadata.IsQuery)
-            {
-                object? answer = typeof(Session).GetMethod(nameof(Session.Query))!.MakeGenericMethod(metadata.ResultType!).Invoke(session, [built]);
-                Remember(step, named, []);
-                return new StepResult(index, name, true, [], JsonSerializer.SerializeToNode(answer, JazzJson.Options), null, null);
-            }
-
-            if (dryRun && !metadata.Undoable)
+            if (dryRun && !metadata.IsQuery && !metadata.Undoable)
             {
                 Remember(step, named, []);
                 return new StepResult(index, name, true, [], null, null, null, Skipped: true);
             }
 
-            CommandResult result = await session.ExecuteAsync((ICommand)built).ConfigureAwait(false);
-            if (!result.Ok)
+            Outcome outcome = await execute(metadata, built).ConfigureAwait(false);
+            if (!outcome.Ok)
             {
-                return new StepResult(index, name, false, [], null, result.Code, result.Error);
+                return new StepResult(index, name, false, [], null, outcome.Code, outcome.Error);
             }
 
-            string[] changed = [.. result.ChangedIds];
-            Remember(step, named, changed);
-            return new StepResult(index, name, true, changed, null, null, null);
+            Remember(step, named, outcome.Changed);
+            return new StepResult(index, name, true, outcome.Changed, outcome.Answer, null, null);
         }
         catch (CommandException error)
         {
@@ -309,6 +387,9 @@ public static partial class ApplyCommand
 
     [GeneratedRegex(@"\$(?<name>[A-Za-z_][A-Za-z0-9_-]*)\.ids?(\[(?<n>\d+)\])?")]
     private static partial Regex ResultPattern();
+
+    /// <summary>What running a step came to, locally or in the editor.</summary>
+    private sealed record Outcome(bool Ok, string[] Changed, JsonNode? Answer, string? Code, string? Error);
 
     /// <summary>What one step did.</summary>
     private sealed record StepResult(int Index, string Command, bool Ok, string[] Changed, JsonNode? Answer, string? Code, string? Error, bool Skipped = false)

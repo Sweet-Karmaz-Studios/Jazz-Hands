@@ -29,6 +29,7 @@ active sequence's rate.
 | `--json` | Emit a single JSON object instead of human-readable text. |
 | `--verbose`, `-v` | Log engine detail to stderr. |
 | `--gpu <gpu>` | Which adapter renders: auto (the best GPU, the default), warp (the software rasterizer, as tests and CI use) or an adapter number from 'jazz version'. JAZZ_GPU sets the same. |
+| `--attach` | Send the command to a running editor or 'jazz serve' instead of opening a project, which is then left out: the newest one, or --attach pipe:<name>, a process id, or 127.0.0.1:47800 for TCP. |
 
 ## Exit codes
 
@@ -266,6 +267,24 @@ Write the command reference, Docs/CLI.md, from the commands themselves.
 |---|---|
 | `--markdown` | Write the reference as Markdown. The only form there is, and the default. |
 | `--out <out>` | Write it to this file, as UTF-8, instead of to the console: Docs/CLI.md. |
+
+### `jazz serve <project>`
+
+Open a project headless and serve it over the control server until Ctrl+C: a GUI-less editor for scripts and Claude Code.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to serve; made empty when it is not there. |
+
+| Option | Meaning |
+|---|---|
+| `--pipe <pipe>` | The pipe name. 'jazzhands' when free, else 'jazzhands-<pid>'. |
+| `--tcp` | Listen on TCP too, on loopback, with a token clients must say. |
+| `--port <port>` | The TCP port; 0 picks a free one. Default: 47800. |
+| `--address <address>` | The address TCP binds to. Other than loopback needs --allow-remote. Default: 127.0.0.1. |
+| `--allow-remote` | Let TCP bind to an address other machines can reach. Only on a network you trust; the token is all that stands between it and anyone. |
+| `--token <token>` | The token TCP clients must say; made up when left out, and printed. |
+| `--save-on-exit` | Save the project when stopped with Ctrl+C, if it has changes. |
 
 ### `jazz describe <project>`
 
@@ -2722,6 +2741,39 @@ Play proxies instead of their sources, or stop.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+## `jazz rpc`
+
+Talk JSON-RPC to a running editor or 'jazz serve': call a method, list them, watch events, or pass stdin through.
+
+### `jazz rpc call <method> [params]`
+
+Call one method and print the result as JSON.
+
+| Argument | Meaning |
+|---|---|
+| `<method>` | The method: a registry name (clip.split) or a session method (session.info). |
+| `<params>` | Its params as a JSON object: '{"clipId": "...", "at": "2s"}'. None when left out. Optional. |
+
+### `jazz rpc list`
+
+List every method: the session methods and every registry command and query, with their params. Needs no editor.
+
+### `jazz rpc events`
+
+Print the editor's events as they happen, one JSON object a line, until Ctrl+C.
+
+| Option | Meaning |
+|---|---|
+| `--events <events>` | Which events, comma separated: project.changed, command.completed, session.opened, selection.changed, playhead.moved, export.progress, export.done, log. All of them by default. Default: *. |
+
+### `jazz rpc stdio`
+
+Pass JSON-RPC lines from stdin to the editor and its lines to stdout, as they are: for embedding jazz in another program.
+
+### `jazz rpc instances`
+
+List the running editors and 'jazz serve' processes, and how to reach them.
 
 ## `jazz scopes`
 

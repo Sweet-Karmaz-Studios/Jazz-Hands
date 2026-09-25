@@ -111,11 +111,12 @@ public static class GeneratedCommands
     /// A batch holds commands rather than values, so it arrives as a script rather than as
     /// something typed; <c>jazz apply</c> in Phase 24 is how. The project verbs that make, open
     /// and save a file are hand-written in <see cref="ProjectCommands"/>, because they are about
-    /// which file is open rather than about editing one.
+    /// which file is open rather than about editing one; attached, they are sent to the editor as
+    /// they are, since which file the editor has open is what they are about.
     /// </remarks>
     private static bool Skip(CommandMetadata metadata) =>
         metadata.Type == typeof(BatchCommand)
-        || metadata.Name is "project.new" or "project.open" or "project.save";
+        || (JazzCli.AttachTarget is null && metadata.Name is "project.new" or "project.open" or "project.save");
 
     private static Command Build(CommandMetadata metadata)
     {
@@ -129,12 +130,13 @@ public static class GeneratedCommands
 
         // A standalone command works on the editor's own settings or on a file, not a project, so
         // there is no file to name and nothing to save; a project may still be given for what it
-        // adds, such as its own fonts.
-        if (!metadata.Standalone)
+        // adds, such as its own fonts. Attached, the project is the running editor's.
+        bool attached = JazzCli.AttachTarget is not null;
+        if (!attached && !metadata.Standalone)
         {
             verb.Arguments.Add(project);
         }
-        else
+        else if (!attached)
         {
             verb.Options.Add(optionalProject);
         }
@@ -170,12 +172,14 @@ public static class GeneratedCommands
             verb.Options.Add(option);
         }
 
-        if (!metadata.IsQuery && !metadata.Standalone)
+        if (!metadata.IsQuery && !metadata.Standalone && !attached)
         {
             verb.Options.Add(noSave);
         }
 
-        verb.SetAction(parse => Run(metadata, parse, project, arguments, options, noSave, optionalProject));
+        verb.SetAction(parse => attached
+            ? RpcCommands.RunAttached(metadata, parse, arguments, options)
+            : Run(metadata, parse, project, arguments, options, noSave, optionalProject));
 
         return verb;
     }
@@ -246,7 +250,7 @@ public static class GeneratedCommands
         (Nullable.GetUnderlyingType(parameter.Type) ?? parameter.Type) == typeof(bool);
 
     /// <summary>An option's text: what was typed after it, "true" for a switch given alone, or null when it was not given.</summary>
-    private static string? ValueOf(System.CommandLine.ParseResult parse, Option<string> option) =>
+    internal static string? ValueOf(System.CommandLine.ParseResult parse, Option<string> option) =>
         parse.GetValue(option) ?? (parse.GetResult(option) is not null && option.Arity.MinimumNumberOfValues == 0 ? "true" : null);
 
     private static int Run(
@@ -364,7 +368,7 @@ public static class GeneratedCommands
         return ExitCode.Ok;
     }
 
-    private static string Render(object? answer, bool json)
+    internal static string Render(object? answer, bool json)
     {
         if (!json)
         {
@@ -376,7 +380,7 @@ public static class GeneratedCommands
             : JsonSerializer.SerializeToNode(answer, JazzJson.Options)?.ToJsonString(Text) ?? "null";
     }
 
-    private static void Report(CommandException error, bool json)
+    internal static void Report(CommandException error, bool json)
     {
         if (json)
         {
