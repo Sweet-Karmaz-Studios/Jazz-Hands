@@ -112,8 +112,31 @@ public static class AudioGraphBuilder
 
         int channels = Math.Clamp(stream.Channels <= 0 ? 2 : stream.Channels, 1, Dsp.MaxChannels);
         Rational speed = clip.EffectiveSpeed;
+        long speedNum = speed.Num;
+        long speedDen = speed.Den;
         long start = clip.Start.ToSamples(rate, RoundingMode.Nearest);
         long end = clip.End.ToSamples(rate, RoundingMode.Nearest);
+        long[]? remap = null;
+
+        if (clip.Remap is { } curve)
+        {
+            // A speed curve: the source position every RemapStep samples, over a fixed
+            // denominator, and a speed bound that sizes the read-ahead window.
+            const long Denominator = 1024;
+            double fastest = Math.Max(Core.Animation.TimeRemap.Fastest(curve, clip.Duration), 1.0 / Denominator);
+            // Kept apart rather than as a Rational, which would reduce the fixed denominator away.
+            speedNum = (long)Math.Ceiling(fastest * Denominator);
+            speedDen = Denominator;
+            int entries = (int)((end - start) / ClipMix.RemapStep) + 2;
+            remap = new long[entries];
+            for (int index = 0; index < entries; index++)
+            {
+                var local = new Flicks((long)index * ClipMix.RemapStep * Flicks.PerSecond / rate);
+                Flicks source = clip.SourceTimeAt(clip.Start + local);
+                remap[index] = (long)Math.Round((double)source.Value * rate * Denominator / Flicks.PerSecond);
+            }
+        }
+
         Fade fadeIn = clip.FadeIn ?? Fade.None;
         Fade fadeOut = clip.FadeOut ?? Fade.None;
 
@@ -124,8 +147,8 @@ public static class AudioGraphBuilder
             end,
             clip.SourceIn.ToSamples(rate, RoundingMode.Nearest),
             clip.SourceOut.ToSamples(rate, RoundingMode.Nearest),
-            speed.Num,
-            speed.Den,
+            speedNum,
+            speedDen,
             clip.Reverse,
             fadeIn.Duration.ToSamples(rate, RoundingMode.Nearest),
             fadeIn.Curve,
@@ -138,7 +161,8 @@ public static class AudioGraphBuilder
             joins.LeadIn,
             joins.Tail,
             joins.CrossIn,
-            joins.CrossOut);
+            joins.CrossOut,
+            remap);
     }
 
     /// <summary>

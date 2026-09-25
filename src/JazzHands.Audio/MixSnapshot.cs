@@ -212,7 +212,8 @@ public sealed class ClipMix
         long leadIn = 0,
         long tail = 0,
         Crossfade? crossIn = null,
-        Crossfade? crossOut = null)
+        Crossfade? crossOut = null,
+        long[]? remap = null)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(source.Channels);
@@ -242,7 +243,19 @@ public sealed class ClipMix
         Tail = Math.Max(0, tail);
         CrossIn = crossIn;
         CrossOut = crossOut;
+        Remap = remap;
     }
+
+    /// <summary>Clip samples between the entries of a <see cref="Remap"/> table.</summary>
+    public const int RemapStep = 256;
+
+    /// <summary>
+    /// For a time remapped clip, the source position (over <see cref="SpeedDen"/>) every
+    /// <see cref="RemapStep"/> clip samples, from the clip's start; null for a clip at one speed.
+    /// Between entries the position runs in a straight line, so the sound follows the speed curve
+    /// the way tape would, its pitch with it.
+    /// </summary>
+    public long[]? Remap { get; }
 
     /// <summary>How many samples before <see cref="Start"/> it plays, into a transition from the clip before it.</summary>
     public long LeadIn { get; }
@@ -350,10 +363,22 @@ public sealed class ClipMix
     public AudioChannelMap ChannelMap { get; }
 
     /// <summary>True when the source is read one for one, forwards, which is the fast path.</summary>
-    public bool IsStraight => SpeedNum == SpeedDen && !Reverse;
+    public bool IsStraight => Remap is null && SpeedNum == SpeedDen && !Reverse;
 
     /// <summary>The source position of a clip sample, as a numerator over <see cref="SpeedDen"/>.</summary>
-    public long SourcePosition(long clipSample) => Reverse
+    public long SourcePosition(long clipSample)
+    {
+        if (Remap is { Length: > 1 } table)
+        {
+            long index = Math.Clamp(Dsp.FloorDiv(clipSample, RemapStep), 0, table.Length - 2);
+            long offset = clipSample - (index * RemapStep);
+            return table[index] + ((table[index + 1] - table[index]) * offset / RemapStep);
+        }
+
+        return Straight(clipSample);
+    }
+
+    private long Straight(long clipSample) => Reverse
         ? (SourceOut * SpeedDen) - ((clipSample + 1) * SpeedNum)
         : (SourceIn * SpeedDen) + (clipSample * SpeedNum);
 

@@ -64,6 +64,11 @@ public sealed class SetClipSpeedHandler : ICommandHandler<SetClipSpeedCommand>
         ClipLocation found = HandlerHelp.Clip(project, command.ClipId);
         HandlerHelp.RequireUnlocked(found.Track);
 
+        if (found.Clip.IsRemapped)
+        {
+            throw new CommandException("clip-remapped", "The clip's speed is a curve (time remap). Change its remap keyframes, or turn remap off (clip.set-remap --off) first.");
+        }
+
         if (command.Speed.IsZero)
         {
             throw new CommandException("zero-speed", "A clip at zero speed would never advance.");

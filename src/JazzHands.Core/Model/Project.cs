@@ -357,6 +357,7 @@ public sealed record Marker(
 /// <param name="Hold">True for a freeze frame: the clip shows the frame at <c>SourceIn</c> for its whole length, and is silent.</param>
 /// <param name="ToneMap">How an HDR source is tone mapped for this clip, over the project's default. Null for the project's.</param>
 /// <param name="Cue">What a cue on a subtitle track says and where it sits; null on every other clip.</param>
+/// <param name="Remap">A speed curve over clip time that replaces <paramref name="Speed"/>: time remapping and speed ramps (<see cref="Animation.TimeRemap"/>).</param>
 public sealed record Clip(
     string Id,
     TimeRange Range,
@@ -385,7 +386,8 @@ public sealed record Clip(
     EquatableArray<Mask> Masks = default,
     bool? Hold = null,
     ToneMapping? ToneMap = null,
-    Cue? Cue = null) : IEquatable<Clip>
+    Cue? Cue = null,
+    AnimatedValue? Remap = null) : IEquatable<Clip>
 {
     /// <summary>Playback rate, defaulting to normal speed.</summary>
     public Rational EffectiveSpeed => Speed ?? Rational.One;
@@ -403,7 +405,12 @@ public sealed record Clip(
     /// How much source material the clip consumes, which is its timeline duration scaled by
     /// speed. A clip at 2x uses twice the source it occupies on the timeline.
     /// </summary>
-    public Flicks SourceDuration => ScaleBySpeed(Range.Duration, EffectiveSpeed);
+    public Flicks SourceDuration => Remap is { } remap
+        ? Animation.TimeRemap.Offset(remap, Range.Duration)
+        : ScaleBySpeed(Range.Duration, EffectiveSpeed);
+
+    /// <summary>True when a speed curve drives the clip rather than one rate.</summary>
+    public bool IsRemapped => Remap is not null;
 
     /// <summary>The first source position after the clip.</summary>
     public Flicks SourceOut => SourceIn + SourceDuration;
@@ -436,7 +443,7 @@ public sealed record Clip(
         }
 
         Flicks offset = timelineTime - Range.Start;
-        Flicks scaled = ScaleBySpeed(offset, EffectiveSpeed);
+        Flicks scaled = Remap is { } remap ? Animation.TimeRemap.Offset(remap, offset) : ScaleBySpeed(offset, EffectiveSpeed);
         return Reverse ? SourceOut - scaled : SourceIn + scaled;
     }
 

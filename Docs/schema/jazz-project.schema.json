@@ -321,6 +321,16 @@
               "type": "null"
             }
           ]
+        },
+        "remap": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/animatedValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [

@@ -94,6 +94,10 @@ public static class ParamTargets
         new ParamDescriptor("volume", ParamType.Float, new ParamValue.Float(0), "Volume", "Gain in decibels; -144 is silence.", Min: -144, Max: 24, SliderMax: 12, Unit: "dB"),
         new ParamDescriptor("pan", ParamType.Float, new ParamValue.Float(0), "Pan", "-1 hard left, 1 hard right.", Min: -1, Max: 1));
 
+    /// <summary>A media clip's time remap: its speed as a curve over clip time (Phase 29).</summary>
+    public static EffectDescriptor RemapParams { get; } = Section("intrinsic.remap", "Speed",
+        new ParamDescriptor(Animation.TimeRemap.Parameter, ParamType.Float, new ParamValue.Float(1), "Speed", "How fast the source plays at each moment: 1 normal, 0.5 half, 0 a held frame. Keyframe it for a speed ramp.", Min: 0, Max: 100, SliderMax: 4, Unit: "x"));
+
     /// <summary>A mask's shape and strength.</summary>
     public static EffectDescriptor MaskParams { get; } = Section("intrinsic.mask", "Mask",
         new ParamDescriptor("bounds", ParamType.Float4, new ParamValue.Float4(Vector4.Zero), "Bounds", "x, y, width and height of a rectangle or ellipse, in source pixels."),
@@ -188,8 +192,8 @@ public static class ParamTargets
             ParamOwnerKind.Clip when owner.Track.Kind is TrackKind.Video or TrackKind.Adjustment =>
                 registry.Find(owner.Clip!.GeneratorId) is { Kind: EffectKind.Generator } generator
                     ? [generator, Transform, Opacity, Crop]
-                    : [Transform, Opacity, Crop],
-            ParamOwnerKind.Clip when owner.Track.Kind == TrackKind.Audio => [Audio],
+                    : owner.Clip.IsMedia && owner.Clip.IsRemapped ? [Transform, Opacity, Crop, RemapParams] : [Transform, Opacity, Crop],
+            ParamOwnerKind.Clip when owner.Track.Kind == TrackKind.Audio => owner.Clip!.IsRemapped ? [Audio, RemapParams] : [Audio],
             ParamOwnerKind.Track when owner.Track.Kind == TrackKind.Audio => [Audio],
             ParamOwnerKind.Effect => registry.Find(owner.Effect!.TypeId) is { } descriptor ? [descriptor] : [],
             ParamOwnerKind.Mask => [MaskParams],
@@ -295,7 +299,22 @@ public static class ParamTargets
                 return ReplaceMask(project, owner, edited);
 
             default:
-                return project.ReplaceTrack(owner.Track.ReplaceClip(WithClipValue(owner.Clip!, name, value, descriptor)));
+                Project updated = project.ReplaceTrack(owner.Track.ReplaceClip(WithClipValue(owner.Clip!, name, value, descriptor)));
+
+                // A speed curve is the whole link's: the picture and its sound stay in step.
+                if (name == Animation.TimeRemap.Parameter && owner.Clip!.LinkGroupId is { } link)
+                {
+                    foreach (Track other in owner.Sequence.Tracks)
+                    {
+                        foreach (Clip partner in other.Clips.Where(candidate => candidate.LinkGroupId == link && candidate.Id != owner.Clip.Id))
+                        {
+                            Track current = updated.Sequence(owner.Sequence.Id)!.Track(other.Id)!;
+                            updated = updated.ReplaceTrack(current.ReplaceClip(partner with { Remap = value }));
+                        }
+                    }
+                }
+
+                return updated;
         }
     }
 
@@ -348,7 +367,7 @@ public static class ParamTargets
         clip.Effects.FirstOrDefault(effect => EffectChains.IsOwnParameters(clip, effect));
 
     private static bool IsIntrinsic(string name) =>
-        name is "opacity" or "volume" or "pan"
+        name is "opacity" or "volume" or "pan" or Animation.TimeRemap.Parameter
         || name.StartsWith("transform.", StringComparison.Ordinal)
         || name.StartsWith("crop.", StringComparison.Ordinal);
 
@@ -366,6 +385,7 @@ public static class ParamTargets
         "crop.bottom" => clip.Crop?.Bottom,
         "volume" => clip.Volume,
         "pan" => clip.Pan,
+        Animation.TimeRemap.Parameter => clip.Remap,
         _ => null,
     };
 
@@ -399,6 +419,8 @@ public static class ParamTargets
                 return clip with { Volume = value };
             case "pan":
                 return clip with { Pan = value };
+            case Animation.TimeRemap.Parameter:
+                return clip with { Remap = value };
         }
 
         if (name.StartsWith("transform.", StringComparison.Ordinal))
