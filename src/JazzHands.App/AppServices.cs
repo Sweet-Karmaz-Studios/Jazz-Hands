@@ -77,7 +77,9 @@ public static class AppServices
             transport.Attach(provider.GetRequiredService<Session>());
             return transport;
         });
-        services.AddSingleton<IMeterFeed>(provider => new TransportMeterFeed(provider.GetRequiredService<Transport>()));
+        services.AddSingleton(provider => new TransportMeters(provider.GetRequiredService<Transport>()));
+        services.AddSingleton<IMeterFeed>(provider => new TransportMeterFeed(provider.GetRequiredService<TransportMeters>()));
+        services.AddSingleton<IMixerFeed>(provider => new TransportMixerFeed(provider.GetRequiredService<TransportMeters>()));
 
         // One device for decode, the preview and everything else that touches the GPU. WARP when
         // there is no hardware adapter, so the editor still opens on a machine without one.
@@ -196,6 +198,11 @@ public static class AppServices
         services.AddSingleton<MetersPanelViewModel>(provider => new MetersPanelViewModel(
             provider.GetRequiredService<IMeterFeed>(),
             provider.GetRequiredService<IUiDispatcher>()));
+        services.AddSingleton(provider => new MixerPanelViewModel(
+            provider.GetRequiredService<ISession>(),
+            provider.GetRequiredService<IMixerFeed>(),
+            provider.GetRequiredService<IUiDispatcher>(),
+            provider.GetRequiredService<IPreviewEngine>()));
         services.AddSingleton<MainViewModel>();
 
         return services;

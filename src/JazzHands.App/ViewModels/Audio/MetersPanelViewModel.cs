@@ -162,6 +162,9 @@ public sealed partial class MeterChannelViewModel(string name) : ObservableObjec
     /// <summary>The RMS bar's height, 0 to 1.</summary>
     public double RmsLevel => MetersPanelViewModel.ToLevel(RmsDb);
 
+    /// <summary>The held peak's height on the bar, 0 to 1.</summary>
+    public double HoldLevel => MetersPanelViewModel.ToLevel(HoldDb);
+
     /// <summary>The held peak, as the number under the bar.</summary>
     public string HoldText => HoldDb <= MetersPanelViewModel.FloorDb
         ? "-inf"
@@ -184,6 +187,7 @@ public sealed partial class MeterChannelViewModel(string name) : ObservableObjec
     partial void OnHoldDbChanged(double value)
     {
         OnPropertyChanged(nameof(HoldText));
+        OnPropertyChanged(nameof(HoldLevel));
         OnPropertyChanged(nameof(IsClipping));
     }
 }

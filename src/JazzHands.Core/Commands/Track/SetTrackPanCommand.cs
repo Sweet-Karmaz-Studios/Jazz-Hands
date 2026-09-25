@@ -15,4 +15,9 @@ namespace JazzHands.Core.Commands;
 public sealed record SetTrackPanCommand(
     [property: Arg(0, "The track id")] string TrackId,
     [property: Option("pan", "-1 hard left, 0 centre, 1 hard right")] double Pan,
-    [property: Option("at", "Set a keyframe at this time on the sequence")] Flicks? At = null) : ICommand;
+    [property: Option("at", "Set a keyframe at this time on the sequence")] Flicks? At = null) : IMergeableCommand
+{
+    /// <inheritdoc />
+    public bool Continues(ICommand previous) =>
+        previous is SetTrackPanCommand before && before.TrackId == TrackId && before.At == At;
+}

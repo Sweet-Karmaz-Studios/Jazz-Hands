@@ -34,6 +34,9 @@ public enum TimelineCursor
     /// <summary>The hand: dragging scrolls.</summary>
     Hand,
 
+    /// <summary>An audio clip's volume line: dragging sets the level.</summary>
+    Volume,
+
     /// <summary>Slip or slide, over a clip.</summary>
     Slip,
 }
@@ -122,6 +125,7 @@ public sealed partial class TimelineViewModel
         Stretch,
         Hand,
         TransitionEdge,
+        Volume,
     }
 
     /// <summary>What a gesture in progress would do, or null.</summary>
@@ -232,6 +236,11 @@ public sealed partial class TimelineViewModel
         if (hit.Transition is { } bar && Tools.Tool is TimelineTool.Select)
         {
             TransitionDown(hit, bar, modifiers);
+            return;
+        }
+
+        if (VolumeDown(hit, point, modifiers))
+        {
             return;
         }
 
@@ -349,6 +358,10 @@ public sealed partial class TimelineViewModel
                 PreviewTransitionEdge(point);
                 return;
 
+            case Gesture.Volume:
+                VolumeMove(point);
+                return;
+
             case Gesture.TrimStart:
             case Gesture.TrimEnd:
                 PreviewTrim(point);
@@ -396,6 +409,10 @@ public sealed partial class TimelineViewModel
             case Gesture.TransitionEdge:
                 PreviewTransitionEdge(point);
                 CommitTransitionEdge();
+                break;
+
+            case Gesture.Volume:
+                VolumeUp(point);
                 break;
 
             case Gesture.Razor:
@@ -677,6 +694,7 @@ public sealed partial class TimelineViewModel
         (TimelineTool.Hand, _) => TimelineCursor.Hand,
         (_, { Region: TimelineRegion.Ruler }) => TimelineCursor.Scrub,
         (TimelineTool.Select, { Transition: { } bar }) => Movable(bar, hit.Edge) ? hit.Edge == ClipEdge.Start ? TimelineCursor.TrimStart : TimelineCursor.TrimEnd : TimelineCursor.Arrow,
+        (TimelineTool.Select, { Clip: not null }) when VolumeAt(hit, point) is not null => TimelineCursor.Volume,
         (TimelineTool.Razor, { Clip: not null }) => TimelineCursor.Razor,
         (TimelineTool.Slip or TimelineTool.Slide, { Clip: not null }) => TimelineCursor.Slip,
         (TimelineTool.RateStretch, { Edge: ClipEdge.Start }) => TimelineCursor.Arrow,

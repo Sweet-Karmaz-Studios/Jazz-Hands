@@ -15,4 +15,9 @@ namespace JazzHands.Core.Commands;
 public sealed record SetMasterVolumeCommand(
     [property: Option("db", "Volume in dB, -144 to 24")] double Db,
     [property: Option("at", "Set a keyframe at this time on the sequence")] Flicks? At = null,
-    [property: Option("sequence", "Which sequence")] string? SequenceId = null) : ICommand;
+    [property: Option("sequence", "Which sequence")] string? SequenceId = null) : IMergeableCommand
+{
+    /// <inheritdoc />
+    public bool Continues(ICommand previous) =>
+        previous is SetMasterVolumeCommand before && before.SequenceId == SequenceId && before.At == At;
+}

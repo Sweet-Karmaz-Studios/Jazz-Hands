@@ -1,5 +1,4 @@
 using JazzHands.Audio;
-using JazzHands.Engine.Playback;
 
 namespace JazzHands.App.Services;
 
@@ -20,13 +19,24 @@ public interface IMeterFeed
     bool TryReadLatest(out MeterReading reading);
 }
 
-/// <summary>The transport's master meter.</summary>
-/// <param name="transport">The transport. Owned by the host, not by this adapter.</param>
-public sealed class TransportMeterFeed(Transport transport) : IMeterFeed
+/// <summary>The transport's master meter, through the tap the Mixer shares.</summary>
+public sealed class TransportMeterFeed : IMeterFeed
 {
-    /// <inheritdoc />
-    public int Channels => transport.Output.Channels;
+    private readonly TransportMeters _meters;
+    private readonly MeterTap.Reader _reader;
+
+    /// <summary>Opens a reader on the master.</summary>
+    /// <param name="meters">The transport's meters. Owned by the host, not by this adapter.</param>
+    public TransportMeterFeed(TransportMeters meters)
+    {
+        ArgumentNullException.ThrowIfNull(meters);
+        _meters = meters;
+        _reader = meters.Master.Open();
+    }
 
     /// <inheritdoc />
-    public bool TryReadLatest(out MeterReading reading) => transport.Meters.TryReadLatest(out reading);
+    public int Channels => _meters.Channels;
+
+    /// <inheritdoc />
+    public bool TryReadLatest(out MeterReading reading) => _reader.TryRead(out reading);
 }

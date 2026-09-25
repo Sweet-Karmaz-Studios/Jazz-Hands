@@ -49,7 +49,8 @@ public sealed partial class MainViewModel : ObservableObject
         Inspector.InspectorPanelViewModel? inspector = null,
         Effects.EffectsPanelViewModel? effects = null,
         Grading.ScopesPanelViewModel? scopes = null,
-        Grading.ColorPanelViewModel? color = null)
+        Grading.ColorPanelViewModel? color = null,
+        MixerPanelViewModel? mixer = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(media);
@@ -66,6 +67,7 @@ public sealed partial class MainViewModel : ObservableObject
         Effects = effects;
         Scopes = scopes;
         Color = color;
+        Mixer = mixer;
         _files = files;
         _dialogs = dialogs;
 
@@ -79,6 +81,11 @@ public sealed partial class MainViewModel : ObservableObject
         if (meters is not null)
         {
             Panels.Add(meters);
+        }
+
+        if (mixer is not null)
+        {
+            Panels.Add(mixer);
         }
 
         if (preview is not null)
@@ -142,6 +149,9 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>The scopes panel, when the host made one.</summary>
     public Grading.ScopesPanelViewModel? Scopes { get; }
 
+    /// <summary>The Audio Mixer, when the window has a transport to meter.</summary>
+    public MixerPanelViewModel? Mixer { get; }
+
     /// <summary>The colour wheels and curves panel, when the host made one.</summary>
     public Grading.ColorPanelViewModel? Color { get; }
 
@@ -158,6 +168,10 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>The colour workspace: the Color panel and the scopes in front, beside the preview.</summary>
     [RelayCommand]
     private void ShowColorWorkspace() => PanelsRequested?.Invoke(this, [Grading.ColorPanelViewModel.PanelId, Grading.ScopesPanelViewModel.PanelId]);
+
+    /// <summary>The audio workspace: the Mixer in front, its strips and the master beside the preview.</summary>
+    [RelayCommand]
+    private void ShowAudioWorkspace() => PanelsRequested?.Invoke(this, [MixerPanelViewModel.PanelId]);
 
     [RelayCommand]
     private static void Exit() => Application.Current?.Shutdown();

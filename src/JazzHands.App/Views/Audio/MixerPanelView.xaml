@@ -1,0 +1,468 @@
+<UserControl x:Class="JazzHands.App.Views.Audio.MixerPanelView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:JazzHands.App.ViewModels.Audio"
+             xmlns:controls="clr-namespace:JazzHands.App.Controls"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:MixerPanelViewModel}"
+             Background="{DynamicResource Brush.Background.Panel}">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="Visible" />
+
+        <!-- A level bar that fills from the bottom, as the Meters panel draws it. -->
+        <Style x:Key="MeterBar" TargetType="{x:Type ProgressBar}">
+            <Setter Property="Minimum" Value="0" />
+            <Setter Property="Maximum" Value="1" />
+            <Setter Property="IsTabStop" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ProgressBar}">
+                        <Grid>
+                            <Grid.LayoutTransform>
+                                <RotateTransform Angle="-90" />
+                            </Grid.LayoutTransform>
+                            <Border x:Name="PART_Track" />
+                            <Border x:Name="PART_Indicator" HorizontalAlignment="Left" Background="{TemplateBinding Foreground}" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- The held peak: only the top edge of the bar, a line that stays where the peak was. -->
+        <Style x:Key="HoldLine" TargetType="{x:Type ProgressBar}" BasedOn="{StaticResource MeterBar}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ProgressBar}">
+                        <Grid>
+                            <Grid.LayoutTransform>
+                                <RotateTransform Angle="-90" />
+                            </Grid.LayoutTransform>
+                            <Border x:Name="PART_Track" />
+                            <Border x:Name="PART_Indicator" HorizontalAlignment="Left" BorderBrush="{TemplateBinding Foreground}" BorderThickness="0,0,2,0" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- The empty stretch either side of a fader's thumb: clicking it steps the fader. -->
+        <Style x:Key="FaderStep" TargetType="{x:Type RepeatButton}">
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="IsTabStop" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type RepeatButton}">
+                        <Rectangle Fill="Transparent" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="FaderThumb" TargetType="{x:Type Thumb}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Thumb}">
+                        <Border x:Name="Cap" Width="26" Height="14" CornerRadius="2"
+                                Background="{DynamicResource Brush.Background.Raised}"
+                                BorderBrush="{DynamicResource Brush.Border.Strong}" BorderThickness="1">
+                            <Rectangle Height="2" Margin="3,0" Fill="{DynamicResource Brush.Text.Primary}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Cap" Property="BorderBrush" Value="{DynamicResource Brush.Accent}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- A vertical fader from -60 (silence) to +12 dB. -->
+        <Style x:Key="Fader" TargetType="{x:Type Slider}">
+            <Setter Property="Orientation" Value="Vertical" />
+            <Setter Property="Minimum" Value="-60" />
+            <Setter Property="Maximum" Value="12" />
+            <Setter Property="SmallChange" Value="0.5" />
+            <Setter Property="LargeChange" Value="3" />
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Slider}">
+                        <Grid Background="Transparent">
+                            <Border Width="4" HorizontalAlignment="Center" Margin="0,7" CornerRadius="2"
+                                    Background="{DynamicResource Brush.Background.Input}"
+                                    BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" />
+                            <Track x:Name="PART_Track" Orientation="Vertical">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Style="{StaticResource FaderStep}" Command="Slider.DecreaseLarge" />
+                                </Track.DecreaseRepeatButton>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Style="{StaticResource FaderStep}" Command="Slider.IncreaseLarge" />
+                                </Track.IncreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb Style="{StaticResource FaderThumb}" />
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- A small horizontal pan slider, hard left to hard right. -->
+        <Style x:Key="PanSlider" TargetType="{x:Type Slider}">
+            <Setter Property="Minimum" Value="-1" />
+            <Setter Property="Maximum" Value="1" />
+            <Setter Property="SmallChange" Value="0.05" />
+            <Setter Property="LargeChange" Value="0.25" />
+            <Setter Property="Height" Value="16" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Slider}">
+                        <Grid Background="Transparent">
+                            <Border Height="4" VerticalAlignment="Center" Margin="4,0" CornerRadius="2"
+                                    Background="{DynamicResource Brush.Background.Input}"
+                                    BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" />
+                            <Rectangle Width="1" Height="8" HorizontalAlignment="Center" Fill="{DynamicResource Brush.Text.Secondary}" />
+                            <Track x:Name="PART_Track" Orientation="Horizontal">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Style="{StaticResource FaderStep}" Command="Slider.DecreaseLarge" />
+                                </Track.DecreaseRepeatButton>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Style="{StaticResource FaderStep}" Command="Slider.IncreaseLarge" />
+                                </Track.IncreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb>
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="{x:Type Thumb}">
+                                                <Ellipse Width="10" Height="10" Fill="{DynamicResource Brush.Text.Primary}"
+                                                         Stroke="{DynamicResource Brush.Border.Strong}" />
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- A mute, solo or lock button: a letter that lights when it is on. -->
+        <Style x:Key="StripToggle" TargetType="{x:Type ToggleButton}" BasedOn="{StaticResource Button.Text}">
+            <Setter Property="MinWidth" Value="22" />
+            <Setter Property="Height" Value="20" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <!-- The meters of a strip: a bar per channel, RMS solid over a lighter peak, the held peak a
+             line, and the bar turns red while its peak is at full scale. -->
+        <DataTemplate x:Key="StripMeter" DataType="{x:Type vm:MixerMeterViewModel}">
+            <ItemsControl ItemsSource="{Binding Channels, Mode=OneWay}" IsTabStop="False">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <UniformGrid Rows="1" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="{x:Type vm:MeterChannelViewModel}">
+                        <Border Width="7" Margin="1,0" Background="{DynamicResource Brush.Background.Input}">
+                            <Grid>
+                                <ProgressBar x:Name="Peak" Style="{StaticResource MeterBar}" Foreground="{DynamicResource Brush.Label.Blue}"
+                                             Opacity="0.45" Value="{Binding PeakLevel, Mode=OneWay}" />
+                                <ProgressBar Style="{StaticResource MeterBar}" Foreground="{DynamicResource Brush.Accent}"
+                                             Value="{Binding RmsLevel, Mode=OneWay}" />
+                                <ProgressBar x:Name="Hold" Style="{StaticResource HoldLine}" Foreground="{DynamicResource Brush.Text.Primary}"
+                                             Value="{Binding HoldLevel, Mode=OneWay}" />
+                            </Grid>
+                        </Border>
+                        <DataTemplate.Triggers>
+                            <DataTrigger Binding="{Binding IsClipping, Mode=OneWay}" Value="True">
+                                <Setter TargetName="Peak" Property="Foreground" Value="{DynamicResource Brush.Error}" />
+                                <Setter TargetName="Peak" Property="Opacity" Value="1" />
+                                <Setter TargetName="Hold" Property="Foreground" Value="{DynamicResource Brush.Error}" />
+                            </DataTrigger>
+                        </DataTemplate.Triggers>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </DataTemplate>
+
+        <!-- The clip light: dark until something clips, then red until it is clicked. -->
+        <Style x:Key="ClipLight" TargetType="{x:Type Button}">
+            <Setter Property="Height" Value="6" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="ToolTip" Value="Lights when a sample reaches full scale. Click to put it out." />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="Light" CornerRadius="1" Background="{DynamicResource Brush.Background.Input}" />
+                        <ControlTemplate.Triggers>
+                            <DataTrigger Binding="{Binding IsClipped, Mode=OneWay}" Value="True">
+                                <Setter TargetName="Light" Property="Background" Value="{DynamicResource Brush.Error}" />
+                            </DataTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="Caption" TargetType="{x:Type TextBlock}">
+            <Setter Property="FontSize" Value="{DynamicResource Text.Caption}" />
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
+        </Style>
+
+        <Style x:Key="Readout" TargetType="{x:Type TextBlock}">
+            <Setter Property="FontFamily" Value="{DynamicResource Font.Mono}" />
+            <Setter Property="FontSize" Value="{DynamicResource Text.Caption}" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+        </Style>
+    </UserControl.Resources>
+
+    <DockPanel>
+        <!-- What went wrong last, such as a lock refusing a change. -->
+        <TextBlock DockPanel.Dock="Bottom" Margin="8,2" Text="{Binding Status, Mode=OneWay}" TextTrimming="CharacterEllipsis"
+                   Style="{StaticResource Caption}" Foreground="{DynamicResource Brush.Warning}" />
+
+        <!-- The master, on the right as on a desk. -->
+        <Border DockPanel.Dock="Right" Width="176" Margin="0,4,4,4" DataContext="{Binding Master, Mode=OneWay}"
+                Background="{DynamicResource Brush.Background.Raised}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="3">
+            <Grid Margin="6">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" MinHeight="120" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Text="Master" FontWeight="SemiBold" HorizontalAlignment="Center" />
+
+                <!-- The limiter: on or off, and its ceiling in dBTP. -->
+                <DockPanel Grid.Row="1" Margin="0,6,0,4">
+                    <CheckBox DockPanel.Dock="Left" Content="Limiter" IsChecked="{Binding IsLimiterOn, Mode=TwoWay}" VerticalAlignment="Center"
+                              ToolTip="Keeps the true peak at or under the ceiling, looking 5 ms ahead." AutomationProperties.Name="Master limiter" />
+                    <TextBlock DockPanel.Dock="Right" Text="dBTP" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="3,0,0,0" />
+                    <controls:NumberBox Width="48" HorizontalAlignment="Right" Value="{Binding CeilingDb, Mode=TwoWay}" Minimum="-24" Maximum="0" Step="0.1" Decimals="1"
+                                        IsEnabled="{Binding IsLimiterOn, Mode=OneWay}" ToolTip="The limiter's ceiling" AutomationProperties.Name="Limiter ceiling" />
+                </DockPanel>
+
+                <!-- Fader, meter and the limiter's gain reduction, side by side. -->
+                <Grid Grid.Row="2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <Button Grid.Row="0" Grid.Column="2" Grid.ColumnSpan="2" Style="{StaticResource ClipLight}" DataContext="{Binding Meter, Mode=OneWay}"
+                            Command="{Binding ClearClipCommand, Mode=OneWay}" Margin="0,0,0,3" />
+                    <Slider Grid.Row="1" Grid.Column="0" Style="{StaticResource Fader}" Value="{Binding VolumeDb, Mode=TwoWay}"
+                            AutomationProperties.Name="Master volume" />
+                    <ContentControl Grid.Row="1" Grid.Column="2" Content="{Binding Meter, Mode=OneWay}" ContentTemplate="{StaticResource StripMeter}"
+                                    HorizontalAlignment="Center" IsTabStop="False" />
+                    <Border Grid.Row="1" Grid.Column="3" Width="7" Background="{DynamicResource Brush.Background.Input}" Margin="4,0,0,0"
+                            ToolTip="How far the limiter is turning the mix down, up to 20 dB.">
+                        <!-- Gain reduction hangs from the top. -->
+                        <ProgressBar Style="{StaticResource MeterBar}" Foreground="{DynamicResource Brush.Warning}" Value="{Binding ReductionLevel, Mode=OneWay}"
+                                     RenderTransformOrigin="0.5,0.5">
+                            <ProgressBar.RenderTransform>
+                                <ScaleTransform ScaleY="-1" />
+                            </ProgressBar.RenderTransform>
+                        </ProgressBar>
+                    </Border>
+                </Grid>
+
+                <DockPanel Grid.Row="3" Margin="0,4,0,0">
+                    <Button DockPanel.Dock="Left" Style="{StaticResource Button.Text}" Content="{Binding VolumeText, Mode=OneWay}"
+                            Command="{Binding ResetVolumeCommand, Mode=OneWay}" ToolTip="Master volume in dB. Click to put it back to 0." />
+                    <TextBlock DockPanel.Dock="Left" Text="&#xE7C9;" FontFamily="{DynamicResource Font.Icon}" VerticalAlignment="Center"
+                               Foreground="{DynamicResource Brush.Accent}" Margin="2,0,0,0"
+                               Visibility="{Binding IsVolumeAnimated, Mode=OneWay, Converter={StaticResource Visible}}"
+                               ToolTip="The master volume has keyframes: the fader sets one at the playhead." />
+                    <TextBlock Text="{Binding ReductionText, Mode=OneWay}" Style="{StaticResource Readout}" VerticalAlignment="Center"
+                               Foreground="{DynamicResource Brush.Warning}" ToolTip="Gain reduction, dB" />
+                </DockPanel>
+
+                <!-- Loudness, EBU R128, and the highest true peak since the reset. -->
+                <Grid Grid.Row="4" Margin="0,6,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Momentary LUFS" Style="{StaticResource Caption}" ToolTip="Loudness over the last 400 ms" />
+                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding MomentaryText, Mode=OneWay}" Style="{StaticResource Readout}" />
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Short-term LUFS" Style="{StaticResource Caption}" ToolTip="Loudness over the last 3 s" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ShortTermText, Mode=OneWay}" Style="{StaticResource Readout}" />
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Integrated LUFS" Style="{StaticResource Caption}" ToolTip="Gated loudness since the last reset" />
+                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding IntegratedText, Mode=OneWay}" Style="{StaticResource Readout}" FontWeight="SemiBold" />
+                    <TextBlock Grid.Row="3" Grid.Column="0" Text="True peak dBTP" Style="{StaticResource Caption}" ToolTip="The highest true peak since the last reset" />
+                    <TextBlock x:Name="TruePeak" Grid.Row="3" Grid.Column="1" Text="{Binding TruePeakText, Mode=OneWay}">
+                        <TextBlock.Style>
+                            <Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource Readout}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsOverCeiling, Mode=OneWay}" Value="True">
+                                        <Setter Property="Foreground" Value="{DynamicResource Brush.Error}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <Button Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2" HorizontalAlignment="Left" Margin="0,4,0,0" Style="{StaticResource Button.Text}"
+                            Content="Reset loudness" Command="{Binding ResetLoudnessCommand, Mode=OneWay}"
+                            ToolTip="Start the integrated loudness and the true peak again from now" />
+                </Grid>
+            </Grid>
+        </Border>
+
+        <Grid>
+            <TextBlock Text="This sequence has no audio tracks." Style="{StaticResource Caption}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                       Visibility="{Binding IsEmpty, Mode=OneWay, Converter={StaticResource Visible}}" />
+
+            <!-- A strip per audio track, scrolling sideways when there are more than fit. -->
+            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Focusable="False">
+                <ItemsControl ItemsSource="{Binding Strips, Mode=OneWay}" Margin="4" IsTabStop="False">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:MixerStripViewModel}">
+                            <Border Width="96" Margin="0,0,4,0" Background="{DynamicResource Brush.Background.Raised}"
+                                    BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="3">
+                                <Grid Margin="5">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" MinHeight="120" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <!-- The track's name on its colour. -->
+                                    <Border Grid.Row="0" CornerRadius="2" Padding="4,1" Background="{Binding Color, Mode=OneWay}">
+                                        <TextBlock Text="{Binding Name, Mode=OneWay}" TextTrimming="CharacterEllipsis" HorizontalAlignment="Center"
+                                                   Foreground="White" FontWeight="SemiBold" ToolTip="{Binding Name, Mode=OneWay}" />
+                                    </Border>
+
+                                    <!-- Effect slots: click a name to bypass it, the cross to remove it. -->
+                                    <StackPanel Grid.Row="1" Margin="0,4,0,0">
+                                        <ItemsControl ItemsSource="{Binding Effects, Mode=OneWay}" IsTabStop="False">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="{x:Type vm:MixerEffectSlotViewModel}">
+                                                    <Border Margin="0,0,0,1" CornerRadius="2" Background="{DynamicResource Brush.Background.Input}">
+                                                        <DockPanel>
+                                                            <Button DockPanel.Dock="Right" Style="{StaticResource Button.Icon}" Width="16" Height="16" FontSize="8"
+                                                                    Content="&#xE711;" Command="{Binding RemoveCommand, Mode=OneWay}" ToolTip="Remove this effect"
+                                                                    AutomationProperties.Name="Remove effect" />
+                                                            <Button x:Name="Slot" Style="{StaticResource Button.Text}" Height="16" Padding="3,0" HorizontalContentAlignment="Left"
+                                                                    Content="{Binding Name, Mode=OneWay}" Command="{Binding ToggleEnabledCommand, Mode=OneWay}"
+                                                                    Foreground="{DynamicResource Brush.Text.Primary}" ToolTip="Click to bypass it or turn it back on" />
+                                                        </DockPanel>
+                                                    </Border>
+                                                    <DataTemplate.Triggers>
+                                                        <DataTrigger Binding="{Binding IsEnabled, Mode=OneWay}" Value="False">
+                                                            <Setter TargetName="Slot" Property="Foreground" Value="{DynamicResource Brush.Text.Disabled}" />
+                                                        </DataTrigger>
+                                                    </DataTemplate.Triggers>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <Button Style="{StaticResource Button.Text}" Height="18" Content="+ Effect" HorizontalAlignment="Stretch"
+                                                Click="OnAddEffectClick" ToolTip="Add an audio effect to this track" AutomationProperties.Name="Add effect">
+                                            <Button.ContextMenu>
+                                                <ContextMenu ItemsSource="{Binding AvailableEffects, Mode=OneWay}">
+                                                    <ContextMenu.ItemContainerStyle>
+                                                        <Style TargetType="{x:Type MenuItem}">
+                                                            <Setter Property="Header" Value="{Binding Name, Mode=OneWay}" />
+                                                            <Setter Property="InputGestureText" Value="{Binding Category, Mode=OneWay}" />
+                                                            <Setter Property="CommandParameter" Value="{Binding TypeId, Mode=OneWay}" />
+                                                            <Setter Property="Command" Value="{Binding PlacementTarget.DataContext.AddEffectCommand, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}, Mode=OneWay}" />
+                                                        </Style>
+                                                    </ContextMenu.ItemContainerStyle>
+                                                </ContextMenu>
+                                            </Button.ContextMenu>
+                                        </Button>
+                                    </StackPanel>
+
+                                    <!-- Pan. -->
+                                    <DockPanel Grid.Row="2" Margin="0,6,0,0">
+                                        <Button DockPanel.Dock="Right" Style="{StaticResource Button.Text}" MinWidth="30" Height="16" Padding="2,0"
+                                                Content="{Binding PanText, Mode=OneWay}" Command="{Binding ResetPanCommand, Mode=OneWay}"
+                                                ToolTip="Pan. Click to put it back in the centre." />
+                                        <Slider Style="{StaticResource PanSlider}" Value="{Binding Pan, Mode=TwoWay}" AutomationProperties.Name="Pan" />
+                                    </DockPanel>
+
+                                    <!-- Mute, solo, lock. -->
+                                    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,4">
+                                        <ToggleButton x:Name="Mute" Style="{StaticResource StripToggle}" Content="M" IsChecked="{Binding IsMuted, Mode=TwoWay}"
+                                                      ToolTip="Mute" AutomationProperties.Name="Mute" />
+                                        <ToggleButton x:Name="Solo" Style="{StaticResource StripToggle}" Content="S" IsChecked="{Binding IsSolo, Mode=TwoWay}"
+                                                      ToolTip="Solo: hear only the soloed tracks" AutomationProperties.Name="Solo" />
+                                        <ToggleButton Style="{StaticResource StripToggle}" FontFamily="{DynamicResource Font.Icon}" FontSize="11" Content="&#xE72E;"
+                                                      IsChecked="{Binding IsLocked, Mode=TwoWay}" ToolTip="Lock: no edits to this track's clips" AutomationProperties.Name="Lock" />
+                                    </StackPanel>
+
+                                    <!-- Fader and meter. -->
+                                    <Grid Grid.Row="4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="*" />
+                                        </Grid.RowDefinitions>
+                                        <Button Grid.Row="0" Grid.Column="1" Style="{StaticResource ClipLight}" DataContext="{Binding Meter, Mode=OneWay}"
+                                                Command="{Binding ClearClipCommand, Mode=OneWay}" Margin="4,0,4,3" />
+                                        <Slider Grid.Row="1" Grid.Column="0" Style="{StaticResource Fader}" Value="{Binding VolumeDb, Mode=TwoWay}"
+                                                AutomationProperties.Name="Volume" />
+                                        <ContentControl Grid.Row="1" Grid.Column="1" Content="{Binding Meter, Mode=OneWay}" ContentTemplate="{StaticResource StripMeter}"
+                                                        HorizontalAlignment="Center" IsTabStop="False" />
+                                    </Grid>
+
+                                    <DockPanel Grid.Row="5" Margin="0,4,0,0">
+                                        <TextBlock DockPanel.Dock="Right" Text="&#xE7C9;" FontFamily="{DynamicResource Font.Icon}" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource Brush.Accent}"
+                                                   Visibility="{Binding IsVolumeAnimated, Mode=OneWay, Converter={StaticResource Visible}}"
+                                                   ToolTip="The volume has keyframes: the fader sets one at the playhead." />
+                                        <Button Style="{StaticResource Button.Text}" Content="{Binding VolumeText, Mode=OneWay}" Command="{Binding ResetVolumeCommand, Mode=OneWay}"
+                                                ToolTip="Volume in dB. Click to put it back to 0." FontFamily="{DynamicResource Font.Mono}" />
+                                    </DockPanel>
+                                </Grid>
+                            </Border>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding IsMuted, Mode=OneWay}" Value="True">
+                                    <Setter TargetName="Mute" Property="Foreground" Value="{DynamicResource Brush.Warning}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsSolo, Mode=OneWay}" Value="True">
+                                    <Setter TargetName="Solo" Property="Foreground" Value="{DynamicResource Brush.Success}" />
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Grid>
+    </DockPanel>
+</UserControl>

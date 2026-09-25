@@ -40,6 +40,9 @@
         <DataTemplate DataType="{x:Type mediavm:MediaPanelViewModel}">
             <media:MediaPanelView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type audiovm:MixerPanelViewModel}">
+            <audio:MixerPanelView />
+        </DataTemplate>
         <DataTemplate DataType="{x:Type audiovm:MetersPanelViewModel}">
             <audio:MetersPanelView />
         </DataTemplate>
@@ -100,6 +103,7 @@
             </MenuItem>
             <MenuItem Header="_Window">
                 <MenuItem Header="_Color workspace" Command="{Binding ShowColorWorkspaceCommand, Mode=OneWay}" />
+                <MenuItem Header="_Audio workspace" Command="{Binding ShowAudioWorkspaceCommand, Mode=OneWay}" />
                 <Separator />
                 <MenuItem Header="Preview _display">
                     <MenuItem Header="_sRGB monitor"

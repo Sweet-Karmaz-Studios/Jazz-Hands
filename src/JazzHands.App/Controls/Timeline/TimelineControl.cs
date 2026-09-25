@@ -27,7 +27,7 @@ namespace JazzHands.App.Controls.Timeline;
 /// </remarks>
 public sealed class TimelineControl : FrameworkElement
 {
-    private const double ClipInset = 2.0;
+    private const double ClipInset = VolumeLine.ClipInset;
     private const double LabelPadding = 4.0;
     private const double ClipFontSize = 11.0;
 
@@ -460,6 +460,7 @@ public sealed class TimelineControl : FrameworkElement
                 TimelineCursor.Razor => Cursors.Cross,
                 TimelineCursor.Hand => Cursors.Hand,
                 TimelineCursor.Slip => Cursors.ScrollWE,
+                TimelineCursor.Volume => Cursors.SizeNS,
                 _ => Cursors.Arrow,
             };
         }
@@ -738,6 +739,12 @@ public sealed class TimelineControl : FrameworkElement
 
                 DrawImagery(dc, clip, body, visibleStart, visibleEnd, geometry.PixelsPerSecond);
 
+                Rect lineBody = VolumeLine.Body(geometry, row, clip);
+                if (VolumeLine.Shown(clip, lineBody))
+                {
+                    DrawVolumeLine(dc, clip, lineBody, width);
+                }
+
                 if (clip.Clip.LinkGroupId is not null)
                 {
                     dc.DrawRectangle(palette.LinkMark, null, new Rect(body.Left + 1, body.Bottom - 3, Math.Min(10.0, body.Width - 2), 2));
@@ -777,6 +784,59 @@ public sealed class TimelineControl : FrameworkElement
         }
 
         dc.Pop();
+    }
+
+    /// <summary>
+    /// The rubber band: the clip's volume as a line across it, on the fader's scale, with a dot on
+    /// each keyframe. A level is one straight line; a curve is followed every few pixels and
+    /// through every keyframe, so its corners are where the keyframes are.
+    /// </summary>
+    private void DrawVolumeLine(DrawingContext dc, ClipView clip, Rect body, double width)
+    {
+        TimelineGeometry geometry = _model!.Geometry;
+        Palette palette = _palette!;
+        double from = Math.Max(body.Left, 0.0);
+        double to = Math.Min(body.Right, width);
+        if (to - from < 2.0)
+        {
+            return;
+        }
+
+        double[] keys = [.. VolumeLine.Keyframes(clip).Select(geometry.XOf)];
+        var xs = new List<double> { from, to };
+        if (keys.Length > 0)
+        {
+            for (double x = from + 3.0; x < to; x += 3.0)
+            {
+                xs.Add(x);
+            }
+
+            xs.AddRange(keys.Where(x => x > from && x < to));
+            xs.Sort();
+        }
+
+        double Y(double x) => VolumeLine.Y(body, VolumeLine.Level(clip, geometry.TimeAt(x, snapToFrame: false)));
+
+        var line = new StreamGeometry();
+        using (StreamGeometryContext context = line.Open())
+        {
+            context.BeginFigure(new Point(xs[0], Y(xs[0])), false, false);
+            for (int index = 1; index < xs.Count; index++)
+            {
+                context.LineTo(new Point(xs[index], Y(xs[index])), true, false);
+            }
+        }
+
+        line.Freeze();
+        dc.DrawGeometry(null, palette.VolumePen, line);
+
+        foreach (double x in keys)
+        {
+            if (x >= from - 4.0 && x <= to + 4.0)
+            {
+                dc.DrawEllipse(palette.VolumeHandle, palette.ClipEdge, new Point(x, Y(Math.Clamp(x, from, to))), 3.5, 3.5);
+            }
+        }
     }
 
     /// <summary>
@@ -1096,6 +1156,8 @@ public sealed class TimelineControl : FrameworkElement
             TransitionEdge = Frozen(new Pen(Faded(Find("Brush.Text.Primary", Color.FromRgb(0xE6, 0xE6, 0xE6)), 0.8), 1.0));
             TransitionLine = Frozen(new Pen(Faded(Find("Brush.Background.Base", Color.FromRgb(0x1B, 0x1B, 0x1B)), 0.45), 1.0));
             Warning = Find("Brush.Warning", Color.FromRgb(0xF2, 0xC1, 0x4E));
+            VolumePen = Frozen(new Pen(Find("Brush.Label.Yellow", Color.FromRgb(0xE8, 0xC5, 0x47)), 1.25));
+            VolumeHandle = Find("Brush.Label.Yellow", Color.FromRgb(0xE8, 0xC5, 0x47));
         }
 
         public Brush Background { get; }
@@ -1145,6 +1207,10 @@ public sealed class TimelineControl : FrameworkElement
         public Brush Waveform { get; }
 
         public Pen WaveformPlaceholder { get; }
+
+        public Pen VolumePen { get; }
+
+        public Brush VolumeHandle { get; }
 
         public Pen ClipEdge { get; }
 
