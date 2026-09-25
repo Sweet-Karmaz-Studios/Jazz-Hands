@@ -89,10 +89,14 @@ public static class GeneratedCommands
 
         var verb = new Command(
             metadata.Verb.Length > 0 ? metadata.Verb : metadata.Area,
-            metadata.Description)
+            metadata.Description);
+
+        // A standalone command works on the editor's own settings, not a project, so there is
+        // no file to name and nothing to save.
+        if (!metadata.Standalone)
         {
-            project,
-        };
+            verb.Arguments.Add(project);
+        }
 
         var arguments = new List<Argument<string>>();
         var options = new Dictionary<string, Option<string>>(StringComparer.Ordinal);
@@ -124,7 +128,7 @@ public static class GeneratedCommands
             verb.Options.Add(option);
         }
 
-        if (!metadata.IsQuery)
+        if (!metadata.IsQuery && !metadata.Standalone)
         {
             verb.Options.Add(noSave);
         }
@@ -151,11 +155,13 @@ public static class GeneratedCommands
         Option<bool> noSave)
     {
         bool json = parse.GetValue(JazzCli.JsonOption);
-        string path = parse.GetValue(projectArgument)!;
+        string path = metadata.Standalone ? string.Empty : parse.GetValue(projectArgument)!;
 
         try
         {
-            ProjectLoad load = ProjectFile.Load(path);
+            ProjectLoad load = metadata.Standalone
+                ? new ProjectLoad(Project.CreateNew("standalone"), string.Empty, UnknownFields.None, [], [])
+                : ProjectFile.Load(path);
 
             if (!load.IsLoadable)
             {
@@ -177,7 +183,7 @@ public static class GeneratedCommands
                 frameRate);
 
             using ServiceProvider services = new ServiceCollection().AddJazzHandsEngine().BuildServiceProvider();
-            return Execute(metadata, built, load, path, services, json, !parse.GetValue(noSave)).GetAwaiter().GetResult();
+            return Execute(metadata, built, load, path, services, json, !metadata.Standalone && !parse.GetValue(noSave)).GetAwaiter().GetResult();
         }
         catch (CommandException error)
         {
@@ -211,7 +217,7 @@ public static class GeneratedCommands
                 + "Use --attach to reach a running instance, or edit the .jazz file and save.");
         }
 
-        await using var session = new Session(load.Project, services, System.IO.Path.GetFullPath(path));
+        await using var session = new Session(load.Project, services, path.Length == 0 ? string.Empty : System.IO.Path.GetFullPath(path));
 
         if (metadata.IsQuery)
         {

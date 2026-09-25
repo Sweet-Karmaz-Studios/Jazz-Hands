@@ -123,7 +123,7 @@ internal static class ExternalFfmpegExporter
 
         Add("-hide_banner", "-loglevel", "error", "-nostdin", "-y");
         Add("-f", "rawvideo", "-pix_fmt", tenBit ? "p010le" : "nv12", "-s", $"{video.Width}x{video.Height}", "-framerate", video.FrameRate.ToString());
-        Add("-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv", "-i", "pipe:0");
+        Add("-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", format is "rgb24" or "pal8" ? "iec61966-2-1" : "bt709", "-color_range", "tv", "-i", "pipe:0");
 
         if (soundFile is not null)
         {

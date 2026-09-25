@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using JazzHands.Core.Commands;
 using JazzHands.Core.Export;
 using JazzHands.Core.Model;
@@ -56,12 +58,21 @@ public sealed class SavePresetHandler : ICommandHandler<SavePresetCommand>
             }
 
             string text = json.TrimStart().StartsWith('{') ? json : File.ReadAllText(Resolve(json, context.ProjectPath));
-            if (!ExportPresets.TryRead(text, out ExportPreset? read, out string? error))
+
+            // The name given is the preset's name, whatever the JSON says, so a file can be saved
+            // under another and one without a name at all is fine.
+            if (JsonNode.Parse(text, documentOptions: new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true }) is not JsonObject body)
+            {
+                throw new CommandException("invalid-preset", "An export preset is a JSON object.");
+            }
+
+            body["name"] = name;
+            if (!ExportPresets.TryRead(body.ToJsonString(), out ExportPreset? read, out string? error))
             {
                 throw new CommandException("invalid-preset", error!);
             }
 
-            preset = read! with { Name = name };
+            preset = read!;
         }
         else
         {

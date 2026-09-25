@@ -86,6 +86,8 @@ public static class ExportCommands
         {
             file, keep, mute, output, mode, exact, preset, external, dryRun, save,
         };
+        var overrides = new ExportOverrideOptions();
+        overrides.AddTo(command);
 
         command.SetAction(parse => Guard(parse, token =>
         {
@@ -130,7 +132,9 @@ public static class ExportCommands
                     parse.GetValue(preset)!,
                     chosen,
                     SnapToKeyframes: !parse.GetValue(exact),
-                    External: parse.GetValue(external));
+                    External: parse.GetValue(external),
+                    Overrides: overrides.Overrides(parse, rate),
+                    Range: overrides.Range(parse, rate));
 
                 return Export(session.Project, projectPath ?? string.Empty, request, services, parse.GetValue(dryRun), parse.GetValue(JazzCli.JsonOption), token);
             }
@@ -153,7 +157,7 @@ public static class ExportCommands
         };
         var preset = new Option<string>("--preset")
         {
-            Description = "youtube-1080p, youtube-4k, proof or lossless.",
+            Description = "Which preset. 'jazz presets list' shows them.",
             DefaultValueFactory = _ => ExportPresets.Default,
         };
         var mode = new Option<string>("--mode")
@@ -178,6 +182,8 @@ public static class ExportCommands
         {
             project, output, preset, mode, sequence, snap, inOut, external, subtitles, sidecarFormat, noChapters, dryRun,
         };
+        var overrides = new ExportOverrideOptions();
+        overrides.AddTo(command);
 
         command.SetAction(parse => Guard(parse, token =>
         {
@@ -189,6 +195,8 @@ public static class ExportCommands
             }
 
             using ServiceProvider services = new ServiceCollection().AddJazzHandsEngine().BuildServiceProvider();
+            Sequence? chosen = parse.GetValue(sequence) is { } id ? load.Project.Sequence(id) : load.Project.ActiveSequence;
+            Rational rate = chosen is null ? load.Project.Settings.FrameRate : load.Project.SettingsFor(chosen).FrameRate;
             var request = new ExportRequest(
                 parse.GetValue(output)!,
                 parse.GetValue(preset)!,
@@ -199,7 +207,9 @@ public static class ExportCommands
                 parse.GetValue(external),
                 Choice<SubtitleDelivery>(parse.GetValue(subtitles)!, "subtitles"),
                 Choice<SubtitleFormat>(parse.GetValue(sidecarFormat)!, "sidecar-format"),
-                !parse.GetValue(noChapters));
+                !parse.GetValue(noChapters),
+                overrides.Overrides(parse, rate),
+                overrides.Range(parse, rate));
 
             return Export(load.Project, path, request, services, parse.GetValue(dryRun), parse.GetValue(JazzCli.JsonOption), token);
         }));
@@ -294,13 +304,52 @@ public static class ExportCommands
                 text.AppendLine();
             }
         }
-        else if (plan.Video is { } video)
+        else
         {
-            text.Append(CultureInfo.InvariantCulture, $"  Picture: {video.Codec} {video.Width}x{video.Height} at {video.FrameRate} fps, {string.Join(" then ", video.Encoders)}");
-            text.AppendLine(video.Lossless ? ", lossless." : $", quality {video.Quality}.");
-            text.AppendLine(plan.Audio is { } audio
-                ? string.Create(CultureInfo.InvariantCulture, $"  Sound: {audio.Encoder} {audio.Channels} channels at {audio.SampleRate} Hz.")
-                : "  Sound: none.");
+            if (plan.Video is { } video)
+            {
+                text.Append(CultureInfo.InvariantCulture, $"  Picture: {video.Codec} {video.Width}x{video.Height} at {video.FrameRate} fps, {string.Join(" then ", video.Encoders)}");
+                if (video.PixelFormat is { } format)
+                {
+                    text.Append(CultureInfo.InvariantCulture, $", {format}");
+                }
+
+                if (video.Profile is { } profile)
+                {
+                    text.Append(CultureInfo.InvariantCulture, $", profile {profile}");
+                }
+
+                text.AppendLine(
+                    video.Lossless ? ", lossless."
+                    : video.Bitrate > 0 ? string.Create(CultureInfo.InvariantCulture, $", {video.Bitrate / 1000} kb/s.")
+                    : string.Create(CultureInfo.InvariantCulture, $", quality {video.Quality}."));
+            }
+            else
+            {
+                text.AppendLine("  Picture: none.");
+            }
+
+            if (plan.Audio is { } audio)
+            {
+                text.Append(CultureInfo.InvariantCulture, $"  Sound: {audio.Encoder} {audio.Channels} channels at {audio.SampleRate} Hz");
+                if (audio.Bitrate > 0)
+                {
+                    text.Append(CultureInfo.InvariantCulture, $", {audio.Bitrate / 1000} kb/s");
+                }
+
+                text.AppendLine(audio.Loudness is { } lufs
+                    ? string.Create(CultureInfo.InvariantCulture, $", normalised to {lufs:0.#} LUFS.")
+                    : ".");
+            }
+            else
+            {
+                text.AppendLine("  Sound: none.");
+            }
+
+            if (plan.TargetBytes > 0)
+            {
+                text.AppendLine($"  Size: under {ExportPresets.FormatBytes(plan.TargetBytes)}, checked when it is done.");
+            }
         }
 
         foreach (KeyframeSnap snap in plan.Snaps)
@@ -415,6 +464,11 @@ public static class ExportCommands
         catch (FfmpegException error)
         {
             Fail(json, "media-error", error.Message);
+            return ExitCode.MediaError;
+        }
+        catch (ExportException error)
+        {
+            Fail(json, "export-failed", error.Message);
             return ExitCode.MediaError;
         }
         catch (IOException error)

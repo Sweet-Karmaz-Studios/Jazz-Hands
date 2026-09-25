@@ -33,7 +33,13 @@ internal sealed class ExportSound : IDisposable
         _server = new AudioSampleServer(new AudioBlockCache(), sampleRate, AudioReadMode.Blocking);
         _server.Update(project, projectPath);
         _graph = new AudioGraph(_server, sampleRate, channels);
-        _graph.Publish(AudioGraphBuilder.Build(project, sequence));
+
+        // The mix is made at the export's rate and channel count rather than the sequence's and
+        // converted after: each source is folded down (ITU, for 5.1 into stereo) or spread on its
+        // way into the mix, and the master limiter then sees what is actually written, so the
+        // fold cannot push a peak past it.
+        ProjectSettings settings = project.SettingsFor(sequence) with { SampleRate = sampleRate, ChannelCount = channels };
+        _graph.Publish(AudioGraphBuilder.Build(project, sequence with { Settings = settings }));
         _buffer = new AudioBuffer(channels, Chunk);
         _planes = [.. Enumerable.Range(0, channels).Select(_ => new float[Chunk])];
 

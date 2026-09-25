@@ -53,6 +53,12 @@ public sealed record CommandMetadata(
     Type? ResultType,
     ImmutableArray<ParameterMetadata> Parameters)
 {
+    /// <summary>
+    /// True for one that needs no project: it works on the editor's own settings, such as its
+    /// export presets. The command line asks for no .jazz file.
+    /// </summary>
+    public bool Standalone { get; init; }
+
     /// <summary>The positional arguments, in order.</summary>
     public IEnumerable<ParameterMetadata> Arguments =>
         Parameters.Where(parameter => parameter.IsPositional).OrderBy(parameter => parameter.Position);
@@ -390,7 +396,7 @@ public static class CommandRegistry
                     isQuery: false,
                     command.Undoable,
                     command.NotUndoableReason,
-                    resultType: null));
+                    resultType: null) with { Standalone = command.Standalone });
             }
             else if (type.GetCustomAttribute<QueryAttribute>() is { } query)
             {
@@ -401,7 +407,7 @@ public static class CommandRegistry
                     isQuery: true,
                     undoable: false,
                     notUndoableReason: "Queries do not change anything.",
-                    resultType: ResultTypeOf(type)));
+                    resultType: ResultTypeOf(type)) with { Standalone = query.Standalone });
             }
         }
 

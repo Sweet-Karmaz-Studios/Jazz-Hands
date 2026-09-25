@@ -66,6 +66,9 @@ public sealed class CommandAttribute(string name) : Attribute
 
     /// <summary>Why this command cannot be undone. Required when <see cref="Undoable"/> is false.</summary>
     public string NotUndoableReason { get; init; } = string.Empty;
+
+    /// <summary>True for a command that needs no project, so the command line asks for no .jazz file.</summary>
+    public bool Standalone { get; init; }
 }
 
 /// <summary>Marks a record as a query and names it.</summary>
@@ -78,6 +81,9 @@ public sealed class QueryAttribute(string name) : Attribute
 
     /// <summary>One line, shown in help.</summary>
     public string Description { get; init; } = string.Empty;
+
+    /// <summary>True for a query that needs no project, so the command line asks for no .jazz file.</summary>
+    public bool Standalone { get; init; }
 }
 
 /// <summary>Marks a command property as a positional argument on the command line.</summary>

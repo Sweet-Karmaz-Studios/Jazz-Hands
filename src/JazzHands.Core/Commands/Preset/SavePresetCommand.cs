@@ -31,7 +31,8 @@ namespace JazzHands.Core.Commands;
 [Command("presets.save",
     Description = "Save an export preset of your own",
     Undoable = false,
-    NotUndoableReason = "A preset is a file in your settings, not part of the project.")]
+    NotUndoableReason = "A preset is a file in your settings, not part of the project.",
+    Standalone = true)]
 public sealed record SavePresetCommand(
     [property: Arg(0, "What to call it")] string Name,
     [property: Option("from", "The preset to start from")] string? From = null,

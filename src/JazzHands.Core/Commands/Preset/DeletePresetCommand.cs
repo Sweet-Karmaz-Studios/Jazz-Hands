@@ -5,6 +5,7 @@ namespace JazzHands.Core.Commands;
 [Command("presets.delete",
     Description = "Delete one of your export presets",
     Undoable = false,
-    NotUndoableReason = "A preset is a file in your settings, not part of the project.")]
+    NotUndoableReason = "A preset is a file in your settings, not part of the project.",
+    Standalone = true)]
 public sealed record DeletePresetCommand(
     [property: Arg(0, "The preset")] string Name) : ICommand;

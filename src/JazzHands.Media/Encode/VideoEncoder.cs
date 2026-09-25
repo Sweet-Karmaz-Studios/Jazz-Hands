@@ -226,6 +226,13 @@ public sealed unsafe class VideoEncoder : IDisposable
         AVFrame* sent = frame.Handle;
         sent->pts = index;
 
+        // A picture bound for RGB was rendered with the sRGB curve rather than BT.1886; say so, or
+        // the palette and the PNG are told the wrong curve.
+        if (_palette is not null || IsRgb(EncodedFormat))
+        {
+            sent->color_trc = AVColorTransferCharacteristic.AVCOL_TRC_IEC61966_2_1;
+        }
+
         if (_palette is not null)
         {
             _palette.Send(sent);

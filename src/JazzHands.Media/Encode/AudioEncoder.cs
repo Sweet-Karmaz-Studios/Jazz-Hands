@@ -74,6 +74,13 @@ public sealed unsafe class AudioEncoder : IDisposable
             AVCodecContext* handle = context.Handle;
             handle->sample_rate = settings.SampleRate;
             handle->sample_fmt = ChooseFormat(handle, codec);
+
+            // FLAC and PCM keep 24 of the 32 bits they are handed, which is more than the mix has.
+            if (handle->sample_fmt is AVSampleFormat.AV_SAMPLE_FMT_S32 or AVSampleFormat.AV_SAMPLE_FMT_S32P)
+            {
+                handle->bits_per_raw_sample = 24;
+            }
+
             handle->time_base = new AVRational { num = 1, den = settings.SampleRate };
             handle->bit_rate = settings.Bitrate;
             ffmpeg.av_channel_layout_default(&handle->ch_layout, settings.Channels);
