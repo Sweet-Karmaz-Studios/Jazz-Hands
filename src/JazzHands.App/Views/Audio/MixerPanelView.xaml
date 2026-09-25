@@ -359,11 +359,33 @@
                                         <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
 
-                                    <!-- The track's name on its colour. -->
-                                    <Border Grid.Row="0" CornerRadius="2" Padding="4,1" Background="{Binding Color, Mode=OneWay}">
-                                        <TextBlock Text="{Binding Name, Mode=OneWay}" TextTrimming="CharacterEllipsis" HorizontalAlignment="Center"
-                                                   Foreground="White" FontWeight="SemiBold" ToolTip="{Binding Name, Mode=OneWay}" />
-                                    </Border>
+                                    <!-- The track's name on its colour, and what it is ducked under. Right click for loudness and ducking. -->
+                                    <StackPanel Grid.Row="0">
+                                        <Border CornerRadius="2" Padding="4,1" Background="{Binding Color, Mode=OneWay}">
+                                            <TextBlock Text="{Binding Name, Mode=OneWay}" TextTrimming="CharacterEllipsis" HorizontalAlignment="Center"
+                                                       Foreground="White" FontWeight="SemiBold" ToolTip="{Binding Name, Mode=OneWay}" />
+                                            <Border.ContextMenu>
+                                                <ContextMenu>
+                                                    <MenuItem Header="Normalise to -14 LUFS" Command="{Binding NormaliseCommand, Mode=OneWay}" />
+                                                    <MenuItem Header="Duck under" ItemsSource="{Binding DuckChoices, Mode=OneWay}">
+                                                        <MenuItem.ItemContainerStyle>
+                                                            <Style TargetType="{x:Type MenuItem}">
+                                                                <Setter Property="Header" Value="{Binding Name, Mode=OneWay}" />
+                                                                <Setter Property="CommandParameter" Value="{Binding TrackId, Mode=OneWay}" />
+                                                                <Setter Property="Command" Value="{Binding PlacementTarget.DataContext.DuckUnderCommand, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}, Mode=OneWay}" />
+                                                            </Style>
+                                                        </MenuItem.ItemContainerStyle>
+                                                    </MenuItem>
+                                                    <MenuItem Header="Stop ducking" Command="{Binding StopDuckingCommand, Mode=OneWay}"
+                                                              Visibility="{Binding IsDucked, Mode=OneWay, Converter={StaticResource Visible}}" />
+                                                </ContextMenu>
+                                            </Border.ContextMenu>
+                                        </Border>
+                                        <TextBlock Text="{Binding DuckedText, Mode=OneWay}" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                   FontSize="{DynamicResource Text.Caption}" Foreground="{DynamicResource Brush.Accent}"
+                                                   ToolTip="An audio.ducker turns this track down while that track has sound"
+                                                   Visibility="{Binding IsDucked, Mode=OneWay, Converter={StaticResource Visible}}" />
+                                    </StackPanel>
 
                                     <!-- Effect slots: click a name to bypass it, the cross to remove it. -->
                                     <StackPanel Grid.Row="1" Margin="0,4,0,0">

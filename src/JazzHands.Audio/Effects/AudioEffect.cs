@@ -17,8 +17,9 @@ namespace JazzHands.Audio.Effects;
 public readonly ref struct AudioEffectBlock
 {
     /// <summary>Creates a block.</summary>
-    public AudioEffectBlock(AudioBuffer buffer, int offset, int frames, int channels, int sampleRate, ReadOnlySpan<float> from, ReadOnlySpan<float> to)
+    public AudioEffectBlock(AudioBuffer buffer, int offset, int frames, int channels, int sampleRate, ReadOnlySpan<float> from, ReadOnlySpan<float> to, AudioBuffer? key = null)
     {
+        Key = key;
         Buffer = buffer;
         Offset = offset;
         Frames = frames;
@@ -51,6 +52,12 @@ public readonly ref struct AudioEffectBlock
 
     /// <summary>One channel's samples for the block.</summary>
     public Span<float> Plane(int channel) => Buffer.Plane(channel, Offset, Frames);
+
+    /// <summary>
+    /// The key track's sound for the same stretch, from its first sample, for an effect that
+    /// listens to another track (a ducker); null when it has none or its key is silent.
+    /// </summary>
+    public AudioBuffer? Key { get; }
 }
 
 /// <summary>
@@ -156,8 +163,14 @@ public sealed class AudioEffectSlot
     /// <summary>What runs it.</summary>
     public AudioEffect Effect { get; }
 
+    /// <summary>The track its <c>key</c> parameter names, by id or name, for an effect that listens to another track; null for none.</summary>
+    public string? KeyName { get; init; }
+
+    /// <summary>The track it listens to, found by the builder from <see cref="KeyName"/>; null for none.</summary>
+    public TrackMix? KeyTrack { get; internal set; }
+
     /// <summary>Runs the effect over a block. <paramref name="time"/> is the owner's sample at the block's start.</summary>
-    public void Process(AudioBuffer buffer, int offset, int frames, int channels, int sampleRate, long time)
+    public void Process(AudioBuffer buffer, int offset, int frames, int channels, int sampleRate, long time, AudioBuffer? key = null)
     {
         // Where the last block ended, if it ran, rather than where the curves start now: a mix
         // rebuilt with a new setting ramps to it across this block instead of stepping.
@@ -170,7 +183,7 @@ public sealed class AudioEffectSlot
             _to[index] = curve.IsConstant ? curve.Evaluate(time) : curve.Evaluate(time + frames);
         }
 
-        Effect.Process(new AudioEffectBlock(buffer, offset, frames, channels, sampleRate, _from, _to));
+        Effect.Process(new AudioEffectBlock(buffer, offset, frames, channels, sampleRate, _from, _to, key));
 
         if (last is not null && last.Length == _params.Length)
         {
@@ -236,7 +249,12 @@ public sealed class AudioEffectHost
                 live.Effect.Prepare(sampleRate, channels);
                 live.Effect.Last ??= new float[descriptor.Params.Length];
                 keep.Add(effect.Id);
-                slots.Add(new AudioEffectSlot(effect.Id, live.Effect, Curves(descriptor, effect, sampleRate)));
+                slots.Add(new AudioEffectSlot(effect.Id, live.Effect, Curves(descriptor, effect, sampleRate))
+                {
+                    KeyName = descriptor.Param("key") is { Type: ParamType.Text } && effect.Parameter("key") is StaticValue { Value: ParamValue.Text { Value.Length: > 0 } key }
+                        ? key.Value
+                        : null,
+                });
             }
         }
 

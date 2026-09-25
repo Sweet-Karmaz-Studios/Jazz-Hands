@@ -146,6 +146,12 @@ public sealed class TrackMix
     /// </summary>
     internal StripState? Strip { get; set; }
 
+    /// <summary>
+    /// Where the track's sound after its fader goes each block for another track's effect to listen
+    /// to (a ducker keyed by it); null when nothing listens.
+    /// </summary>
+    public AudioBuffer? KeyOut { get; internal set; }
+
     /// <summary>The track identifier.</summary>
     public string Id { get; }
 

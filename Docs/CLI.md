@@ -422,6 +422,26 @@ Unlink a clip's audio from its picture.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+### `jazz audio duck <project>`
+
+Duck the music under a voice: one track drops by a depth while another has sound, holding over the gaps between words.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--music <id>` | Required. The track to turn down. |
+| `--voice <id>` | The track that turns it down. |
+| `--depth <number>` | How far down: -12dB. Default: -12. Default: -12. |
+| `--threshold <number>` | How loud the voice must be to duck, in dBFS. Default: -40. Default: -40. |
+| `--attack <time>` | How quickly it goes down: 15ms. Default: 15 ms. |
+| `--hold <time>` | How long it stays down after the voice stops. Default: 300 ms. |
+| `--release <time>` | How quickly it comes back. Default: 400 ms. |
+| `--off` | Take the ducking off the music track. |
+| `--no-save` | Do not write the project back. |
+
 ### `jazz audio measure <project>`
 
 Measure a clip, a track or the mix on its own: peak, RMS and integrated loudness (LUFS).

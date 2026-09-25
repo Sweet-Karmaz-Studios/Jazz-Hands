@@ -78,7 +78,40 @@ public static class AudioGraphBuilder
         }
 
         effects.Retain(used);
-        return new MixSnapshot(rate, channels, tracks, Master(sequence.Master, rate));
+        return new MixSnapshot(rate, channels, Keyed(tracks, channels), Master(sequence.Master, rate));
+    }
+
+    /// <summary>
+    /// Connects effects that listen to another track (a ducker's key) to it, by id or else by name,
+    /// and puts the tracks listened to first, so a listener hears the same block. A key that names
+    /// nothing, or its own track, is left unconnected and the effect hears silence.
+    /// </summary>
+    private static List<TrackMix> Keyed(List<TrackMix> tracks, int channels)
+    {
+        var keys = new HashSet<TrackMix>();
+        foreach (TrackMix track in tracks)
+        {
+            foreach (AudioEffectSlot slot in track.EffectArray)
+            {
+                if (slot.KeyName is not { } name)
+                {
+                    continue;
+                }
+
+                TrackMix? key = tracks.FirstOrDefault(candidate => string.Equals(candidate.Id, name, StringComparison.Ordinal))
+                    ?? tracks.FirstOrDefault(candidate => string.Equals(candidate.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (key is null || ReferenceEquals(key, track))
+                {
+                    continue;
+                }
+
+                slot.KeyTrack = key;
+                key.KeyOut ??= new AudioBuffer(channels, AudioGraph.BlockSize);
+                keys.Add(key);
+            }
+        }
+
+        return keys.Count == 0 ? tracks : [.. tracks.Where(keys.Contains), .. tracks.Where(track => !keys.Contains(track))];
     }
 
     /// <summary>The master bus in samples: unity with the limiter on when the sequence says nothing.</summary>

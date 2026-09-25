@@ -254,7 +254,8 @@ public static class CommandValues
 
         if (type == typeof(double))
         {
-            return double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double number)
+            // A level may carry its unit, as people write it: -12dB, -14 LUFS, -1 dBFS.
+            return double.TryParse(WithoutUnit(text), NumberStyles.Float, CultureInfo.InvariantCulture, out double number)
                 ? number
                 : throw new CommandException("invalid-value", $"'{name}' takes a number, not '{text}'.");
         }
@@ -390,6 +391,21 @@ public static class CommandValues
 
     private static string[] Split(string text) =>
         text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    /// <summary>A number with a level's unit after it (dB, dBFS, dBTP, LUFS, LU) taken off.</summary>
+    private static string WithoutUnit(string text)
+    {
+        string trimmed = text.Trim();
+        foreach (string unit in (ReadOnlySpan<string>)["dBFS", "dBTP", "LUFS", "dB", "LU"])
+        {
+            if (trimmed.EndsWith(unit, StringComparison.OrdinalIgnoreCase))
+            {
+                return trimmed[..^unit.Length].TrimEnd();
+            }
+        }
+
+        return trimmed;
+    }
 
     private static bool IsHex(string text)
     {

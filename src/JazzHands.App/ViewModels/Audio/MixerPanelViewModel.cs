@@ -174,7 +174,7 @@ public sealed partial class MixerPanelViewModel : ToolViewModel, IDisposable, Sh
                 }
             }
 
-            strip.Apply(track, Playhead, IsSending(VolumeKey(track.Id)), IsSending(PanKey(track.Id)));
+            strip.Apply(track, Playhead, IsSending(VolumeKey(track.Id)), IsSending(PanKey(track.Id)), tracks);
         }
 
         _stripIds = [.. tracks.Select(track => track.Id)];
@@ -306,3 +306,8 @@ public sealed partial class MixerPanelViewModel : ToolViewModel, IDisposable, Sh
 /// <param name="Name">What the menu says.</param>
 /// <param name="Category">The group it is listed under.</param>
 public sealed record MixerEffectChoice(string TypeId, string Name, string Category);
+
+/// <summary>A track a strip can be ducked under, for its menu.</summary>
+/// <param name="TrackId">The track.</param>
+/// <param name="Name">What it is called.</param>
+public sealed record MixerDuckChoice(string TrackId, string Name);

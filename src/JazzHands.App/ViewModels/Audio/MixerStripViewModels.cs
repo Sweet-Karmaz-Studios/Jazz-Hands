@@ -44,6 +44,15 @@ public sealed partial class MixerStripViewModel : ObservableObject
     [ObservableProperty]
     private bool _isPanAnimated;
 
+    /// <summary>The name of the track this one is ducked under, or null when it is not ducked.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsDucked), nameof(DuckedText))]
+    private string? _duckedBy;
+
+    /// <summary>The other sound tracks, for the Duck under menu.</summary>
+    [ObservableProperty]
+    private IReadOnlyList<MixerDuckChoice> _duckChoices = [];
+
     internal MixerStripViewModel(MixerPanelViewModel mixer, string trackId, int channels)
     {
         _mixer = mixer;
@@ -69,12 +78,19 @@ public sealed partial class MixerStripViewModel : ObservableObject
     /// <summary>The pan's label.</summary>
     public string PanText => MixerPanelViewModel.FormatPan(Pan);
 
+    /// <summary>True when an <c>audio.ducker</c> turns this track down under another.</summary>
+    public bool IsDucked => DuckedBy is not null;
+
+    /// <summary>What the strip says under its name when it is ducked.</summary>
+    public string DuckedText => DuckedBy is null ? string.Empty : $"ducked by {DuckedBy}";
+
     /// <summary>Reads the track into the strip without sending anything back.</summary>
     /// <param name="track">The track.</param>
     /// <param name="playhead">Where an animated volume or pan is read.</param>
     /// <param name="keepVolume">True while the fader's own value is on its way, so it is not pulled back mid-drag.</param>
     /// <param name="keepPan">The same for the pan.</param>
-    internal void Apply(Track track, Flicks playhead, bool keepVolume, bool keepPan)
+    /// <param name="tracks">The sequence's sound tracks, for the ducking key's name and the Duck under menu.</param>
+    internal void Apply(Track track, Flicks playhead, bool keepVolume, bool keepPan, IReadOnlyList<Track> tracks)
     {
         _applying = true;
         try
@@ -98,6 +114,12 @@ public sealed partial class MixerStripViewModel : ObservableObject
             }
 
             SyncEffects(track);
+            DuckedBy = KeyName(track, tracks);
+            MixerDuckChoice[] choices = [.. tracks.Where(other => other.Id != track.Id).Select(other => new MixerDuckChoice(other.Id, other.Name))];
+            if (!choices.SequenceEqual(DuckChoices))
+            {
+                DuckChoices = choices;
+            }
         }
         finally
         {
@@ -165,6 +187,37 @@ public sealed partial class MixerStripViewModel : ObservableObject
         {
             _mixer.Run(new AddEffectCommand(TrackId, typeId));
         }
+    }
+
+    /// <summary>Ducks this track under another: the music under the voice.</summary>
+    [RelayCommand]
+    private void DuckUnder(string? trackId)
+    {
+        if (trackId is { Length: > 0 })
+        {
+            _mixer.Run(new DuckAudioCommand(TrackId, trackId));
+        }
+    }
+
+    /// <summary>Takes the ducking off this track.</summary>
+    [RelayCommand]
+    private void StopDucking() => _mixer.Run(new DuckAudioCommand(TrackId, Off: true));
+
+    /// <summary>Sets the fader so the track measures -14 LUFS on its own.</summary>
+    [RelayCommand]
+    private void Normalise() => _mixer.Run(new NormalizeAudioCommand(TrackId: TrackId));
+
+    /// <summary>The name of the track a track's ducker listens to, by its key's id or name; null when it has none.</summary>
+    private static string? KeyName(Track track, IReadOnlyList<Track> tracks)
+    {
+        if (track.Effects.FirstOrDefault(effect => effect.Enabled && effect.TypeId == "audio.ducker")?.Parameter("key") is not StaticValue { Value: ParamValue.Text { Value.Length: > 0 } key })
+        {
+            return null;
+        }
+
+        return tracks.FirstOrDefault(other => other.Id == key.Value)?.Name
+            ?? tracks.FirstOrDefault(other => string.Equals(other.Name, key.Value, StringComparison.OrdinalIgnoreCase))?.Name
+            ?? key.Value;
     }
 
     private static double Level(AnimatedValue? value, int param, Flicks playhead) =>

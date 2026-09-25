@@ -287,6 +287,7 @@ public sealed class AudioGraph
                     strip.Valid = true;
                 }
 
+                track.KeyOut?.Clear(0, frames);
                 continue;
             }
 
@@ -331,14 +332,16 @@ public sealed class AudioGraph
             {
                 foreach (Effects.AudioEffectSlot effect in track.EffectArray)
                 {
-                    effect.Process(_bus, 0, frames, Channels, SampleRate, start);
+                    effect.Process(_bus, 0, frames, Channels, SampleRate, start, effect.KeyTrack?.KeyOut);
                 }
 
                 AddBus(track, strip, audible, start, frames);
+                Tap(track, frames);
             }
             else
             {
                 strip?.Valid = false;
+                track.KeyOut?.Clear(0, frames);
             }
         }
 
@@ -383,6 +386,23 @@ public sealed class AudioGraph
         {
             strip.Valid = true;
             strip.Meter.Process(_bus, 0, frames, start);
+        }
+    }
+
+    /// <summary>
+    /// Keeps a track's sound after its fader for the effects that listen to it (a ducker keyed by
+    /// the voice). Tracks that are listened to are mixed first, so the listeners hear this block.
+    /// </summary>
+    private void Tap(TrackMix track, int frames)
+    {
+        if (track.KeyOut is not { } key)
+        {
+            return;
+        }
+
+        for (int channel = 0; channel < Channels; channel++)
+        {
+            _bus.Plane(channel, 0, frames).CopyTo(key.Plane(channel, 0, frames));
         }
     }
 
