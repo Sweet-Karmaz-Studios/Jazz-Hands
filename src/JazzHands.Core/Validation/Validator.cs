@@ -430,6 +430,24 @@ public static class Validator
     {
         foreach ((string name, AnimatedValue? value) in EnumerateClipParameters(clip))
         {
+            if (value is DrivenValue driven)
+            {
+                try
+                {
+                    Drivers.DriverExpression.Parse(driven.Expression);
+                }
+                catch (Drivers.DriverSyntaxException error)
+                {
+                    issues.Add(new ValidationIssue(
+                        Severity.Warning,
+                        "invalid-driver",
+                        $"{clipPath}/{name}",
+                        $"The driver on '{clip.Name}' does not read: {error.Message}. The value underneath it is used."));
+                }
+
+                continue;
+            }
+
             if (value is not KeyframedValue keyframed || keyframed.Keyframes.IsEmpty)
             {
                 continue;

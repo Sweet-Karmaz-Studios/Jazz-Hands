@@ -68,7 +68,7 @@
   ],
   "$defs": {
     "animatedValue": {
-      "description": "Either a parameter value, or an object with a keyframes array.",
+      "description": "A parameter value, an object with a keyframes array, or a driver expression over a base value.",
       "anyOf": [
         {
           "type": "object",
@@ -81,6 +81,21 @@
               "items": {
                 "$ref": "#/$defs/keyframe"
               }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "driver"
+          ],
+          "properties": {
+            "driver": {
+              "type": "string",
+              "description": "The expression that works the value out each frame (param.set-driver)."
+            },
+            "base": {
+              "$ref": "#/$defs/animatedValue"
             }
           }
         },

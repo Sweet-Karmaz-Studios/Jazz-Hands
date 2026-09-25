@@ -37,6 +37,11 @@ public sealed class AnimationEvaluator
             return constant.Value;
         }
 
+        if (value is DrivenValue driven)
+        {
+            return Drivers.DriverEval.Evaluate(driven, time, this);
+        }
+
         var animated = (KeyframedValue)value;
         EquatableArray<Keyframe> keyframes = animated.Keyframes;
 

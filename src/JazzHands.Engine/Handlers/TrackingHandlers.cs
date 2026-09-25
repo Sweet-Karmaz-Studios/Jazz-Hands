@@ -229,7 +229,7 @@ public sealed class ApplyTrackHandler : ICommandHandler<ApplyTrackCommand>
         }
 
         context.Changed(owner.Id);
-        return ParamTargets.Set(project, owner, descriptor, new KeyframedValue(keyframes));
+        return ParamHelp.Store(project, owner, descriptor, new KeyframedValue(keyframes), context);
     }
 
     /// <summary>A mask on the tracked clip, its shape moved with the point in the clip's own pixels.</summary>
@@ -270,7 +270,7 @@ public sealed class ApplyTrackHandler : ICommandHandler<ApplyTrackCommand>
         }
 
         context.Changed(mask.Id);
-        return ParamTargets.Set(project, owner, descriptor, new KeyframedValue(keyframes));
+        return ParamHelp.Store(project, owner, descriptor, new KeyframedValue(keyframes), context);
     }
 }
 

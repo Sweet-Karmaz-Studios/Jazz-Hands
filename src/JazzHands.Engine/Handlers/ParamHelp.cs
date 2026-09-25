@@ -175,8 +175,18 @@ internal static class ParamHelp
     /// Stores a parameter and reports the owner as changed, with the clip or track it sits on,
     /// which is what redraws.
     /// </summary>
-    internal static Project Store(Project project, ParamOwner owner, ParamDescriptor descriptor, AnimatedValue? value, HandlerContext context)
+    internal static Project Store(Project project, ParamOwner owner, ParamDescriptor descriptor, AnimatedValue? value, HandlerContext context, bool driver = false)
     {
+        // A driven parameter's value is the driver's; a set or a keyframe would silently replace it.
+        // A reset (no value) puts it back to its default, driver and all.
+        if (!driver && value is not null && ParamTargets.Get(owner, descriptor.Name) is DrivenValue)
+        {
+            throw new CommandException(
+                "param-driven",
+                $"'{descriptor.Name}' is driven by an expression, so it has no value or keyframes to set. Change the driver with 'jazz param set-driver', or clear it with 'jazz param clear-driver {owner.Id} {descriptor.Name}'.",
+                "param");
+        }
+
         Project changed = ParamTargets.Set(project, owner, descriptor, value);
         if (changed == project)
         {

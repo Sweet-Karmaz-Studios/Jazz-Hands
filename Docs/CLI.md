@@ -2460,6 +2460,20 @@ List the folders being watched for new recordings.
 
 Any parameter by its address, on a clip, a track, an effect or a mask.
 
+### `jazz param clear-driver <project> <owner-id> <param>`
+
+Stop driving a parameter, back to its keyframes or value.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<owner-id>` | The clip, track, effect or mask id. |
+| `<param>` | The parameter name. |
+
+| Option | Meaning |
+|---|---|
+| `--no-save` | Do not write the project back. |
+
 ### `jazz param clear-keyframes <project> <owner-id> <param>`
 
 Remove every keyframe from a parameter.
@@ -2514,6 +2528,21 @@ Set a parameter of a clip, track, effect or mask.
 |---|---|
 | `--at <time>` | For a keyframed parameter, the keyframe's time on the sequence. |
 | `--local` | Read --at from the clip's start rather than the sequence's. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz param set-driver <project> <owner-id> <param> <expression>`
+
+Drive a parameter with an expression (time, wiggle, audio, param, marker) instead of keyframes.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<owner-id>` | The clip, track, effect or mask id. |
+| `<param>` | The parameter name. |
+| `<expression>` | The expression, for example value + wiggle(2, 12). |
+
+| Option | Meaning |
+|---|---|
 | `--no-save` | Do not write the project back. |
 
 ## `jazz perf`

@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.Input;
 using JazzHands.App.Services;
 using JazzHands.App.Shell;
 using JazzHands.Core.Commands;
+using JazzHands.Core.Drivers;
 using JazzHands.Core.Effects;
 using JazzHands.Core.Model;
 using JazzHands.Core.Time;
@@ -33,13 +34,13 @@ public readonly record struct KeyRef(int Channel, int Index);
 /// </summary>
 public sealed partial class CurveChannel : ObservableObject
 {
-    private readonly KeyframedValue _value;
+    private readonly AnimatedValue _value;
 
     /// <summary>Shown in the graph.</summary>
     [ObservableProperty]
     private bool _isShown = true;
 
-    internal CurveChannel(string ownerId, string ownerName, ParamDescriptor descriptor, int component, string color, KeyframedValue value)
+    internal CurveChannel(string ownerId, string ownerName, ParamDescriptor descriptor, int component, string color, AnimatedValue value)
     {
         OwnerId = ownerId;
         OwnerName = ownerName;
@@ -47,7 +48,9 @@ public sealed partial class CurveChannel : ObservableObject
         Component = component;
         Color = color;
         _value = value;
-        Keys = [.. value.Keyframes.Select(keyframe => new CurveKey(keyframe.Time, Part(keyframe.Value), keyframe.Interp, keyframe.InHandle, keyframe.OutHandle))];
+        Keys = value is KeyframedValue keyed
+            ? [.. keyed.Keyframes.Select(keyframe => new CurveKey(keyframe.Time, Part(keyframe.Value), keyframe.Interp, keyframe.InHandle, keyframe.OutHandle))]
+            : [];
     }
 
     /// <summary>The clip, effect or mask the parameter belongs to.</summary>
@@ -68,19 +71,29 @@ public sealed partial class CurveChannel : ObservableObject
     /// <summary>The curve's colour.</summary>
     public string Color { get; }
 
-    /// <summary>What the list calls it.</summary>
-    public string Label => Component < 0 ? Descriptor.Label : $"{Descriptor.Label} {Suffix}";
+    /// <summary>What the list calls it; a driven one says so.</summary>
+    public string Label => (Component < 0 ? Descriptor.Label : $"{Descriptor.Label} {Suffix}") + (IsDriven ? " (driven)" : string.Empty);
+
+    /// <summary>True when an expression works it out: drawn, with no keyframes to move.</summary>
+    public bool IsDriven => _value is DrivenValue;
+
+    /// <summary>What a driver reads (other parameters, markers), and where its owner starts on the sequence.</summary>
+    internal (IDriverEnvironment? Environment, Flicks Origin) Drivers { get; init; }
 
     /// <summary>The keyframes, in time order.</summary>
     public IReadOnlyList<CurveKey> Keys { get; }
 
-    /// <summary>The whole keyframed value.</summary>
-    internal KeyframedValue Value => _value;
+    /// <summary>The whole keyframed value; none for a driven one.</summary>
+    internal KeyframedValue Value => _value as KeyframedValue ?? new KeyframedValue([]);
 
     private string Suffix => Descriptor.Type == ParamType.Float4 ? (Component switch { 0 => "x", 1 => "y", 2 => "width", _ => "height" }) : (Component == 0 ? "x" : "y");
 
     /// <summary>The channel's value at a time from the clip's start.</summary>
-    public double ValueAt(Flicks local) => Part(ParamEval.Eval(_value, Descriptor, local));
+    public double ValueAt(Flicks local)
+    {
+        using DriverScope.Entered scope = DriverScope.Enter(Drivers.Environment, Drivers.Origin);
+        return Part(ParamEval.Eval(_value, Descriptor, local));
+    }
 
     /// <summary>A keyframe's whole value with this channel's part changed.</summary>
     internal ParamValue With(ParamValue whole, double part)
@@ -324,6 +337,7 @@ public sealed partial class CurveEditorPanelViewModel : ToolViewModel
             Length = clip.Duration;
             FrameRate = project.SettingsFor(location.Sequence).FrameRate;
             EffectRegistry registry = Engine.Effects.EffectCatalog.Registry;
+            var drivers = new ProjectDriverEnvironment(project, location.Sequence);
 
             IEnumerable<(string Id, string Name)> owners =
             [
@@ -341,7 +355,8 @@ public sealed partial class CurveEditorPanelViewModel : ToolViewModel
 
                 foreach (ParamDescriptor descriptor in ParamTargets.Params(owner, registry))
                 {
-                    if (ParamTargets.Get(owner, descriptor.Name) is not KeyframedValue { IsAnimated: true } keyed)
+                    AnimatedValue? stored = ParamTargets.Get(owner, descriptor.Name);
+                    if (stored is not (KeyframedValue { IsAnimated: true } or DrivenValue))
                     {
                         continue;
                     }
@@ -357,8 +372,9 @@ public sealed partial class CurveEditorPanelViewModel : ToolViewModel
                     for (int part = 0; part < parts; part++)
                     {
                         int component = parts == 1 ? -1 : part;
-                        var channel = new CurveChannel(ownerId, ownerName, descriptor, component, Palette[Channels.Count % Palette.Length], keyed)
+                        var channel = new CurveChannel(ownerId, ownerName, descriptor, component, Palette[Channels.Count % Palette.Length], stored)
                         {
+                            Drivers = (drivers, clip.Start),
                             IsShown = !hidden.Contains((ownerId, descriptor.Name, component)),
                         };
                         channel.PropertyChanged += (_, _) => Revision++;

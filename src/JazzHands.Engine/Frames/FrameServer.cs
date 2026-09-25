@@ -320,6 +320,10 @@ public sealed class FrameServer : IFrameProvider, IDisposable
             ? Effects.MotionStore.For(_projectPath).Load(item.Hash, clip.SourceStreamIndex)
             : null;
 
+    /// <inheritdoc />
+    double IFrameProvider.AudioLevel(Project project, Sequence sequence, string trackId, Core.Drivers.AudioBand band, double seconds, double attack, double release) =>
+        Drivers.AudioLevels.At(project, sequence, trackId, band, seconds, attack, release, _projectPath);
+
     /// <summary>
     /// What to decode in place of a media item, or null for the item itself: the proxy service's
     /// <see cref="Caching.ProxyService.Substitute"/> for playback, nothing for export.

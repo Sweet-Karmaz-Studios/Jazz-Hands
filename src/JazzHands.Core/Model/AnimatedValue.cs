@@ -99,3 +99,15 @@ public sealed record KeyframedValue : AnimatedValue
     /// <summary>The time of the last keyframe, or zero when there are none.</summary>
     public Flicks End => Keyframes.IsEmpty ? Flicks.Zero : Keyframes[^1].Time;
 }
+
+/// <summary>
+/// A parameter whose value an expression works out each frame (<c>param.set-driver</c>) over the
+/// keyframed or fixed value underneath.
+/// </summary>
+/// <param name="Expression">The driver, in the language <see cref="Drivers.DriverExpression"/> reads.</param>
+/// <param name="Base">What <c>value</c> reads in it, and what the parameter goes back to when the driver is cleared.</param>
+public sealed record DrivenValue(string Expression, AnimatedValue Base) : AnimatedValue
+{
+    /// <inheritdoc />
+    public override bool IsAnimated => true;
+}

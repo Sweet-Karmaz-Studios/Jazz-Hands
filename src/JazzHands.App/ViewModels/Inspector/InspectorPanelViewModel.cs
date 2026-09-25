@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using JazzHands.App.Services;
 using JazzHands.App.Shell;
 using JazzHands.Core.Commands;
+using JazzHands.Core.Drivers;
 using JazzHands.Core.Effects;
 using JazzHands.Core.Model;
 using JazzHands.Core.Time;
@@ -227,6 +228,11 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         var commands = new List<ICommand>();
         foreach (string target in TargetsFor(row))
         {
+            if (row.IsDriven)
+            {
+                commands.Add(new ClearDriverCommand(target, row.Name));
+            }
+
             if (row.IsAnimated)
             {
                 commands.Add(new ClearKeyframesCommand(target, row.Name));
@@ -236,6 +242,22 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         }
 
         _ = RunAsync(commands.Count == 1 ? commands[0] : new BatchCommand([.. commands], $"Reset {row.Label}"));
+    }
+
+    /// <inheritdoc />
+    public void SetDriver(ParamRowViewModel row, string expression)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        ICommand[] commands = [.. TargetsFor(row).Select(target => (ICommand)new SetDriverCommand(target, row.Name, expression))];
+        _ = RunAsync(commands.Length == 1 ? commands[0] : new BatchCommand(commands, $"Drive {row.Label}"));
+    }
+
+    /// <inheritdoc />
+    public void ClearDriver(ParamRowViewModel row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        ICommand[] commands = [.. TargetsFor(row).Select(target => (ICommand)new ClearDriverCommand(target, row.Name))];
+        _ = RunAsync(commands.Length == 1 ? commands[0] : new BatchCommand(commands, $"Stop driving {row.Label}"));
     }
 
     /// <inheritdoc />
@@ -587,6 +609,10 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         Flicks playhead = Playhead;
         Flicks local = playhead - clip.Start;
         Flicks tolerance = Tolerance();
+
+        // Drivers read other parameters and markers here; sound reads zero, as measuring it would
+        // hold up the UI thread.
+        using DriverScope.Entered drivers = DriverScope.Enter(new ProjectDriverEnvironment(project, found.Sequence), clip.Start);
 
         _loading = true;
         try

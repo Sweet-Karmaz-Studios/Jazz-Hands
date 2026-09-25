@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Numerics;
+using JazzHands.Core.Drivers;
 using JazzHands.Core.Effects;
 using JazzHands.Core.Model;
 using JazzHands.Core.Queries;
@@ -58,6 +59,12 @@ public interface IFrameProvider
     /// stabilization; null when it has not.
     /// </summary>
     CameraMotion? Motion(Project project, Clip clip) => null;
+
+    /// <summary>
+    /// A track's sound at a moment, from 0 to its loudest, for a driver's <c>audio()</c>: the band,
+    /// followed with an attack and a release in seconds. Zero when nothing here can hear it.
+    /// </summary>
+    double AudioLevel(Project project, Sequence sequence, string trackId, AudioBand band, double seconds, double attack, double release) => 0;
 }
 
 /// <summary>How a frame is built.</summary>
@@ -196,6 +203,12 @@ public static class RenderGraphBuilder
 
     private static RenderGraph Build(Project project, Sequence sequence, Flicks time, IFrameProvider frames, RenderOptions options, int depth)
     {
+        // Drivers read this sequence's markers, tracks and sound; each clip sets where it starts.
+        using DriverScope.Entered drivers = DriverScope.Enter(new ProjectDriverEnvironment(
+            project,
+            sequence,
+            (heard, track, band, seconds, attack, release) => frames.AudioLevel(project, heard, track, band, seconds, attack, release)));
+
         ProjectSettings settings = project.SettingsFor(sequence);
         (int width, int height) = OutputSize(settings, options.Scale);
         var frameSize = new Vector2(settings.Width, settings.Height);
@@ -237,6 +250,8 @@ public static class RenderGraphBuilder
             {
                 continue;
             }
+
+            DriverScope.Origin = clip.Start;
 
             Flicks local = time - clip.Start;
 
@@ -303,6 +318,7 @@ public static class RenderGraphBuilder
                 return null;
             }
 
+            DriverScope.Origin = clip.Start;
             Flicks local = time - clip.Start;
             Flicks shown = TransitionTiming.ClampToSource(project, clip, time);
             if (Source(project, clip, shown, lane, frameSize, output, frames, options, depth, frameRate) is not { } source)
@@ -857,6 +873,8 @@ public static class RenderGraphBuilder
             }
         }
 
+        // A track's effects are timed from the sequence's start, a clip's from its own.
+        DriverScope.Origin = Flicks.Zero;
         foreach (Effect effect in track.Effects)
         {
             if (Node(effect, time, sequenceLength, time, options) is { } node)
@@ -864,6 +882,7 @@ public static class RenderGraphBuilder
                 nodes.Add(node);
             }
         }
+        DriverScope.Origin = clip.Start;
 
         return nodes.ToImmutable();
     }

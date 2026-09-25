@@ -82,7 +82,7 @@
                 <Button Grid.Column="0"
                         Style="{StaticResource Button.Stopwatch}"
                         Content="&#xE916;"
-                        Visibility="{Binding Animatable, Mode=OneWay, Converter={StaticResource Visible}}"
+                        Visibility="{Binding ShowsKeyframes, Mode=OneWay, Converter={StaticResource Visible}}"
                         Command="{Binding ToggleAnimationCommand, Mode=OneWay}"
                         ToolTip="Animate: keyframe this at the playhead, or stop animating it"
                         AutomationProperties.Name="Animate" />
@@ -92,9 +92,40 @@
                            ToolTip="{Binding Description, Mode=OneWay}"
                            VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis"
-                           Foreground="{DynamicResource Brush.Text.Secondary}" />
+                           Foreground="{DynamicResource Brush.Text.Secondary}">
+                    <TextBlock.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Drive with an expression"
+                                      Command="{Binding DriveCommand, Mode=OneWay}"
+                                      Visibility="{Binding CanDrive, Mode=OneWay, Converter={StaticResource Visible}}" />
+                            <MenuItem Header="Stop driving"
+                                      Command="{Binding StopDrivingCommand, Mode=OneWay}"
+                                      Visibility="{Binding IsDriven, Mode=OneWay, Converter={StaticResource Visible}}" />
+                        </ContextMenu>
+                    </TextBlock.ContextMenu>
+                </TextBlock>
 
-                <Grid Grid.Column="2" VerticalAlignment="Center">
+                <!-- Driven: the expression that works the value out, edited in place; empty stops driving. -->
+                <DockPanel Grid.Column="2"
+                           VerticalAlignment="Center"
+                           Visibility="{Binding IsDriven, Mode=OneWay, Converter={StaticResource Visible}}">
+                    <TextBlock DockPanel.Dock="Left"
+                               Margin="0,0,6,0"
+                               VerticalAlignment="Center"
+                               FontStyle="Italic"
+                               FontWeight="SemiBold"
+                               Text="f"
+                               Foreground="{DynamicResource Brush.Accent}"
+                               ToolTip="Driven by an expression" />
+                    <TextBox Style="{StaticResource TextBox.Field}"
+                             FontFamily="{DynamicResource Font.Mono}"
+                             Text="{Binding DriverText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                             KeyDown="OnFieldKeyDown"
+                             ToolTip="time, frame, value, wiggle(freq, amount), audio(&quot;Music&quot;, low), param(&quot;id&quot;, &quot;name&quot;), marker(&quot;name&quot;). Empty to stop driving."
+                             AutomationProperties.Name="{Binding Label, StringFormat={}{0} driver, Mode=OneWay}" />
+                </DockPanel>
+
+                <Grid Grid.Column="2" VerticalAlignment="Center" Visibility="{Binding ShowsValue, Mode=OneWay, Converter={StaticResource Visible}}">
                     <!-- A number, with a slider when it has both ends. -->
                     <Grid Visibility="{Binding IsNumber, Mode=OneWay, Converter={StaticResource Visible}}">
                         <Grid.ColumnDefinitions>
@@ -187,7 +218,7 @@
                           Data="{Binding CurveData, Mode=OneWay, Converter={StaticResource PathData}}"
                           Stroke="{DynamicResource Brush.Accent}"
                           StrokeThickness="1"
-                          Visibility="{Binding IsAnimated, Mode=OneWay, Converter={StaticResource Visible}}"
+                          Visibility="{Binding HasCurve, Mode=OneWay, Converter={StaticResource Visible}}"
                           ToolTip="The curve across the clip" />
                     <Button Style="{StaticResource Button.Small}"
                             Content="&#xE76B;"
@@ -196,7 +227,7 @@
                             ToolTip="Go to the keyframe before"
                             AutomationProperties.Name="Previous keyframe" />
                     <Button Command="{Binding ToggleKeyframeCommand, Mode=OneWay}"
-                            Visibility="{Binding Animatable, Mode=OneWay, Converter={StaticResource Visible}}"
+                            Visibility="{Binding ShowsKeyframes, Mode=OneWay, Converter={StaticResource Visible}}"
                             ToolTip="Add a keyframe at the playhead, or remove the one there"
                             AutomationProperties.Name="Keyframe at the playhead">
                         <Button.Template>

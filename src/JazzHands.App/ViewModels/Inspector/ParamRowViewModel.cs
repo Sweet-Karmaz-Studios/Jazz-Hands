@@ -29,6 +29,12 @@ public interface IParamEditor
 
     /// <summary>Pick a point on the preview.</summary>
     void Pick(ParamRowViewModel row);
+
+    /// <summary>Drive the parameter with an expression, or change the one driving it.</summary>
+    void SetDriver(ParamRowViewModel row, string expression);
+
+    /// <summary>Stop driving the parameter, back to its keyframes or value.</summary>
+    void ClearDriver(ParamRowViewModel row);
 }
 
 /// <summary>
@@ -87,7 +93,15 @@ public sealed partial class ParamRowViewModel : ObservableObject
     private bool _isMixed;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasCurve))]
     private string? _curveData;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsDriven), nameof(ShowsValue), nameof(ShowsKeyframes))]
+    private string? _driver;
+
+    [ObservableProperty]
+    private string _driverText = string.Empty;
 
     /// <summary>Creates a row for one parameter of one owner.</summary>
     public ParamRowViewModel(IParamEditor editor, string ownerId, ParamDescriptor descriptor, string section)
@@ -126,8 +140,23 @@ public sealed partial class ParamRowViewModel : ObservableObject
     /// <summary>The kind of control.</summary>
     public ParamType Type => Descriptor.Type;
 
-    /// <summary>False for a parameter with no stopwatch.</summary>
+    /// <summary>False for a parameter with no stopwatch, and for one a driver works out.</summary>
     public bool Animatable => Descriptor.Animatable;
+
+    /// <summary>True when there is a curve thumbnail to show: the parameter is animated or driven.</summary>
+    public bool HasCurve => CurveData is not null;
+
+    /// <summary>True when an expression works the value out (param.set-driver): it shows the expression, not the value.</summary>
+    public bool IsDriven => Driver is not null;
+
+    /// <summary>The value's control shows: the parameter is not driven.</summary>
+    public bool ShowsValue => !IsDriven;
+
+    /// <summary>The keyframe controls show: it animates and is not driven.</summary>
+    public bool ShowsKeyframes => Animatable && !IsDriven;
+
+    /// <summary>True for a kind of value a driver can make, on an owner that takes one.</summary>
+    public bool CanDrive => Animatable && Type is ParamType.Float or ParamType.Int or ParamType.Bool or ParamType.Float2 or ParamType.Point or ParamType.Float4 or ParamType.Color;
 
     /// <summary>For an enum, what it takes.</summary>
     public IReadOnlyList<string> Choices => [.. Descriptor.Choices];
@@ -258,9 +287,11 @@ public sealed partial class ParamRowViewModel : ObservableObject
 
             IsDefault = stored is null;
             IsAnimated = stored is KeyframedValue { IsAnimated: true };
+            Driver = stored is DrivenValue driven ? driven.Expression : null;
+            DriverText = Driver ?? string.Empty;
             KeyframeTimes = stored is KeyframedValue keyed ? [.. keyed.Keyframes.Select(key => key.Time + origin)] : [];
             HasKeyframeHere = KeyframeTimes.Any(time => Math.Abs((time - playhead).Value) <= tolerance.Value);
-            CurveData = IsAnimated && IsNumber ? Curve(stored!, length) : null;
+            CurveData = (IsAnimated || IsDriven) && IsNumber ? Curve(stored!, length) : null;
             PreviousKeyframeCommand.NotifyCanExecuteChanged();
             NextKeyframeCommand.NotifyCanExecuteChanged();
         }
@@ -338,6 +369,34 @@ public sealed partial class ParamRowViewModel : ObservableObject
 
     [RelayCommand]
     private void Pick() => _editor.Pick(this);
+
+    /// <summary>Starts driving it with an expression that keeps its value, to be edited from there.</summary>
+    [RelayCommand]
+    private void Drive() => _editor.SetDriver(this, Driver ?? "value");
+
+    /// <summary>The expression box was committed (Enter, or leaving it): a new expression, or none to stop driving.</summary>
+    partial void OnDriverTextChanged(string value)
+    {
+        if (!_loading)
+        {
+            CommitDriver();
+        }
+    }
+
+    private void CommitDriver()
+    {
+        if (string.IsNullOrWhiteSpace(DriverText))
+        {
+            _editor.ClearDriver(this);
+        }
+        else if (!string.Equals(DriverText, Driver, StringComparison.Ordinal))
+        {
+            _editor.SetDriver(this, DriverText);
+        }
+    }
+
+    [RelayCommand]
+    private void StopDriving() => _editor.ClearDriver(this);
 
     private void Edited()
     {

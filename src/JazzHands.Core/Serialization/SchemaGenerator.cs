@@ -207,7 +207,7 @@ public static class SchemaGenerator
 
         yield return ("animatedValue", new JsonObject
         {
-            ["description"] = "Either a parameter value, or an object with a keyframes array.",
+            ["description"] = "A parameter value, an object with a keyframes array, or a driver expression over a base value.",
             ["anyOf"] = new JsonArray(
                 new JsonObject
                 {
@@ -220,6 +220,20 @@ public static class SchemaGenerator
                             ["type"] = "array",
                             ["items"] = Reference("keyframe"),
                         },
+                    },
+                },
+                new JsonObject
+                {
+                    ["type"] = "object",
+                    ["required"] = new JsonArray("driver"),
+                    ["properties"] = new JsonObject
+                    {
+                        ["driver"] = new JsonObject
+                        {
+                            ["type"] = "string",
+                            ["description"] = "The expression that works the value out each frame (param.set-driver).",
+                        },
+                        ["base"] = Reference("animatedValue"),
                     },
                 },
                 Reference("paramValue")),

@@ -5,7 +5,7 @@ using JazzHands.Core.Model;
 namespace JazzHands.Core.Serialization.Converters;
 
 /// <summary>
-/// Reads and writes <see cref="AnimatedValue"/>: either a bare parameter value or a keyframe list.
+/// Reads and writes <see cref="AnimatedValue"/>: a bare parameter value, a keyframe list, or a driver.
 /// </summary>
 /// <remarks>
 /// A parameter that never moves is written as its value and nothing else, because that is what
@@ -15,9 +15,10 @@ namespace JazzHands.Core.Serialization.Converters;
 /// <code>
 /// "opacity": 1
 /// "opacity": {"keyframes": [{"time": 0, "value": 0}, {"time": 23520000, "value": 1}]}
+/// "opacity": {"driver": "0.5 + audio(\"Music\", low) * 0.5", "base": 1}
 /// </code>
 ///
-/// The two are told apart by the <c>keyframes</c> member, which no parameter value has.
+/// They are told apart by the <c>keyframes</c> and <c>driver</c> members, which no parameter value has.
 /// </remarks>
 public sealed class AnimatedValueConverter : JsonConverter<AnimatedValue>
 {
@@ -31,9 +32,12 @@ public sealed class AnimatedValueConverter : JsonConverter<AnimatedValue>
             // Peek for a keyframes member without consuming the reader, so a static object value
             // such as a colour can still be handed to the parameter converter intact.
             Utf8JsonReader peek = reader;
-            if (HasKeyframes(ref peek))
+            switch (Marker(ref peek))
             {
-                return ReadKeyframed(ref reader, options);
+                case "keyframes":
+                    return ReadKeyframed(ref reader, options);
+                case "driver":
+                    return ReadDriven(ref reader, options);
             }
         }
 
@@ -64,6 +68,14 @@ public sealed class AnimatedValueConverter : JsonConverter<AnimatedValue>
                 writer.WriteEndObject();
                 break;
 
+            case DrivenValue driven:
+                writer.WriteStartObject();
+                writer.WriteString("driver", driven.Expression);
+                writer.WritePropertyName("base");
+                Write(writer, driven.Base, options);
+                writer.WriteEndObject();
+                break;
+
             default:
                 throw new JsonException($"There is no file format for animated values of type {value.GetType().Name}.");
         }
@@ -72,7 +84,8 @@ public sealed class AnimatedValueConverter : JsonConverter<AnimatedValue>
     private static JsonConverter<ParamValue> ValueConverter(JsonSerializerOptions options) =>
         (JsonConverter<ParamValue>)options.GetConverter(typeof(ParamValue));
 
-    private static bool HasKeyframes(ref Utf8JsonReader reader)
+    /// <summary>The member that says what an object is, <c>keyframes</c> or <c>driver</c>, or null for a parameter value.</summary>
+    private static string? Marker(ref Utf8JsonReader reader)
     {
         int depth = 0;
 
@@ -92,18 +105,21 @@ public sealed class AnimatedValueConverter : JsonConverter<AnimatedValue>
                 case JsonTokenType.EndObject:
                     if (depth == 0)
                     {
-                        return false;
+                        return null;
                     }
 
                     depth--;
                     break;
 
                 case JsonTokenType.PropertyName when depth == 0 && reader.ValueTextEquals("keyframes"):
-                    return true;
+                    return "keyframes";
+
+                case JsonTokenType.PropertyName when depth == 0 && reader.ValueTextEquals("driver"):
+                    return "driver";
             }
         }
 
-        return false;
+        return null;
     }
 
     private static AnimatedValue ReadKeyframed(ref Utf8JsonReader reader, JsonSerializerOptions options)
@@ -131,5 +147,37 @@ public sealed class AnimatedValueConverter : JsonConverter<AnimatedValue>
         }
 
         return new KeyframedValue(keyframes);
+    }
+
+    private AnimatedValue ReadDriven(ref Utf8JsonReader reader, JsonSerializerOptions options)
+    {
+        string expression = string.Empty;
+        AnimatedValue? under = null;
+
+        while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
+        {
+            if (reader.TokenType != JsonTokenType.PropertyName)
+            {
+                continue;
+            }
+
+            string name = reader.GetString() ?? string.Empty;
+            reader.Read();
+            switch (name)
+            {
+                case "driver":
+                    expression = reader.GetString() ?? string.Empty;
+                    break;
+                case "base":
+                    under = Read(ref reader, typeof(AnimatedValue), options);
+                    break;
+                default:
+                    reader.Skip();
+                    break;
+            }
+        }
+
+        // A driver with nothing underneath drives a number starting at zero.
+        return new DrivenValue(expression, under ?? AnimatedValue.Constant(0.0f));
     }
 }
