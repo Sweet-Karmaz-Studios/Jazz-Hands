@@ -62,6 +62,9 @@ public sealed class Session : ISessionState, IAsyncDisposable
         _dispatcher = new CommandDispatcher(project, services, clock, undoLimit) { ProjectPath = path };
         _dispatcher.ProjectChanged += OnProjectChanged;
 
+        // Handlers that start work finishing later (a watched folder) queue its commands here.
+        _dispatcher.Later = (command, issuer) => ExecuteAsync(command, issuer);
+
         ProjectPath = path;
         _savedVersion = _dispatcher.Version;
 

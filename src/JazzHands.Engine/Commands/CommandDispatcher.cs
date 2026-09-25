@@ -115,6 +115,9 @@ public sealed class CommandDispatcher : IAsyncDisposable
     /// <summary>Where the project lives, for handlers that need to resolve a path.</summary>
     public string ProjectPath { get; set; } = string.Empty;
 
+    /// <summary>What handlers use to queue a command for later; the session sets it to its own queue.</summary>
+    public Func<ICommand, string, Task<CommandResult>>? Later { get; set; }
+
     /// <summary>Runs a command and waits for it.</summary>
     /// <exception cref="CommandException">The command could not be done.</exception>
     public Task<CommandResult> ExecuteAsync(ICommand command, CancellationToken cancellationToken = default) =>
@@ -281,7 +284,7 @@ public sealed class CommandDispatcher : IAsyncDisposable
         CommandMetadata metadata = CommandRegistry.Describe(command);
         Project before = _project;
 
-        var context = new HandlerContext(_services, _clock, ProjectPath);
+        var context = new HandlerContext(_services, _clock, ProjectPath) { Later = Later };
         Project after = SettleTitles(before, SettleTransitions(before, Magnetize(before, Apply(before, command, context), context), context), context);
 
         return Commit(command, metadata, before, after, context.ChangedIds, ChangeOrigin.Command, issuer);
@@ -299,7 +302,7 @@ public sealed class CommandDispatcher : IAsyncDisposable
     {
         Project before = _project;
         Project working = before;
-        var context = new HandlerContext(_services, _clock, ProjectPath);
+        var context = new HandlerContext(_services, _clock, ProjectPath) { Later = Later };
 
         foreach (ICommand step in batch.Commands)
         {

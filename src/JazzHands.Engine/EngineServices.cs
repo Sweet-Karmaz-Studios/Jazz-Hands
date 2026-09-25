@@ -48,6 +48,9 @@ public static class EngineServices
         // selection commands find it here, which is what lets a script select and then act.
         services.TryAddSingleton<Selection.SelectionService>();
 
+        // Folders watched for new recordings, per process; each import goes through its session.
+        services.TryAddSingleton(_ => new Library.MediaWatchService());
+
         // Frames looked at by queries (the eyedropper, the scopes read headless) are drawn on WARP
         // by a device of their own, made on first use.
         services.TryAddSingleton(_ => new Frames.StillRenderer());

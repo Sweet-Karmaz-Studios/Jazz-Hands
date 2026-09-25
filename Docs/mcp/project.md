@@ -6,4 +6,5 @@ A project is one `.jazz` file: readable JSON holding the media list, the sequenc
 - `project_set_settings` changes the frame rate, size or audio format; a sequence can have its own (`sequence_set_settings`). Frame rates are exact ratios: `30000/1001`, not 29.97 (though `"29.97"` is read as it).
 - `project_set_tone_map` sets how HDR footage is brought down to SDR by default.
 - `project_save` writes it, atomically; `path` saves as. Nothing is written until then.
+- `project_consolidate` gathers the project and every file its clips use into one folder (`trim` keeps only the used parts, smart cut, with `handles`); `project_archive` writes the same into one zip. The open project is not changed. They take a while on long recordings.
 - `project_new` and `project_open` replace the open project, and are refused while it has unsaved changes unless `discard` is true. In the editor, that is the person's project: ask first.

@@ -2097,6 +2097,14 @@ Import files, folders or globs into the project.
 | `--fps <rate>` | The rate an image sequence plays at. |
 | `--no-save` | Do not write the project back. |
 
+### `jazz media check <project>`
+
+Say which media files are there, missing, or changed.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
 ### `jazz media get <project> <media-id>`
 
 Describe one media item and its streams.
@@ -2120,6 +2128,19 @@ List the files the project uses.
 | `--search <search>` | Only items matching this text. |
 | `--tag <tag>` | Only items carrying this tag. |
 
+### `jazz media missing <project>`
+
+Find where missing media went, with candidates for each.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--search <list>` | Folders to look in, with their subfolders. |
+| `--media <id>` | Only this media item. |
+
 ### `jazz media probe <path>`
 
 Read a file and say what is in it, without importing it.
@@ -2135,19 +2156,21 @@ Read a file and say what is in it, without importing it.
 | `--deinterlace <auto|on|off>` | auto, on or off. Default: auto. |
 | `--vfr-conform <auto|on|off>` | auto, on or off. Default: auto. |
 
-### `jazz media relink <project> <media-id> <path>`
+### `jazz media relink <project> [media-id] [path]`
 
-Point a media item at a file that has moved.
+Point media at files that have moved, by hand or found by hash.
 
 | Argument | Meaning |
 |---|---|
 | `<project>` | The .jazz file to work on. |
-| `<media-id>` | The media id. |
-| `<path>` | Where the file is now. |
+| `<media-id>` | The media id. Optional. |
+| `<path>` | Where the file is now. Optional. |
 
 | Option | Meaning |
 |---|---|
 | `--force` | Accept a file of a different duration. |
+| `--auto` | Find every missing file by hash, then by name and size. |
+| `--search <list>` | Folders to look in, with their subfolders. |
 | `--no-save` | Do not write the project back. |
 
 ### `jazz media remove <project> <media-id>`
@@ -2162,6 +2185,34 @@ Take a file out of the project.
 | Option | Meaning |
 |---|---|
 | `--with-clips` | Remove the clips that play it too. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz media remove-unused <project>`
+
+Remove every media item no clip uses.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--keep-tagged` | Keep items that have tags. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz media replace <project> <media-id> <path>`
+
+Swap a media item's file for another, keeping its clips.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<media-id>` | The media id. |
+| `<path>` | The new file. |
+
+| Option | Meaning |
+|---|---|
+| `--force` | Accept a file too short for some clips. |
 | `--no-save` | Do not write the project back. |
 
 ### `jazz media reprobe <project> [media-id]`
@@ -2196,6 +2247,56 @@ Change a media item's name, folder, tags or conform settings.
 | `--deinterlace <auto|on|off>` | auto, on or off. |
 | `--vfr-conform <auto|on|off>` | auto, on or off. |
 | `--no-save` | Do not write the project back. |
+
+### `jazz media unwatch <project> [folder]`
+
+Stop watching a folder.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<folder>` | The folder, or every one when left out. Optional. |
+
+| Option | Meaning |
+|---|---|
+| `--no-save` | Do not write the project back. |
+
+### `jazz media usage <project>`
+
+Say which clips and sequences use each media item.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--media <id>` | Only this media item. |
+| `--unused` | Only items no clip uses. |
+
+### `jazz media watch <project> <folder>`
+
+Watch a folder and bring in new recordings as they finish.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<folder>` | The folder to watch. |
+
+| Option | Meaning |
+|---|---|
+| `--tags <list>` | Tags for everything it brings in. |
+| `--bin <bin>` | The bin folder they go in. |
+| `--existing` | Bring in what is already there too. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz media watches <project>`
+
+List the folders being watched for new recordings.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
 
 ## `jazz param`
 
@@ -2698,6 +2799,38 @@ Save an export preset of your own.
 ## `jazz project`
 
 The project: settings, default tone mapping, a summary.
+
+### `jazz project archive <project> <to>`
+
+Write the project and its media into one zip.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<to>` | The zip file to write. |
+
+| Option | Meaning |
+|---|---|
+| `--trim` | Keep only the parts clips use, with handles. |
+| `--handles <time>` | How much to keep either side of each used part (default 1s). |
+| `--no-save` | Do not write the project back. |
+
+### `jazz project consolidate <project> <to>`
+
+Gather the project and its media into one folder.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<to>` | The folder to gather into. |
+
+| Option | Meaning |
+|---|---|
+| `--trim` | Keep only the parts clips use, with handles. |
+| `--handles <time>` | How much to keep either side of each used part (default 1s). |
+| `--move` | Move the files instead of copying them. |
+| `--overwrite` | Write into a folder that already has a project in it. |
+| `--no-save` | Do not write the project back. |
 
 ### `jazz project get <project>`
 

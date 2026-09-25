@@ -237,9 +237,78 @@ public sealed class RelinkMediaHandler : ICommandHandler<RelinkMediaCommand>
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(context);
 
-        MediaItem item = MediaServices.Require(project, command.MediaId);
-        string full = HandlerHelp.Resolve(context, command.Path);
+        if (command.Auto)
+        {
+            return Auto(project, command, context);
+        }
 
+        if (command.MediaId is not { Length: > 0 } mediaId || command.Path is not { Length: > 0 } path)
+        {
+            throw new CommandException(
+                "nothing-to-relink",
+                "Name a media id and where its file is now, or pass --auto to find every missing file.");
+        }
+
+        return Relink(project, MediaServices.Require(project, mediaId), HandlerHelp.Resolve(context, path), command.Force, context);
+    }
+
+    /// <summary>
+    /// Every missing item found by hash (or by name and size when only one file fits), relinked as
+    /// one undoable step. Refused when none was found, naming what is missing.
+    /// </summary>
+    private static Project Auto(Project project, RelinkMediaCommand command, HandlerContext context)
+    {
+        if (command.MediaId is { Length: > 0 } only)
+        {
+            _ = MediaServices.Require(project, only);
+        }
+
+        MissingMediaInfo[] missing = Library.MediaLibrary.FindMissing(project, context.ProjectPath, command.Search, command.MediaId);
+        if (missing.Length == 0)
+        {
+            throw new CommandException("nothing-missing", "No media is missing: every file is where the project says.");
+        }
+
+        Project updated = project;
+        var notFound = new List<string>();
+        foreach (MissingMediaInfo item in missing)
+        {
+            if (Library.MediaLibrary.AutoChoice(item) is not { } choice)
+            {
+                notFound.Add(item.Name);
+                continue;
+            }
+
+            MediaItem media = updated.MediaItem(item.MediaId)!;
+            updated = choice.Match == MediaMatch.Hash
+                ? Moved(updated, media, choice.Path, context)
+                : Relink(updated, media, choice.Path, force: false, context);
+        }
+
+        if (updated == project)
+        {
+            throw new CommandException(
+                "not-found",
+                $"None of the missing media was found: {string.Join(", ", notFound)}. Pass --search with the folder they are in, or relink each by hand.");
+        }
+
+        if (notFound.Count > 0)
+        {
+            Log.ForContext<RelinkMediaHandler>().Warning("Still missing after the search: {Names}", string.Join(", ", notFound));
+        }
+
+        return updated;
+    }
+
+    /// <summary>The same file somewhere else: only the path changes, the probe is still true.</summary>
+    private static Project Moved(Project project, MediaItem item, string full, HandlerContext context)
+    {
+        context.Changed(item.Id);
+        return project.WithMedia(item with { RelativePath = HandlerHelp.Store(context, full) });
+    }
+
+    private static Project Relink(Project project, MediaItem item, string full, bool force, HandlerContext context)
+    {
         if (!File.Exists(full))
         {
             throw new CommandException("file-not-found", $"'{full}' is not there.");
@@ -262,7 +331,7 @@ public sealed class RelinkMediaHandler : ICommandHandler<RelinkMediaCommand>
         // A different length would move every cut made against this item, so it is refused unless
         // the user says they meant it. A different hash is fine: relinking to a re-encode or a
         // transcode is an ordinary thing to do.
-        if (!command.Force && imported.Item.Duration != item.Duration)
+        if (!force && imported.Item.Duration != item.Duration)
         {
             throw new CommandException(
                 "different-duration",
@@ -278,7 +347,7 @@ public sealed class RelinkMediaHandler : ICommandHandler<RelinkMediaCommand>
             RelativePath = HandlerHelp.Store(context, full),
             Hash = imported.Item.Hash,
             Info = imported.Item.Info,
-            Duration = command.Force ? imported.Item.Duration : item.Duration,
+            Duration = force ? imported.Item.Duration : item.Duration,
         });
     }
 }
@@ -341,7 +410,14 @@ public sealed class ReprobeMediaHandler : ICommandHandler<ReprobeMediaCommand>
                     continue;
                 }
 
-                if (refreshed.Hash != item.Hash)
+                if (refreshed.Hash != item.Hash && refreshed.Info is { } info && item.Info is { } was && info with { ProbedAt = was.ProbedAt } == was)
+                {
+                    // Only touched: the same streams, size and length under a new date. What was
+                    // made from it (thumbnails, waveform, keyframes, a proxy) still holds.
+                    importer.Cache?.Rekey(item.Hash, refreshed.Hash);
+                    (context.Services?.GetService(typeof(Caching.ProxyService)) as Caching.ProxyService)?.Rekey(item.Hash, refreshed.Hash);
+                }
+                else if (refreshed.Hash != item.Hash)
                 {
                     CacheHelp.ForgetContent(context.Services, importer.Cache, item.Hash);
                 }

@@ -41,6 +41,12 @@ public sealed class HandlerContext
     /// <summary>Where the project lives, or empty when it has never been saved.</summary>
     public string ProjectPath { get; init; }
 
+    /// <summary>
+    /// Queues a command to run through the session after this one, with an issuer, for work that
+    /// finishes later: a watched folder's imports. Null outside a session.
+    /// </summary>
+    public Func<ICommand, string, Task<CommandResult>>? Later { get; init; }
+
     /// <summary>Everything the handler touched, in the order it said so.</summary>
     public ImmutableArray<string> ChangedIds { get; private set; } = [];
 
