@@ -20,7 +20,7 @@
 
     <Window.Resources>
         <local:PageIsConverter x:Key="PageIs" />
-        <local:NotConverter x:Key="Not" />
+        <local:RadioBoolConverter x:Key="Radio" />
         <Style x:Key="Label" TargetType="TextBlock">
             <Setter Property="Width" Value="170" />
             <Setter Property="VerticalAlignment" Value="Center" />
@@ -147,8 +147,8 @@
                 <CheckBox Style="{StaticResource CheckBox.Dark}" Margin="0,0,0,8" Content="Open the last project when Jazz Hands starts" IsChecked="{Binding OpenLastProject, Mode=TwoWay}" />
                 <CheckBox Style="{StaticResource CheckBox.Dark}" Margin="0,0,0,8" Content="Start Jazz Hands in the notification area when Windows starts" IsChecked="{Binding StartWithWindows, Mode=TwoWay}" />
                 <TextBlock Margin="0,8,0,4" Text="When I close the window" Foreground="{DynamicResource Brush.Text.Secondary}" />
-                <RadioButton Margin="0,0,0,4" GroupName="Close" Content="Keep Jazz Hands running in the notification area" IsChecked="{Binding CloseToTray, Mode=TwoWay}" Foreground="{DynamicResource Brush.Text.Primary}" />
-                <RadioButton Margin="0,0,0,4" GroupName="Close" Content="Quit" IsChecked="{Binding CloseToTray, Mode=TwoWay, Converter={StaticResource Not}}" Foreground="{DynamicResource Brush.Text.Primary}" />
+                <RadioButton Margin="0,0,0,4" GroupName="Close" Content="Keep Jazz Hands running in the notification area" IsChecked="{Binding CloseToTray, Mode=TwoWay, Converter={StaticResource Radio}, ConverterParameter=True}" Foreground="{DynamicResource Brush.Text.Primary}" />
+                <RadioButton Margin="0,0,0,4" GroupName="Close" Content="Quit" IsChecked="{Binding CloseToTray, Mode=TwoWay, Converter={StaticResource Radio}, ConverterParameter=False}" Foreground="{DynamicResource Brush.Text.Primary}" />
                 <TextBlock Style="{StaticResource Note}" Margin="0,0,0,12" Text="Running in the notification area, exports finish and jazz --attach and Claude Code stay connected. Right-click its icon to quit." />
                 <CheckBox Style="{StaticResource CheckBox.Dark}" Margin="0,0,0,8" Content="Windows notifications when exports finish or fail and proxies are ready" IsChecked="{Binding WindowsNotifications, Mode=TwoWay}" />
                 <CheckBox Style="{StaticResource CheckBox.Dark}" Margin="0,0,0,8" Content="A notification when Claude Code or another client attaches" IsChecked="{Binding NotifyClientAttached, Mode=TwoWay}" />

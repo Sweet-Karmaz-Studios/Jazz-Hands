@@ -27,12 +27,18 @@ public sealed class PageIsConverter : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => Binding.DoNothing;
 }
 
-/// <summary>True for false and false for true, both ways: the second of a pair of radio buttons.</summary>
-public sealed class NotConverter : IValueConverter
+/// <summary>
+/// One of a pair of radio buttons over a bool: checked when the value is the parameter (<c>True</c> or
+/// <c>False</c>), and setting it only when checked, so the button the group unchecks writes nothing back
+/// and the two cannot flip each other for ever.
+/// </summary>
+public sealed class RadioBoolConverter : IValueConverter
 {
     /// <inheritdoc />
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value is not true;
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value is bool flag && flag == IsTrue(parameter);
 
     /// <inheritdoc />
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => value is not true;
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => value is true ? IsTrue(parameter) : Binding.DoNothing;
+
+    private static bool IsTrue(object parameter) => string.Equals(parameter as string, "True", StringComparison.OrdinalIgnoreCase);
 }
