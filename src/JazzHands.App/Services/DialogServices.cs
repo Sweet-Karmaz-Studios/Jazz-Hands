@@ -30,6 +30,12 @@ public interface IDialogService
 
     /// <summary>Asks what to do about exports still running when the person quits.</summary>
     Task<Shell.QuitChoice> AskToQuitWithExportsAsync(int running);
+
+    /// <summary>Shows the missing media, with the files that might be them, to find or relink.</summary>
+    Task ShowMissingMediaAsync();
+
+    /// <summary>Asks where and how to gather the project and its media: a folder, or a zip when archiving.</summary>
+    Task ShowConsolidateAsync(bool archive);
 }
 
 /// <summary>What to do with unsaved changes.</summary>
@@ -84,17 +90,59 @@ public interface IFileDialogService
 
     /// <summary>Asks where to save a project, starting from a suggestion, or null when the user cancelled.</summary>
     string? SaveProject(string suggested);
+
+    /// <summary>Picks a folder, or null when the user cancelled.</summary>
+    string? PickFolder(string title);
+
+    /// <summary>Asks where an archive zip goes, or null when the user cancelled.</summary>
+    string? SaveArchive(string suggested);
 }
 
 /// <summary>The real dialogs.</summary>
 /// <param name="importFactory">Makes an import viewmodel per dialog, since each one has its own list.</param>
 /// <param name="exportFactory">Makes an export viewmodel per dialog.</param>
 /// <param name="settingsFactory">Makes the Settings dialog's viewmodel, fresh each time so it reads the files again.</param>
+/// <param name="missingFactory">Makes the missing media dialog's viewmodel.</param>
+/// <param name="consolidateFactory">Makes the Consolidate and Archive dialog's viewmodel.</param>
 public sealed class DialogService(
     Func<ImportViewModel> importFactory,
     Func<ExportDialogViewModel>? exportFactory = null,
-    Func<ViewModels.Settings.SettingsViewModel>? settingsFactory = null) : IDialogService
+    Func<ViewModels.Settings.SettingsViewModel>? settingsFactory = null,
+    Func<MissingMediaViewModel>? missingFactory = null,
+    Func<ConsolidateViewModel>? consolidateFactory = null) : IDialogService
 {
+    /// <inheritdoc />
+    public async Task ShowMissingMediaAsync()
+    {
+        if (missingFactory is null)
+        {
+            return;
+        }
+
+        MissingMediaViewModel viewModel = missingFactory();
+        var window = new MissingMediaWindow { DataContext = viewModel, Owner = Application.Current?.MainWindow };
+        viewModel.CloseRequested += (_, _) => window.Close();
+        window.Loaded += async (_, _) => await viewModel.LoadAsync().ConfigureAwait(true);
+        window.ShowDialog();
+        await Task.CompletedTask.ConfigureAwait(true);
+    }
+
+    /// <inheritdoc />
+    public Task ShowConsolidateAsync(bool archive)
+    {
+        if (consolidateFactory is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        ConsolidateViewModel viewModel = consolidateFactory();
+        viewModel.Load(archive);
+        var window = new ConsolidateWindow { DataContext = viewModel, Owner = Application.Current?.MainWindow };
+        viewModel.CloseRequested += (_, _) => window.Close();
+        window.ShowDialog();
+        return Task.CompletedTask;
+    }
+
     /// <inheritdoc />
     public Task ShowImportAsync(IReadOnlyList<string> paths)
     {
@@ -314,6 +362,29 @@ public sealed class FileDialogService : IFileDialogService
             InitialDirectory = System.IO.Path.GetDirectoryName(suggested),
             DefaultExt = ".jazz",
             Filter = "Jazz Hands project|*.jazz",
+            OverwritePrompt = true,
+        };
+
+        return dialog.ShowDialog() == true ? dialog.FileName : null;
+    }
+
+    /// <inheritdoc />
+    public string? PickFolder(string title)
+    {
+        var dialog = new OpenFolderDialog { Title = title };
+        return dialog.ShowDialog() == true ? dialog.FolderName : null;
+    }
+
+    /// <inheritdoc />
+    public string? SaveArchive(string suggested)
+    {
+        var dialog = new SaveFileDialog
+        {
+            Title = "Archive the project to",
+            FileName = System.IO.Path.GetFileName(suggested),
+            InitialDirectory = System.IO.Path.GetDirectoryName(suggested),
+            DefaultExt = ".zip",
+            Filter = "Zip archive|*.zip",
             OverwritePrompt = true,
         };
 

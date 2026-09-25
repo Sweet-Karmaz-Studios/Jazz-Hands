@@ -272,9 +272,19 @@ public sealed partial class MainViewModel
             new MenuItemViewModel("Quick _Trim a recording...", QuickTrimFileCommand),
             Bound("_Export...", "ui.export", fallback: ExportCommand),
             MenuItemViewModel.Separator(),
+            new MenuItemViewModel("Find _missing media...", Media.FindMissingCommand, toolTip: "Find files that moved, by hash, and relink them"),
+            new MenuItemViewModel("_Consolidate project...", ConsolidateCommand, toolTip: "Gather the project and every file it uses into one folder"),
+            new MenuItemViewModel("Arc_hive project...", ArchiveCommand, toolTip: "Write the project and every file it uses into one zip"),
+            MenuItemViewModel.Separator(),
             Bound("Se_ttings...", "ui.settings", fallback: ShowSettingsCommand),
             MenuItemViewModel.Separator(),
             new MenuItemViewModel("E_xit", ExitCommand));
+
+    [RelayCommand]
+    private Task ConsolidateAsync() => _dialogs?.ShowConsolidateAsync(archive: false) ?? Task.CompletedTask;
+
+    [RelayCommand]
+    private Task ArchiveAsync() => _dialogs?.ShowConsolidateAsync(archive: true) ?? Task.CompletedTask;
 
     private MenuItemViewModel RecentMenu()
     {

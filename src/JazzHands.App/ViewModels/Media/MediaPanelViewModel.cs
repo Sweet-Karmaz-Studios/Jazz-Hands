@@ -213,6 +213,13 @@ public sealed partial class MediaPanelViewModel : ToolViewModel
         ApplyFilter();
         OnPropertyChanged(nameof(TotalCount));
         SuggestProxies();
+
+        foreach (MediaItemViewModel row in rebuilt)
+        {
+            row.IsOffline = _states.GetValueOrDefault(row.Id) == MediaFileState.Missing;
+        }
+
+        _ = CheckFilesAsync();
     }
 
     /// <summary>The ids a drag out of the panel should carry.</summary>
@@ -257,6 +264,8 @@ public sealed partial class MediaPanelViewModel : ToolViewModel
         SetColorCommand.NotifyCanExecuteChanged();
         RevealCommand.NotifyCanExecuteChanged();
         GenerateProxyCommand.NotifyCanExecuteChanged();
+        RelinkSelectedCommand.NotifyCanExecuteChanged();
+        ReplaceSelectedCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand]

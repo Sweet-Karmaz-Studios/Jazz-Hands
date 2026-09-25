@@ -1,0 +1,83 @@
+<Window x:Class="JazzHands.App.Views.Media.MissingMediaWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:JazzHands.App.ViewModels.Media"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        d:DataContext="{d:DesignInstance vm:MissingMediaViewModel}"
+        Title="Missing media"
+        Width="760"
+        Height="460"
+        MinWidth="560"
+        MinHeight="320"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Background="{DynamicResource Brush.Background.Panel}"
+        Foreground="{DynamicResource Brush.Text.Primary}">
+    <Grid x:Name="Root" Margin="16" Background="{DynamicResource Brush.Background.Panel}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0"
+                   Margin="0,0,0,12"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource Brush.Text.Secondary}"
+                   Text="These files are not where the project says. Jazz Hands looked in the project's folder and where they were; add the folder they went to if it is somewhere else." />
+
+        <ListBox Grid.Row="1"
+                 ItemsSource="{Binding Rows, Mode=OneWay}"
+                 Background="{DynamicResource Brush.Background.Base}"
+                 BorderThickness="0"
+                 HorizontalContentAlignment="Stretch"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 AutomationProperties.Name="Missing media">
+            <ListBox.ItemTemplate>
+                <DataTemplate DataType="{x:Type vm:MissingMediaRow}">
+                    <Grid Margin="0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="{Binding Name, Mode=OneWay}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding Expected, Mode=OneWay}" FontSize="{DynamicResource Text.Caption}" Foreground="{DynamicResource Brush.Text.Secondary}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock FontSize="{DynamicResource Text.Caption}" Foreground="{DynamicResource Brush.Text.Secondary}">
+                                <Run Text="{Binding Clips, Mode=OneWay}" />
+                                <Run Text="  " />
+                                <Run Text="{Binding Found, Mode=OneWay}" />
+                            </TextBlock>
+                            <ComboBox Style="{StaticResource ComboBox.Compact}"
+                                      Margin="0,4,0,0"
+                                      ItemsSource="{Binding Candidates, Mode=OneWay}"
+                                      SelectedItem="{Binding SelectedCandidate, Mode=TwoWay}"
+                                      AutomationProperties.Name="Where it might be">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Path, Mode=OneWay}" TextTrimming="CharacterEllipsis" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center" Orientation="Horizontal">
+                            <Button Style="{StaticResource Button.Text}" Content="Browse..." Command="{Binding DataContext.BrowseCommand, RelativeSource={RelativeSource AncestorType=ListBox}, Mode=OneWay}" CommandParameter="{Binding Mode=OneWay}" AutomationProperties.Name="Pick the file by hand" />
+                            <Button Style="{StaticResource Button.Text}" Margin="8,0,0,0" Content="Relink" Command="{Binding DataContext.RelinkCommand, RelativeSource={RelativeSource AncestorType=ListBox}, Mode=OneWay}" CommandParameter="{Binding Mode=OneWay}" AutomationProperties.Name="Relink to the chosen file" />
+                        </StackPanel>
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <TextBlock Grid.Row="2" Margin="0,8,0,0" Text="{Binding Status, Mode=OneWay}" Foreground="{DynamicResource Brush.Text.Secondary}" TextWrapping="Wrap" />
+
+        <StackPanel Grid.Row="3" Margin="0,12,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Style="{StaticResource Button.Text}" Content="Look in a folder..." Command="{Binding AddFolderCommand, Mode=OneWay}" AutomationProperties.Name="Add a folder to look in" />
+            <Button Style="{StaticResource Button.Text}" Margin="8,0,0,0" Content="Relink everything found" IsDefault="True" Command="{Binding FindAllCommand, Mode=OneWay}" AutomationProperties.Name="Relink everything found" />
+            <Button Style="{StaticResource Button.Text}" Margin="8,0,0,0" Content="Close" IsCancel="True" Command="{Binding CloseCommand, Mode=OneWay}" AutomationProperties.Name="Close" />
+        </StackPanel>
+    </Grid>
+</Window>

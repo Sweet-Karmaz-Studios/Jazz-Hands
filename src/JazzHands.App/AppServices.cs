@@ -51,7 +51,11 @@ public static class AppServices
             new DialogService(
                 provider.GetRequiredService<ImportViewModel>,
                 provider.GetRequiredService<ExportDialogViewModel>,
-                provider.GetRequiredService<ViewModels.Settings.SettingsViewModel>));
+                provider.GetRequiredService<ViewModels.Settings.SettingsViewModel>,
+                provider.GetRequiredService<MissingMediaViewModel>,
+                provider.GetRequiredService<ConsolidateViewModel>));
+        services.AddTransient<MissingMediaViewModel>();
+        services.AddTransient<ConsolidateViewModel>();
 
         services.AddTransient<ImportViewModel>();
         services.AddTransient<ExportDialogViewModel>();

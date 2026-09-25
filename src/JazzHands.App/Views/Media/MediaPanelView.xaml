@@ -23,28 +23,54 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Heavy footage just imported: offer proxies, once, and get out of the way. -->
-        <Border Grid.Row="1"
-                Margin="6,0,6,6"
-                Padding="8,6"
-                Background="{DynamicResource Brush.Background.Raised}"
-                BorderBrush="{DynamicResource Brush.Accent}"
-                BorderThickness="2,0,0,0"
-                Visibility="{Binding HasProxySuggestion, Mode=OneWay, Converter={StaticResource BoolToVisible}}">
-            <DockPanel LastChildFill="True">
-                <Button DockPanel.Dock="Right"
-                        Margin="6,0,0,0"
-                        Content="Not now"
-                        Command="{Binding DismissProxySuggestionCommand, Mode=OneWay}" />
-                <Button DockPanel.Dock="Right"
-                        Margin="6,0,0,0"
-                        Content="Make proxies"
-                        Command="{Binding MakeSuggestedProxiesCommand, Mode=OneWay}" />
-                <TextBlock Text="{Binding ProxySuggestion, Mode=OneWay}"
-                           VerticalAlignment="Center"
-                           TextWrapping="Wrap" />
-            </DockPanel>
-        </Border>
+        <StackPanel Grid.Row="1">
+            <!-- Files missing or changed on disk: say so, with the way to fix it. -->
+            <Border Margin="6,0,6,6"
+                    Padding="8,6"
+                    Background="{DynamicResource Brush.Background.Raised}"
+                    BorderBrush="{DynamicResource Brush.Error}"
+                    BorderThickness="2,0,0,0"
+                    Visibility="{Binding HasLibraryNotice, Mode=OneWay, Converter={StaticResource BoolToVisible}}">
+                <DockPanel LastChildFill="True">
+                    <Button DockPanel.Dock="Right"
+                            Margin="6,0,0,0"
+                            Content="Update"
+                            ToolTip="Read the changed files again"
+                            Command="{Binding UpdateChangedCommand, Mode=OneWay}"
+                            Visibility="{Binding HasChanged, Mode=OneWay, Converter={StaticResource BoolToVisible}}" />
+                    <Button DockPanel.Dock="Right"
+                            Margin="6,0,0,0"
+                            Content="Find them..."
+                            Command="{Binding FindMissingCommand, Mode=OneWay}"
+                            Visibility="{Binding HasMissing, Mode=OneWay, Converter={StaticResource BoolToVisible}}" />
+                    <TextBlock Text="{Binding LibraryNotice, Mode=OneWay}"
+                               VerticalAlignment="Center"
+                               TextWrapping="Wrap" />
+                </DockPanel>
+            </Border>
+
+            <!-- Heavy footage just imported: offer proxies, once, and get out of the way. -->
+            <Border Margin="6,0,6,6"
+                    Padding="8,6"
+                    Background="{DynamicResource Brush.Background.Raised}"
+                    BorderBrush="{DynamicResource Brush.Accent}"
+                    BorderThickness="2,0,0,0"
+                    Visibility="{Binding HasProxySuggestion, Mode=OneWay, Converter={StaticResource BoolToVisible}}">
+                <DockPanel LastChildFill="True">
+                    <Button DockPanel.Dock="Right"
+                            Margin="6,0,0,0"
+                            Content="Not now"
+                            Command="{Binding DismissProxySuggestionCommand, Mode=OneWay}" />
+                    <Button DockPanel.Dock="Right"
+                            Margin="6,0,0,0"
+                            Content="Make proxies"
+                            Command="{Binding MakeSuggestedProxiesCommand, Mode=OneWay}" />
+                    <TextBlock Text="{Binding ProxySuggestion, Mode=OneWay}"
+                               VerticalAlignment="Center"
+                               TextWrapping="Wrap" />
+                </DockPanel>
+            </Border>
+        </StackPanel>
 
         <!-- Toolbar: import, view mode, and the search box the exit criteria are about. -->
         <Grid Grid.Row="0" Margin="6">
@@ -129,6 +155,13 @@
                         <MenuItem Header="Reveal in Explorer" Command="{Binding RevealCommand, Mode=OneWay}" />
                         <MenuItem Header="Re-read from disk" Command="{Binding ReprobeCommand, Mode=OneWay}" />
                         <MenuItem Header="Generate proxy" Command="{Binding GenerateProxyCommand, Mode=OneWay}" />
+                        <MenuItem Header="Relink to a file..." Command="{Binding RelinkSelectedCommand, Mode=OneWay}" ToolTip="The file moved: point this item at where it is now" />
+                        <MenuItem Header="Replace file..." Command="{Binding ReplaceSelectedCommand, Mode=OneWay}" ToolTip="Swap in another file, keeping every clip made from this one" />
+                        <Separator />
+                        <MenuItem Header="Find missing media..." Command="{Binding FindMissingCommand, Mode=OneWay}" />
+                        <MenuItem Header="Remove unused media" Command="{Binding RemoveUnusedCommand, Mode=OneWay}" ToolTip="Take out every item no clip uses (undoable)" />
+                        <MenuItem Header="Watch a folder..." Command="{Binding WatchFolderCommand, Mode=OneWay}" ToolTip="Bring in new recordings from a captures folder as they finish" />
+                        <MenuItem Header="Stop watching folders" Command="{Binding StopWatchingCommand, Mode=OneWay}" />
                         <Separator />
                         <MenuItem Header="Colour label">
                             <MenuItem Header="None" Command="{Binding SetColorCommand, Mode=OneWay}" CommandParameter="" />
@@ -166,6 +199,12 @@
                                                           Style="{DynamicResource ToggleButton.Disclosure}"
                                                           IsChecked="{Binding IsStreamListOpen, Mode=TwoWay}" />
                                             <TextBlock Text="{Binding Name, Mode=OneWay}" VerticalAlignment="Center" />
+                                            <TextBlock Text="  offline"
+                                                       VerticalAlignment="Center"
+                                                       FontSize="{DynamicResource Text.Caption}"
+                                                       Foreground="{DynamicResource Brush.Error}"
+                                                       ToolTip="The file is not where the project says: Find missing media relinks it"
+                                                       Visibility="{Binding IsOffline, Mode=OneWay, Converter={StaticResource BoolToVisible}}" />
                                             <TextBlock Text="  conformed"
                                                        VerticalAlignment="Center"
                                                        FontSize="{DynamicResource Text.Caption}"

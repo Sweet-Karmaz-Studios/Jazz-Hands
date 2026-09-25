@@ -19,6 +19,10 @@ public sealed partial class MediaItemViewModel : ObservableObject
     [ObservableProperty]
     private bool _isStreamListOpen;
 
+    /// <summary>True when the file is not where the project says.</summary>
+    [ObservableProperty]
+    private bool _isOffline;
+
     /// <summary>The picture on the tile: the poster, or the frame under the mouse while scrubbing across it.</summary>
     [ObservableProperty]
     private System.Windows.Media.ImageSource? _thumbnail;
