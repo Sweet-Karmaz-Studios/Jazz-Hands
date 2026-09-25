@@ -231,9 +231,8 @@
     </DrawingImage>
 
     <!--
-        The icons Jazz Hands ships, from the chosen candidate. Until one is chosen (Phase 27a),
-        they are A's. To change the design, point these at another candidate's drawings and run
-        gen-icons build.
+        The icons Jazz Hands ships: candidate A, the open hand, chosen 2026-09-25.
+        To change the design, point these at another candidate's drawings and run gen-icons build.
     -->
     <!-- Drawings of their own rather than StaticResource aliases, which compiled XAML does not find. -->
     <DrawingImage x:Key="Icon.App">
