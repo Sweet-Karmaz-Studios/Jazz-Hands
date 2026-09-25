@@ -87,9 +87,10 @@ public static class TimeRemap
         return new Flicks((long)Math.Round(total));
     }
 
-    /// <summary>The speed at a clip time, never below zero.</summary>
+    /// <summary>The speed at a clip time, never below zero; normal for a curve with no keyframes, as a hand edit can leave.</summary>
     public static double Speed(AnimatedValue speed, Flicks local) =>
-        AnimationEvaluator.Evaluate(speed, local) is ParamValue.Float value ? Math.Max(0, value.Value) : 1.0;
+        speed is KeyframedValue { Keyframes.IsEmpty: true } ? 1.0
+        : AnimationEvaluator.Evaluate(speed, local) is ParamValue.Float value ? Math.Max(0, value.Value) : 1.0;
 
     /// <summary>The fastest the curve runs over a clip's length, for sizing a read-ahead window.</summary>
     public static double Fastest(AnimatedValue speed, Flicks length)
@@ -118,11 +119,6 @@ public static class TimeRemap
     private static double Simpson(AnimatedValue speed, Flicks start, Flicks end)
     {
         double width = end.Value - start.Value;
-        if (width <= 0)
-        {
-            return 0;
-        }
-
         double step = width / Steps;
         double sum = Speed(speed, start) + Speed(speed, end);
         for (int index = 1; index < Steps; index++)
