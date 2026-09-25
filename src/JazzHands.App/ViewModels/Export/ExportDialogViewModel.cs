@@ -26,8 +26,10 @@ namespace JazzHands.App.ViewModels.Export;
 /// <c>export.enqueue</c>, the same command the CLI and MCP send; Export now sends it at high
 /// priority, so it starts ahead of anything waiting. The dialog never plans or exports by itself.
 ///
-/// A Quick Trim opens in Copy with snapping on, because that is what Quick Trim is for; anything
-/// else opens in Auto.
+/// A Quick Trim opens in Smart cut, exact and all but lossless, because that is what Quick Trim is
+/// for; when the source cannot be smart cut it falls back to Copy with snapping on. Anything else
+/// opens in Auto. The mode list says beside Smart cut and Copy whether each would work now, and
+/// why not when it would not.
 /// </remarks>
 public sealed partial class ExportDialogViewModel : ObservableObject
 {
@@ -36,6 +38,7 @@ public sealed partial class ExportDialogViewModel : ObservableObject
     private readonly IFileDialogService _files;
     private readonly IUiDispatcher _ui;
     private int _planVersion;
+    private bool _trimFallback;
 
     [ObservableProperty]
     private string _outputPath = string.Empty;
@@ -179,21 +182,31 @@ public sealed partial class ExportDialogViewModel : ObservableObject
     /// <summary>Every preset, built in and the person's own.</summary>
     public IReadOnlyList<ExportPresetSummary> Presets { get; }
 
-    /// <summary>The three modes, in the order the dialog offers them.</summary>
-    public IReadOnlyList<ExportMode> Modes { get; } = [ExportMode.Auto, ExportMode.Copy, ExportMode.Encode];
+    /// <summary>The four modes, in the order the dialog offers them.</summary>
+    public IReadOnlyList<ExportMode> Modes { get; } = [ExportMode.Auto, ExportMode.Smart, ExportMode.Copy, ExportMode.Encode];
+
+    /// <summary>The modes with whether each would work now and, when not, why: refreshed with every plan.</summary>
+    public IReadOnlyList<ExportModeChoice> ModeChoices { get; } =
+    [
+        new(ExportMode.Auto, "Auto"),
+        new(ExportMode.Smart, "Smart cut"),
+        new(ExportMode.Copy, "Copy"),
+        new(ExportMode.Encode, "Encode"),
+    ];
 
     /// <summary>Why the planner chose what it chose, one sentence each.</summary>
     public ObservableCollection<string> Reasons { get; } = [];
 
-    /// <summary>True for a Quick Trim, which is exported by copy unless told otherwise.</summary>
+    /// <summary>True for a Quick Trim, which is smart cut, or copied when it cannot be, unless told otherwise.</summary>
     public bool IsQuickTrim { get; private set; }
 
     /// <summary>What each mode means, for the dialog to show beside the choice.</summary>
     public string ModeExplanation => Mode switch
     {
+        ExportMode.Smart => "Smart cut: the source's own packets between the cuts, and only the frames from each cut to the next keyframe encoded again, with an encoder matched to the source. Cuts are exact and almost nothing is lost.",
         ExportMode.Copy => "Copy: the source's own packets, untouched. No quality lost and very fast, but cuts can only fall on keyframes and nothing can be changed.",
         ExportMode.Encode => "Encode: every frame rendered and compressed again. Cuts are exact and anything on the timeline is kept, at the cost of time and a generation of quality.",
-        _ => "Auto: copy when the timeline plays one file untouched and the preset would write what the source already is; encode otherwise.",
+        _ => "Auto: copy when the timeline plays one file untouched and the preset would write what the source already is, smart cut when the cuts are off keyframes; encode otherwise.",
     };
 
     /// <summary>Fills the dialog for a sequence, or the active one.</summary>
@@ -206,7 +219,10 @@ public sealed partial class ExportDialogViewModel : ObservableObject
         Heading = sequence is null ? "Export" : $"Export {sequence.Name}";
 
         OutputPath = SuggestedPath(project, sequence);
-        Mode = IsQuickTrim ? ExportMode.Copy : ExportMode.Auto;
+        // A Quick Trim opens in Smart cut; when the source cannot be smart cut, the first plan
+        // says so and the dialog falls back to Copy with snapping.
+        _trimFallback = IsQuickTrim;
+        Mode = IsQuickTrim ? ExportMode.Smart : ExportMode.Auto;
         SnapToKeyframes = IsQuickTrim;
 
         OnPropertyChanged(nameof(Heading));
@@ -240,22 +256,14 @@ public sealed partial class ExportDialogViewModel : ObservableObject
 
         return Task.Run(() =>
         {
-            ExportPlan? plan = null;
-            string failure = string.Empty;
+            (ExportPlan? plan, string failure, string code) = Ask(query);
 
-            try
+            // Whether the two modes that depend on the source would work, for the mode list.
+            var notes = new Dictionary<ExportMode, (bool Available, string Note)>();
+            foreach (ExportMode other in (ExportMode[])[ExportMode.Smart, ExportMode.Copy])
             {
-                plan = _session.Query(query);
-            }
-            catch (CommandException refusal)
-            {
-                failure = refusal.Message;
-            }
-            catch (Exception problem) when (problem is not OutOfMemoryException)
-            {
-                // A file that cannot be read shows as a sentence in the dialog, not a crash.
-                _log.Warning(problem, "Planning the export failed");
-                failure = problem.Message;
+                (ExportPlan? tried, string why, _) = other == query.Mode ? (plan, failure, code) : Ask(query with { Mode = other });
+                notes[other] = tried is null ? (false, why) : (true, Availability(tried));
             }
 
             _ui.Post(() =>
@@ -265,10 +273,54 @@ public sealed partial class ExportDialogViewModel : ObservableObject
                     return;
                 }
 
+                foreach (ExportModeChoice choice in ModeChoices)
+                {
+                    (bool available, string note) = notes.TryGetValue(choice.Mode, out var known) ? known : (true, string.Empty);
+                    choice.IsAvailable = available;
+                    choice.Note = note;
+                }
+
+                bool fallBack = _trimFallback && plan is null && code == "cannot-smart-cut" && Mode == ExportMode.Smart;
+                _trimFallback = false;
+                if (fallBack)
+                {
+                    // Setting the mode plans again.
+                    Mode = ExportMode.Copy;
+                    return;
+                }
+
                 Show(plan, failure);
             });
         });
     }
+
+    /// <summary>What the planner says to a query: a plan, or why not and the refusal's code.</summary>
+    private (ExportPlan? Plan, string Failure, string Code) Ask(PlanExportQuery query)
+    {
+        try
+        {
+            return (_session.Query(query), string.Empty, string.Empty);
+        }
+        catch (CommandException refusal)
+        {
+            return (null, refusal.Message, refusal.Code);
+        }
+        catch (Exception problem) when (problem is not OutOfMemoryException)
+        {
+            // A file that cannot be read shows as a sentence in the dialog, not a crash.
+            _log.Warning(problem, "Planning the export failed");
+            return (null, problem.Message, string.Empty);
+        }
+    }
+
+    /// <summary>A few words on what a mode would do, beside it in the list.</summary>
+    private static string Availability(ExportPlan plan) => plan switch
+    {
+        { Smart: { } smart } => string.Create(CultureInfo.InvariantCulture, $"Exact cuts, {smart.EncodedFrames} frame(s) encoded again."),
+        { Mode: ExportMode.Copy, Snaps.Length: > 0 } => string.Create(CultureInfo.InvariantCulture, $"{plan.Snaps.Length} cut(s) move to keyframes."),
+        { Mode: ExportMode.Copy } => "Every cut is on a keyframe.",
+        _ => string.Empty,
+    };
 
     partial void OnOutputPathChanged(string value) => RefreshPlan();
 
@@ -477,6 +529,8 @@ public sealed partial class ExportDialogViewModel : ObservableObject
 
         string what = plan.Mode == ExportMode.Copy
             ? $"Copy, {(plan.Copy!.AudioStreams.IsEmpty ? "no sound" : $"{plan.Copy.AudioStreams.Length} sound stream(s)")}"
+            : plan.Smart is { } smart
+                ? string.Create(CultureInfo.InvariantCulture, $"Smart cut, {smart.EncodedFrames} frame(s) encoded again with {smart.Encoders[0]}, {(smart.AudioStreams.IsEmpty ? "no sound" : $"{smart.AudioStreams.Length} sound stream(s)")}")
             : plan.Video is { } video
                 ? string.Create(CultureInfo.InvariantCulture, $"Encode {video.Width}x{video.Height} {video.Codec} at {video.FrameRate.ToDouble():0.###} fps{(plan.Audio is null ? string.Empty : $" with {plan.Audio.Encoder}")}")
                 : $"Sound only, {plan.Audio!.Encoder}";

@@ -57,8 +57,8 @@ public static class ExportCommands
         };
         var mode = new Option<string>("--mode")
         {
-            Description = "copy (lossless, cuts on keyframes) or encode (exact cuts, re-encoded).",
-            DefaultValueFactory = _ => "copy",
+            Description = "auto (smart when the source allows it, copy otherwise), smart (exact cuts, only the frames around each cut encoded again), copy (lossless, cuts on keyframes) or full (exact cuts, everything encoded again).",
+            DefaultValueFactory = _ => "auto",
         };
         var exact = new Option<bool>("--exact")
         {
@@ -82,7 +82,7 @@ public static class ExportCommands
             Description = "Also save the Quick Trim as a project, to open in the editor.",
         };
 
-        var command = new Command("trim", "Cut stretches out of one recording and write them back to back, losslessly by default.")
+        var command = new Command("trim", "Cut stretches out of one recording and write them back to back: by default a smart cut, exact and encoding only the frames around each cut.")
         {
             file, keep, mute, output, mode, exact, preset, external, dryRun, save,
         };
@@ -91,7 +91,7 @@ public static class ExportCommands
 
         command.SetAction(parse => Guard(parse, token =>
         {
-            ExportMode chosen = ParseMode(parse.GetValue(mode)!, allowAuto: false);
+            ExportMode chosen = ParseMode(parse.GetValue(mode)!);
             string source = Path.GetFullPath(parse.GetValue(file)!);
             if (!File.Exists(source))
             {
@@ -136,7 +136,7 @@ public static class ExportCommands
                     Overrides: overrides.Overrides(parse, rate),
                     Range: overrides.Range(parse, rate));
 
-                return Export(session.Project, projectPath ?? string.Empty, request, services, parse.GetValue(dryRun), parse.GetValue(JazzCli.JsonOption), token);
+                return Export(session.Project, projectPath ?? string.Empty, request, services, parse.GetValue(dryRun), parse.GetValue(JazzCli.JsonOption), token, trim: true);
             }
             finally
             {
@@ -162,7 +162,7 @@ public static class ExportCommands
         };
         var mode = new Option<string>("--mode")
         {
-            Description = "auto (copy when nothing needs rendering), copy, or encode.",
+            Description = "auto (copy or smart cut when nothing needs rendering), smart, copy, or full (encode).",
             DefaultValueFactory = _ => "auto",
         };
         var sequence = new Option<string?>("--sequence") { Description = "Which sequence. The active one when left out." };
@@ -200,7 +200,7 @@ public static class ExportCommands
             var request = new ExportRequest(
                 parse.GetValue(output)!,
                 parse.GetValue(preset)!,
-                ParseMode(parse.GetValue(mode)!, allowAuto: true),
+                ParseMode(parse.GetValue(mode)!),
                 parse.GetValue(sequence),
                 parse.GetValue(snap),
                 parse.GetValue(inOut),
@@ -218,10 +218,12 @@ public static class ExportCommands
     }
 
     /// <summary>Plans, reports the plan, and unless it is a dry run, exports.</summary>
-    private static int Export(Project project, string projectPath, ExportRequest request, IServiceProvider services, bool dryRun, bool json, CancellationToken token)
+    private static int Export(Project project, string projectPath, ExportRequest request, IServiceProvider services, bool dryRun, bool json, CancellationToken token, bool trim = false)
     {
         KeyframeLookup keyframes = services.GetRequiredService<KeyframeLookup>();
-        ExportPlan plan = ExportPlanner.Plan(project, projectPath, request, keyframes, token);
+        ExportPlan plan = trim && request.Mode == ExportMode.Auto
+            ? ExportPlanner.PlanSmartOrCopy(project, projectPath, request, keyframes, token)
+            : ExportPlanner.Plan(project, projectPath, request, keyframes, token);
 
         if (dryRun)
         {
@@ -276,7 +278,13 @@ public static class ExportCommands
     internal static string Describe(ExportPlan plan)
     {
         var text = new System.Text.StringBuilder();
-        text.Append(CultureInfo.InvariantCulture, $"{(plan.Mode == ExportMode.Copy ? "Copy" : "Encode")} to {plan.OutputPath} ({plan.Container}), {Timecode.FormatClock(plan.Duration)}");
+        string mode = plan.Mode switch
+        {
+            ExportMode.Copy => "Copy",
+            ExportMode.Smart => "Smart cut",
+            _ => "Encode",
+        };
+        text.Append(CultureInfo.InvariantCulture, $"{mode} to {plan.OutputPath} ({plan.Container}), {Timecode.FormatClock(plan.Duration)}");
         text.AppendLine();
 
         foreach (string reason in plan.Reasons)
@@ -284,7 +292,23 @@ public static class ExportCommands
             text.Append("  ").AppendLine(reason);
         }
 
-        if (plan.Copy is { } copy)
+        if (plan.Smart is { } smart)
+        {
+            text.Append(CultureInfo.InvariantCulture, $"  Picture: stream {smart.VideoStream}, matched with {string.Join(" then ", smart.Encoders)}. Sound: ");
+            text.AppendLine(smart.AudioStreams.IsEmpty
+                ? "none."
+                : string.Join(", ", smart.AudioStreams.Select((stream, index) =>
+                    index < smart.StreamNames.Length ? $"{smart.StreamNames[index]} (stream {stream})" : $"stream {stream}")) + ".");
+
+            foreach (ExportSegment segment in smart.Segments)
+            {
+                long first = segment.Start.ToFrames(smart.FrameRate, RoundingMode.Nearest);
+                long end = segment.End.ToFrames(smart.FrameRate, RoundingMode.Nearest);
+                text.Append(CultureInfo.InvariantCulture, $"  {(segment.Encode ? "Encode" : "Copy  ")} {Timecode.FormatClock(segment.Start)} to {Timecode.FormatClock(segment.End)} (frames {first} to {end}, {end - first} frames)");
+                text.AppendLine();
+            }
+        }
+        else if (plan.Copy is { } copy)
         {
             text.Append(CultureInfo.InvariantCulture, $"  Picture: stream {copy.VideoStream}. Sound: ");
             text.AppendLine(copy.AudioStreams.IsEmpty
@@ -409,14 +433,13 @@ public static class ExportCommands
     private static void Run(Session session, ICommand command, CancellationToken token) =>
         session.ExecuteAsync(command, token).GetAwaiter().GetResult().EnsureOk();
 
-    private static ExportMode ParseMode(string text, bool allowAuto) => text.Trim().ToLowerInvariant() switch
+    private static ExportMode ParseMode(string text) => text.Trim().ToLowerInvariant() switch
     {
         "copy" => ExportMode.Copy,
-        "encode" => ExportMode.Encode,
-        "auto" when allowAuto => ExportMode.Auto,
-        _ => throw new CommandException(
-            "invalid-value",
-            allowAuto ? $"--mode takes auto, copy or encode, not '{text}'." : $"--mode takes copy or encode, not '{text}'."),
+        "smart" => ExportMode.Smart,
+        "encode" or "full" => ExportMode.Encode,
+        "auto" => ExportMode.Auto,
+        _ => throw new CommandException("invalid-value", $"--mode takes auto, smart, copy or full (encode), not '{text}'."),
     };
 
     /// <summary>One of an enum's values by its lower case name, or a refusal that lists them.</summary>

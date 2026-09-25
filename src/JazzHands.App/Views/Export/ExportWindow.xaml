@@ -81,11 +81,33 @@
         <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,16,0,0" Text="Mode" VerticalAlignment="Top" Foreground="{DynamicResource Brush.Text.Secondary}" />
         <StackPanel Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,12,0,0">
             <ComboBox Style="{StaticResource ComboBox.Compact}"
-                      ItemsSource="{Binding Modes, Mode=OneWay}"
-                      SelectedItem="{Binding Mode, Mode=TwoWay}"
+                      ItemsSource="{Binding ModeChoices, Mode=OneWay}"
+                      SelectedValuePath="Mode"
+                      SelectedValue="{Binding Mode, Mode=TwoWay}"
                       HorizontalAlignment="Left"
-                      Width="160"
-                      AutomationProperties.Name="Mode" />
+                      MinWidth="160"
+                      MaxWidth="520"
+                      AutomationProperties.Name="Mode">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate DataType="{x:Type vm:ExportModeChoice}">
+                        <StackPanel Orientation="Horizontal" AutomationProperties.Name="{Binding Label, Mode=OneTime}">
+                            <TextBlock Text="{Binding Label, Mode=OneTime}" />
+                            <TextBlock x:Name="Note"
+                                       Margin="8,0,0,0"
+                                       Text="{Binding Note, Mode=OneWay}"
+                                       TextTrimming="CharacterEllipsis"
+                                       MaxWidth="400"
+                                       ToolTip="{Binding Note, Mode=OneWay}"
+                                       Foreground="{DynamicResource Brush.Text.Secondary}" />
+                        </StackPanel>
+                        <DataTemplate.Triggers>
+                            <DataTrigger Binding="{Binding IsAvailable, Mode=OneWay}" Value="False">
+                                <Setter TargetName="Note" Property="Foreground" Value="{DynamicResource Brush.Warning}" />
+                            </DataTrigger>
+                        </DataTemplate.Triggers>
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
             <TextBlock Margin="0,6,0,0"
                        Text="{Binding ModeExplanation, Mode=OneWay}"
                        TextWrapping="Wrap"
