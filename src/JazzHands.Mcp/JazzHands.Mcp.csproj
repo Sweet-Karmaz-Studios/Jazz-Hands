@@ -3,7 +3,8 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <AssemblyName>jazz-mcp</AssemblyName>
-    <Description>Model Context Protocol server over stdio.</Description>
+    <RootNamespace>JazzHands.Mcp</RootNamespace>
+    <Description>Model Context Protocol server over stdio: jazz-mcp.exe, and jazz mcp.</Description>
   </PropertyGroup>
 
   <ItemGroup>
@@ -14,6 +15,12 @@
     <PackageReference Include="ModelContextProtocol" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="Serilog.Extensions.Hosting" />
+  </ItemGroup>
+
+  <!-- The model's manual: an area's prose per page, the way of working, and the CLI reference. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\Docs\mcp\*.md" LogicalName="mcpdoc:%(Filename)" />
+    <EmbeddedResource Include="..\..\Docs\CLI.md" LogicalName="mcpdoc:cli-reference" />
   </ItemGroup>
 
 </Project>

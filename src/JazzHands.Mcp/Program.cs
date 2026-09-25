@@ -1,4 +1,5 @@
 using JazzHands.Engine.Logging;
+using JazzHands.Mcp;
 using Serilog;
 
 // stdout carries the MCP protocol, so nothing else may write to it: logging goes to file only.
@@ -7,12 +8,22 @@ JazzHands.Engine.Effects.EffectCatalog.LoadUserTransitions();
 
 try
 {
-    Log.ForContext("SourceContext", "mcp").Information("jazz-mcp starting");
+    if (args.Contains("--list-tools", StringComparer.Ordinal))
+    {
+        await Console.Out.WriteAsync(McpHost.ListTools(args.Contains("--json", StringComparer.Ordinal))).ConfigureAwait(false);
+        return 0;
+    }
 
-    // Phase 26 builds the real server: every CommandRegistry entry becomes a tool, plus
-    // render_frame, describe_timeline, probe_media and the jazz:// resources.
-    await Console.Error.WriteLineAsync("jazz-mcp: the MCP server is implemented in Phase 26.").ConfigureAwait(false);
+    McpHostOptions options = McpCommandLine.Parse(args);
+    Log.ForContext("SourceContext", "mcp").Information("jazz-mcp starting, {Mode}", options.Attach ? "attached" : "headless");
+    await using EditorLink link = await McpHost.LinkAsync(options).ConfigureAwait(false);
+    await McpHost.RunAsync(link).ConfigureAwait(false);
     return 0;
+}
+catch (Exception error) when (error is JazzHands.Control.AttachException or JazzHands.Core.Commands.CommandException or ArgumentException)
+{
+    await Console.Error.WriteLineAsync($"jazz-mcp: {error.Message}").ConfigureAwait(false);
+    return 4;
 }
 finally
 {
