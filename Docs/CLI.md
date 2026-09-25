@@ -4196,6 +4196,35 @@ Start a Quick Trim of a file.
 | `--name <name>` | The sequence's name. |
 | `--no-save` | Do not write the project back. |
 
+## `jazz vfx`
+
+Commands and queries about vfx.
+
+### `jazz vfx apply-preset <project> <preset>`
+
+Place a timed combination of effects (a hit, a heavy hit, a boss intro) at a moment or a marker.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<preset>` | The preset, for example impact.heavy; vfx.presets lists them. |
+
+| Option | Meaning |
+|---|---|
+| `--at <time>` | The moment of the hit, on the sequence. |
+| `--marker <marker>` | A marker whose time is the moment, by name or id. |
+| `--to <to>` | A clip or track to put the effects on, instead of a new adjustment clip. |
+| `--sequence <id>` | Which sequence. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz vfx presets <project>`
+
+The effect presets vfx.apply-preset places, with what each is made of.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
 ## Guides
 
 ### Working from Claude Code
