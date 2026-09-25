@@ -66,6 +66,7 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
     private readonly Func<bool> _interrupted;
     private readonly RenderOptions[] _playingOptions = new RenderOptions[5];
     private readonly RenderOptions[] _parkedOptions = new RenderOptions[5];
+    private readonly FrameTimings _timings = new();
     private long _lastVersion = -1;
 
     private IPreviewTarget[] _targets = [];
@@ -233,6 +234,12 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
         Volatile.Read(ref _renderStats[3]),
         (int)Volatile.Read(ref _renderStats[4]),
         Volatile.Read(ref _renderStats[5]));
+
+    /// <summary>Where the composition thread's time went on the frames played since <see cref="ResetTimings"/>.</summary>
+    public FrameTimingsInfo Timings => _timings.Snapshot();
+
+    /// <summary>Starts the timings again, as a benchmark does once playback has settled.</summary>
+    public void ResetTimings() => _timings.Reset();
 
     /// <inheritdoc />
     public bool Loop
@@ -568,7 +575,8 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
             DroppedFrames,
             _transport.CanStretch,
             RenderStats,
-            _proxies?.Enabled ?? false);
+            _proxies?.Enabled ?? false,
+            Timings);
     }
 
     /// <summary>Waits until the engine has presented a frame after this call, for tests and scripts.</summary>
@@ -811,13 +819,29 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
         bool refresh = _refresh;
         _refresh = false;
 
+        bool rendered = false;
+        long decodedBefore = frames.Sources.Decoded;
+        long decodedInRender = 0;
         if (key != _lastKey || _lastFrame is null)
         {
             CountDrops(frame, playing, rate, generation);
+            long fetchBefore = frames.FetchTicks;
+            long started = Stopwatch.GetTimestamp();
             Render(frames, snapshot, sequence, settings, frame, time, effective, playing, rate);
+            long renderedAt = Stopwatch.GetTimestamp();
             _lastKey = key;
             Present();
             MeasureScopes(playing, force: false);
+
+            if (playing)
+            {
+                rendered = true;
+                decodedInRender = frames.Sources.Decoded - decodedBefore;
+                _timings.Add(FrameStage.Late, (time - Flicks.FromFrames(frame, fps)).Value * 1000.0 / Flicks.PerSecond / Math.Abs(rate));
+                _timings.Add(FrameStage.Fetch, (frames.FetchTicks - fetchBefore) / TicksPerMillisecond);
+                _timings.Add(FrameStage.Render, (renderedAt - started) / TicksPerMillisecond);
+                _timings.Add(FrameStage.Present, (Stopwatch.GetTimestamp() - renderedAt) / TicksPerMillisecond);
+            }
         }
         else if (refresh)
         {
@@ -833,8 +857,19 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
 
         if (playing)
         {
+            long aheadFrom = frames.Sources.Decoded;
+            long started = Stopwatch.GetTimestamp();
             DecodeAhead(frames, snapshot, sequence, frame, rate, frameLength);
-            return MillisecondsToNextFrame(time, frame, fps, rate);
+            if (rendered)
+            {
+                _timings.Add(FrameStage.Ahead, (Stopwatch.GetTimestamp() - started) / TicksPerMillisecond);
+                _timings.Frame(decodedInRender, frames.Sources.Decoded - aheadFrom);
+            }
+
+            // From where the clock is now, after the render, the present and decoding ahead, not
+            // from where it was when this turn began: counting from then slept the work's length
+            // again, and every frame began about 9 ms into its interval (Phase 32).
+            return MillisecondsToNextFrame(_transport.Playhead, frame, fps, rate);
         }
 
         // Stopped on a frame: have the next few ready on the playhead decoder, so that pressing

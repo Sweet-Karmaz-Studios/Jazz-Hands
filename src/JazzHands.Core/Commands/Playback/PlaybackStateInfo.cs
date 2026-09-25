@@ -19,6 +19,7 @@ namespace JazzHands.Core.Commands;
 /// <param name="StretchedAudio">True when rates other than 1 keep their pitch; false when they play silent.</param>
 /// <param name="Render">What the render pools have done, to show that steady playback allocates nothing.</param>
 /// <param name="ProxiesEnabled">True when proxies play in place of their sources.</param>
+/// <param name="Timings">Where the time of each played frame went, since the editor started or the timings were reset.</param>
 public sealed record PlaybackStateInfo(
     string State,
     string? SequenceId,
@@ -35,4 +36,5 @@ public sealed record PlaybackStateInfo(
     long DroppedFrames,
     bool StretchedAudio,
     RenderStatsInfo? Render = null,
-    bool ProxiesEnabled = false);
+    bool ProxiesEnabled = false,
+    FrameTimingsInfo? Timings = null);

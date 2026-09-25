@@ -38,6 +38,7 @@ namespace JazzHands.Cli;
 /// <param name="TargetsCreated">Render targets the compositor created in steady play, from two seconds in. Zero is the bar.</param>
 /// <param name="FrameTexturesCreated">Frame textures created in steady play, from two seconds in.</param>
 /// <param name="Notices">What the session noticed: decoder fallbacks, files it could not read.</param>
+/// <param name="Timings">Where each frame's time went on the composition thread: render, fetch, present, decoding ahead.</param>
 public sealed record PlaybackBenchmarkResult(
     string File,
     string Size,
@@ -58,7 +59,8 @@ public sealed record PlaybackBenchmarkResult(
     long Underruns,
     long TargetsCreated,
     long FrameTexturesCreated,
-    string[] Notices);
+    string[] Notices,
+    FrameTimingsInfo Timings);
 
 /// <summary>
 /// Plays a long sequence through the real playback engine and counts the frames it drops.
@@ -151,6 +153,7 @@ public static class PlaybackBenchmark
         }
 
         target.StartCounting();
+        engine.ResetTimings();
         long presentedAtStart = engine.PresentedFrames;
         long droppedAtStart = engine.DroppedFrames;
         RenderStatsInfo? statsAtStart = null;
@@ -181,6 +184,7 @@ public static class PlaybackBenchmark
         Flicks endedAt = transport.Position;
         double seconds = watch.Elapsed.TotalSeconds;
         RenderStatsInfo statsAtEnd = engine.RenderStats;
+        FrameTimingsInfo timings = engine.Timings;
         statsAtStart ??= statsAtEnd;
         engine.Pause();
 
@@ -207,7 +211,8 @@ public static class PlaybackBenchmark
             transport.Underruns,
             statsAtEnd.TargetsCreated - statsAtStart.TargetsCreated,
             statsAtEnd.FrameTexturesCreated - statsAtStart.FrameTexturesCreated,
-            [.. notices.All.Select(notice => $"{notice.Code}: {notice.Message}")]);
+            [.. notices.All.Select(notice => $"{notice.Code}: {notice.Message}")],
+            timings);
     }
 
     /// <summary>A human summary.</summary>
@@ -216,6 +221,7 @@ public static class PlaybackBenchmark
         ArgumentNullException.ThrowIfNull(result);
 
         string notices = result.Notices.Length == 0 ? "none" : string.Join("; ", result.Notices);
+        FrameTimingsInfo t = result.Timings;
 
         return string.Create(
             CultureInfo.InvariantCulture,
@@ -225,6 +231,9 @@ public static class PlaybackBenchmark
               dropped         {result.Dropped} ({result.DroppedPercent:F3}%)
               late            p50 {result.LateP50Milliseconds:F1} ms, p99 {result.LateP99Milliseconds:F1} ms after the frame was due
               present         p99 {result.PresentP99Milliseconds:F2} ms for the blit and GPU wait
+              per frame       render p50 {t.Render.P50:F2} p99 {t.Render.P99:F2} max {t.Render.Max:F1} ms, of which fetch p50 {t.Fetch.P50:F2} p99 {t.Fetch.P99:F2}
+                              present p50 {t.Present.P50:F2} p99 {t.Present.P99:F2}, ahead p50 {t.Ahead.P50:F2} p99 {t.Ahead.P99:F2} ms
+                              decoded {t.DecodedInRender} in renders, {t.DecodedAhead} ahead, over {t.Frames} frames
               underruns       {result.Underruns}
               allocated       {result.TargetsCreated} render targets, {result.FrameTexturesCreated} frame textures in steady play
               notices         {notices}

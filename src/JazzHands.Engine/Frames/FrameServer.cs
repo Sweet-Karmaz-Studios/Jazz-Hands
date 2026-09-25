@@ -100,6 +100,12 @@ public sealed class FrameServer : IFrameProvider, IDisposable
     public Motion Motion { get; set; } = Motion.Still;
 
     /// <summary>
+    /// <see cref="Stopwatch"/> ticks spent fetching layers' pictures for renders, lookups and
+    /// decodes both: the part of a render that waits on the decoders.
+    /// </summary>
+    public long FetchTicks { get; private set; }
+
+    /// <summary>
     /// Renders a sequence at a time into a stack of premultiplied linear light.
     /// </summary>
     /// <returns>A target from <see cref="Compositor"/>'s pool; the caller returns it.</returns>
@@ -342,9 +348,12 @@ public sealed class FrameServer : IFrameProvider, IDisposable
             return null;
         }
 
+        long started = Stopwatch.GetTimestamp();
         try
         {
-            if (Fetch(project, clip, item, timelineTime, lane) is not { } frame)
+            FrameTexture? fetched = Fetch(project, clip, item, timelineTime, lane);
+            FetchTicks += Stopwatch.GetTimestamp() - started;
+            if (fetched is not { } frame)
             {
                 return null;
             }
