@@ -1,0 +1,198 @@
+<UserControl x:Class="JazzHands.App.Views.Remote.CommandConsoleView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:JazzHands.App.ViewModels.Remote"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:CommandConsoleViewModel}"
+             d:DesignWidth="480"
+             d:DesignHeight="420"
+             Background="{DynamicResource Brush.Background.Panel}">
+
+    <Grid Margin="8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" MinHeight="60" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="140" MinHeight="40" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Filter, what the server listens on, and the log's actions. -->
+        <Grid Grid.Row="0" Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <ComboBox Grid.Column="0"
+                      MinWidth="110"
+                      ItemsSource="{Binding Origins, Mode=OneWay}"
+                      SelectedItem="{Binding SelectedOrigin, Mode=TwoWay}"
+                      ToolTip="Show the lines from one origin"
+                      AutomationProperties.Name="Filter by origin" />
+            <TextBlock Grid.Column="1"
+                       Margin="8,0"
+                       VerticalAlignment="Center"
+                       Text="{Binding Status, Mode=OneWay}"
+                       TextTrimming="CharacterEllipsis"
+                       ToolTip="{Binding Status, Mode=OneWay}"
+                       FontSize="{DynamicResource Text.Caption}"
+                       Foreground="{DynamicResource Brush.Text.Secondary}" />
+            <Button Grid.Column="2"
+                    Style="{StaticResource Button.Icon}"
+                    Content="&#xE72C;"
+                    Command="{Binding ReplayCommand, Mode=OneWay}"
+                    CommandParameter="{Binding SelectedEntry, Mode=OneWay}"
+                    ToolTip="Run the selected line again"
+                    AutomationProperties.Name="Replay the selected line" />
+            <Button Grid.Column="3"
+                    Style="{StaticResource Button.Icon}"
+                    Content="&#xE74E;"
+                    Command="{Binding SaveScriptCommand, Mode=OneWay}"
+                    ToolTip="Save the commands in view as a jazz apply script"
+                    AutomationProperties.Name="Save as script" />
+            <Button Grid.Column="4"
+                    Style="{StaticResource Button.Icon}"
+                    Content="&#xE894;"
+                    Command="{Binding ClearCommand, Mode=OneWay}"
+                    ToolTip="Clear the log and the events"
+                    AutomationProperties.Name="Clear the console" />
+        </Grid>
+
+        <!-- Every command and request, from every origin. -->
+        <ListBox x:Name="Log"
+                 Grid.Row="1"
+                 ItemsSource="{Binding Visible, Mode=OneWay}"
+                 SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
+                 Background="{DynamicResource Brush.Background.Base}"
+                 BorderThickness="0"
+                 HorizontalContentAlignment="Stretch"
+                 VirtualizingPanel.IsVirtualizing="True"
+                 VirtualizingPanel.VirtualizationMode="Recycling"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 AutomationProperties.Name="Command log">
+            <ListBox.ItemTemplate>
+                <DataTemplate DataType="{x:Type vm:ConsoleEntry}">
+                    <Grid Margin="0,1" ToolTip="{Binding ArgsJson, Mode=OneWay}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Text="{Binding Time, Mode=OneWay}"
+                                   FontFamily="{DynamicResource Font.Mono}"
+                                   FontSize="{DynamicResource Text.Caption}"
+                                   Foreground="{DynamicResource Brush.Text.Disabled}" />
+                        <TextBlock Grid.Column="1"
+                                   Margin="6,0"
+                                   MinWidth="56"
+                                   Text="{Binding Origin, Mode=OneWay}"
+                                   FontFamily="{DynamicResource Font.Mono}"
+                                   FontSize="{DynamicResource Text.Caption}"
+                                   Foreground="{DynamicResource Brush.Accent}" />
+                        <TextBlock Grid.Column="2"
+                                   Text="{Binding Title, Mode=OneWay}"
+                                   TextTrimming="CharacterEllipsis"
+                                   FontFamily="{DynamicResource Font.Mono}"
+                                   FontSize="{DynamicResource Text.Caption}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Ok, Mode=OneWay}" Value="False">
+                                            <Setter Property="Foreground" Value="{DynamicResource Brush.Error}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <GridSplitter Grid.Row="2"
+                      Height="6"
+                      HorizontalAlignment="Stretch"
+                      Background="Transparent"
+                      ResizeDirection="Rows"
+                      AutomationProperties.Name="Resize the log" />
+
+        <!-- The selected line's params and answer, and the event feed beside it. -->
+        <Grid Grid.Row="3">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="6" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBox Grid.Column="0"
+                     IsReadOnly="True"
+                     TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto"
+                     FontFamily="{DynamicResource Font.Mono}"
+                     FontSize="{DynamicResource Text.Caption}"
+                     Text="{Binding SelectedEntry.Result, Mode=OneWay, FallbackValue=''}"
+                     AutomationProperties.Name="The selected line's result" />
+            <ListBox Grid.Column="2"
+                     ItemsSource="{Binding Events, Mode=OneWay}"
+                     Background="{DynamicResource Brush.Background.Base}"
+                     BorderThickness="0"
+                     VirtualizingPanel.IsVirtualizing="True"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     AutomationProperties.Name="Event feed">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding Mode=OneWay}"
+                                   ToolTip="{Binding Mode=OneWay}"
+                                   TextTrimming="CharacterEllipsis"
+                                   FontFamily="{DynamicResource Font.Mono}"
+                                   FontSize="{DynamicResource Text.Caption}"
+                                   Foreground="{DynamicResource Brush.Text.Secondary}" />
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Grid>
+
+        <!-- The input: Enter runs, Up and Down recall, Tab completes. -->
+        <TextBox x:Name="Prompt"
+                 Grid.Row="4"
+                 Margin="0,8,0,0"
+                 FontFamily="{DynamicResource Font.Mono}"
+                 Text="{Binding Input, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                 ToolTip="A command as jazz takes it (clip split &lt;id&gt; at 2s with its options), or a method and its JSON (clip.list {})"
+                 AutomationProperties.Name="Command">
+            <TextBox.InputBindings>
+                <KeyBinding Key="Enter" Command="{Binding SubmitCommand, Mode=OneWay}" />
+                <KeyBinding Key="Up" Command="{Binding HistoryBackCommand, Mode=OneWay}" />
+                <KeyBinding Key="Down" Command="{Binding HistoryForwardCommand, Mode=OneWay}" />
+                <KeyBinding Key="Tab" Command="{Binding CompleteCommand, Mode=OneWay}" />
+            </TextBox.InputBindings>
+        </TextBox>
+
+        <ItemsControl Grid.Row="5"
+                      Margin="0,4,0,0"
+                      ItemsSource="{Binding Suggestions, Mode=OneWay}"
+                      AutomationProperties.Name="Completions">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <WrapPanel />
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <TextBlock Margin="0,0,10,0"
+                               Text="{Binding Mode=OneWay}"
+                               FontFamily="{DynamicResource Font.Mono}"
+                               FontSize="{DynamicResource Text.Caption}"
+                               Foreground="{DynamicResource Brush.Text.Secondary}" />
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </Grid>
+</UserControl>

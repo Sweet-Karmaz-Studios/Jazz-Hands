@@ -74,6 +74,8 @@
     <SolidColorBrush x:Key="Brush.Timeline.Refused" Color="#66E05C5C" />
     <SolidColorBrush x:Key="Brush.Timeline.Transition" Color="#FFD8D8E8" />
     <SolidColorBrush x:Key="Brush.Timeline.ClipText" Color="#FFF2F2F2" />
+    <!-- The outline on a clip a remote client (an attached jazz, MCP) just changed, for a second. -->
+    <SolidColorBrush x:Key="Brush.Timeline.Remote" Color="#FFFFB84C" />
 
     <!-- Typography. Three sizes and two families is the whole vocabulary. -->
     <FontFamily x:Key="Font.Ui">Segoe UI Variable Text, Segoe UI</FontFamily>

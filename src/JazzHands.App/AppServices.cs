@@ -5,6 +5,7 @@ using JazzHands.App.ViewModels.Export;
 using JazzHands.App.ViewModels.Media;
 using JazzHands.App.ViewModels.Playback;
 using JazzHands.App.ViewModels.Timeline;
+using JazzHands.Control;
 using JazzHands.Core.Model;
 using JazzHands.Engine;
 using JazzHands.Engine.Commands;
@@ -38,7 +39,7 @@ public static class AppServices
         // The selection prunes itself after every command, so a deleted clip never stays selected.
         services.AddSingleton(provider =>
         {
-            var session = new Session(project, provider, path, recovery: path.Length > 0);
+            var session = new Session(project, provider, path, recovery: path.Length > 0) { DefaultIssuer = "gui" };
             provider.GetRequiredService<SelectionService>().Attach(session);
             return session;
         });
@@ -208,6 +209,24 @@ public static class AppServices
             provider.GetRequiredService<IUiDispatcher>(),
             provider.GetRequiredService<IFileDialogService>(),
             provider.GetRequiredService<IPreviewEngine>()));
+        // The control server: the pipe always, TCP when the settings say so. App starts it once
+        // the window is up and disposes it before the session, so clients hear session.closed.
+        services.AddSingleton(_ => new ControlSettingsStore());
+        services.AddSingleton(provider => new ControlServer(
+            new ControlTarget
+            {
+                Session = provider.GetRequiredService<Session>(),
+                Selection = provider.GetRequiredService<SelectionService>(),
+                Playback = provider.GetRequiredService<PlaybackEngine>(),
+                Exports = provider.GetRequiredService<IExportService>(),
+                Kind = "gui",
+            },
+            provider.GetRequiredService<ControlSettingsStore>().Current.ToOptions("Jazz Hands")));
+        services.AddSingleton(provider => new ViewModels.Remote.CommandConsoleViewModel(
+            provider.GetRequiredService<ControlServer>(),
+            provider.GetRequiredService<IUiDispatcher>(),
+            provider.GetRequiredService<IFileDialogService>()));
+
         services.AddSingleton<MainViewModel>();
 
         return services;

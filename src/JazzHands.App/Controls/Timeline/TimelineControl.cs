@@ -997,6 +997,24 @@ public sealed class TimelineControl : FrameworkElement
         using DrawingContext dc = _selection.RenderOpen();
         dc.PushClip(new RectangleGeometry(new Rect(0, TimelineGeometry.TracksTop, width, Math.Max(0, height - TimelineGeometry.TracksTop))));
 
+        // Clips another client just changed, outlined for a second so the person watching sees
+        // where the remote edit landed. Drawn first, so the selection wins where both apply.
+        foreach (string id in model.Flashing)
+        {
+            if (model.Content.Clip(id) is not { } changed || geometry.Row(changed.TrackId) is not { } changedRow)
+            {
+                continue;
+            }
+
+            double from = Math.Max(geometry.XOf(changed.Start), -4.0);
+            double to = Math.Min(geometry.XOf(changed.End), width + 4.0);
+            if (to >= 0 && from <= width)
+            {
+                double top = geometry.TopOf(changedRow) + ClipInset;
+                dc.DrawRoundedRectangle(null, palette.RemotePen, new Rect(from + 1, top + 1, Math.Max(1, to - from - 3), Math.Max(1, changedRow.Height - (ClipInset * 2) - 2)), 3, 3);
+            }
+        }
+
         foreach (string id in model.Selected)
         {
             if (model.Content.Transition(id) is { } bar && geometry.Row(bar.TrackId) is { } barRow)
@@ -1147,6 +1165,7 @@ public sealed class TimelineControl : FrameworkElement
             RowLine = Frozen(new Pen(Find("Brush.Border", Color.FromRgb(0x3A, 0x3A, 0x3A)), 1.0));
             Tick = Frozen(new Pen(Find("Brush.Timeline.Tick", Color.FromRgb(0x5A, 0x5A, 0x5A)), 1.0));
             SelectionPen = Frozen(new Pen(Find("Brush.Timeline.Selection", Color.FromRgb(0xF2, 0xF2, 0xF2)), 2.0));
+            RemotePen = Frozen(new Pen(Find("Brush.Timeline.Remote", Color.FromRgb(0xFF, 0xB8, 0x4C)), 2.0));
             BoxPen = Frozen(new Pen(Find("Brush.Accent", Color.FromRgb(0x4C, 0x9A, 0xFF)), 1.0));
             GhostPen = Frozen(new Pen(Find("Brush.Text.Primary", Color.FromRgb(0xE6, 0xE6, 0xE6)), 1.0) { DashStyle = DashStyles.Dash });
             PlayheadPen = Frozen(new Pen(Playhead, 1.0));
@@ -1219,6 +1238,8 @@ public sealed class TimelineControl : FrameworkElement
         public Pen Tick { get; }
 
         public Pen SelectionPen { get; }
+
+        public Pen RemotePen { get; }
 
         public Pen BoxPen { get; }
 

@@ -71,6 +71,10 @@ public sealed partial class TimelineViewModel : DocumentViewModel
     private bool _selectionQueued;
     private Flicks _playhead;
     private bool _fitted;
+    private readonly Lock _flashGate = new();
+    private readonly HashSet<string> _pendingFlash = new(StringComparer.Ordinal);
+    private bool _flashQueued;
+    private long _flashGeneration;
 
     [ObservableProperty]
     private string _status = string.Empty;
@@ -99,7 +103,14 @@ public sealed partial class TimelineViewModel : DocumentViewModel
         Tools = tools ?? new TimelineTools();
         SequenceId = sequenceId;
 
-        _session.ProjectChanged += (_, _) => QueueRefresh();
+        _session.ProjectChanged += (_, e) =>
+        {
+            QueueRefresh();
+            if (IsRemote(e.Issuer) && !e.ChangedIds.IsEmpty)
+            {
+                QueueFlash(e.ChangedIds);
+            }
+        };
         _selection.Changed += (_, _) => QueueSelection();
 
         _preview?.PlayheadMoved += (_, e) => _ui.Post(() => OnPlayheadMoved(e));
@@ -122,6 +133,15 @@ public sealed partial class TimelineViewModel : DocumentViewModel
 
     /// <summary>The selected clips and markers of this sequence.</summary>
     public ImmutableHashSet<string> Selected { get; private set; } = ImmutableHashSet.Create<string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// What another client just changed: clips a command from <c>jazz --attach</c>, MCP or the
+    /// Command Console touched, outlined for <see cref="FlashDuration"/> and then let go.
+    /// </summary>
+    public ImmutableHashSet<string> Flashing { get; private set; } = ImmutableHashSet.Create<string>(StringComparer.Ordinal);
+
+    /// <summary>How long a remote change stays outlined: a second.</summary>
+    public TimeSpan FlashDuration { get; set; } = TimeSpan.FromSeconds(1);
 
     /// <summary>The track headers, in display order, kept by id from one snapshot to the next.</summary>
     public System.Collections.ObjectModel.ObservableCollection<TrackHeaderViewModel> Headers { get; } = [];
@@ -291,6 +311,61 @@ public sealed partial class TimelineViewModel : DocumentViewModel
         _playhead = e.Position;
         IsPlaying = e.State == TransportState.Playing;
         OnPropertyChanged(nameof(Timecode));
+    }
+
+    /// <summary>
+    /// True for a change someone other than the person at this window made: a remote client
+    /// (<c>rpc:*</c>), headless <c>serve</c>, or the Command Console. The window's own edits are
+    /// <c>gui</c>, and a session made without an issuer is <c>local</c>.
+    /// </summary>
+    internal static bool IsRemote(string issuer) => issuer.Length > 0 && issuer is not ("gui" or "local");
+
+    private void QueueFlash(ImmutableArray<string> ids)
+    {
+        // A remote script of a thousand commands is a thousand events; they gather here and
+        // reach the UI thread once.
+        lock (_flashGate)
+        {
+            _pendingFlash.UnionWith(ids);
+            if (_flashQueued)
+            {
+                return;
+            }
+
+            _flashQueued = true;
+        }
+
+        _ui.Post(() =>
+        {
+            string[] ids;
+            lock (_flashGate)
+            {
+                ids = [.. _pendingFlash];
+                _pendingFlash.Clear();
+                _flashQueued = false;
+            }
+
+            Flash(ids);
+        });
+    }
+
+    private void Flash(IReadOnlyCollection<string> ids)
+    {
+        Flashing = Flashing.Union(ids);
+        long generation = ++_flashGeneration;
+        Invalidated?.Invoke(this, TimelineLayers.Selection);
+
+        _ = Task.Delay(FlashDuration).ContinueWith(
+            _ => _ui.Post(() =>
+            {
+                // A newer change restarts the second; only the last one lets go.
+                if (generation == _flashGeneration)
+                {
+                    Flashing = Flashing.Clear();
+                    Invalidated?.Invoke(this, TimelineLayers.Selection);
+                }
+            }),
+            TaskScheduler.Default);
     }
 
     private void QueueRefresh()

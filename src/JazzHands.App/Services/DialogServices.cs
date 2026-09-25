@@ -34,6 +34,9 @@ public interface IFileDialogService
 
     /// <summary>Asks where a subtitle file goes, starting from a suggestion, or null when the user cancelled.</summary>
     string? SaveSubtitles(string suggested);
+
+    /// <summary>Asks where a <c>jazz apply</c> script goes, starting from a suggestion, or null when the user cancelled.</summary>
+    string? SaveScript(string suggested);
 }
 
 /// <summary>The real dialogs.</summary>
@@ -165,6 +168,21 @@ public sealed class FileDialogService : IFileDialogService
             FileName = System.IO.Path.GetFileName(suggested),
             InitialDirectory = System.IO.Path.GetDirectoryName(suggested),
             Filter = "SubRip|*.srt|WebVTT|*.vtt|ASS|*.ass",
+            OverwritePrompt = true,
+        };
+
+        return dialog.ShowDialog() == true ? dialog.FileName : null;
+    }
+
+    /// <inheritdoc />
+    public string? SaveScript(string suggested)
+    {
+        var dialog = new SaveFileDialog
+        {
+            Title = "Save the commands as a script",
+            FileName = System.IO.Path.GetFileName(suggested),
+            InitialDirectory = System.IO.Path.GetDirectoryName(suggested),
+            Filter = "Jazz script|*.json",
             OverwritePrompt = true,
         };
 

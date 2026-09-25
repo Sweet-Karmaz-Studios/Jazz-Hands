@@ -51,7 +51,8 @@ public sealed partial class MainViewModel : ObservableObject
         Grading.ScopesPanelViewModel? scopes = null,
         Grading.ColorPanelViewModel? color = null,
         MixerPanelViewModel? mixer = null,
-        Subtitles.SubtitlesPanelViewModel? subtitles = null)
+        Subtitles.SubtitlesPanelViewModel? subtitles = null,
+        Remote.CommandConsoleViewModel? console = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(media);
@@ -70,6 +71,7 @@ public sealed partial class MainViewModel : ObservableObject
         Color = color;
         Mixer = mixer;
         Subtitles = subtitles;
+        Console = console;
         _files = files;
         _dialogs = dialogs;
 
@@ -128,6 +130,11 @@ public sealed partial class MainViewModel : ObservableObject
             Panels.Add(color);
         }
 
+        if (console is not null)
+        {
+            Panels.Add(console);
+        }
+
         _session.ProjectChanged += (_, _) => ui.Post(UpdateTitle);
         UpdateTitle();
     }
@@ -168,6 +175,9 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>The colour wheels and curves panel, when the host made one.</summary>
     public Grading.ColorPanelViewModel? Color { get; }
 
+    /// <summary>The Command Console, when the host has a control server.</summary>
+    public Remote.CommandConsoleViewModel? Console { get; }
+
     /// <summary>
     /// Raised with the content ids of panels to bring to the front: a workspace, until Phase 27's
     /// layout service saves and restores whole layouts. The window, which owns the docking
@@ -185,6 +195,10 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>The audio workspace: the Mixer in front, its strips and the master beside the preview.</summary>
     [RelayCommand]
     private void ShowAudioWorkspace() => PanelsRequested?.Invoke(this, [MixerPanelViewModel.PanelId]);
+
+    /// <summary>Brings the Command Console to the front.</summary>
+    [RelayCommand]
+    private void ShowConsole() => PanelsRequested?.Invoke(this, [Remote.CommandConsoleViewModel.PanelId]);
 
     [RelayCommand]
     private static void Exit() => Application.Current?.Shutdown();

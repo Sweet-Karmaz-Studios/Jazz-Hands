@@ -17,6 +17,8 @@
         xmlns:shell="clr-namespace:JazzHands.App.Shell"
         xmlns:export="clr-namespace:JazzHands.App.Views.Export"
         xmlns:exportvm="clr-namespace:JazzHands.App.ViewModels.Export"
+        xmlns:remote="clr-namespace:JazzHands.App.Views.Remote"
+        xmlns:remotevm="clr-namespace:JazzHands.App.ViewModels.Remote"
         xmlns:inspector="clr-namespace:JazzHands.App.Views.Inspector"
         xmlns:inspectorvm="clr-namespace:JazzHands.App.ViewModels.Inspector"
         xmlns:effects="clr-namespace:JazzHands.App.Views.Effects"
@@ -78,12 +80,16 @@
         <DataTemplate DataType="{x:Type exportvm:ExportQueuePanelViewModel}">
             <export:ExportQueuePanelView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type remotevm:CommandConsoleViewModel}">
+            <remote:CommandConsoleView />
+        </DataTemplate>
     </Window.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <Menu Grid.Row="0"
@@ -115,6 +121,7 @@
             <MenuItem Header="_Window">
                 <MenuItem Header="_Color workspace" Command="{Binding ShowColorWorkspaceCommand, Mode=OneWay}" />
                 <MenuItem Header="_Audio workspace" Command="{Binding ShowAudioWorkspaceCommand, Mode=OneWay}" />
+                <MenuItem Header="Command _Console" Command="{Binding ShowConsoleCommand, Mode=OneWay}" />
                 <Separator />
                 <MenuItem Header="Preview _display">
                     <MenuItem Header="_sRGB monitor"
@@ -171,5 +178,26 @@
                 </layout:LayoutPanel>
             </layout:LayoutRoot>
         </dock:DockingManager>
+
+        <!-- While the control server listens where other machines can reach it, say so, always. -->
+        <Border Grid.Row="2"
+                Padding="8,4"
+                Background="{DynamicResource Brush.Background.Raised}"
+                BorderBrush="{DynamicResource Brush.Warning}"
+                BorderThickness="0,1,0,0"
+                AutomationProperties.Name="Remote control warning">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding Console.NetworkWarning, Mode=OneWay, FallbackValue=''}" Value="">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <TextBlock Text="{Binding Console.NetworkWarning, Mode=OneWay}"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource Brush.Warning}" />
+        </Border>
     </Grid>
 </Window>

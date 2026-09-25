@@ -11,8 +11,8 @@ using Serilog.Events;
 namespace JazzHands.App;
 
 /// <summary>
-/// The WPF application. Phase 27 adds the control server and the workspaces; today it brings up
-/// logging, the service provider, the session and the window.
+/// The WPF application: logging, the service provider, the session, the window and the control
+/// server that lets <c>jazz --attach</c> and MCP drive it.
 /// </summary>
 public partial class App : Application
 {
@@ -53,6 +53,7 @@ public partial class App : Application
         {
             MainWindow = CreateStartupWindow(e.Args, spike);
             MainWindow.Show();
+            StartControlServer();
         }
         catch (Exception ex)
         {
@@ -78,6 +79,9 @@ public partial class App : Application
         // The session owns the autosave timer, the history log and the probe cache's SQLite
         // connection. Blocking here is the one place it is right: the process is going away and
         // an unflushed autosave is lost work.
+        // The control server goes first so its clients hear session.closed while the session is
+        // still there to describe.
+        _services?.GetService<Control.ControlServer>()?.DisposeAsync().AsTask().GetAwaiter().GetResult();
         _services?.GetService<Session>()?.DisposeAsync().AsTask().GetAwaiter().GetResult();
         _services?.Dispose();
 
@@ -112,6 +116,29 @@ public partial class App : Application
             Log.ForContext<App>().Error(error, "Could not open {Path}", path);
             MessageBox.Show(error.Message, "Could not open the project", MessageBoxButton.OK, MessageBoxImage.Warning);
             return (Project.CreateNew("Untitled"), string.Empty);
+        }
+    }
+
+    /// <summary>
+    /// Starts listening for remote clients. A server that cannot start (the pipe refused, the TCP
+    /// port taken) is logged and the editor carries on: remote control is worth having, not worth
+    /// refusing to edit over.
+    /// </summary>
+    private void StartControlServer()
+    {
+        if (_services?.GetService<Control.ControlServer>() is not { } server)
+        {
+            return;
+        }
+
+        try
+        {
+            server.StartAsync().GetAwaiter().GetResult();
+            _services.GetService<ViewModels.Remote.CommandConsoleViewModel>()?.ServerStarted();
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.Net.Sockets.SocketException or InvalidOperationException)
+        {
+            Log.ForContext<App>().Error(error, "The control server could not start; remote control is off for this run");
         }
     }
 
