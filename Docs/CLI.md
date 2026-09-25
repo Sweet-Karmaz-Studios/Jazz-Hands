@@ -2921,6 +2921,19 @@ Time a big project: load, open, and the edits a person makes, each to the change
 | `--clips <clips>` | How many clips, over four picture and four sound tracks. Default: 2000. |
 | `--edits <edits>` | Rounds of edits: a move, a trim and a split on a random clip, each undone. Default: 100. |
 
+### `jazz perf soak <file>`
+
+Play and edit for hours and watch memory, video memory and handles: steady, or growing.
+
+| Argument | Meaning |
+|---|---|
+| `<file>` | A media file with a picture, laid end to end on two layers and looped. |
+
+| Option | Meaning |
+|---|---|
+| `--hours <hours>` | How long to play and edit. Default: 8. |
+| `--csv <csv>` | Where to write a sample a minute as it is taken, so a run cut short still says something. |
+
 ## `jazz playback`
 
 The transport of a running editor: play, pause, seek, loop, rate.

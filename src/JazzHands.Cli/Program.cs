@@ -156,7 +156,67 @@ namespace JazzHands.Cli
             perf.Subcommands.Add(BuildPlaybackBenchmarkCommand());
             perf.Subcommands.Add(BuildThumbnailBenchmarkCommand());
             perf.Subcommands.Add(BuildProjectBenchmarkCommand());
+            perf.Subcommands.Add(BuildSoakBenchmarkCommand());
             return perf;
+        }
+
+        private static Command BuildSoakBenchmarkCommand()
+        {
+            var file = new Argument<FileInfo>("file") { Description = "A media file with a picture, laid end to end on two layers and looped." };
+            var hours = new Option<double>("--hours")
+            {
+                Description = "How long to play and edit.",
+                DefaultValueFactory = _ => 8,
+            };
+            var csv = new Option<FileInfo?>("--csv") { Description = "Where to write a sample a minute as it is taken, so a run cut short still says something." };
+
+            var command = new Command(
+                "soak",
+                "Play and edit for hours and watch memory, video memory and handles: steady, or growing.")
+            {
+                file,
+                hours,
+                csv,
+            };
+
+            command.SetAction(parseResult =>
+            {
+                FileInfo target = parseResult.GetValue(file)!;
+                if (!target.Exists)
+                {
+                    Console.Error.WriteLine($"jazz: '{target.FullName}' does not exist.");
+                    return ExitCode.CommandError;
+                }
+
+                LogSetup.ConfigureForCli(parseResult.GetValue(VerboseOption) ? LogEventLevel.Debug : LogEventLevel.Warning);
+
+                try
+                {
+                    SoakBenchmarkResult result = SoakBenchmark.Run(
+                        target.FullName,
+                        TimeSpan.FromHours(parseResult.GetValue(hours)),
+                        parseResult.GetValue(csv)?.FullName,
+                        parseResult.GetValue(JsonOption) ? null : Console.Out);
+
+                    Console.Out.WriteLine(parseResult.GetValue(JsonOption)
+                        ? System.Text.Json.JsonSerializer.Serialize(result, JazzHands.Core.Serialization.JazzJson.Options)
+                        : SoakBenchmark.Describe(result));
+
+                    return result.Steady ? ExitCode.Ok : ExitCode.CommandError;
+                }
+                catch (JazzHands.Media.Interop.FfmpegException ex)
+                {
+                    Console.Error.WriteLine($"jazz: {ex.Message}");
+                    return ExitCode.MediaError;
+                }
+                catch (InvalidOperationException ex)
+                {
+                    Console.Error.WriteLine($"jazz: {ex.Message}");
+                    return ExitCode.CommandError;
+                }
+            });
+
+            return command;
         }
 
         private static Command BuildProjectBenchmarkCommand()

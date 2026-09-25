@@ -359,7 +359,7 @@ public static class PlaybackBenchmark
     }
 
     /// <summary>Does what the preview panel's presenter does, minus handing the surface to WPF.</summary>
-    private sealed class PanelTarget : IPreviewTarget, IDisposable
+    internal sealed class PanelTarget : IPreviewTarget, IDisposable
     {
         private readonly RenderDevice _device;
         private readonly PreviewPass _pass;
