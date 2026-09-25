@@ -383,6 +383,29 @@ Show the editor's window and bring it to the front.
 
 Sound on clips: gain, pan, fades, channel maps, muting a stream, detaching sound; the master volume and limiter; the meters.
 
+### `jazz audio beat-analysis <project> <clip-id>`
+
+The tempo, confidence and beats of a music clip, without marking them.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The music clip. |
+
+### `jazz audio beats <project> <clip-id>`
+
+Find a music clip's beats and mark them on the sequence.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The music clip. |
+
+| Option | Meaning |
+|---|---|
+| `--keep` | Keep beat markers already there. |
+| `--no-save` | Do not write the project back. |
+
 ### `jazz audio detach <project> <clip-id>`
 
 Unlink a clip's audio from its picture.
@@ -1394,6 +1417,30 @@ List what the session has noticed: fallbacks, missing files.
 |---|---|
 | `--media <id>` | Only this media item. |
 | `--level <information|warning|error>` | information, warning or error. Default: information. |
+
+## `jazz edit`
+
+Commands and queries about edit.
+
+### `jazz edit cut-to-beats <project>`
+
+Lay clips along the beat markers, one to each stretch between cuts.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--track <id>` | Required. The video track to lay them on. |
+| `--every <n>` | Cut on every this many beats. Default: 1. Default: 1. |
+| `--downbeats` | Cut only on downbeats. |
+| `--from <time>` | The first cut is at or after this. |
+| `--to <time>` | The last cut is at or before this. |
+| `--clips <list>` | Clips to lay, in order. |
+| `--bin <bin>` | A media folder to lay instead, by name. |
+| `--with-audio` | Bring each clip's sound along. |
+| `--no-save` | Do not write the project back. |
 
 ## `jazz effect`
 

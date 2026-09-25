@@ -620,6 +620,16 @@
         },
         "isChapter": {
           "type": "boolean"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "standard",
+            "beat"
+          ]
+        },
+        "downbeat": {
+          "type": "boolean"
         }
       },
       "required": [

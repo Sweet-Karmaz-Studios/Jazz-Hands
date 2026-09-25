@@ -309,6 +309,16 @@ public sealed record Transition(
         string.Equals(LeftClipId, clipId, StringComparison.Ordinal) || string.Equals(RightClipId, clipId, StringComparison.Ordinal);
 }
 
+/// <summary>What a marker is.</summary>
+public enum MarkerKind
+{
+    /// <summary>One a person put there.</summary>
+    Standard,
+
+    /// <summary>A beat of the music, from <c>audio.beats</c>: the timeline snaps to it and <c>edit.cut-to-beats</c> cuts on it.</summary>
+    Beat,
+}
+
 /// <summary>A point or range of interest on a sequence, a clip or a piece of media.</summary>
 /// <param name="Id">The marker identifier.</param>
 /// <param name="Time">Where it sits.</param>
@@ -317,6 +327,8 @@ public sealed record Transition(
 /// <param name="Color">A colour for the timeline, as an sRGB hex string.</param>
 /// <param name="Note">Longer text, shown on hover and in the marker list.</param>
 /// <param name="IsChapter">True when this marker should be exported as a chapter.</param>
+/// <param name="Kind">What made it: a person, or beat detection.</param>
+/// <param name="Downbeat">For a beat, true when it starts a bar.</param>
 public sealed record Marker(
     string Id,
     Flicks Time,
@@ -324,7 +336,9 @@ public sealed record Marker(
     string Name,
     string Color = "#FFCC00",
     string Note = "",
-    bool IsChapter = false) : IEquatable<Marker>
+    bool IsChapter = false,
+    MarkerKind Kind = MarkerKind.Standard,
+    bool Downbeat = false) : IEquatable<Marker>
 {
     /// <summary>True when the marker covers a span rather than an instant.</summary>
     public bool IsRange => !Duration.IsZero;
