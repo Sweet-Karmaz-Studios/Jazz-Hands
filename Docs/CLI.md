@@ -356,7 +356,7 @@ jazz export trailer.jazz --out renders/trailer.mp4 --preset youtube-1080p
 | Option | Meaning |
 |---|---|
 | `--out <file>` | Required. Relative to the project. The extension picks the container; left off, the preset's is added. |
-| `--preset <name>` | `youtube-1080p` (default), `youtube-4k`, `proof`, `lossless`. `jazz export presets <project>` lists them. |
+| `--preset <name>` | `youtube-1080p` (default) or any other; `jazz presets list` lists them, built in and your own. |
 | `--mode auto\|copy\|encode` | `auto` copies when the timeline plays one file untouched and the preset would write what the source already is, and encodes otherwise. |
 | `--sequence <id>` | Which sequence. The active one when left out. |
 | `--snap-to-keyframes` | For a copy, move cuts to the nearest keyframe instead of refusing. |
@@ -365,11 +365,35 @@ jazz export trailer.jazz --out renders/trailer.mp4 --preset youtube-1080p
 | `--subtitles soft\|burn\|sidecar\|none` | What subtitle tracks become. `soft` (the default): a stream per track that players turn on and off, mov_text in MP4, SubRip or ASS (for a styled track or placed cues) in Matroska, the first on by default. `burn`: drawn into the picture, which makes the export an encode. `sidecar`: a file per track beside the video, `trailer.eng.srt`. `none`: left out. ffmpeg.exe exports write sidecars for `soft`. |
 | `--sidecar-format srt\|vtt\|ass` | The format of sidecar files. |
 | `--no-chapters` | Leave the chapter marks out. They go in by default: Matroska chapters, and an MP4 chapter track and `chpl` box, which YouTube reads. |
-| `--dry-run` | Print the plan, with the reasons for the mode, and write nothing. |
+| `--dry-run` | Print the plan, with the reasons for the mode and an estimate of size and time, and write nothing. |
+| `--size <WxH>` | Fit the picture inside this size, never scaling up: `1280x720`. |
+| `--fps <rate>` | Write at this rate: `30`, `30000/1001`. A slower rate takes every nth frame. |
+| `--quality <n>` | Constant quality, CRF or CQ; lower is better. |
+| `--bitrate <rate>` | A picture bitrate instead: `8M`, `2500k`. |
+| `--encoder <list>` | The encoders to try, in order: `libx264`, or `hevc_nvenc,libx265`. |
+| `--pixel-format <format>` | `yuv420p10le` for ten bits, `yuv422p10le` for 4:2:2 ten bit. Always BT.709. |
+| `--audio-encoder <name>` | `aac`, `libopus`, `flac`, `eac3`, `ac3`, `libmp3lame`, `pcm_s24le`, `pcm_s16le`. |
+| `--audio-bitrate <rate>` | `320k`. |
+| `--channels 1\|2\|6` | A 5.1 sequence exported in stereo is folded down (ITU), per source, before the master limiter. |
+| `--loudness <LUFS>` | Measure the mix and bring it to this integrated loudness, peaks held under -1 dBFS: `-14`. |
+| `--target-size <size>` | Come in under this size: `8MB` (binary units, as Discord counts). The picture steps down when it must; the file is checked and encoded again if over. |
+| `--start <t>`, `--end <t>` | Export only this stretch of the sequence. |
+
+`jazz trim` takes the same override options.
 
 A Quick Trim sequence exports its kept stretches back to back; any other sequence exports from its
 start to its last clip. The plan says in sentences why it copies or encodes, and `--dry-run` is
 the way to ask.
+
+```
+Encode to C:\clips\boss.mp4 (mp4), 00:01:00.000
+  Encoding, as asked.
+  Aiming under 8 MB for 60 s: 957 kb/s of picture at 960x540, after 128 kb/s of sound. Smaller than 1920x1080, which needs about 2177 kb/s to look right. The file is checked when it is done and encoded again, smaller, if it is over.
+  Picture: h264 960x540 at 30 fps, h264_nvenc then libx264, 956 kb/s.
+  Sound: aac 2 channels at 48000 Hz, 128 kb/s.
+  Size: under 8 MB, checked when it is done.
+  Estimate: about 7.92 MB, about 2 s.
+```
 
 ## Generated verbs
 
@@ -691,12 +715,29 @@ clips, and a cut is a gap. `jazz trim` above is the one-line form.
 
 | Verb | Does |
 |---|---|
-| `jazz export plan <project> <output>` | The plan without running it: mode, stretches, encoders, snaps, reasons. |
-| `jazz export presets <project>` | The presets. |
-| `jazz export enqueue <project> <output>` | Plans and queues an export in a running editor; the job id comes back as the changed id. A headless process has no queue and says to use `jazz export`. |
-| `jazz export cancel <project> <job-id>` | Stops a queued or running export; the partial file is deleted. |
+| `jazz export plan <project> <output>` | The plan without running it: mode, stretches, encoders, snaps, reasons, estimate. Takes the override options `jazz export` takes. |
+| `jazz export enqueue <project> <output>` | Plans and queues an export in a running editor; the job id comes back as the changed id. Takes the override options, and `--priority low\|normal\|high`, `--open-folder` and `--run <script>` (given the file's path when it is done). A headless process has no queue and says to use `jazz export`. |
+| `jazz export batch <project> <folder>` | Queues an export for each range marker (`--markers`, optionally `--name-contains`), named `01 Intro.mp4` and on, or each of `--ranges 00:10-00:20,01:00-01:30`, named for the sequence. All are planned first; one that cannot be is refused before any is queued. |
+| `jazz export still <project> <file.png> --at <t>` | Writes the frame at a time as a PNG, straight away, in any process. `--size` fits it. |
+| `jazz export contact-sheet <project> <file.png>` | Frames from the middle of even steps through what an export plays, tiled with their times: `--columns 4 --rows 4 --width 1920`, `--start`, `--end`. Straight away, in any process. |
+| `jazz export pause <project> [job-id]` | Holds a job, or every one; a running job stops and starts again from the top when resumed. |
+| `jazz export resume <project> [job-id]` | Lets a paused job, or every one, run again. |
+| `jazz export set-priority <project> <job-id> low\|normal\|high` | Moves a job that has not started. |
+| `jazz export log <project> <job-id>` | What a job has done, a line a step. |
+| `jazz export cancel <project> <job-id>` | Stops a queued, paused or running export; the partial file is deleted. |
 | `jazz export clear <project>` | Takes finished jobs off the queue. |
-| `jazz export list <project>` | The queue with progress. Empty in a headless process. |
+| `jazz export list <project>` | The queue with progress, priority and whether a job is on the GPU. Empty in a headless process. |
+
+### Presets (Phase 22)
+
+These need no project.
+
+| Verb | Does |
+|---|---|
+| `jazz presets list [--category youtube\|discord\|device\|archive\|web\|image\|audio\|other]` | Every export preset with a line on what it writes, built in and your own. |
+| `jazz presets get <name>` | A preset in full, as its file has it. |
+| `jazz presets save <name> --from <preset> [overrides]` | Saves a preset of your own to `%APPDATA%\JazzHands\export-presets`: a copy of another with the same override options `jazz export` takes, and `--label`, `--description`. Or `--json <file or text>` for a whole preset. A preset with a built-in's name replaces it. |
+| `jazz presets delete <name>` | Deletes one of yours; a built-in one of the same name comes back. |
 
 ### Cache and proxies
 
@@ -1035,7 +1076,6 @@ skipped and logged.
 |---|---|
 | 04 | `jazz new`, `open`, `validate`, `fmt` |
 | 06 | `jazz media add`, `media probe`, `media list` |
-| 22 | More presets, and presets from files |
 | 24 | The generated command tree, `jazz apply`, `describe`, `frame`, `proof`, `docs` |
 | 25 | `jazz rpc call`, `rpc list`, `rpc events`, `--attach` |
 | 26 | `jazz mcp` |
