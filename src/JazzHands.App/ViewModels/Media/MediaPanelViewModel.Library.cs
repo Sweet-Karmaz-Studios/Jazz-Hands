@@ -11,14 +11,16 @@ namespace JazzHands.App.ViewModels.Media;
 /// with a way to fix it, relink and replace, removing unused media, and watching a folder.
 /// </summary>
 /// <remarks>
-/// The files are checked off the UI thread whenever the set of media or where it lives changes
-/// (<c>media.check</c> hashes each file), and the rows marked offline. Everything that changes the
-/// project is a command.
+/// The files are checked off the UI thread whenever the set of media, where it lives or which of
+/// its files are there changes (<c>media.check</c> hashes each file), and the rows marked offline.
+/// Everything that changes the project is a command.
 /// </remarks>
 public sealed partial class MediaPanelViewModel
 {
     private Dictionary<string, MediaFileState> _states = new(StringComparer.Ordinal);
     private string _checked = string.Empty;
+    private int _generation;
+    private Task _running = Task.CompletedTask;
 
     /// <summary>What the library bar says: missing and changed files, or empty when all is well.</summary>
     [ObservableProperty]
@@ -35,17 +37,30 @@ public sealed partial class MediaPanelViewModel
 
     partial void OnLibraryNoticeChanged(string value) => OnPropertyChanged(nameof(HasLibraryNotice));
 
-    /// <summary>Checks the files again when what the project points at has changed since the last look.</summary>
-    public async Task CheckFilesAsync()
+    /// <summary>
+    /// Checks the files again when what the project points at, or which of its files are there,
+    /// has changed since the last look. Awaiting it waits for the check under way, if there is one.
+    /// </summary>
+    public Task CheckFilesAsync()
     {
+        // Which files are there is part of what is compared, and costs a look at each file's
+        // entry, not a read: a file moved away while the editor is open is noticed at the next
+        // change, without hashing every file each time.
         Project project = _session.Project;
-        string signature = _session.ProjectPath + "|" + string.Join('|', project.Media.Select(item => $"{item.Id}:{item.RelativePath}:{item.Hash}"));
+        string projectPath = _session.ProjectPath;
+        string signature = projectPath + "|" + string.Join('|', project.Media.Select(item => $"{item.Id}:{item.RelativePath}:{item.Hash}:{Present(projectPath, item)}"));
         if (signature == _checked)
         {
-            return;
+            return _running;
         }
 
         _checked = signature;
+        _running = CheckAsync(++_generation);
+        return _running;
+    }
+
+    private async Task CheckAsync(int generation)
+    {
         MediaCheckInfo[] checks;
         try
         {
@@ -54,6 +69,12 @@ public sealed partial class MediaPanelViewModel
         catch (Exception error) when (error is CommandException or InvalidOperationException or System.IO.IOException)
         {
             _log.Debug(error, "The media files could not be checked");
+            return;
+        }
+
+        // A later check started while this one ran: what it finds is newer.
+        if (generation != _generation)
+        {
             return;
         }
 
@@ -74,6 +95,20 @@ public sealed partial class MediaPanelViewModel
         };
         OnPropertyChanged(nameof(HasMissing));
         OnPropertyChanged(nameof(HasChanged));
+    }
+
+    /// <summary>Whether a media item's file (or an image sequence's folder) is where the project says.</summary>
+    private static bool Present(string projectPath, MediaItem item)
+    {
+        try
+        {
+            string path = projectPath.Length == 0 ? System.IO.Path.GetFullPath(item.RelativePath) : Core.Serialization.ProjectPaths.Resolve(projectPath, item.RelativePath);
+            return item.Kind == MediaKind.ImageSequence ? System.IO.Directory.Exists(System.IO.Path.GetDirectoryName(path)) : System.IO.File.Exists(path);
+        }
+        catch (Exception error) when (error is ArgumentException or NotSupportedException or System.IO.PathTooLongException)
+        {
+            return false;
+        }
     }
 
     /// <summary>Opens the missing media dialog, and checks again after it.</summary>
