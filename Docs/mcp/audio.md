@@ -14,4 +14,13 @@ On the mix: `audio_set_master_volume` and `audio_set_limiter` for the sequence, 
 
 Effects on sound (EQ, compressor, gate, de-esser, limiter, reverb, delay) are `effect_add` with an `audio.` type on a clip or an audio track.
 
+Finishing the sound:
+
+- `audio_normalize` brings a clip, a track or the whole mix (`mix`) to a target: `lufs` (default -14, what YouTube and Spotify play at), `peak` (-1 dBFS) or `rms` (-20 dBFS), by moving its volume. `audio_measure` reads the same numbers without changing anything; measure before and after.
+- `audio_duck` turns the music track down (`depth`, -12 dB) while the voice track has sound, holding over the gaps between words so it does not pump; `off` takes it away. Prefer it to keyframing dips by hand.
+- `audio_learn_noise` learns a clip's background noise (a fan, hiss, the room) from its quietest half second, or a stretch you give, and takes it out; `audio_reduce_noise` sets how much (`reduction` in dB) or takes it off.
+- `audio_sync_offset` finds how far a separately recorded clip (a second microphone) must move to line up with another by their waveforms, with a confidence; `audio_sync` moves it there.
+- `export_enqueue` with `audio-only` writes the mix alone, in the preset's sound format (.m4a, .opus, .flac, .wav, .mp3).
+- A test tone (`audio.gen.tone`) or pink noise (`audio.gen.pink-noise`) is a generator clip on a sound track: `clip_add` with `generator`.
+
 `audio_beats` finds a music clip's beats and tempo and marks them on the sequence as beat markers, downbeats flagged; `audio_beat_analysis` answers without marking. Cut to them with `edit_cut_to_beats` (jazz://docs/edit).
