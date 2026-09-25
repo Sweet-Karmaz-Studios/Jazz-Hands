@@ -96,3 +96,27 @@ float4 PsMix(FullScreenVertex input) : SV_TARGET
     int3 texel = int3(input.Position.xy, 0);
     return lerp(Input.Load(texel), Current.Load(texel), MixMatte.Load(texel).a);
 }
+
+#define TRACK_ALPHA 0
+#define TRACK_LUMA 1
+#define TRACK_ALPHA_INVERTED 2
+#define TRACK_LUMA_INVERTED 3
+
+// A track matte: the matte track's picture (t0, premultiplied linear light) as coverage, by its
+// alpha or its light, either inverted, folded into the masks' matte (t1) unless First says there
+// is none. MaskMode carries the track matte mode.
+float4 PsTrack(FullScreenVertex input) : SV_TARGET
+{
+    int3 texel = int3(input.Position.xy, 0);
+    float4 picture = Input.Load(texel);
+    bool luma = MaskMode == TRACK_LUMA || MaskMode == TRACK_LUMA_INVERTED;
+    float value = luma ? saturate(dot(picture.rgb, float3(0.2126, 0.7152, 0.0722))) : saturate(picture.a);
+
+    if (MaskMode == TRACK_ALPHA_INVERTED || MaskMode == TRACK_LUMA_INVERTED)
+    {
+        value = 1.0 - value;
+    }
+
+    float current = First != 0 ? 1.0 : Current.Load(texel).a;
+    return float4(1.0, 1.0, 1.0, value * current);
+}

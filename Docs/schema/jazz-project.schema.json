@@ -349,6 +349,16 @@
               "type": "null"
             }
           ]
+        },
+        "matte": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/trackMatte"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -1465,6 +1475,16 @@
               "type": "null"
             }
           ]
+        },
+        "matte": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/trackMatte"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -1472,6 +1492,26 @@
         "kind",
         "name",
         "order"
+      ]
+    },
+    "trackMatte": {
+      "type": "object",
+      "properties": {
+        "sourceTrackId": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "alpha",
+            "luma",
+            "alphaInverted",
+            "lumaInverted"
+          ]
+        }
+      },
+      "required": [
+        "sourceTrackId"
       ]
     },
     "transform": {

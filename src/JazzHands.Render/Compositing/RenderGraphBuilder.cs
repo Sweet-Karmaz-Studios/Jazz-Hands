@@ -200,6 +200,9 @@ public static class RenderGraphBuilder
         var frameSize = new Vector2(settings.Width, settings.Height);
         var layers = ImmutableArray.CreateBuilder<LayerNode>();
 
+        // A track another uses as its matte is drawn only as that matte.
+        HashSet<string> mattes = TrackMatte.Sources(sequence);
+
         // Tracks are kept in stacking order by every edit and by loading, so this is bottom first.
         foreach (Track track in sequence.Tracks)
         {
@@ -213,7 +216,7 @@ public static class RenderGraphBuilder
                 continue;
             }
 
-            if (track.Kind is not (TrackKind.Video or TrackKind.Adjustment) || track.Muted)
+            if (track.Kind is not (TrackKind.Video or TrackKind.Adjustment) || track.Muted || mattes.Contains(track.Id))
             {
                 continue;
             }
@@ -224,7 +227,8 @@ public static class RenderGraphBuilder
 
             if (moment.Span is { } span)
             {
-                layers.Add(Transition(project, sequence, track, span, time, frameSize, (width, height), frames, options, depth, settings.FrameRate));
+                layers.Add(Transition(project, sequence, track, span, time, frameSize, (width, height), frames, options, depth, settings.FrameRate)
+                    with { TrackMatte = Matted(project, sequence, track.Matte, time, frames, options, depth) });
                 continue;
             }
 
@@ -249,7 +253,8 @@ public static class RenderGraphBuilder
             }
 
             LayerNode layer = Layer(clip, local, source, frameSize, options, Steady(project, clip, time, source.Size, frames, options)) with { Effects = effects };
-            layers.Add(Blurred(project, sequence, track, clip, time, source, layer, frameSize, (width, height), frames, options, depth, settings.FrameRate) ?? layer);
+            TrackMatteNode? matte = Matted(project, sequence, TrackMatte.For(clip, track), time, frames, options, depth);
+            layers.Add((Blurred(project, sequence, track, clip, time, source, layer, frameSize, (width, height), frames, options, depth, settings.FrameRate) ?? layer) with { TrackMatte = matte });
         }
 
         return new RenderGraph(width, height, layers.ToImmutable())
@@ -561,6 +566,23 @@ public static class RenderGraphBuilder
             Float(transform.Rotation, Intrinsic.Rotation, local),
             Float2(transform.Anchor, Intrinsic.Anchor, local),
             1.0f);
+    }
+
+    /// <summary>
+    /// A track matte at a moment: the matte track drawn on its own, even when it is hidden, at the
+    /// same size and time. Null for no matte, a track that is not there, or nesting too deep.
+    /// </summary>
+    private static TrackMatteNode? Matted(Project project, Sequence sequence, TrackMatte? matte, Flicks time, IFrameProvider frames, RenderOptions options, int depth)
+    {
+        if (matte is null
+            || depth >= options.MaxNesting
+            || sequence.Track(matte.SourceTrackId) is not { Kind: TrackKind.Video } source)
+        {
+            return null;
+        }
+
+        Sequence alone = sequence with { Tracks = EquatableArray.Create(source with { Muted = false, Matte = null }) };
+        return new TrackMatteNode(Build(project, alone, time, frames, options, depth + 1), matte.Mode);
     }
 
     /// <summary>

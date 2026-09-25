@@ -1072,6 +1072,22 @@ Enable or disable a clip without removing it.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+### `jazz clip set-matte <project> <clip-id>`
+
+Show a clip only through another track's picture (a track matte).
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The clip id. |
+
+| Option | Meaning |
+|---|---|
+| `--source <source>` | The track whose picture is the matte. |
+| `--mode <alpha|luma|alpha-inverted|luma-inverted>` | alpha, luma, alpha-inverted or luma-inverted. Default: alpha. Default: alpha. |
+| `--off` | Take the clip's matte away. |
+| `--no-save` | Do not write the project back. |
+
 ### `jazz clip set-motion-blur <project> <clip-id>`
 
 Set motion blur on a clip's animated movement.
@@ -3713,6 +3729,22 @@ Lock or unlock a track.
 
 | Option | Meaning |
 |---|---|
+| `--no-save` | Do not write the project back. |
+
+### `jazz track set-matte <project> <track-id>`
+
+Show a track only through another track's picture (a track matte).
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<track-id>` | The track id. |
+
+| Option | Meaning |
+|---|---|
+| `--source <source>` | The track whose picture is the matte. |
+| `--mode <alpha|luma|alpha-inverted|luma-inverted>` | alpha, luma, alpha-inverted or luma-inverted. Default: alpha. Default: alpha. |
+| `--off` | Take the track's matte away. |
 | `--no-save` | Do not write the project back. |
 
 ### `jazz track set-motion-blur <project> <track-id>`

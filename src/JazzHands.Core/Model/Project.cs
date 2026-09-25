@@ -373,6 +373,7 @@ public sealed record Marker(
 /// <param name="Remap">A speed curve over clip time that replaces <paramref name="Speed"/>: time remapping and speed ramps (<see cref="Animation.TimeRemap"/>).</param>
 /// <param name="Retime">How a picture between two source frames is shown when the clip plays at another speed or rate: the nearer frame, or a blend of both.</param>
 /// <param name="MotionBlur">Motion blur on the clip's animated placement, over its track's and sequence's; null to follow them.</param>
+/// <param name="Matte">Another track used as this clip's matte, over its track's; null to follow the track.</param>
 public sealed record Clip(
     string Id,
     TimeRange Range,
@@ -404,7 +405,8 @@ public sealed record Clip(
     Cue? Cue = null,
     AnimatedValue? Remap = null,
     RetimeMode Retime = RetimeMode.Nearest,
-    MotionBlur? MotionBlur = null) : IEquatable<Clip>
+    MotionBlur? MotionBlur = null,
+    TrackMatte? Matte = null) : IEquatable<Clip>
 {
     /// <summary>Playback rate, defaulting to normal speed.</summary>
     public Rational EffectiveSpeed => Speed ?? Rational.One;
@@ -514,6 +516,7 @@ public sealed record Clip(
 /// </param>
 /// <param name="SubtitleStyle">How a subtitle track's cues look; null for the default style.</param>
 /// <param name="MotionBlur">Motion blur for the animated clips on it, over the sequence's, unless a clip says otherwise; null to follow the sequence.</param>
+/// <param name="Matte">Another track used as the matte of every clip on it, unless a clip has its own; null for none.</param>
 public sealed record Track(
     string Id,
     TrackKind Kind,
@@ -532,7 +535,8 @@ public sealed record Track(
     bool? SyncLock = null,
     string? Language = null,
     SubtitleStyle? SubtitleStyle = null,
-    MotionBlur? MotionBlur = null) : IEquatable<Track>
+    MotionBlur? MotionBlur = null,
+    TrackMatte? Matte = null) : IEquatable<Track>
 {
     /// <summary>The first position after the last clip, or zero for an empty track.</summary>
     public Flicks Duration => Clips.IsEmpty ? Flicks.Zero : Clips[^1].End;

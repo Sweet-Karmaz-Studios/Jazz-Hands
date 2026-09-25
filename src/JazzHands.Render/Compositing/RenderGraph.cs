@@ -47,6 +47,11 @@ public sealed record TransitionLayerSource(LayerNode? Outgoing, LayerNode? Incom
 /// <param name="Samples">The layer at each moment, each with its own place, opacity, masks and effects.</param>
 public sealed record MotionBlurLayerSource(ImmutableArray<LayerNode> Samples) : LayerSource;
 
+/// <summary>A track matte at one moment: the matte track drawn alone, and what of it the layer keeps.</summary>
+/// <param name="Graph">The matte track's layers at this moment, at the frame's size.</param>
+/// <param name="Mode">Alpha, luma, or either inverted.</param>
+public sealed record TrackMatteNode(RenderGraph Graph, TrackMatteMode Mode);
+
 /// <summary>A transition at one frame, with its parameters evaluated and its progress eased.</summary>
 /// <param name="Effect">The transition's type and parameters, as an effect node: its time is from the start of its span, its owner length the span's.</param>
 /// <param name="Progress">How far through it the frame is, 0 to 1, after easing.</param>
@@ -113,6 +118,9 @@ public sealed record LayerNode(
     /// blend and masks.
     /// </summary>
     public ImmutableArray<EffectNode> Effects { get; init; } = [];
+
+    /// <summary>Another track's picture this layer shows only through, and how; null for none.</summary>
+    public TrackMatteNode? TrackMatte { get; init; }
 
     /// <summary>True for an adjustment layer, which has no picture of its own.</summary>
     public bool IsAdjustment { get; init; }

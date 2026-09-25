@@ -313,7 +313,7 @@ public sealed class Compositor : IDisposable
         // untransformed layer over nothing, which below becomes the stack without any drawing.
         bool fillsFrame = stack is null && layer.Opacity >= 1.0f && IsInPlace(graph, layer);
         bool hasEffects = !layer.Effects.IsDefaultOrEmpty;
-        if (key is null && !hasEffects && layer.Masks.IsDefaultOrEmpty && layer.Blend == BlendMode.Normal && !fillsFrame)
+        if (key is null && !hasEffects && Unmatted(layer) && layer.Blend == BlendMode.Normal && !fillsFrame)
         {
             stack ??= Empty(graph);
             RenderTarget source = Linear(graph, layer);
@@ -341,7 +341,7 @@ public sealed class Compositor : IDisposable
         // Normal at full opacity over nothing is the layer itself, so there is nothing to blend.
         // A layer the cache keeps is copied rather than handed over, because the stack is
         // returned to the pool at the end of the frame and the cache still holds it.
-        if (stack is null && layer.Masks.IsDefaultOrEmpty && layer.Blend == BlendMode.Normal && layer.Opacity >= 1.0f)
+        if (stack is null && Unmatted(layer) && layer.Blend == BlendMode.Normal && layer.Opacity >= 1.0f)
         {
             if (cached || key is not null)
             {
@@ -360,7 +360,7 @@ public sealed class Compositor : IDisposable
         }
 
         stack ??= Empty(graph);
-        RenderTarget? matte = layer.Masks.IsDefaultOrEmpty ? null : Matte(graph, layer);
+        RenderTarget? matte = LayerMatte(graph, layer);
         RenderTarget result = Composite(stack, placed, matte, layer.Opacity, layer.Blend);
 
         if (matte is not null)
@@ -567,13 +567,13 @@ public sealed class Compositor : IDisposable
     /// </summary>
     private RenderTarget Finish(RenderGraph graph, LayerNode layer, RenderTarget? stack, RenderTarget picture, bool owned)
     {
-        if (owned && stack is null && layer.Masks.IsDefaultOrEmpty && layer.Blend == BlendMode.Normal && layer.Opacity >= 1.0f)
+        if (owned && stack is null && Unmatted(layer) && layer.Blend == BlendMode.Normal && layer.Opacity >= 1.0f)
         {
             return picture;
         }
 
         stack ??= Empty(graph);
-        RenderTarget? matte = layer.Masks.IsDefaultOrEmpty ? null : Matte(graph, layer);
+        RenderTarget? matte = LayerMatte(graph, layer);
         RenderTarget result = Composite(stack, picture, matte, layer.Opacity, layer.Blend);
 
         if (matte is not null)
@@ -867,6 +867,42 @@ public sealed class Compositor : IDisposable
         return result;
     }
 
+    /// <summary>True when nothing limits where a layer shows: no masks and no track matte.</summary>
+    private static bool Unmatted(LayerNode layer) => layer.Masks.IsDefaultOrEmpty && layer.TrackMatte is null;
+
+    /// <summary>
+    /// Where a layer shows: its masks' matte, cut by its track matte's picture when it has one;
+    /// null for everywhere.
+    /// </summary>
+    private RenderTarget? LayerMatte(RenderGraph graph, LayerNode layer)
+    {
+        RenderTarget? masks = layer.Masks.IsDefaultOrEmpty ? null : Matte(graph, layer);
+        if (layer.TrackMatte is not { } track)
+        {
+            return masks;
+        }
+
+        RenderTarget picture = Render(track.Graph);
+        RenderTarget coverage = Pool.Rent(graph.Width, graph.Height, Format.B8G8R8A8_UNorm);
+        var constants = new MatteConstants
+        {
+            MaskMode = (uint)track.Mode,
+            First = masks is null ? 1u : 0u,
+        };
+
+        _views[0] = picture.Resource;
+        _views[1] = masks?.Resource ?? picture.Resource;
+        FullScreen(_shaders!.MatteTrack, coverage.View, coverage.Width, coverage.Height, in constants, 2);
+
+        Pool.Return(picture);
+        if (masks is not null)
+        {
+            Pool.Return(masks);
+        }
+
+        return coverage;
+    }
+
     /// <summary>
     /// Every mask on a layer, rasterized in frame space, feathered and combined into one matte.
     /// </summary>
@@ -1088,6 +1124,7 @@ public sealed class Compositor : IDisposable
             CompositePixel = ShaderLibrary.PixelShader(device, "Composite.hlsl", "PsMain");
             MatteBlur = ShaderLibrary.PixelShader(device, "Matte.hlsl", "PsBlur");
             MatteCombine = ShaderLibrary.PixelShader(device, "Matte.hlsl", "PsCombine");
+            MatteTrack = ShaderLibrary.PixelShader(device, "Matte.hlsl", "PsTrack");
             MatteMix = ShaderLibrary.PixelShader(device, "Matte.hlsl", "PsMix");
             OutputPixel = ShaderLibrary.PixelShader(device, "Output.hlsl", "PsMain");
             YuvLuma = ShaderLibrary.PixelShader(device, "OutputYuv.hlsl", "PsLuma");
@@ -1108,6 +1145,8 @@ public sealed class Compositor : IDisposable
 
         public ID3D11PixelShader MatteCombine { get; }
 
+        public ID3D11PixelShader MatteTrack { get; }
+
         public ID3D11PixelShader MatteMix { get; }
 
         public ID3D11PixelShader OutputPixel { get; }
@@ -1123,6 +1162,7 @@ public sealed class Compositor : IDisposable
             OutputPixel.Dispose();
             MatteMix.Dispose();
             MatteCombine.Dispose();
+            MatteTrack.Dispose();
             MatteBlur.Dispose();
             CompositePixel.Dispose();
             TransformPixel.Dispose();
