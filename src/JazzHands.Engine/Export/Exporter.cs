@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using JazzHands.Core.Export;
 using JazzHands.Core.Model;
+using JazzHands.Core.Subtitles;
 using JazzHands.Core.Time;
 using JazzHands.Media.Encode;
 using Serilog;
@@ -55,12 +56,13 @@ public static class Exporter
         {
             ExportResult result = plan.Mode switch
             {
-                ExportMode.Copy => Copy(plan, temporary, progress, cancellationToken),
+                ExportMode.Copy => Copy(plan, project, temporary, progress, cancellationToken),
                 _ when plan.External => ExternalFfmpegExporter.Run(plan, project, projectPath, temporary, environment, progress, cancellationToken),
                 _ => Encode(plan, project, projectPath, temporary, environment, progress, cancellationToken),
             };
 
             File.Move(temporary, plan.OutputPath, overwrite: true);
+            WriteSidecars(plan, project);
             Log.Information(
                 "Exported {Path}: {Mode} with {Encoder}, {Bytes} bytes, {Duration} in {Seconds:F1} s ({Speed:F1}x real time)",
                 plan.OutputPath,
@@ -79,9 +81,49 @@ public static class Exporter
         }
     }
 
-    private static ExportResult Copy(ExportPlan plan, string temporary, IProgress<ExportProgress>? progress, CancellationToken cancellationToken)
+    /// <summary>
+    /// The subtitle streams and chapters a plan puts in its file: each soft subtitle track's cues
+    /// at their times in the output, and the plan's chapters. Null when there are none.
+    /// </summary>
+    internal static MuxExtras? Extras(ExportPlan plan, Project project)
+    {
+        Sequence? sequence = project.Sequence(plan.SequenceId);
+        MuxSubtitleTrack[] subtitles = plan.Subtitles is { Delivery: SubtitleDelivery.Soft } soft && sequence is not null
+            ? [.. soft.Tracks
+                .Select(track => (Plan: track, Track: sequence.Tracks.FirstOrDefault(candidate => candidate.Id == track.TrackId)))
+                .Where(pair => pair.Track is not null && pair.Plan.Codec is not null)
+                .Select(pair => new MuxSubtitleTrack(pair.Plan.Codec!, SubtitleTracks.Document(pair.Track!, plan.Ranges), pair.Plan.Language, pair.Plan.Name, pair.Plan.Default))]
+            : [];
+        MuxChapter[] chapters = plan.Chapters.IsEmpty ? [] : [.. plan.Chapters.Select(chapter => new MuxChapter(chapter.Start, chapter.End, chapter.Title))];
+
+        return subtitles.Length == 0 && chapters.Length == 0 ? null : new MuxExtras(subtitles, chapters);
+    }
+
+    /// <summary>Writes the subtitle files a plan puts beside its video, at their times in the output.</summary>
+    private static void WriteSidecars(ExportPlan plan, Project project)
+    {
+        if (plan.Subtitles is not { Delivery: SubtitleDelivery.Sidecar } sidecar || project.Sequence(plan.SequenceId) is not { } sequence)
+        {
+            return;
+        }
+
+        foreach (ExportSubtitleTrack planned in sidecar.Tracks)
+        {
+            if (planned.SidecarPath is not { } path || sequence.Tracks.FirstOrDefault(track => track.Id == planned.TrackId) is not { } track)
+            {
+                continue;
+            }
+
+            string text = SubtitleFiles.Write(SubtitleTracks.Document(track, plan.Ranges), sidecar.SidecarFormat);
+            File.WriteAllText(path, text, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            Log.Information("Wrote subtitles for {Track} to {Path}", track.Name, path);
+        }
+    }
+
+    private static ExportResult Copy(ExportPlan plan, Project project, string temporary, IProgress<ExportProgress>? progress, CancellationToken cancellationToken)
     {
         ExportCopy copy = plan.Copy ?? throw new ArgumentException("A copy plan says what to copy.", nameof(plan));
+        using MuxExtras? extras = Extras(plan, project);
 
         var job = new StreamCopyJob(
             temporary,
@@ -90,7 +132,8 @@ public static class Exporter
             [.. copy.AudioStreams],
             copy.FrameRate,
             plan.Container,
-            FastStart: plan.Container is "mp4" or "mov");
+            FastStart: plan.Container is "mp4" or "mov",
+            Extras: extras);
 
         IProgress<CopyProgress>? relay = progress is null
             ? null
@@ -300,6 +343,7 @@ public static class Exporter
             VideoEncoder? encoder = null;
             AudioEncoder? sound = null;
             ExportSound? mix = null;
+            MuxExtras? extras = null;
 
             try
             {
@@ -319,6 +363,8 @@ public static class Exporter
 
                 int videoStream = muxer.AddStream(encoder);
                 int soundStream = sound is null ? -1 : muxer.AddStream(sound);
+                extras = Extras(_plan, _project);
+                extras?.Open(muxer);
                 muxer.WriteHeader(fastStart: _plan.Container is "mp4" or "mov");
 
                 for (int index = 0; index < FrameCount; index++)
@@ -343,6 +389,7 @@ public static class Exporter
                     written = index + 1;
 
                     mix?.WriteUpTo(SamplesAt(written), sound!, muxer, soundStream);
+                    extras?.WriteUpTo(muxer, Flicks.FromFrames(written, video.FrameRate));
 
                     long now = clock.ElapsedMilliseconds;
                     if (_progress is not null && now - reported >= 250)
@@ -366,6 +413,7 @@ public static class Exporter
                     sound!.Flush(muxer, soundStream);
                 }
 
+                extras?.Close(muxer);
                 muxer.Finish();
                 _progress?.Report(new ExportProgress(
                     1.0,
@@ -392,6 +440,7 @@ public static class Exporter
             }
             finally
             {
+                extras?.Dispose();
                 mix?.Dispose();
                 sound?.Dispose();
                 encoder?.Dispose();

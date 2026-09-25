@@ -16,6 +16,22 @@ public enum ExportMode
     Encode,
 }
 
+/// <summary>What an export does with the sequence's subtitle tracks.</summary>
+public enum SubtitleDelivery
+{
+    /// <summary>A subtitle stream in the file per track, which players can turn on and off.</summary>
+    Soft,
+
+    /// <summary>Drawn into the picture, where everyone sees them.</summary>
+    Burn,
+
+    /// <summary>A subtitle file per track beside the video, named for its language.</summary>
+    Sidecar,
+
+    /// <summary>Left out.</summary>
+    None,
+}
+
 /// <summary>
 /// What someone asked to export, before the planner has decided how.
 /// </summary>
@@ -26,6 +42,9 @@ public enum ExportMode
 /// <param name="SnapToKeyframes">For a copy, move each cut to the nearest keyframe instead of refusing.</param>
 /// <param name="UseInOut">Export only between the sequence's in and out points.</param>
 /// <param name="External">Encode through ffmpeg.exe instead of in process, to tell an encoder bug from ours.</param>
+/// <param name="Subtitles">What happens to subtitle tracks: streams in the file, burned in, files beside it, or nothing.</param>
+/// <param name="SidecarFormat">The format of subtitle files written beside the video.</param>
+/// <param name="Chapters">Write the sequence's chapter marks into the file.</param>
 public sealed record ExportRequest(
     string OutputPath,
     string Preset = ExportPresets.Default,
@@ -33,7 +52,40 @@ public sealed record ExportRequest(
     string? SequenceId = null,
     bool SnapToKeyframes = false,
     bool UseInOut = false,
-    bool External = false);
+    bool External = false,
+    SubtitleDelivery Subtitles = SubtitleDelivery.Soft,
+    Subtitles.SubtitleFormat SidecarFormat = Subtitles.SubtitleFormat.Srt,
+    bool Chapters = true);
+
+/// <summary>The subtitles an export carries, and how.</summary>
+/// <param name="Delivery">Streams, burned in, or files beside the video.</param>
+/// <param name="Tracks">Each subtitle track exported, bottom track first.</param>
+/// <param name="SidecarFormat">The format of files beside the video.</param>
+public sealed record ExportSubtitles(
+    SubtitleDelivery Delivery,
+    EquatableArray<ExportSubtitleTrack> Tracks,
+    Subtitles.SubtitleFormat SidecarFormat = Subtitles.SubtitleFormat.Srt) : IEquatable<ExportSubtitles>;
+
+/// <summary>One subtitle track in an export.</summary>
+/// <param name="TrackId">The track.</param>
+/// <param name="Name">What players call it.</param>
+/// <param name="Language">Its language, or null.</param>
+/// <param name="Codec">For a stream, the encoder: mov_text, subrip or ass.</param>
+/// <param name="SidecarPath">For a file beside the video, where it goes.</param>
+/// <param name="Default">Shown unless the viewer turns it off.</param>
+public sealed record ExportSubtitleTrack(
+    string TrackId,
+    string Name,
+    string? Language,
+    string? Codec = null,
+    string? SidecarPath = null,
+    bool Default = false) : IEquatable<ExportSubtitleTrack>;
+
+/// <summary>A chapter in an export, at its time in the output.</summary>
+/// <param name="Start">Where it starts in the file.</param>
+/// <param name="End">Where it ends.</param>
+/// <param name="Title">Its title.</param>
+public sealed record ExportChapter(Flicks Start, Flicks End, string Title) : IEquatable<ExportChapter>;
 
 /// <summary>
 /// A fully resolved export: everything the exporter needs, nothing it has to decide.
@@ -57,6 +109,8 @@ public sealed record ExportRequest(
 /// <param name="Reasons">Why the planner chose this mode.</param>
 /// <param name="Snaps">Cuts a copy moved to a keyframe, one per edge that moved.</param>
 /// <param name="External">Encode through ffmpeg.exe.</param>
+/// <param name="Subtitles">The subtitles it carries, and how; null for none.</param>
+/// <param name="Chapters">The chapters it carries, at their times in the output.</param>
 public sealed record ExportPlan(
     string SequenceId,
     string Preset,
@@ -70,7 +124,9 @@ public sealed record ExportPlan(
     ExportCopy? Copy = null,
     EquatableArray<string> Reasons = default,
     EquatableArray<KeyframeSnap> Snaps = default,
-    bool External = false) : IEquatable<ExportPlan>;
+    bool External = false,
+    ExportSubtitles? Subtitles = null,
+    EquatableArray<ExportChapter> Chapters = default) : IEquatable<ExportPlan>;
 
 /// <summary>The video side of an encode.</summary>
 /// <param name="Codec">h264 or hevc.</param>

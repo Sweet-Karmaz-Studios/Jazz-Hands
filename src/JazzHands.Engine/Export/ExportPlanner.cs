@@ -49,6 +49,134 @@ public static class ExportPlanner
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(keyframes);
 
+        Sequence sequence = (request.SequenceId is { } id ? project.Sequence(id) : project.ActiveSequence)
+            ?? throw new CommandException("sequence-not-found", request.SequenceId is null
+                ? "The project has no sequence to export."
+                : $"No sequence with id '{request.SequenceId}'.");
+
+        // Burning subtitles in draws them into every picture, so there is nothing to copy.
+        ImmutableArray<TimeRange> ranges = Ranges(sequence, request.UseInOut);
+        bool burn = request.Subtitles == SubtitleDelivery.Burn && SubtitleTracks(sequence, ranges).Length > 0;
+
+        ExportPlan plan = PlanStreams(project, projectPath, request, keyframes, burn, cancellationToken);
+        return plan with
+        {
+            Subtitles = Subtitles(request, sequence, plan),
+            Chapters = request.Chapters ? Chapters(sequence, plan.Ranges, plan.Duration) : default,
+        };
+    }
+
+    /// <summary>The subtitle tracks an export of these ranges carries: not muted, with a cue inside.</summary>
+    public static ImmutableArray<Track> SubtitleTracks(Sequence sequence, IReadOnlyList<TimeRange> ranges)
+    {
+        ArgumentNullException.ThrowIfNull(sequence);
+        ArgumentNullException.ThrowIfNull(ranges);
+        return [.. sequence.Tracks
+            .Where(track => track.Kind == TrackKind.Subtitle && !track.Muted)
+            .Where(track => track.Clips.Any(clip => clip.Cue is not null && clip.Enabled && ranges.Any(range => clip.Start < range.End && clip.End > range.Start)))
+            .OrderBy(track => track.Order)];
+    }
+
+    /// <summary>
+    /// Where each chapter falls in the output: moved by the stretches before it, a chapter in a
+    /// gap starting where the next stretch does, and one past the end left out.
+    /// </summary>
+    public static ImmutableArray<ExportChapter> Chapters(Sequence sequence, IReadOnlyList<TimeRange> ranges, Flicks duration)
+    {
+        ArgumentNullException.ThrowIfNull(sequence);
+        ArgumentNullException.ThrowIfNull(ranges);
+
+        Flicks? Map(Flicks time)
+        {
+            Flicks before = Flicks.Zero;
+            foreach (TimeRange range in ranges)
+            {
+                if (time < range.End)
+                {
+                    return before + (time > range.Start ? time - range.Start : Flicks.Zero);
+                }
+
+                before += range.Duration;
+            }
+
+            return null;
+        }
+
+        (Flicks Start, string Title)[] starts = [.. sequence.Markers
+            .Where(marker => marker.IsChapter)
+            .OrderBy(marker => marker.Time)
+            .Select(marker => (Start: Map(marker.Time), marker.Name))
+            .Where(mapped => mapped.Start is { } start && start < duration)
+            .Select(mapped => (mapped.Start!.Value, mapped.Name))
+            .GroupBy(mapped => mapped.Value)
+            .Select(group => group.Last())];
+
+        return [.. starts.Select((chapter, index) => new ExportChapter(
+            chapter.Start,
+            index + 1 < starts.Length ? starts[index + 1].Start : duration,
+            chapter.Title))];
+    }
+
+    /// <summary>How the plan carries the subtitle tracks, or null when there are none to carry.</summary>
+    private static ExportSubtitles? Subtitles(ExportRequest request, Sequence sequence, ExportPlan plan)
+    {
+        ImmutableArray<Track> tracks = SubtitleTracks(sequence, plan.Ranges);
+        if (tracks.IsEmpty || request.Subtitles == SubtitleDelivery.None)
+        {
+            return null;
+        }
+
+        // ffmpeg.exe is handed the picture and the sound; subtitles go beside its file.
+        SubtitleDelivery delivery = request.Subtitles == SubtitleDelivery.Soft && plan.External ? SubtitleDelivery.Sidecar : request.Subtitles;
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        return new ExportSubtitles(
+            delivery,
+            [.. tracks.Select((track, index) => new ExportSubtitleTrack(
+                track.Id,
+                track.Name,
+                track.Language,
+                delivery == SubtitleDelivery.Soft ? Codec(plan.Container, track) : null,
+                delivery == SubtitleDelivery.Sidecar ? SidecarPath(plan.OutputPath, track, request.SidecarFormat, used) : null,
+                Default: index == 0))],
+            request.SidecarFormat);
+    }
+
+    /// <summary>
+    /// The subtitle encoder for a container: mov_text is all MP4 carries; Matroska takes ASS
+    /// when the track's look or a cue's place needs it, and SubRip, which everything plays, when not.
+    /// </summary>
+    private static string Codec(string container, Track track) =>
+        container is "mp4" or "mov"
+            ? "mov_text"
+            : track.SubtitleStyle is not null || track.Clips.Any(clip => clip.Cue is { Align: not SubtitleAlign.Bottom })
+                ? "ass"
+                : "subrip";
+
+    /// <summary>A file beside the video for a track: <c>trailer.eng.srt</c>, or <c>trailer.srt</c> without a language.</summary>
+    private static string SidecarPath(string output, Track track, Core.Subtitles.SubtitleFormat format, HashSet<string> used)
+    {
+        string stem = Path.Combine(Path.GetDirectoryName(output) ?? ".", Path.GetFileNameWithoutExtension(output));
+        string extension = Core.Subtitles.SubtitleFiles.Extension(format);
+        string name = track.Language is { } language ? $"{stem}.{language}" : stem;
+        string path = name + extension;
+
+        for (int copy = 2; !used.Add(path); copy++)
+        {
+            path = $"{name}.{copy}{extension}";
+        }
+
+        return path;
+    }
+
+    private static ExportPlan PlanStreams(
+        Project project,
+        string projectPath,
+        ExportRequest request,
+        KeyframeLookup keyframes,
+        bool burn,
+        CancellationToken cancellationToken)
+    {
         ExportPresetInfo preset = ExportPresets.Find(request.Preset)
             ?? throw new CommandException(
                 "unknown-preset",
@@ -76,6 +204,12 @@ public static class ExportPlanner
 
         var reasons = new List<string>();
         CopySource? copy = CopyCheck(project, projectPath, sequence, ranges, reasons);
+
+        if (burn && copy is not null)
+        {
+            reasons.Add("The subtitles are burned into the picture, so every frame is drawn.");
+            copy = null;
+        }
 
         if (request.Mode == ExportMode.Copy && copy is null)
         {
@@ -264,7 +398,7 @@ public static class ExportPlanner
         bool Audible(Track track) => !track.Muted && (!anySolo || track.Solo || !track.IsAudio);
 
         Track[] pictures = [.. sequence.Tracks.Where(track =>
-            track.Kind != TrackKind.Audio && !track.Muted && Within(track, ranges).Any())];
+            track.Kind is TrackKind.Video or TrackKind.Adjustment && !track.Muted && Within(track, ranges).Any())];
 
         if (pictures.Length == 0)
         {

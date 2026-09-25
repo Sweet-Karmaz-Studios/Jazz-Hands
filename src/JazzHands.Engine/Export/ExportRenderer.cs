@@ -107,6 +107,7 @@ internal sealed class ExportRenderer : IDisposable
             Scale = (float)video.Height / settings.Height,
             Bicubic = true,
             CacheLayers = false,
+            Subtitles = plan.Subtitles?.Delivery == SubtitleDelivery.Burn,
         };
         var output = new OutputSettings(OutputEncoding.Bt1886, DitherLevels: 255);
 

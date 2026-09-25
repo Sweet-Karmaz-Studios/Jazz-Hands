@@ -1,4 +1,5 @@
 using JazzHands.Core.Export;
+using JazzHands.Core.Subtitles;
 
 namespace JazzHands.Core.Commands;
 
@@ -16,6 +17,9 @@ namespace JazzHands.Core.Commands;
 /// <param name="SnapToKeyframes">For a copy, move cuts to the nearest keyframe instead of refusing.</param>
 /// <param name="UseInOut">Export only between the in and out points.</param>
 /// <param name="External">Encode through ffmpeg.exe instead of in process.</param>
+/// <param name="Subtitles">What happens to subtitle tracks: streams in the file (soft), burned in, files beside it (sidecar), or none.</param>
+/// <param name="SidecarFormat">The format of subtitle files written beside the video.</param>
+/// <param name="Chapters">Write the sequence's chapter marks into the file.</param>
 /// <param name="JobId">The id for the new job. A fresh one when left out.</param>
 [Command("export.enqueue",
     Description = "Queue an export of a sequence to a file",
@@ -29,8 +33,11 @@ public sealed record EnqueueExportCommand(
     [property: Option("snap-to-keyframes", "For a copy, move cuts to the nearest keyframe")] bool SnapToKeyframes = false,
     [property: Option("use-in-out", "Export only between the in and out points")] bool UseInOut = false,
     [property: Option("use-external-ffmpeg", "Encode through ffmpeg.exe")] bool External = false,
+    [property: Option("subtitles", "soft, burn, sidecar or none")] SubtitleDelivery Subtitles = SubtitleDelivery.Soft,
+    [property: Option("sidecar-format", "srt, vtt or ass")] SubtitleFormat SidecarFormat = SubtitleFormat.Srt,
+    [property: Option("chapters", "Write chapter marks into the file")] bool Chapters = true,
     [property: Option("id", "The id for the new job")] string? JobId = null) : ICommand
 {
     /// <summary>The export this asks for.</summary>
-    public ExportRequest ToRequest() => new(Output, Preset, Mode, SequenceId, SnapToKeyframes, UseInOut, External);
+    public ExportRequest ToRequest() => new(Output, Preset, Mode, SequenceId, SnapToKeyframes, UseInOut, External, Subtitles, SidecarFormat, Chapters);
 }

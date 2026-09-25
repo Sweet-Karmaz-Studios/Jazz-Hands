@@ -4,6 +4,7 @@ using System.Text.Json;
 using JazzHands.Core.Commands;
 using JazzHands.Core.Editing;
 using JazzHands.Core.Export;
+using JazzHands.Core.Subtitles;
 using JazzHands.Core.Model;
 using JazzHands.Core.Serialization;
 using JazzHands.Core.Time;
@@ -164,11 +165,18 @@ public static class ExportCommands
         var snap = new Option<bool>("--snap-to-keyframes") { Description = "For a copy, move cuts to the nearest keyframe instead of refusing." };
         var inOut = new Option<bool>("--use-in-out") { Description = "Export only between the in and out points." };
         var external = new Option<bool>("--use-external-ffmpeg") { Description = "Encode through ffmpeg.exe." };
+        var subtitles = new Option<string>("--subtitles")
+        {
+            Description = "What subtitle tracks become: soft (streams players can turn on), burn (drawn into the picture), sidecar (files beside the video) or none.",
+            DefaultValueFactory = _ => "soft",
+        };
+        var sidecarFormat = new Option<string>("--sidecar-format") { Description = "srt, vtt or ass, for --subtitles sidecar.", DefaultValueFactory = _ => "srt" };
+        var noChapters = new Option<bool>("--no-chapters") { Description = "Leave the chapter marks out of the file." };
         var dryRun = new Option<bool>("--dry-run") { Description = "Print the plan and write nothing." };
 
         var command = new Command("export", "Export a sequence to a file in the foreground. 'jazz export enqueue' queues one in a running editor.")
         {
-            project, output, preset, mode, sequence, snap, inOut, external, dryRun,
+            project, output, preset, mode, sequence, snap, inOut, external, subtitles, sidecarFormat, noChapters, dryRun,
         };
 
         command.SetAction(parse => Guard(parse, token =>
@@ -188,7 +196,10 @@ public static class ExportCommands
                 parse.GetValue(sequence),
                 parse.GetValue(snap),
                 parse.GetValue(inOut),
-                parse.GetValue(external));
+                parse.GetValue(external),
+                Choice<SubtitleDelivery>(parse.GetValue(subtitles)!, "subtitles"),
+                Choice<SubtitleFormat>(parse.GetValue(sidecarFormat)!, "sidecar-format"),
+                !parse.GetValue(noChapters));
 
             return Export(load.Project, path, request, services, parse.GetValue(dryRun), parse.GetValue(JazzCli.JsonOption), token);
         }));
@@ -334,6 +345,13 @@ public static class ExportCommands
             "invalid-value",
             allowAuto ? $"--mode takes auto, copy or encode, not '{text}'." : $"--mode takes copy or encode, not '{text}'."),
     };
+
+    /// <summary>One of an enum's values by its lower case name, or a refusal that lists them.</summary>
+    private static T Choice<T>(string text, string option)
+        where T : struct, Enum =>
+        Enum.TryParse(text.Trim(), ignoreCase: true, out T value) && Enum.IsDefined(value) && !int.TryParse(text, out _)
+            ? value
+            : throw new CommandException("invalid-value", $"--{option} takes {string.Join(", ", Enum.GetNames<T>().Select(name => name.ToLowerInvariant()))}, not '{text}'.");
 
     private static IEnumerable<string> Split(string? text) =>
         text is null ? [] : text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
