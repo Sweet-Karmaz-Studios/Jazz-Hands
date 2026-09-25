@@ -8,11 +8,13 @@ namespace JazzHands.Core.Model;
 /// ULIDs, as 26-character strings: sortable by creation time, safe in a file name, and readable
 /// enough that a person editing a .jazz file by hand can tell two of them apart. Never integers,
 /// which collide the moment two machines edit the same project, and never GUIDs with braces.
+/// Inside an <see cref="IdScope"/> the identifiers a command makes are written down, or handed
+/// out again from what was written down, so a command replayed after a crash makes the same ones.
 /// </remarks>
 public static class Id
 {
-    /// <summary>A fresh identifier.</summary>
-    public static string New() => Ulid.NewUlid().ToString();
+    /// <summary>A fresh identifier, or the next one a replaying scope hands out.</summary>
+    public static string New() => IdScope.Next() ?? Ulid.NewUlid().ToString();
 
     /// <summary>True when a string is a well-formed identifier.</summary>
     public static bool IsValid(string? value) => value is { Length: 26 } && Ulid.TryParse(value, out _);

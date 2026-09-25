@@ -43,7 +43,7 @@ public static class AppServices
         // The selection prunes itself after every command, so a deleted clip never stays selected.
         services.AddSingleton(provider =>
         {
-            var session = new Session(project, provider, path, recovery: path.Length > 0) { DefaultIssuer = "gui" };
+            var session = new Session(project, provider, path, recovery: true) { DefaultIssuer = "gui" };
             provider.GetRequiredService<SelectionService>().Attach(session);
             return session;
         });

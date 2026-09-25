@@ -93,6 +93,7 @@ public static class GeneratedCommands
         "presets" => "Export presets, built in and your own. Need no project.",
         "project" => "The project: settings, default tone mapping, a summary.",
         "proxy" => "Proxies: half size copies of heavy media for smooth editing.",
+        "recovery" => "Unsaved work after a crash: check what there is, bring it back by replaying every command since the last save, or set it aside.",
         "scopes" => "Waveform, vectorscope and histogram measurements of the picture.",
         "selection" => "What is selected in a running editor.",
         "sequence" => "Sequences: create, rename, set active, their own settings.",

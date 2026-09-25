@@ -127,10 +127,18 @@ public sealed class CommandDispatcher : IAsyncDisposable
     /// <param name="command">What to run.</param>
     /// <param name="issuer">Who asked, as the history and the change event will say it.</param>
     /// <param name="cancellationToken">Gives up while it is still queued.</param>
-    public Task<CommandResult> ExecuteAsync(ICommand command, string issuer, CancellationToken cancellationToken = default)
+    public Task<CommandResult> ExecuteAsync(ICommand command, string issuer, CancellationToken cancellationToken = default) =>
+        ExecuteAsync(command, issuer, null, cancellationToken);
+
+    /// <summary>Runs a command for someone with the identifiers it makes recorded or replayed.</summary>
+    /// <param name="command">What to run.</param>
+    /// <param name="issuer">Who asked.</param>
+    /// <param name="ids">Active on the dispatcher's thread while the command runs; null for none.</param>
+    /// <param name="cancellationToken">Gives up while it is still queued.</param>
+    public Task<CommandResult> ExecuteAsync(ICommand command, string issuer, IdScope? ids, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
-        return Enqueue(new Job(command, NewCompletion(), issuer ?? string.Empty), cancellationToken);
+        return Enqueue(new Job(command, NewCompletion(), issuer ?? string.Empty, Ids: ids), cancellationToken);
     }
 
     /// <summary>
@@ -254,7 +262,10 @@ public sealed class CommandDispatcher : IAsyncDisposable
 
             try
             {
-                job.Completion.TrySetResult(Run(job.Command!, job.Issuer));
+                using (job.Ids?.Enter())
+                {
+                    job.Completion.TrySetResult(Run(job.Command!, job.Issuer));
+                }
             }
             catch (CommandException error)
             {
@@ -565,7 +576,7 @@ public sealed class CommandDispatcher : IAsyncDisposable
     }
 
     /// <summary>A command to run for someone, or session work to run in its turn.</summary>
-    private sealed record Job(ICommand? Command, TaskCompletionSource<CommandResult> Completion, string Issuer, Func<CommandResult>? Exclusive = null);
+    private sealed record Job(ICommand? Command, TaskCompletionSource<CommandResult> Completion, string Issuer, Func<CommandResult>? Exclusive = null, IdScope? Ids = null);
 
     private interface IHandlerAdapter
     {

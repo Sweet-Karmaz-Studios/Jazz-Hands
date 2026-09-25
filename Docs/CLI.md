@@ -3309,6 +3309,44 @@ Play proxies instead of their sources, or stop.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+## `jazz recovery`
+
+Unsaved work after a crash: check what there is, bring it back by replaying every command since the last save, or set it aside.
+
+### `jazz recovery accept <project>`
+
+Bring back unsaved work after a crash: the saved project with every command since replayed.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--file <file>` | A rescued untitled project from recovery.check, instead of this project's own. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz recovery check <project>`
+
+Say whether there is unsaved work to recover beside the project, and how much.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+### `jazz recovery discard <project>`
+
+Decline the recovery: set the autosave copy and command history aside and keep the project as saved.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--file <file>` | A rescued untitled project to remove instead. |
+| `--no-save` | Do not write the project back. |
+
 ## `jazz rpc`
 
 Talk JSON-RPC to a running editor or 'jazz serve': call a method, list them, watch events, or pass stdin through.

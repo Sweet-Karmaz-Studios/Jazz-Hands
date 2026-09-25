@@ -11,7 +11,8 @@ namespace JazzHands.Engine.Recovery;
 /// <param name="Timestamp">When it ran, in UTC.</param>
 /// <param name="Name">The command's registered name, for example clip.split.</param>
 /// <param name="Arguments">Its arguments, exactly as they were dispatched.</param>
-public sealed record HistoryEntry(DateTimeOffset Timestamp, string Name, JsonObject Arguments);
+/// <param name="Ids">The identifiers it made, in order, so a replay makes the same ones (Phase 33).</param>
+public sealed record HistoryEntry(DateTimeOffset Timestamp, string Name, JsonObject Arguments, IReadOnlyList<string>? Ids = null);
 
 /// <summary>
 /// The append-only record of every command that ran since the last save.
@@ -100,7 +101,7 @@ public sealed class HistoryLog : IDisposable
     }
 
     /// <summary>Appends one command.</summary>
-    public void Append(string name, JsonObject arguments, TimeProvider? clock = null)
+    public void Append(string name, JsonObject arguments, TimeProvider? clock = null, IReadOnlyList<string>? ids = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(arguments);
@@ -117,6 +118,11 @@ public sealed class HistoryLog : IDisposable
             ["command"] = name,
             ["args"] = arguments.DeepClone(),
         };
+
+        if (ids is { Count: > 0 })
+        {
+            entry["ids"] = new JsonArray([.. ids.Select(id => (JsonNode?)JsonValue.Create(id))]);
+        }
 
         lock (_gate)
         {
@@ -184,7 +190,11 @@ public sealed class HistoryLog : IDisposable
                     ? parsed
                     : default;
 
-            return new HistoryEntry(timestamp, name, entry["args"] as JsonObject ?? []);
+            IReadOnlyList<string>? ids = entry["ids"] is JsonArray made
+                ? [.. made.Select(id => id?.GetValue<string>()).OfType<string>()]
+                : null;
+
+            return new HistoryEntry(timestamp, name, entry["args"] as JsonObject ?? [], ids);
         }
         catch (JsonException)
         {
