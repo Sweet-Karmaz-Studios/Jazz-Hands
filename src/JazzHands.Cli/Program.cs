@@ -16,6 +16,19 @@ try
 {
     RootCommand root = JazzCli.BuildRootCommand();
     ParseResult parsed = root.Parse(args);
+
+    // Chosen before anything makes a device, so every render in this process is on it.
+    if (parsed.GetValue(JazzCli.GpuOption) is { Length: > 0 } gpu)
+    {
+        if (!JazzHands.Render.GpuChoice.TryParse(gpu, out JazzHands.Render.GpuChoice? choice))
+        {
+            Console.Error.WriteLine($"jazz: --gpu takes auto, warp or an adapter number, not '{gpu}'.");
+            return ExitCode.UsageError;
+        }
+
+        JazzHands.Render.RenderDevice.Preferred = choice;
+    }
+
     int code = parsed.Invoke();
 
     // System.CommandLine prints what was wrong and exits 1; the contract says a usage error is 2,
@@ -49,15 +62,26 @@ namespace JazzHands.Cli
             Recursive = true,
         };
 
+        /// <summary>The global --gpu option: which adapter renders.</summary>
+        public static Option<string?> GpuOption { get; } = new("--gpu")
+        {
+            Description = "Which adapter renders: auto (the best GPU, the default), warp (the software rasterizer, as tests and CI use) or an adapter number from 'jazz version'. JAZZ_GPU sets the same.",
+            Recursive = true,
+        };
+
         /// <summary>Builds the root command with every verb attached.</summary>
         public static RootCommand BuildRootCommand()
         {
             var root = new RootCommand("Jazz Hands video editor. Everything the GUI can do, jazz can do headless.");
             root.Options.Add(JsonOption);
             root.Options.Add(VerboseOption);
+            root.Options.Add(GpuOption);
             root.Subcommands.Add(BuildVersionCommand());
             ProjectCommands.AddTo(root);
             ExportCommands.AddTo(root);
+            InspectCommands.AddTo(root);
+            root.Subcommands.Add(ApplyCommand.Build());
+            root.Subcommands.Add(CliDocs.Build());
             GeneratedCommands.AddTo(root);
             root.Subcommands.Add(BuildPerfCommand());
             return root;
@@ -155,7 +179,7 @@ namespace JazzHands.Cli
             };
             var effects = new Option<string>("--effects")
             {
-                Description = "Picture effects to stack on every clip, by type id, comma separated, for example video.blur.gaussian,video.glow.",
+                Description = "Picture effects stacked on every clip at their defaults, by type id, comma separated: video.blur.gaussian,video.glow. An id that is not a picture effect is refused.",
             };
 
             var command = new Command(
@@ -248,7 +272,7 @@ namespace JazzHands.Cli
             };
             var audible = new Option<bool>("--audible")
             {
-                Description = "Play at full volume. Silent by default: the mix and the device do the same work.",
+                Description = "Play at full volume. Silent by default: the mix and the device do the same work, and nobody has to listen to test tones.",
             };
 
             var command = new Command(
@@ -319,7 +343,7 @@ namespace JazzHands.Cli
             };
             var reuse = new Option<bool>("--reuse")
             {
-                Description = "Keep one decoder across passes and rewind, the way playback loops do.",
+                Description = "Keep one decoder across passes and rewind, the way playback loops do. This is what separates a decode leak from the cost of churning decoders.",
             };
             var passes = new Option<int>("--passes")
             {
@@ -394,11 +418,11 @@ namespace JazzHands.Cli
             };
             var drag = new Option<bool>("--drag")
             {
-                Description = "Move the playhead in small steps, the way a hand does, instead of at random.",
+                Description = "Move the playhead in small steps, the way a hand does, instead of at random. This is what a scrub actually is; random access is the worst case.",
             };
             var reverse = new Option<bool>("--reverse")
             {
-                Description = "Play backwards one frame at a time, priming each group of pictures.",
+                Description = "Play backwards one frame at a time, priming each group of pictures. Reports how many frames missed the playback budget.",
             };
             var nearest = new Option<bool>("--nearest")
             {

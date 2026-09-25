@@ -11,3 +11,6 @@ tests/corpus/*
 *.jazz.d/
 TestResults/
 BenchmarkDotNet.Artifacts/
+
+# Published builds (dotnet publish -p:PublishProfile=win-x64).
+artifacts/

@@ -17,4 +17,19 @@
     <PackageReference Include="Serilog.Extensions.Hosting" />
   </ItemGroup>
 
+  <!-- A published jazz.exe carries the FFmpeg libraries in a folder beside it. -->
+  <Target Name="CopyFfmpegToPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <FfmpegLibrary Include="$(MSBuildThisFileDirectory)..\..\third_party\ffmpeg\bin\*.dll" />
+    </ItemGroup>
+    <Error Condition="'@(FfmpegLibrary)' == ''" Text="third_party/ffmpeg/bin has no DLLs. Run tools/get-ffmpeg.ps1 first." />
+    <Copy SourceFiles="@(FfmpegLibrary)" DestinationFolder="$(PublishDir)ffmpeg" SkipUnchangedFiles="true" />
+  </Target>
+
+  <!-- The prose that jazz docs puts around the generated reference. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\Docs\cli\*.md" LogicalName="doc:%(Filename)" />
+    <EmbeddedResource Include="..\..\Docs\cli\notes\*.md" LogicalName="note:%(Filename)" />
+  </ItemGroup>
+
 </Project>

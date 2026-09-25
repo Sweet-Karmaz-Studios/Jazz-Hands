@@ -44,7 +44,7 @@ public static class ExportCommands
         var file = new Argument<string>("file") { Description = "The recording to trim." };
         var keep = new Option<string?>("--keep")
         {
-            Description = "The stretches to keep, in source time: 00:10-00:25,01:00-01:30. All of it when left out.",
+            Description = "The stretches to keep, in source time, as start-end pairs separated by commas: 00:10-00:25,01:00-01:30. Any time form works: 10s-25s, 600f-1500f. All of it when left out.",
         };
         var mute = new Option<string?>("--mute-stream")
         {
@@ -152,31 +152,31 @@ public static class ExportCommands
         var project = new Argument<string>("project") { Description = "The .jazz file to export." };
         var output = new Option<string>("--out")
         {
-            Description = "Where to write the file. Relative to the project; the extension picks the container.",
+            Description = "Where to write the file. Relative to the project. The extension picks the container; left off, the preset's is added.",
             Required = true,
         };
         var preset = new Option<string>("--preset")
         {
-            Description = "Which preset. 'jazz presets list' shows them.",
+            Description = "Which preset: youtube-1080p (the default) or any other; 'jazz presets list' shows them, built in and your own.",
             DefaultValueFactory = _ => ExportPresets.Default,
         };
         var mode = new Option<string>("--mode")
         {
-            Description = "auto (copy or smart cut when nothing needs rendering), smart, copy, or full (encode).",
+            Description = "auto copies when the timeline plays one file untouched and the preset would write what the source already is, smart cuts when such a timeline's cuts are off keyframes, and encodes otherwise. smart and copy keep the source's codec whatever the preset says. full (or encode) renders every frame.",
             DefaultValueFactory = _ => "auto",
         };
         var sequence = new Option<string?>("--sequence") { Description = "Which sequence. The active one when left out." };
         var snap = new Option<bool>("--snap-to-keyframes") { Description = "For a copy, move cuts to the nearest keyframe instead of refusing." };
-        var inOut = new Option<bool>("--use-in-out") { Description = "Export only between the in and out points." };
+        var inOut = new Option<bool>("--use-in-out") { Description = "Export only between the sequence's in and out points." };
         var external = new Option<bool>("--use-external-ffmpeg") { Description = "Encode through ffmpeg.exe." };
         var subtitles = new Option<string>("--subtitles")
         {
-            Description = "What subtitle tracks become: soft (streams players can turn on), burn (drawn into the picture), sidecar (files beside the video) or none.",
+            Description = "What subtitle tracks become. soft (the default): a stream per track that players turn on and off, mov_text in MP4, SubRip or ASS (for a styled track or placed cues) in Matroska, the first on by default. burn: drawn into the picture, which makes the export an encode. sidecar: a file per track beside the video, trailer.eng.srt. none: left out. ffmpeg.exe exports write sidecars for soft.",
             DefaultValueFactory = _ => "soft",
         };
         var sidecarFormat = new Option<string>("--sidecar-format") { Description = "srt, vtt or ass, for --subtitles sidecar.", DefaultValueFactory = _ => "srt" };
-        var noChapters = new Option<bool>("--no-chapters") { Description = "Leave the chapter marks out of the file." };
-        var dryRun = new Option<bool>("--dry-run") { Description = "Print the plan and write nothing." };
+        var noChapters = new Option<bool>("--no-chapters") { Description = "Leave the chapter marks out. They go in by default: Matroska chapters, and an MP4 chapter track and chpl box, which YouTube reads." };
+        var dryRun = new Option<bool>("--dry-run") { Description = "Print the plan, with the reasons for the mode and an estimate of size and time, and write nothing." };
 
         var command = new Command("export", "Export a sequence to a file in the foreground. 'jazz export enqueue' queues one in a running editor.")
         {
@@ -218,7 +218,7 @@ public static class ExportCommands
     }
 
     /// <summary>Plans, reports the plan, and unless it is a dry run, exports.</summary>
-    private static int Export(Project project, string projectPath, ExportRequest request, IServiceProvider services, bool dryRun, bool json, CancellationToken token, bool trim = false)
+    internal static int Export(Project project, string projectPath, ExportRequest request, IServiceProvider services, bool dryRun, bool json, CancellationToken token, bool trim = false)
     {
         KeyframeLookup keyframes = services.GetRequiredService<KeyframeLookup>();
         ExportPlan plan = trim && request.Mode == ExportMode.Auto
@@ -459,7 +459,7 @@ public static class ExportCommands
     /// Runs a verb, turning Ctrl+C into a cancellation and every ordinary failure into an exit
     /// code and one sentence, never a stack trace.
     /// </summary>
-    private static int Guard(ParseResult parse, Func<CancellationToken, int> body)
+    internal static int Guard(ParseResult parse, Func<CancellationToken, int> body)
     {
         bool json = parse.GetValue(JazzCli.JsonOption);
         using var cancel = new CancellationTokenSource();

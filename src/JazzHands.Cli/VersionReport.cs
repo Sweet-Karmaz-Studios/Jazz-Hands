@@ -19,6 +19,7 @@ namespace JazzHands.Cli;
 /// <param name="Gpu">The Direct3D 11 adapter the compositor would use.</param>
 /// <param name="FeatureLevel">The Direct3D feature level.</param>
 /// <param name="HardwareVideo">Whether the device supports hardware video decode.</param>
+/// <param name="Adapters">The hardware adapters by the number <c>--gpu</c> takes, fastest first.</param>
 public sealed record VersionReport(
     string JazzHands,
     string Runtime,
@@ -29,7 +30,8 @@ public sealed record VersionReport(
     IReadOnlyDictionary<string, string> Libraries,
     string Gpu,
     string FeatureLevel,
-    bool HardwareVideo)
+    bool HardwareVideo,
+    IReadOnlyList<string> Adapters)
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -87,7 +89,8 @@ public sealed record VersionReport(
             libraries,
             gpu,
             featureLevel,
-            hardwareVideo);
+            hardwareVideo,
+            ListAdapters());
     }
 
     /// <summary>The human-readable form printed by default.</summary>
@@ -113,11 +116,29 @@ public sealed record VersionReport(
 
         sb.AppendLine($"GPU          {Gpu}");
         sb.Append($"Direct3D     {FeatureLevel}, hardware video {(HardwareVideo ? "yes" : "no")}");
+        for (int index = 0; index < Adapters.Count; index++)
+        {
+            sb.AppendLine();
+            sb.Append(index == 0 ? "Adapters     " : "             ").Append(index).Append(' ').Append(Adapters[index]);
+        }
+
         return sb.ToString();
     }
 
     /// <summary>The --json form.</summary>
     public string ToJson() => JsonSerializer.Serialize(this, JsonOptions);
+
+    private static IReadOnlyList<string> ListAdapters()
+    {
+        try
+        {
+            return RenderDevice.Adapters();
+        }
+        catch (SharpGen.Runtime.SharpGenException)
+        {
+            return [];
+        }
+    }
 
     private static string InformationalVersion()
     {

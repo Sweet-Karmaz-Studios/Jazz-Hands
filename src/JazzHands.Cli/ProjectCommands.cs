@@ -38,12 +38,12 @@ public static class ProjectCommands
         var file = new Argument<string>("project") { Description = "Where to write the new .jazz file." };
         var fps = new Option<string>("--fps")
         {
-            Description = "Frame rate: 30, 60, 23.976, or an exact ratio such as 30000/1001.",
+            Description = "Frame rate: 30, 60, an exact ratio such as 30000/1001, or one of the decimal shorthands 23.976, 29.97, 59.94, 119.88. Any other decimal is refused, with the ratio to type instead.",
             DefaultValueFactory = _ => "30",
         };
         var size = new Option<string>("--size")
         {
-            Description = "Frame size: 1920x1080, 1080p, 4k, 720p.",
+            Description = "Frame size: 1920x1080, or one of 720p, 1080p, 2k, 4k, 8k.",
             DefaultValueFactory = _ => "1920x1080",
         };
         var name = new Option<string?>("--name")
@@ -168,7 +168,7 @@ public static class ProjectCommands
         var file = new Argument<string>("project") { Description = "The .jazz file to rewrite." };
         var check = new Option<bool>("--check")
         {
-            Description = "Report whether the file is already canonical instead of rewriting it.",
+            Description = "Report whether the file is already canonical and exit 1 if not, without writing.",
         };
 
         var command = new Command("fmt", "Rewrite a project into canonical form: ordering, indentation, defaults.")
