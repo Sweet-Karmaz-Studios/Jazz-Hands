@@ -331,6 +331,19 @@ public static class AssFormat
         return text.ToString();
     }
 
+    /// <summary>A cue's text as an ASS event's, with an alignment tag unless it sits at the bottom.</summary>
+    public static string Line(SubtitleCue cue)
+    {
+        ArgumentNullException.ThrowIfNull(cue);
+        return Body(cue, SubtitleAlign.Bottom);
+    }
+
+    /// <summary>
+    /// The script header an ASS encoder is opened with: the style, and the events' format line,
+    /// with no events.
+    /// </summary>
+    public static string EncoderHeader(SubtitleStyle? style) => Write(new SubtitleDocument([], style ?? SubtitleStyle.Default));
+
     /// <summary>
     /// A cue's text for writing: the line as the file had it while the markup and place still say
     /// the same, otherwise made from the markup.

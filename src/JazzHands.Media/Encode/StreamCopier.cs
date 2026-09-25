@@ -28,6 +28,7 @@ public sealed record CopySegment(string Path, Flicks Start, Flicks End)
 /// </param>
 /// <param name="Container">The FFmpeg muxer name, or null to choose from the extension.</param>
 /// <param name="FastStart">Put an MP4's index at the front.</param>
+/// <param name="Extras">Subtitle streams and chapters to add, at their times in the output.</param>
 public sealed record StreamCopyJob(
     string OutputPath,
     IReadOnlyList<CopySegment> Segments,
@@ -35,7 +36,8 @@ public sealed record StreamCopyJob(
     IReadOnlyList<int> AudioStreams,
     Rational? FrameRate = null,
     string? Container = null,
-    bool FastStart = true);
+    bool FastStart = true,
+    MuxExtras? Extras = null);
 
 /// <summary>How far a copy has got.</summary>
 /// <param name="Done">Source time copied so far.</param>
@@ -119,6 +121,7 @@ public static unsafe class StreamCopier
             Demuxer first = Open(demuxers, job.Segments[0].Path);
             muxer = Muxer.Create(job.OutputPath, job.Container);
             Output output = AddStreams(muxer, first, job);
+            job.Extras?.Open(muxer);
             muxer.WriteHeader(job.FastStart);
 
             Flicks offset = Flicks.Zero;
@@ -129,10 +132,11 @@ public static unsafe class StreamCopier
                 cancellationToken.ThrowIfCancellationRequested();
 
                 Demuxer demuxer = Open(demuxers, segment.Path);
-                CopyOne(demuxer, segment, offset, output, muxer, packet, cancellationToken, progress, total);
+                CopyOne(demuxer, segment, offset, output, muxer, packet, cancellationToken, progress, total, job.Extras);
                 offset += segment.Duration;
             }
 
+            job.Extras?.Close(muxer);
             muxer.Finish();
             complete = true;
 
@@ -238,7 +242,8 @@ public static unsafe class StreamCopier
         AvPacket owned,
         CancellationToken cancellationToken,
         IProgress<CopyProgress>? progress,
-        Flicks total)
+        Flicks total,
+        MuxExtras? extras)
     {
         VideoLane? video = output.Video;
         int anchorStream = video?.Source ?? output.Audio[0].Source;
@@ -317,6 +322,7 @@ public static unsafe class StreamCopier
                 }
 
                 MovePacket(read, owned);
+                extras?.WriteUpTo(muxer, at - segment.Start + offset);
                 video.Write(owned.Handle, at - segment.Start + offset, muxer);
                 output.VideoPackets++;
 
@@ -359,6 +365,7 @@ public static unsafe class StreamCopier
             }
 
             MovePacket(read, owned);
+            extras?.WriteUpTo(muxer, at - segment.Start + offset);
             audio.Write(owned.Handle, at - segment.Start + offset, samples, muxer);
             output.AudioPackets++;
         }

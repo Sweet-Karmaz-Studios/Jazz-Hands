@@ -156,6 +156,41 @@ public sealed unsafe class Muxer : IDisposable
         return Register(stream, new Rational(encoder->time_base.num, encoder->time_base.den));
     }
 
+    /// <summary>Marks a stream as the one a player shows unless told otherwise.</summary>
+    internal void SetDefault(int stream)
+    {
+        VerifyThread();
+        _context->streams[stream]->disposition |= ffmpeg.AV_DISPOSITION_DEFAULT;
+    }
+
+    /// <summary>Adds chapters, in milliseconds, before the header is written.</summary>
+    internal void AddChapters(IReadOnlyList<MuxChapter> chapters)
+    {
+        ArgumentNullException.ThrowIfNull(chapters);
+        VerifyThread();
+        if (_headerWritten)
+        {
+            throw new InvalidOperationException("Chapters are added before the header is written.");
+        }
+
+        for (int index = 0; index < chapters.Count; index++)
+        {
+            MuxChapter chapter = chapters[index];
+
+            // Allocated as FFmpeg would, because avformat_free_context frees them.
+            AVChapter* added = Av.CheckAlloc((AVChapter*)ffmpeg.av_mallocz((ulong)sizeof(AVChapter)), "av_mallocz");
+            added->id = index + 1;
+            added->time_base = new AVRational { num = 1, den = 1000 };
+            added->start = chapter.Start.ToTimebase(1, 1000, RoundingMode.Nearest);
+            added->end = chapter.End.ToTimebase(1, 1000, RoundingMode.Nearest);
+            ffmpeg.av_dict_set(&added->metadata, "title", chapter.Title, 0);
+
+            int count = (int)_context->nb_chapters;
+            ffmpeg.av_dynarray_add(&_context->chapters, &count, added);
+            _context->nb_chapters = (uint)count;
+        }
+    }
+
     /// <summary>Opens the file and writes the container header.</summary>
     /// <param name="fastStart">For MP4 and MOV, move the index to the front so a player can start before the whole file arrives.</param>
     public void WriteHeader(bool fastStart = false)
