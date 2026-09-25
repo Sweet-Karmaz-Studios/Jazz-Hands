@@ -1,5 +1,6 @@
 using System.Numerics;
 using JazzHands.Core.Commands;
+using JazzHands.Core.Effects;
 using JazzHands.Core.Model;
 using JazzHands.Core.Time;
 using JazzHands.Engine.Commands;
@@ -52,12 +53,22 @@ public sealed class ReframeSequenceHandler : ICommandHandler<ReframeSequenceComm
 
         Project result = project;
         Clip front;
+        Track[] lifted = [];
         if (command.Mode == ReframeMode.Fit)
         {
             front = new Clip(Id.New(), new TimeRange(Flicks.Zero, length), Flicks.Zero, SequenceId: source.Id, Name: source.Name);
         }
         else
         {
+            // Graphics (titles, shapes, adjustment layers) are laid over the vertical frame rather
+            // than cut by the window: hidden in the nests, and copied above, fitted to the width.
+            Track[] graphics = [.. source.Tracks.Where(IsGraphics)];
+            string[] hidden = [.. graphics.Select(track => track.Id)];
+            background = background with { HiddenTracks = [.. hidden] };
+            float across = frame.X / sourceSize.X;
+            float down = (frame.X / (float)command.Window) / sourceSize.Y;
+            lifted = [.. graphics.Select((track, index) => Lift(track, 2 + index, across, down))];
+
             // The window: a sequence the shape of the window, the original's height, holding the
             // original scaled to cover it; that clip's position is the pan.
             int windowHeight = original.Height;
@@ -72,6 +83,7 @@ public sealed class ReframeSequenceHandler : ICommandHandler<ReframeSequenceComm
                         ? Follow(project, source, trackId, sourceSize, window)
                         : AnimatedValue.Constant(new ParamValue.Float2(Vector2.Zero)),
                 },
+                HiddenTracks = [.. hidden],
             };
 
             var crop = new Sequence(Id.New(), $"{source.Name} crop", [new Track(Id.New(), TrackKind.Video, "V1", 0, [pan])])
@@ -91,7 +103,7 @@ public sealed class ReframeSequenceHandler : ICommandHandler<ReframeSequenceComm
                 .Select((track, index) => track with
                 {
                     Id = Id.New(),
-                    Order = 2 + index,
+                    Order = 2 + lifted.Length + index,
                     Clips = [.. track.Clips.Select(clip => clip with { Id = Id.New(), LinkGroupId = null })],
                     Transitions = [],
                 }),
@@ -103,6 +115,7 @@ public sealed class ReframeSequenceHandler : ICommandHandler<ReframeSequenceComm
             [
                 new Track(Id.New(), TrackKind.Video, "V1", 0, [background]),
                 new Track(Id.New(), TrackKind.Video, "V2", 1, [front]),
+                .. lifted,
                 .. sound,
             ])
         {
@@ -110,6 +123,7 @@ public sealed class ReframeSequenceHandler : ICommandHandler<ReframeSequenceComm
         };
 
         context.Changed(vertical.Id);
+        context.Changed(lifted.SelectMany(track => track.Clips.Select(clip => clip.Id)));
         context.Changed(project.Id);
         return result.AddSequence(vertical) with { ActiveSequenceId = vertical.Id };
     }
@@ -153,6 +167,74 @@ public sealed class ReframeSequenceHandler : ICommandHandler<ReframeSequenceComm
         }
 
         return new KeyframedValue(keyframes);
+    }
+
+    /// <summary>A track that only draws: no file and no nested sequence on it, and something to draw.</summary>
+    private static bool IsGraphics(Track track) =>
+        track.Kind is TrackKind.Video or TrackKind.Adjustment
+        && !track.Clips.IsEmpty
+        && track.Clips.All(clip => clip.MediaId is null && clip.SequenceId is null);
+
+    /// <summary>
+    /// A graphics track copied into the vertical frame: every clip new, its places across fitted
+    /// to the width and down spread over the window, and its sizes fitted to the width, so nothing
+    /// is cut off and nothing that sat side by side overlaps.
+    /// </summary>
+    private static Track Lift(Track track, int order, float across, float down)
+    {
+        Vector2 Place(Vector2 point) => new(MathF.Round(point.X * across, 2), MathF.Round(point.Y * down, 2));
+
+        AnimatedValue? Map(AnimatedValue? value, Func<ParamValue, ParamValue> change) => value switch
+        {
+            StaticValue fixedValue => new StaticValue(change(fixedValue.Value)),
+            KeyframedValue keyed => new KeyframedValue(keyed.Keyframes.Select(key => key with { Value = change(key.Value) })),
+            DrivenValue driven => driven with { Base = Map(driven.Base, change)! },
+            _ => value,
+        };
+
+        ParamValue Point(ParamValue value) => value is ParamValue.Float2 pair ? new ParamValue.Float2(Place(pair.Value)) : value;
+
+        ParamValue Size(ParamValue value) => value switch
+        {
+            ParamValue.Float number => new ParamValue.Float(MathF.Round(number.Value * across, 3)),
+            ParamValue.Float2 pair => new ParamValue.Float2(pair.Value * across),
+            _ => value,
+        };
+
+        Clip Moved(Clip clip)
+        {
+            Clip copy = clip with { Id = Id.New(), LinkGroupId = null };
+            if (copy.Transform is { } transform)
+            {
+                copy = copy with { Transform = transform with { Position = Map(transform.Position, Point)! } };
+            }
+
+            // A generator's own sizes and places in pixels.
+            if (copy.GeneratorId is { } generator && Effects.EffectCatalog.Registry.Find(generator) is { } descriptor)
+            {
+                copy = copy with
+                {
+                    Effects = [.. copy.Effects.Select(effect => !EffectChains.IsOwnParameters(copy, effect)
+                        ? effect with { Id = Id.New() }
+                        : effect with
+                        {
+                            Parameters = [.. effect.Parameters.Select(parameter => descriptor.Param(parameter.Name) is { Unit: "px" } param
+                                ? parameter with { Value = Map(parameter.Value, param.Type == ParamType.Point || parameter.Name == "position" ? Point : Size)! }
+                                : parameter)],
+                        })],
+                };
+            }
+
+            return copy;
+        }
+
+        return track with
+        {
+            Id = Id.New(),
+            Order = order,
+            Clips = [.. track.Clips.Select(Moved)],
+            Transitions = [],
+        };
     }
 
     /// <summary>The scale that makes a picture cover a frame, both ways.</summary>

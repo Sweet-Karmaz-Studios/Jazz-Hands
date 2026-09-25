@@ -380,6 +380,12 @@
           "items": {
             "$ref": "#/$defs/pointTrack"
           }
+        },
+        "hiddenTracks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "required": [

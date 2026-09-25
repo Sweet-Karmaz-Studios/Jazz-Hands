@@ -2733,6 +2733,7 @@ Play a long sequence through the playback engine and count dropped frames.
 | `--panel <panel>` | The size of the preview surface each frame is drawn into. Default: 2560x1440. |
 | `--layers <layers>` | Video tracks to stack, each scaled and turned into its own quadrant, on its own decoder. Default: 1. |
 | `--effects <effects>` | Picture effects stacked on every clip at their defaults, by type id, comma separated: video.blur.gaussian,video.glow. An id that is not a picture effect is refused. |
+| `--vfx` | Over the file, two moving layers with motion blur (a title and a shape), a particle layer, and a heavy hit every four seconds: Phase 29a's bar. |
 
 Lays one file end to end until the run is covered and plays it through the playback engine, with
 the sound card's clock at zero monitor volume. Each frame is drawn into a panel-sized surface and

@@ -242,6 +242,11 @@ namespace JazzHands.Cli
                 Description = "Picture effects stacked on every clip at their defaults, by type id, comma separated: video.blur.gaussian,video.glow. An id that is not a picture effect is refused.",
             };
 
+            var vfx = new Option<bool>("--vfx")
+            {
+                Description = "Over the file, two moving layers with motion blur (a title and a shape), a particle layer, and a heavy hit every four seconds: Phase 29a's bar.",
+            };
+
             var command = new Command(
                 "playback",
                 "Play a long sequence through the playback engine and count dropped frames.")
@@ -253,6 +258,7 @@ namespace JazzHands.Cli
                 panel,
                 layers,
                 effects,
+                vfx,
             };
 
             command.SetAction(parseResult =>
@@ -290,7 +296,8 @@ namespace JazzHands.Cli
                         size.Height,
                         Math.Clamp(parseResult.GetValue(layers), 1, 16),
                         stack,
-                        Console.Error);
+                        Console.Error,
+                        parseResult.GetValue(vfx));
 
                     Console.Out.WriteLine(parseResult.GetValue(JsonOption)
                         ? System.Text.Json.JsonSerializer.Serialize(result, JazzHands.Core.Serialization.JazzJson.Options)

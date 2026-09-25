@@ -37,7 +37,8 @@ public sealed record ListTemplatesQuery : IQuery<TemplateInfo[]>;
 /// <param name="Steps">How many commands it runs.</param>
 /// <param name="BuiltIn">True for one that ships with the editor.</param>
 /// <param name="Source">The file a person's template was read from.</param>
-public sealed record TemplateInfo(string Name, string Label, string Description, ImmutableSortedDictionary<string, TemplateParam> Params, int Steps, bool BuiltIn, string Source);
+/// <param name="Portrait">True when it has a layout of its own for a portrait frame, used when it is placed in one.</param>
+public sealed record TemplateInfo(string Name, string Label, string Description, ImmutableSortedDictionary<string, TemplateParam> Params, int Steps, bool BuiltIn, string Source, bool Portrait = false);
 
 /// <summary>Turns clips and their effects into a motion template, with chosen values as its parameters.</summary>
 /// <remarks>

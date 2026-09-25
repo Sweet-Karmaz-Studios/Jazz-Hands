@@ -58,7 +58,8 @@ public static class TemplateLibrary
             template.Values,
             template.Steps?.Count ?? 0,
             template.BuiltIn,
-            template.Source);
+            template.Source,
+            template.PortraitSteps is { Count: > 0 });
     }
 
     private static ImmutableArray<MotionTemplate> ReadBuiltIns()

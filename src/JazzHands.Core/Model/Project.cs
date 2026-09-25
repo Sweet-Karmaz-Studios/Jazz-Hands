@@ -389,6 +389,7 @@ public sealed record Marker(
 /// <param name="MotionBlur">Motion blur on the clip's animated placement, over its track's and sequence's; null to follow them.</param>
 /// <param name="Matte">Another track used as this clip's matte, over its track's; null to follow the track.</param>
 /// <param name="PointTracks">Points of its picture followed through its frames (<c>tracking.point</c>).</param>
+/// <param name="HiddenTracks">For a nested sequence, tracks of it this clip leaves out: its graphics, lifted into a vertical version by <c>sequence.reframe</c>.</param>
 public sealed record Clip(
     string Id,
     TimeRange Range,
@@ -422,7 +423,8 @@ public sealed record Clip(
     RetimeMode Retime = RetimeMode.Nearest,
     MotionBlur? MotionBlur = null,
     TrackMatte? Matte = null,
-    EquatableArray<PointTrack> PointTracks = default) : IEquatable<Clip>
+    EquatableArray<PointTrack> PointTracks = default,
+    EquatableArray<string> HiddenTracks = default) : IEquatable<Clip>
 {
     /// <summary>Playback rate, defaulting to normal speed.</summary>
     public Rational EffectiveSpeed => Speed ?? Rational.One;

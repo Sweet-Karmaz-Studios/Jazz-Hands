@@ -6,7 +6,7 @@
   "params": {
     "target": { "type": "text", "default": "0, 0", "description": "The point to magnify, as x, y in sequence pixels from the frame's centre." },
     "label": { "type": "text", "default": "New: crafting", "description": "What it is, under the inset." },
-    "inset": { "type": "text", "default": "520, -220", "description": "Where the inset's middle goes, as x, y from the frame's centre." },
+    "inset": { "type": "text", "default": "520, -220", "portraitDefault": "0, -520", "description": "Where the inset's middle goes, as x, y from the frame's centre." },
     "zoom": { "type": "number", "default": "2.5", "description": "How much bigger the inset shows it." },
     "duration": { "type": "time", "default": "3s", "description": "How long it stays." }
   },

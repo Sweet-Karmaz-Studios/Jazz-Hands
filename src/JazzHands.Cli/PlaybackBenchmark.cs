@@ -5,11 +5,14 @@ using JazzHands.Audio.Output;
 using JazzHands.Core.Commands;
 using JazzHands.Core.Model;
 using JazzHands.Core.Time;
+using JazzHands.Engine;
+using JazzHands.Engine.Commands;
 using JazzHands.Engine.Diagnostics;
 using JazzHands.Engine.Playback;
 using JazzHands.Media.Import;
 using JazzHands.Render;
 using JazzHands.Render.Passes;
+using Microsoft.Extensions.DependencyInjection;
 using Vortice.Direct3D11;
 
 namespace JazzHands.Cli;
@@ -87,6 +90,7 @@ public static class PlaybackBenchmark
     /// <param name="layers">How many video tracks to stack, each transformed into its own quadrant.</param>
     /// <param name="effects">Picture effects to stack on every clip, at their default settings, by type id.</param>
     /// <param name="progress">Where to report as it goes.</param>
+    /// <param name="vfx">Add Phase 29a's load over the file: two moving layers with motion blur, a particle layer, and a heavy hit every four seconds.</param>
     public static PlaybackBenchmarkResult Run(
         string path,
         TimeSpan duration,
@@ -96,7 +100,8 @@ public static class PlaybackBenchmark
         int panelHeight = 1440,
         int layers = 1,
         IReadOnlyList<string>? effects = null,
-        TextWriter? progress = null)
+        TextWriter? progress = null,
+        bool vfx = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
@@ -106,6 +111,13 @@ public static class PlaybackBenchmark
 
         string[] stacked = [.. effects ?? []];
         (Project project, int clips) = Build(item, video, duration, Math.Max(1, layers), stacked);
+        if (vfx)
+        {
+            (project, int added) = Vfx(project, duration);
+            clips += added;
+            stacked = [.. stacked, "motion blur x2", "gen.particles.embers", "impact.heavy every 4 s"];
+        }
+
         ProjectSettings settings = project.Settings;
 
         using RenderDevice device = RenderDevice.Create();
@@ -272,6 +284,55 @@ public static class PlaybackBenchmark
         }
 
         return (project with { Sequences = EquatableArray.Create(project.Sequences[0] with { Tracks = [.. tracks] }) }, total);
+    }
+
+    /// <summary>
+    /// Phase 29a's bar over the picture: a title and a shape crossing the frame every two seconds
+    /// with motion blur, embers over the whole run, and a heavy hit every four seconds, placed by
+    /// the real command so the benchmark plays what a person makes.
+    /// </summary>
+    private static (Project Project, int Clips) Vfx(Project project, TimeSpan duration)
+    {
+        using ServiceProvider services = new ServiceCollection().AddJazzHandsEngine().BuildServiceProvider();
+        var session = new Session(project, services);
+        Flicks run = Flicks.FromSeconds(duration.TotalSeconds + 5);
+        float width = project.Settings.Width;
+        string[] ids = [Id.New(), Id.New(), Id.New()];
+        string[] tracks = [Id.New(), Id.New(), Id.New()];
+        var commands = new List<ICommand>();
+        for (int index = 0; index < 3; index++)
+        {
+            commands.Add(new AddTrackCommand(TrackKind.Video, TrackId: tracks[index]));
+        }
+
+        commands.Add(new AddTitleCommand(Flicks.Zero, "BOSS RUSH", "title-card", run, tracks[0], ClipId: ids[0]));
+        commands.Add(new AddClipCommand(tracks[1], Flicks.Zero, GeneratorId: "gen.shape.rectangle", Duration: run, ClipId: ids[1]));
+        commands.Add(new AddClipCommand(tracks[2], Flicks.Zero, GeneratorId: "gen.particles.embers", Duration: run, ClipId: ids[2]));
+
+        // Back and forth across the frame, a second each way.
+        for (int second = 0; second <= (int)run.ToSeconds(); second++)
+        {
+            string across = FormattableString.Invariant($"{(second % 2 == 0 ? -0.4f : 0.4f) * width:0}, {(second % 2 == 0 ? -200 : 200)}");
+            commands.Add(new AddKeyframeCommand(ids[0], "transform.position", Flicks.FromSeconds(second), across));
+            commands.Add(new AddKeyframeCommand(ids[1], "transform.position", Flicks.FromSeconds(second), across.StartsWith('-') ? across[1..] : "-" + across));
+        }
+
+        commands.Add(new SetClipMotionBlurCommand(ids[0], Angle: 180));
+        commands.Add(new SetClipMotionBlurCommand(ids[1], Angle: 180));
+        for (double hit = 2; hit < run.ToSeconds() - 2; hit += 4)
+        {
+            commands.Add(new ApplyVfxPresetCommand("impact.heavy", At: Flicks.FromSeconds(hit)));
+        }
+
+        CommandResult result = session.ExecuteAsync(commands, "vfx load").GetAwaiter().GetResult();
+        if (!result.Ok)
+        {
+            throw new InvalidOperationException($"The vfx scene did not build: {result.Code}: {result.Error}");
+        }
+
+        Project built = session.Project;
+        session.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        return (built, built.ActiveSequence!.Tracks.Sum(track => track.Clips.Length) - project.ActiveSequence!.Tracks.Sum(track => track.Clips.Length));
     }
 
     /// <summary>Half size, turned a few degrees, in one quadrant of the frame.</summary>

@@ -53,7 +53,8 @@ public sealed class ApplyTemplateHandler : ICommandHandler<ApplyTemplateCommand>
             given[last] = pair[(split + 1)..];
         }
 
-        IReadOnlyList<ICommand> steps = template.Expand(given, command.At, project.SettingsFor(sequence).FrameRate);
+        ProjectSettings settings = project.SettingsFor(sequence);
+        IReadOnlyList<ICommand> steps = template.Expand(given, command.At, settings.FrameRate, portrait: settings.Width < settings.Height);
 
         // The steps work on the active sequence, so the one asked for is made so while they run.
         string? active = project.ActiveSequenceId;

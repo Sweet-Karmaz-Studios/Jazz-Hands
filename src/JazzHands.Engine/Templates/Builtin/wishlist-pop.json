@@ -5,7 +5,7 @@
   "params": {
     "text": { "type": "text", "default": "Wishlist on Steam", "description": "The words on the button." },
     "colour": { "type": "color", "default": "#1B9E4B", "description": "The button." },
-    "position": { "type": "text", "default": "0, 330", "description": "Where the button's middle goes, as x, y in sequence pixels from the frame's centre." },
+    "position": { "type": "text", "default": "0, 330", "portraitDefault": "0, 560", "description": "Where the button's middle goes, as x, y in sequence pixels from the frame's centre." },
     "duration": { "type": "time", "default": "3s", "description": "How long it stays." }
   },
   "steps": [

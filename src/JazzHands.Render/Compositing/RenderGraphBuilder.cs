@@ -442,7 +442,13 @@ public static class RenderGraphBuilder
                 return null;
             }
 
-            // The nested sequence plays its own time: where the clip's source in and speed put it.
+            // The nested sequence plays its own time: where the clip's source in and speed put it,
+            // less any of its tracks the clip leaves out.
+            if (!clip.HiddenTracks.IsEmpty)
+            {
+                nested = nested with { Tracks = [.. nested.Tracks.Where(track => !clip.HiddenTracks.Contains(track.Id))] };
+            }
+
             RenderGraph inner = Build(project, nested, clip.SourceTimeAt(time), frames, options, depth + 1);
             ProjectSettings innerSettings = project.SettingsFor(nested);
             return (new NestedLayerSource(inner), new Vector2(innerSettings.Width, innerSettings.Height), ConformPolicy.Fit);

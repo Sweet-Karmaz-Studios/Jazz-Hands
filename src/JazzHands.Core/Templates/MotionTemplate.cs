@@ -14,7 +14,8 @@ namespace JazzHands.Core.Templates;
 /// <param name="Type">text, color, number, time, media or clip.</param>
 /// <param name="Default">What it is when not given; empty for one that has to be.</param>
 /// <param name="Description">What it is for, for a person or Claude filling it in.</param>
-public sealed record TemplateParam(string Type = "text", string Default = "", string Description = "");
+/// <param name="PortraitDefault">What it is when not given in a portrait frame, when that differs: a place, a size.</param>
+public sealed record TemplateParam(string Type = "text", string Default = "", string Description = "", string? PortraitDefault = null);
 
 /// <summary>
 /// A motion template: a reusable thing made of commands (a hero intro, an end card, a button pop),
@@ -38,12 +39,17 @@ public sealed record TemplateParam(string Type = "text", string Default = "", st
 /// <param name="Description">What it makes and when to use it.</param>
 /// <param name="Params">The values it is filled in with, by name.</param>
 /// <param name="Steps">The commands that make it.</param>
+/// <param name="PortraitSteps">
+/// The commands that make it in a portrait frame (a Short, a Reel), where a layout for 16:9 would
+/// not fit; the same steps are used when there are none.
+/// </param>
 public sealed partial record MotionTemplate(
     string Name,
     string Label = "",
     string Description = "",
     ImmutableSortedDictionary<string, TemplateParam>? Params = null,
-    JsonArray? Steps = null)
+    JsonArray? Steps = null,
+    JsonArray? PortraitSteps = null)
 {
     /// <summary>The kinds of value a parameter can be.</summary>
     public static readonly ImmutableArray<string> Types = ["text", "color", "number", "time", "media", "clip", "switch"];
@@ -113,16 +119,29 @@ public sealed partial record MotionTemplate(
             return $"'{template.Name}' has no steps.";
         }
 
+        foreach ((JsonArray list, string kind) in (ReadOnlySpan<(JsonArray, string)>)[(steps, "Step"), (template.PortraitSteps ?? [], "Portrait step")])
+        {
+            if (Check(template, list, kind) is { } problem)
+            {
+                return problem;
+            }
+        }
+
+        return null;
+    }
+
+    private static string? Check(MotionTemplate template, JsonArray steps, string kind)
+    {
         for (int index = 0; index < steps.Count; index++)
         {
             if (steps[index] is not JsonObject step || step["command"] is not JsonValue value || !value.TryGetValue(out string? command))
             {
-                return $"Step {index + 1} of '{template.Name}' is not a {{ \"command\", \"args\" }} object.";
+                return $"{kind} {index + 1} of '{template.Name}' is not a {{ \"command\", \"args\" }} object.";
             }
 
             if (CommandRegistry.Find(command) is not { } metadata || metadata.IsQuery || !metadata.Undoable || command.StartsWith("template.", StringComparison.Ordinal))
             {
-                return $"Step {index + 1} of '{template.Name}' runs '{command}', which is not an edit a template can make.";
+                return $"{kind} {index + 1} of '{template.Name}' runs '{command}', which is not an edit a template can make.";
             }
 
             foreach (Match match in Strings(step["args"]).SelectMany(text => VariablePattern().Matches(text)))
@@ -130,7 +149,7 @@ public sealed partial record MotionTemplate(
                 string variable = match.Groups[1].Value;
                 if (!IsTime(variable) && !variable.StartsWith("id:", StringComparison.Ordinal) && !template.Values.ContainsKey(variable))
                 {
-                    return $"Step {index + 1} of '{template.Name}' uses ${{{variable}}}, which is not a parameter, a time or an id.";
+                    return $"{kind} {index + 1} of '{template.Name}' uses ${{{variable}}}, which is not a parameter, a time or an id.";
                 }
             }
         }
@@ -145,7 +164,8 @@ public sealed partial record MotionTemplate(
     /// <param name="given">Values by parameter name.</param>
     /// <param name="at">Where on the sequence it is placed.</param>
     /// <param name="rate">The sequence's frame rate, which times are read at.</param>
-    public IReadOnlyList<ICommand> Expand(IReadOnlyDictionary<string, string> given, Flicks at, Rational rate)
+    /// <param name="portrait">True for a frame taller than it is wide: the portrait steps and defaults are used.</param>
+    public IReadOnlyList<ICommand> Expand(IReadOnlyDictionary<string, string> given, Flicks at, Rational rate, bool portrait = false)
     {
         ArgumentNullException.ThrowIfNull(given);
         foreach (string name in given.Keys)
@@ -159,7 +179,7 @@ public sealed partial record MotionTemplate(
         var values = new Dictionary<string, (TemplateParam Param, string Value)>(StringComparer.Ordinal);
         foreach ((string name, TemplateParam parameter) in Values)
         {
-            string value = given.TryGetValue(name, out string? text) ? text : parameter.Default;
+            string value = given.TryGetValue(name, out string? text) ? text : portrait && parameter.PortraitDefault is { } upright ? upright : parameter.Default;
             if (value.Length == 0 && parameter.Type != "text")
             {
                 throw new CommandException("missing-param", $"'{Name}' needs '{name}': {parameter.Description}", "param");
@@ -169,8 +189,9 @@ public sealed partial record MotionTemplate(
         }
 
         var ids = new Dictionary<string, string>(StringComparer.Ordinal);
-        var commands = new List<ICommand>(Steps!.Count);
-        foreach (JsonNode? node in Steps!)
+        JsonArray steps = portrait && PortraitSteps is { Count: > 0 } portraitSteps ? portraitSteps : Steps!;
+        var commands = new List<ICommand>(steps.Count);
+        foreach (JsonNode? node in steps)
         {
             var step = (JsonObject)node!;
             string command = step["command"]!.GetValue<string>();
