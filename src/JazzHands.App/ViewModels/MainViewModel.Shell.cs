@@ -140,7 +140,53 @@ public sealed partial class MainViewModel
         }
 
         Report(result, $"Opened {Path.GetFileName(full)}.");
+        if (result.Ok)
+        {
+            await OfferRecoveryAsync().ConfigureAwait(true);
+        }
+
         return result.Ok;
+    }
+
+    /// <summary>
+    /// Offers the work a crash left beside the open project, or, with none open, the newest never
+    /// saved project a crash rescued: bring it back, or keep what was saved and set it aside. At
+    /// start and after every open (Phase 33).
+    /// </summary>
+    public async Task OfferRecoveryAsync()
+    {
+        if (_dialogs is null)
+        {
+            return;
+        }
+
+        RecoveryInfo info;
+        try
+        {
+            info = _session.Query(new CheckRecoveryQuery());
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            return;
+        }
+
+        if (info.Available)
+        {
+            bool recover = await _dialogs.AskToRecoverAsync(info.Description).ConfigureAwait(true);
+            CommandResult result = await _session.ExecuteAsync(recover ? new AcceptRecoveryCommand() : new DiscardRecoveryCommand()).ConfigureAwait(true);
+            Report(result, recover
+                ? "The unsaved work is back. Save to keep it."
+                : "Kept the project as it was saved; the unsaved work is set aside in its .jazz.d\\recovered folder.");
+            return;
+        }
+
+        if (_session.ProjectPath.Length == 0 && !_session.IsDirty && info.Untitled.FirstOrDefault() is { } rescued)
+        {
+            string when = rescued.SavedAt.ToLocalTime().ToString("HH:mm on d MMM", System.Globalization.CultureInfo.CurrentCulture);
+            bool recover = await _dialogs.AskToRecoverAsync($"'{rescued.Name}' was never saved, and was rescued when Jazz Hands closed at {when}.").ConfigureAwait(true);
+            CommandResult result = await _session.ExecuteAsync(recover ? new AcceptRecoveryCommand(rescued.Path) : new DiscardRecoveryCommand(rescued.Path)).ConfigureAwait(true);
+            Report(result, recover ? $"'{rescued.Name}' is back. Save it to choose where it lives." : $"Removed the rescued copy of '{rescued.Name}'.");
+        }
     }
 
     /// <summary>File, Save: where it came from, or asks where for a project never saved.</summary>
@@ -216,9 +262,16 @@ public sealed partial class MainViewModel
         return await _dialogs.AskToSaveAsync(name).ConfigureAwait(true) switch
         {
             SaveChoice.Save => await SaveAsync().ConfigureAwait(true),
-            SaveChoice.Discard => true,
+            SaveChoice.Discard => await ForgetUnsavedAsync().ConfigureAwait(true),
             _ => false,
         };
+    }
+
+    /// <summary>Unsaved changes deliberately thrown away are not offered again after a restart.</summary>
+    private async Task<bool> ForgetUnsavedAsync()
+    {
+        await _session.ExecuteAsync(new DiscardRecoveryCommand()).ConfigureAwait(true);
+        return true;
     }
 
     /// <summary>Builds the menu again: at start, and when the keymap or the recent list changes.</summary>

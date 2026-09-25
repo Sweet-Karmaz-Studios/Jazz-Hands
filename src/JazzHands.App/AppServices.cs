@@ -132,6 +132,7 @@ public static class AppServices
             var engine = new PlaybackEngine(
                 provider.GetRequiredService<Transport>(),
                 provider.GetRequiredService<RenderDevice>(),
+                options: Shell.SafeMode.IsOn ? new PlaybackOptions { HardwareDecode = false } : null,
                 notices: session.Notices,
                 cacheManager: provider.GetService<Media.Import.CacheManager>(),
                 proxies: provider.GetService<Engine.Caching.ProxyService>());

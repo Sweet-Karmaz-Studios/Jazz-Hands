@@ -37,7 +37,9 @@ public partial class MainWindow : Window, Shell.IAppWindow
         SourceInitialized += (_, _) => Restore();
 
         // The layout can be saved and restored only once the docking manager holds the panels.
-        Loaded += (_, _) => model.AttachWorkspaces(new Shell.LayoutService(Dock, ContentFor, notify: model.Notify));
+        // Safe mode starts from the built-in layouts in a folder of its own, whatever was saved.
+        string? layouts = Shell.SafeMode.Folder is { } safe ? System.IO.Path.Combine(safe, "layouts") : null;
+        Loaded += (_, _) => model.AttachWorkspaces(new Shell.LayoutService(Dock, ContentFor, layouts, notify: model.Notify));
 
         // The status bar reads the playhead and the queue four times a second while the window is up.
         if (model.StatusBar is { } status)

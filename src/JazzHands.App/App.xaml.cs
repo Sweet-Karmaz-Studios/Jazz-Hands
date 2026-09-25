@@ -22,6 +22,7 @@ public partial class App : Application
     private Shell.StartupTimes? _startup;
     private bool _measuring;
     private readonly Task<Render.RenderDevice>? _device;
+    private int _crashed;
 
     /// <summary>
     /// Starts creating the render device before anything else: the GPU chosen in Settings, unless
@@ -36,7 +37,10 @@ public partial class App : Application
             return;
         }
 
-        if (Environment.GetEnvironmentVariable("JAZZ_GPU") is null && Render.GpuChoice.TryParse(EditorSettings.Store().Current.Gpu, out Render.GpuChoice? gpu))
+        // Safe mode draws on WARP whatever Settings say (Phase 33).
+        if (!Shell.SafeMode.Apply(Environment.GetCommandLineArgs())
+            && Environment.GetEnvironmentVariable("JAZZ_GPU") is null
+            && Render.GpuChoice.TryParse(EditorSettings.Store().Current.Gpu, out Render.GpuChoice? gpu))
         {
             Render.RenderDevice.Preferred = gpu;
         }
@@ -55,20 +59,27 @@ public partial class App : Application
         bool spike = e.Args.Contains("--spike", StringComparer.Ordinal);
         LogSetup.ConfigureForApp(spike ? LogEventLevel.Debug : LogEventLevel.Information);
         Log.ForContext<App>().Information("Jazz Hands starting");
-        Engine.Effects.EffectCatalog.LoadUserTransitions();
+        if (Shell.SafeMode.IsOn)
+        {
+            Log.ForContext<App>().Warning("Safe mode: WARP, software decoding, the built-in layout, an empty cache and no custom transitions");
+        }
+        else
+        {
+            Engine.Effects.EffectCatalog.LoadUserTransitions();
+        }
 
         // Nothing should die without saying why. Phase 33 adds the recovery save and the last
         // fifty commands; this is the floor.
         DispatcherUnhandledException += (_, args) =>
         {
-            Log.ForContext<App>().Fatal(args.Exception, "Unhandled exception on the UI thread");
-            Log.CloseAndFlush();
+            args.Handled = true;
+            Crash(args.Exception, ask: true);
         };
 
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
-            Log.ForContext<App>().Fatal(args.ExceptionObject as Exception, "Unhandled exception on a background thread");
-            Log.CloseAndFlush();
+            // The runtime ends the process when this returns; there is time to save, not to ask.
+            Crash(args.ExceptionObject as Exception ?? new InvalidOperationException("An unknown error on a background thread"), ask: false);
         };
 
         TaskScheduler.UnobservedTaskException += (_, args) =>
@@ -100,6 +111,7 @@ public partial class App : Application
                 ? Shell.Startup.ProjectToOpen(e.Args, editor, Services.RecentProjects.Store().Current)
                 : null;
         if (!spike && !e.Args.Contains(Shell.Startup.NewInstance, StringComparer.Ordinal)
+            && !Shell.SafeMode.IsOn
             && Shell.Startup.TryHandOffAsync(launch).GetAwaiter().GetResult())
         {
             _device?.ContinueWith(made => made.Result.Dispose(), TaskContinuationOptions.OnlyOnRanToCompletion);
@@ -138,6 +150,64 @@ public partial class App : Application
                 MessageBoxImage.Error);
             Shutdown(1);
         }
+    }
+
+    /// <summary>
+    /// The end of the road for an error nothing could handle: the unsaved work saved for recovery,
+    /// a report with the last fifty commands beside the logs, and, on the UI thread, a word with
+    /// the person and the choice to start again, where the work is offered back (Phase 33).
+    /// </summary>
+    private void Crash(Exception error, bool ask)
+    {
+        if (Interlocked.Exchange(ref _crashed, 1) == 1)
+        {
+            return;
+        }
+
+        Engine.Commands.Session? session = null;
+        try
+        {
+            session = _services?.GetService<Engine.Commands.Session>();
+        }
+        catch (Exception resolving) when (resolving is InvalidOperationException or ObjectDisposedException)
+        {
+            // Still being built, or already gone: there is nothing of the session to save.
+        }
+
+        (string? report, string? rescued) = Engine.Recovery.CrashReport.Write(error, session);
+        Log.CloseAndFlush();
+
+        if (!ask)
+        {
+            return;
+        }
+
+        string saved = rescued is null
+            ? "There were no unsaved changes."
+            : "Your unsaved work was saved, and is offered back when Jazz Hands starts again.";
+        string where = report is null ? string.Empty : $"\n\nWhat happened, with the last fifty commands, is in {report}.";
+
+        MessageBoxResult answer = MessageBox.Show(
+            $"Jazz Hands met a problem it cannot carry on from, and has to close.\n\n{saved}{where}\n\nStart it again now?",
+            "Jazz Hands has to close",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Error);
+
+        if (answer == MessageBoxResult.Yes && Environment.ProcessPath is { } exe)
+        {
+            var start = new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = false };
+            start.ArgumentList.Add(Shell.Startup.NewInstance);
+            if (session?.ProjectPath is { Length: > 0 } project)
+            {
+                start.ArgumentList.Add(project);
+            }
+
+            using (System.Diagnostics.Process.Start(start))
+            {
+            }
+        }
+
+        Environment.Exit(1);
     }
 
     /// <summary>Logs how long starting took, once the window's first frame is up.</summary>
@@ -207,6 +277,7 @@ public partial class App : Application
         // dispose of the container throws for it.
         _services?.DisposeAsync().AsTask().GetAwaiter().GetResult();
 
+        Shell.SafeMode.Clean();
         LogSetup.Shutdown();
         base.OnExit(e);
     }
@@ -363,15 +434,24 @@ public partial class App : Application
         {
             recent.Update(projects => projects.With(session.ProjectPath));
             model.BuildMenu();
+        }
+        else
+        {
+            ApplyJumpList(recent.Current);
+        }
 
-            if (new Engine.Recovery.RecoveryService().Find(session.ProjectPath) is { } offer)
+        // Work a crash left is offered once the window is up; started in the background, the
+        // notification says so and the offer waits for the window.
+        if (launch.Action == Shell.LaunchAction.Background)
+        {
+            if (session.ProjectPath.Length > 0 && new Engine.Recovery.RecoveryService().Find(session.ProjectPath) is { } offer)
             {
                 notifications.RecoveryAvailable(session.ProjectPath, offer.Describe());
             }
         }
         else
         {
-            ApplyJumpList(recent.Current);
+            _ = Dispatcher.InvokeAsync(model.OfferRecoveryAsync, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
         }
 
         if (editor.Current.PreviewQuality != "auto" && Enum.TryParse(editor.Current.PreviewQuality, ignoreCase: true, out Core.Commands.PreviewQuality quality))

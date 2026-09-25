@@ -19,6 +19,9 @@ public interface IDialogService
     /// <summary>Asks whether to save a project with unsaved changes before it is closed.</summary>
     Task<SaveChoice> AskToSaveAsync(string projectName);
 
+    /// <summary>Offers unsaved work a crash left: true to bring it back, false to keep what was saved and set it aside.</summary>
+    Task<bool> AskToRecoverAsync(string description);
+
     /// <summary>Asks what a new project should be: its name and its frame rate and size.</summary>
     Task<NewProjectChoice?> ShowNewProjectAsync();
 
@@ -201,6 +204,19 @@ public sealed class DialogService(
             MessageBoxResult.No => SaveChoice.Discard,
             _ => SaveChoice.Cancel,
         });
+    }
+
+    /// <inheritdoc />
+    public Task<bool> AskToRecoverAsync(string description)
+    {
+        MessageBoxResult answer = MessageBox.Show(
+            Application.Current?.MainWindow!,
+            $"{description}\n\nBring the unsaved work back? It opens unsaved; the file is untouched until you save.\n\n"
+            + @"No keeps the project as it was saved, and sets the unsaved work aside in the project's .jazz.d\recovered folder.",
+            "Recover unsaved work",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+        return Task.FromResult(answer == MessageBoxResult.Yes);
     }
 
     /// <inheritdoc />

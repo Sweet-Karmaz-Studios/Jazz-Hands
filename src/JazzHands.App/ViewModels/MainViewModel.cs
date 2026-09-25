@@ -330,6 +330,7 @@ public sealed partial class MainViewModel : ObservableObject
             ? Path.GetFileNameWithoutExtension(_session.ProjectPath)
             : _session.Project.Name;
 
-        Title = name.Length > 0 ? $"{name} - Jazz Hands" : "Jazz Hands";
+        string app = Shell.SafeMode.IsOn ? "Jazz Hands (safe mode)" : "Jazz Hands";
+        Title = name.Length > 0 ? $"{name} - {app}" : app;
     }
 }
