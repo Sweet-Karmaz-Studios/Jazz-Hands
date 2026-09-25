@@ -252,9 +252,7 @@ public static class CommandRegistry
                         entry as JsonObject
                             ?? throw new CommandException("invalid-argument", "A batch holds command objects."),
                         frameRate)).ToArray()
-                    : frameRate is { } rate && IsTime(parameter.Type) && node is JsonValue value && value.TryGetValue(out string? text)
-                        ? CommandValues.Parse(parameter.Type, text, rate, parameter.JsonName)
-                        : node.Deserialize(parameter.Type, JazzJson.Options);
+                    : ReadValue(parameter, node, frameRate);
             }
             catch (JsonException error)
             {
@@ -497,6 +495,65 @@ public static class CommandRegistry
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// One argument's value from JSON: times, ranges, sizes and rates as the command line writes
+    /// them as well as the shapes the project file holds, and a rate or ratio as a plain number.
+    /// </summary>
+    private static object? ReadValue(ParameterMetadata parameter, JsonNode node, Rational? frameRate)
+    {
+        Type bare = Nullable.GetUnderlyingType(parameter.Type) ?? parameter.Type;
+        if (node is JsonValue value)
+        {
+            if (value.TryGetValue(out string? text))
+            {
+                if (frameRate is { } rate && IsTime(parameter.Type))
+                {
+                    return CommandValues.Parse(parameter.Type, text, rate, parameter.JsonName);
+                }
+
+                if (bare == typeof(FrameSize) || bare == typeof(Rational))
+                {
+                    return CommandValues.Parse(bare, text, frameRate ?? Rational.Fps30, parameter.JsonName);
+                }
+            }
+            else if (bare == typeof(Rational) && (value.TryGetValue(out decimal number) || TryDouble(value, out number)))
+            {
+                // 2, 0.5 or 1.25 as an exact ratio: a speed, a scale.
+                return RationalOf(number);
+            }
+        }
+        else if (node is JsonArray list && frameRate is { } rate && bare == typeof(Model.EquatableArray<TimeRange>)
+            && list.All(item => item is JsonValue entry && entry.TryGetValue(out string? _)))
+        {
+            // ["0:10-0:25", "0:40-0:50"], each range as the command line writes one.
+            return CommandValues.Parse(bare, string.Join(",", list.Select(item => item!.GetValue<string>())), rate, parameter.JsonName);
+        }
+
+        return node.Deserialize(parameter.Type, JazzJson.Options);
+    }
+
+    // A value built in code holds its CLR type, and a double will not give itself up as a decimal.
+    private static bool TryDouble(JsonValue value, out decimal number)
+    {
+        bool read = value.TryGetValue(out double real) && double.IsFinite(real);
+        number = read ? (decimal)real : 0m;
+        return read;
+    }
+
+    private static Rational RationalOf(decimal number)
+    {
+        long denominator = 1;
+        while (decimal.Truncate(number) != number && denominator < 1_000_000)
+        {
+            number *= 10;
+            denominator *= 10;
+        }
+
+        return number > 0
+            ? new Rational((long)decimal.Truncate(number), denominator)
+            : throw new CommandException("invalid-value", $"{number / denominator} is not a positive ratio.");
     }
 
     private static bool IsTime(Type type) => (Nullable.GetUnderlyingType(type) ?? type) is var bare && (bare == typeof(Flicks) || bare == typeof(TimeRange) || bare == typeof(Model.EquatableArray<TimeRange>));
