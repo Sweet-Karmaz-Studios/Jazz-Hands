@@ -422,6 +422,21 @@ Unlink a clip's audio from its picture.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+### `jazz audio measure <project>`
+
+Measure a clip, a track or the mix on its own: peak, RMS and integrated loudness (LUFS).
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--clip <id>` | A clip, or its linked sound for a video clip. |
+| `--track <id>` | A track. |
+| `--mix` | The whole mix, before the limiter. |
+| `--sequence <id>` | For --mix, which sequence. |
+
 ### `jazz audio meter <project>`
 
 Meter a stretch of the mix: peak, true peak, RMS and LUFS.
@@ -449,6 +464,24 @@ Mute one audio stream of a clip.
 |---|---|
 | `--stream <n>` | Which stream of the media. |
 | `--muted` | true to mute, false to unmute. Default: true. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz audio normalize <project>`
+
+Set a clip's, a track's or the mix's gain so it measures a peak, RMS or loudness (LUFS) target.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--clip <id>` | A clip: its volume, or its linked sound's for a video clip. |
+| `--track <id>` | A track: its fader. |
+| `--mix` | The whole mix, by the master volume. |
+| `--mode <peak|rms|lufs>` | peak, rms or lufs. Default: lufs. Default: lufs. |
+| `--target <number>` | dBFS for peak and rms, LUFS for lufs. Default: -1, -20 and -14. |
+| `--sequence <id>` | For --mix, which sequence. |
 | `--no-save` | Do not write the project back. |
 
 ### `jazz audio replace <project> <clip-id> <media-id>`
