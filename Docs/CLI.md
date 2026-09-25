@@ -320,13 +320,16 @@ jazz trim capture.mkv --keep 00:10-00:25,01:00-01:30 --mute-stream Mic --out cut
 ```
 
 ```
-Copy to C:\work\cut.mp4 (mp4), 00:00:45.000
-  Copying the source's packets, as asked: no quality lost, and fast.
-  Picture: stream 0. Sound: Game (stream 1), Discord (stream 3).
-  Stretch 1: 00:00:10.000 to 00:00:26.000 (frames 600 to 1560)
-  Stretch 2: 00:01:00.000 to 00:01:30.000 (frames 3600 to 5400)
-  Moved the end at 00:00:25.000 to the keyframe at 00:00:26.000 (frame 1560).
-Wrote C:\work\cut.mp4: 43.1 MB, 00:00:46.000 in 0.2 s (230.0x real time) with copy.
+Smart cut to C:\work\cut.mp4 (mp4), 00:00:45.000
+  Smart cut: 1 piece(s) around the cuts, 60 frame(s), encoded again with h264_nvenc; the other 2640 frame(s) are the source's own packets.
+  The sound is cut to the sample: PCM in its packets, anything else encoded again with its own codec.
+  Picture: stream 0, matched with h264_nvenc then libx264. Sound: Game (stream 1), Discord (stream 3).
+  Copy   00:00:10.000 to 00:00:24.000 (frames 600 to 1440, 840 frames)
+  Encode 00:00:24.000 to 00:00:25.000 (frames 1440 to 1500, 60 frames)
+  Copy   00:01:00.000 to 00:01:30.000 (frames 3600 to 5400, 1800 frames)
+  Estimate: about 42.4 MB, about 2 s.
+Wrote C:\work\cut.mp4: 42.2 MB, 00:00:45.000 in 0.9 s (50.0x real time) with smart (h264_nvenc).
+  60 frame(s) encoded again with h264_nvenc, 2640 copied; every frame checked in place.
 ```
 
 | Option | Meaning |
@@ -334,12 +337,20 @@ Wrote C:\work\cut.mp4: 43.1 MB, 00:00:46.000 in 0.2 s (230.0x real time) with co
 | `--keep <ranges>` | Stretches to keep, in source time, as `start-end` pairs separated by commas. Any time form works: `00:10-00:25`, `10s-25s`, `600f-1500f`. The whole file when left out. |
 | `--mute-stream <streams>` | Sound streams to leave out, by container index (`2`) or title (`Mic`), comma separated. |
 | `--out <file>` | Required. `.mp4`, `.mkv` or `.mov`. |
-| `--mode copy\|encode` | `copy` (the default) keeps the source's packets; `encode` renders and re-encodes so cuts are exact. |
+| `--mode auto\|smart\|copy\|full` | `auto` (the default) smart cuts when the source allows it and copies when it does not. `smart` copies the source's packets between the cuts and encodes again only the frames from each cut to the next keyframe, with an encoder matched to the source, so cuts are exact and almost nothing is lost. `copy` keeps only the source's packets and cuts on keyframes. `full` (or `encode`) renders and encodes every frame. |
 | `--exact` | For a copy, refuse cuts that are not on keyframes instead of moving them to the nearest. |
 | `--preset <name>` | The preset for an encode. |
 | `--use-external-ffmpeg` | Encode through ffmpeg.exe with the same frames and options, to tell an encoder bug from ours. |
 | `--dry-run` | Print the plan and write nothing. With `--json`, the plan as JSON. |
 | `--save <project.jazz>` | Also save the Quick Trim as a project to open in the editor. |
+
+A smart cut is exact. It needs H.264, HEVC or AV1 at a constant frame rate, progressive, and an
+encoder that writes parameter sets describing the same picture as the source's (profile, chroma
+format, bit depth, size); NVENC is tried first, then x264, x265 or SVT-AV1, and `--encoder libx264`
+(or any of the codec's chain) chooses, which keeps a smart cut off a busy GPU. Sound is cut to the
+sample: PCM inside its packets, anything else encoded again with its own codec. The file is
+checked packet by packet before it is kept. When the source cannot be smart cut, `auto` copies
+instead and the plan says why (`--mode smart` refuses with `cannot-smart-cut`).
 
 A copy cuts on keyframes. Each cut moves to the nearest one, the start back or on and the end on
 or back, and every move is printed with the frame it landed on; `--json` puts them in `snaps`.
@@ -357,7 +368,7 @@ jazz export trailer.jazz --out renders/trailer.mp4 --preset youtube-1080p
 |---|---|
 | `--out <file>` | Required. Relative to the project. The extension picks the container; left off, the preset's is added. |
 | `--preset <name>` | `youtube-1080p` (default) or any other; `jazz presets list` lists them, built in and your own. |
-| `--mode auto\|copy\|encode` | `auto` copies when the timeline plays one file untouched and the preset would write what the source already is, and encodes otherwise. |
+| `--mode auto\|smart\|copy\|full` | `auto` copies when the timeline plays one file untouched and the preset would write what the source already is, smart cuts when such a timeline's cuts are off keyframes (or would lose an open group's leading pictures), and encodes otherwise. `smart` and `copy` keep the source's codec whatever the preset says. `full` is `encode`. |
 | `--sequence <id>` | Which sequence. The active one when left out. |
 | `--snap-to-keyframes` | For a copy, move cuts to the nearest keyframe instead of refusing. |
 | `--use-in-out` | Export only between the sequence's in and out points. |
