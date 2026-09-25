@@ -506,6 +506,33 @@ jazz track set-volume trailer.jazz <track-id> --db -3
 | `audio detach <clip>` | Unlinks the audio from the picture. The audio clips stay linked to each other. |
 | `audio replace <clip> <media> [--stream n]` | Plays another media item's audio in the clip, keeping its place, gain, fades and links. |
 | `track set-volume <track> --db x`, `track set-pan <track> --pan x` | The track fader and balance, applied after each clip's own. |
+| `... --at t` on `audio set-gain`, `audio set-pan`, `track set-volume`, `track set-pan` | Sets a keyframe at t on the sequence (the first turns automation on), or changes the one there. Without `--at`, a value that has keyframes is refused (`param-animated`) rather than flattened; `param clear-keyframes` turns them off. |
+| `audio set-master-volume --db x [--at t] [--sequence s]` | The master fader, after every track and before the limiter. |
+| `audio set-limiter [--on true\|false] [--ceiling x] [--sequence s]` | The master's true peak limiter: 5 ms lookahead, on at -1 dBTP until told otherwise. The ceiling is -24 to 0 dBTP. |
+| `audio meter [--from t] [--to t] [--sequence s]` | Mixes the stretch offline, master and limiter included, and reports peak (dBFS), true peak (dBTP), RMS, momentary, short-term, loudest short-term and integrated loudness (LUFS), the limiter's most reduction, and each track's peak and RMS. Silence is `null`. The meter starts at `--from`, so for the short-term loudness at a moment start 3 s before it. |
+
+Sound effects are ordinary effects on an audio clip or track: `effect add <clip-or-track> <type>`,
+then `param set` and `keyframe add` like any other. The catalogue, each at zero latency:
+
+| Type | Does |
+|---|---|
+| `audio.eq.parametric` | Low cut, low shelf, four peaking bands, high shelf, high cut. |
+| `audio.compressor` | Threshold, ratio, attack, release, soft knee, makeup; RMS or peak detection, channels linked. |
+| `audio.gate` | Threshold with hysteresis, attack, hold, release, and a range for softening rather than silencing. |
+| `audio.de-esser` | A high shelf that dips only while the sibilance band is over its threshold. |
+| `audio.limiter` | A sample peak ceiling for one clip or track, instant attack, no lookahead. |
+| `audio.reverb` | Room size, damping, pre-delay, width and mix; rings on past the last clip. |
+| `audio.delay` | Time, feedback, mix, ping-pong and a high cut on the echoes. |
+| `audio.gain` | Gain in dB. |
+
+```bash
+jazz effect add trailer.jazz <voice-track> audio.compressor
+jazz param set trailer.jazz <effect-id> threshold -24
+jazz track set-volume trailer.jazz <music-track> --db -18 --at 12s
+jazz track set-volume trailer.jazz <music-track> --db -6 --at 14s
+jazz audio set-limiter trailer.jazz --ceiling -2
+jazz audio meter trailer.jazz --from 0 --to 30s
+```
 
 `timeline describe` shows what is set on each audio clip:
 
