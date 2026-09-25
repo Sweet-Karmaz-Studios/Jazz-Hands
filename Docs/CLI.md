@@ -1268,6 +1268,22 @@ Change which part of the source a clip shows.
 | `--by <time>` | Required. How far through the source to slide. |
 | `--no-save` | Do not write the project back. |
 
+### `jazz clip speed-preset <project> <clip-id> <preset>`
+
+Put a packaged speed ramp on a clip: slow into an impact and snap back, speed through a traversal, a VHS rewind, or a slow motion replay.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The clip id. |
+| `<preset>` | impact, traversal, rewind or replay. |
+
+| Option | Meaning |
+|---|---|
+| `--at <time>` | Required. The moment: the hit, the start, or the end of what is repeated. |
+| `--dur <time>` | How long it runs fast, or how much is repeated. Default: 2s. |
+| `--no-save` | Do not write the project back. |
+
 ### `jazz clip split <project> <clip-id>`
 
 Cut a clip in two at a timeline time.
