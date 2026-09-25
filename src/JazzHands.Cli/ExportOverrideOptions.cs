@@ -24,13 +24,14 @@ internal sealed class ExportOverrideOptions
     private readonly Option<string?> _loudness = new("--loudness") { Description = "Measure the mix and bring it to this integrated loudness, peaks held under -1 dBFS: -14." };
     private readonly Option<string?> _targetSize = new("--target-size") { Description = "Come in under this size: 8MB, in binary units as Discord counts. The picture steps down when it must; the file is checked and encoded again if it is over." };
     private readonly Option<string?> _pixelFormat = new("--pixel-format") { Description = "The pixel format: yuv420p10le for ten bits, yuv422p10le for 4:2:2 ten bit. Always BT.709." };
+    private readonly Option<bool> _audioOnly = new("--audio-only") { Description = "Write the sound alone, in a sound file for the preset's encoder: AAC in .m4a, Opus in .opus, FLAC, WAV or MP3." };
     private readonly Option<string?> _start = new("--start") { Description = "Export from here, in sequence time." };
     private readonly Option<string?> _end = new("--end") { Description = "Export to here, in sequence time." };
 
     /// <summary>Adds the options to a command.</summary>
     public void AddTo(Command command)
     {
-        foreach (Option option in new Option[] { _size, _fps, _quality, _bitrate, _encoder, _audioEncoder, _audioBitrate, _channels, _loudness, _targetSize, _pixelFormat, _start, _end })
+        foreach (Option option in new Option[] { _size, _fps, _quality, _bitrate, _encoder, _audioEncoder, _audioBitrate, _channels, _loudness, _targetSize, _pixelFormat, _audioOnly, _start, _end })
         {
             command.Options.Add(option);
         }
@@ -48,7 +49,8 @@ internal sealed class ExportOverrideOptions
         Value<int?>(parse, _channels, rate, "channels"),
         Value<double?>(parse, _loudness, rate, "loudness"),
         parse.GetValue(_targetSize),
-        parse.GetValue(_pixelFormat));
+        parse.GetValue(_pixelFormat),
+        parse.GetValue(_audioOnly));
 
     /// <summary>The stretch asked for, or null for all of it.</summary>
     public TimeRange? Range(ParseResult parse, Rational rate) => ExportOverrideText.Range(

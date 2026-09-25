@@ -50,9 +50,10 @@ public sealed record SavePresetCommand(
     [property: Option("channels", "1, 2 or 6 channels")] int? Channels = null,
     [property: Option("loudness", "Normalise the mix to this many LUFS, for example -14")] double? Loudness = null,
     [property: Option("target-size", "Come in under this size: 8MB")] string? TargetSize = null,
-    [property: Option("pixel-format", "yuv420p10le for ten bits, yuv422p10le for 4:2:2 ten bit")] string? PixelFormat = null) : ICommand
+    [property: Option("pixel-format", "yuv420p10le for ten bits, yuv422p10le for 4:2:2 ten bit")] string? PixelFormat = null,
+    [property: Option("audio-only", "Write the sound alone, in a sound file for its encoder: .m4a, .opus, .flac, .wav or .mp3")] bool AudioOnly = false) : ICommand
 {
     /// <summary>The changes to the preset it starts from.</summary>
     public Export.ExportOverrides? ToOverrides() =>
-        Export.ExportOverrideText.Parse(Size, FrameRate, Quality, Bitrate, Encoders, AudioEncoder, AudioBitrate, Channels, Loudness, TargetSize, PixelFormat);
+        Export.ExportOverrideText.Parse(Size, FrameRate, Quality, Bitrate, Encoders, AudioEncoder, AudioBitrate, Channels, Loudness, TargetSize, PixelFormat, AudioOnly);
 }

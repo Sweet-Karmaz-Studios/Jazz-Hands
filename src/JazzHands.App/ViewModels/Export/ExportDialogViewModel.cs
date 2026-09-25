@@ -97,6 +97,10 @@ public sealed partial class ExportDialogViewModel : ObservableObject
     [ObservableProperty]
     private bool _normalise;
 
+    /// <summary>Write the sound alone, in a sound file for the preset's encoder.</summary>
+    [ObservableProperty]
+    private bool _soundOnly;
+
     [ObservableProperty]
     private string _loudnessText = "-14";
 
@@ -372,6 +376,8 @@ public sealed partial class ExportDialogViewModel : ObservableObject
 
     partial void OnNormaliseChanged(bool value) => RefreshPlan();
 
+    partial void OnSoundOnlyChanged(bool value) => RefreshPlan();
+
     partial void OnLoudnessTextChanged(string value) => RefreshPlan();
 
     partial void OnTargetSizeTextChanged(string value) => RefreshPlan();
@@ -396,6 +402,7 @@ public sealed partial class ExportDialogViewModel : ObservableObject
         AudioEncoderText = AudioBitrateText = TargetSizeText = StartText = EndText = string.Empty;
         Channels = ChannelChoices[0];
         Normalise = false;
+        SoundOnly = false;
         LoudnessText = "-14";
     }
 
@@ -442,6 +449,7 @@ public sealed partial class ExportDialogViewModel : ObservableObject
             query.Loudness,
             query.TargetSize,
             query.PixelFormat,
+            query.AudioOnly,
             query.Start,
             query.End,
             priority)).ConfigureAwait(true);
@@ -495,6 +503,7 @@ public sealed partial class ExportDialogViewModel : ObservableObject
             Loudness: Normalise ? Read<double?>(LoudnessText, "loudness") : null,
             TargetSize: Blank(TargetSizeText),
             PixelFormat: Blank(PixelFormatText),
+            AudioOnly: SoundOnly,
             Start: Read<Flicks?>(StartText, "start"),
             End: Read<Flicks?>(EndText, "end"));
     }

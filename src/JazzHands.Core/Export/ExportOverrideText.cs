@@ -28,7 +28,8 @@ public static class ExportOverrideText
         int? channels,
         double? loudness,
         string? targetSize,
-        string? pixelFormat = null)
+        string? pixelFormat = null,
+        bool audioOnly = false)
     {
         var overrides = new ExportOverrides(
             size?.Width ?? 0,
@@ -42,7 +43,8 @@ public static class ExportOverrideText
             channels ?? 0,
             loudness,
             Bytes(targetSize),
-            string.IsNullOrWhiteSpace(pixelFormat) ? null : pixelFormat.Trim().ToLowerInvariant());
+            string.IsNullOrWhiteSpace(pixelFormat) ? null : pixelFormat.Trim().ToLowerInvariant(),
+            audioOnly);
 
         if (overrides.PixelFormat is { } format && !ExportPresets.PixelFormats.Contains(format))
         {
@@ -99,6 +101,11 @@ public static class ExportOverrideText
             return preset;
         }
 
+        if (overrides.AudioOnly)
+        {
+            preset = SoundOnly(preset);
+        }
+
         ExportPresetVideo? video = preset.Video;
         if (video is not null)
         {
@@ -132,6 +139,28 @@ public static class ExportOverrideText
             TargetBytes = overrides.TargetBytes > 0 ? overrides.TargetBytes : overrides.Bitrate > 0 || overrides.Quality is not null ? 0 : preset.TargetBytes,
             Loudness = overrides.Loudness ?? preset.Loudness,
         };
+    }
+
+    /// <summary>
+    /// A preset's sound alone, in the sound file its encoder is usually written in: AAC in .m4a
+    /// (an MP4 without a picture), Opus in .opus, FLAC, PCM in WAV, MP3, and AC-3 in .mka.
+    /// </summary>
+    private static ExportPreset SoundOnly(ExportPreset preset)
+    {
+        ExportPresetAudio audio = preset.Audio
+            ?? throw new CommandException("no-sound", $"{preset.Name} writes no sound, so there is nothing to export on its own. Pick a preset with sound, or an audio preset: audio-only, audio-wav, audio-mp3.");
+
+        (string container, string extension) = audio.Encoder switch
+        {
+            "aac" => ("mp4", ".m4a"),
+            "libopus" => ("ogg", ".opus"),
+            "flac" => ("flac", ".flac"),
+            "pcm_s16le" or "pcm_s24le" => ("wav", ".wav"),
+            "libmp3lame" => ("mp3", ".mp3"),
+            _ => ("matroska", ".mka"),
+        };
+
+        return preset with { Video = null, TargetBytes = 0, Container = container, Extension = extension, Category = "audio" };
     }
 
     private static long Bitrate(string? text, string name)

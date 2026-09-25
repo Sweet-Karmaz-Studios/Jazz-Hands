@@ -147,9 +147,9 @@ public static partial class ExportPresets
     /// <summary>Every container Jazz Hands writes.</summary>
     public static IReadOnlyList<ExportContainer> Containers { get; } =
     [
-        new("mp4", [".mp4", ".m4v"], ["h264", "hevc", "av1"], ["aac", "ac3", "eac3", "flac", "libopus", "libmp3lame"], "mov_text", true),
+        new("mp4", [".mp4", ".m4v", ".m4a"], ["h264", "hevc", "av1"], ["aac", "ac3", "eac3", "flac", "libopus", "libmp3lame"], "mov_text", true),
         new("mov", [".mov"], ["h264", "hevc", "prores", "dnxhr"], ["aac", "pcm_s16le", "pcm_s24le", "ac3", "eac3"], "mov_text", true),
-        new("matroska", [".mkv"], ["h264", "hevc", "av1", "vp9", "prores", "dnxhr", "ffv1"], ["aac", "flac", "libopus", "ac3", "eac3", "pcm_s16le", "pcm_s24le", "libmp3lame"], "subrip", true),
+        new("matroska", [".mkv", ".mka"], ["h264", "hevc", "av1", "vp9", "prores", "dnxhr", "ffv1"], ["aac", "flac", "libopus", "ac3", "eac3", "pcm_s16le", "pcm_s24le", "libmp3lame"], "subrip", true),
         new("webm", [".webm"], ["vp9", "av1"], ["libopus"], "webvtt", false),
         new("mxf", [".mxf"], ["dnxhr"], ["pcm_s16le", "pcm_s24le"], null, false),
         new("gif", [".gif"], ["gif"], [], null, false),
@@ -157,6 +157,7 @@ public static partial class ExportPresets
         new("wav", [".wav"], [], ["pcm_s16le", "pcm_s24le"], null, false),
         new("flac", [".flac"], [], ["flac"], null, false),
         new("mp3", [".mp3"], [], ["libmp3lame"], null, false),
+        new("ogg", [".opus", ".ogg"], [], ["libopus", "flac"], null, false),
     ];
 
     /// <summary>The encoders a codec is written with when a preset names none: the GPU first where there is one.</summary>

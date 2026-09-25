@@ -65,6 +65,7 @@ public sealed record EnqueueExportCommand(
     [property: Option("loudness", "Normalise the mix to this many LUFS, for example -14")] double? Loudness = null,
     [property: Option("target-size", "Come in under this size: 8MB")] string? TargetSize = null,
     [property: Option("pixel-format", "yuv420p10le for ten bits, yuv422p10le for 4:2:2 ten bit")] string? PixelFormat = null,
+    [property: Option("audio-only", "Write the sound alone, in a sound file for its encoder: .m4a, .opus, .flac, .wav or .mp3")] bool AudioOnly = false,
     [property: Option("start", "Export from here")] Flicks? Start = null,
     [property: Option("end", "Export to here")] Flicks? End = null,
     [property: Option("priority", "low, normal or high")] ExportPriority Priority = ExportPriority.Normal,
@@ -84,7 +85,7 @@ public sealed record EnqueueExportCommand(
         Subtitles,
         SidecarFormat,
         Chapters,
-        ExportOverrideText.Parse(Size, FrameRate, Quality, Bitrate, Encoders, AudioEncoder, AudioBitrate, Channels, Loudness, TargetSize, PixelFormat),
+        ExportOverrideText.Parse(Size, FrameRate, Quality, Bitrate, Encoders, AudioEncoder, AudioBitrate, Channels, Loudness, TargetSize, PixelFormat, AudioOnly),
         ExportOverrideText.Range(Start, End));
 
     /// <summary>How the queue treats the job.</summary>

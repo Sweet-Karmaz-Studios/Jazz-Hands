@@ -1704,6 +1704,7 @@ Export a sequence to a file in the foreground. 'jazz export enqueue' queues one 
 | `--loudness <loudness>` | Measure the mix and bring it to this integrated loudness, peaks held under -1 dBFS: -14. |
 | `--target-size <target-size>` | Come in under this size: 8MB, in binary units as Discord counts. The picture steps down when it must; the file is checked and encoded again if it is over. |
 | `--pixel-format <pixel-format>` | The pixel format: yuv420p10le for ten bits, yuv422p10le for 4:2:2 ten bit. Always BT.709. |
+| `--audio-only` | Write the sound alone, in a sound file for the preset's encoder: AAC in .m4a, Opus in .opus, FLAC, WAV or MP3. |
 | `--start <start>` | Export from here, in sequence time. |
 | `--end <end>` | Export to here, in sequence time. |
 
@@ -1827,6 +1828,7 @@ Queue an export of a sequence to a file.
 | `--loudness <number>` | Normalise the mix to this many LUFS, for example -14. |
 | `--target-size <target-size>` | Come in under this size: 8MB. |
 | `--pixel-format <pixel-format>` | yuv420p10le for ten bits, yuv422p10le for 4:2:2 ten bit. |
+| `--audio-only` | Write the sound alone, in a sound file for its encoder: .m4a, .opus, .flac, .wav or .mp3. |
 | `--start <time>` | Export from here. |
 | `--end <time>` | Export to here. |
 | `--priority <low|normal|high>` | low, normal or high. Default: normal. |
@@ -1896,6 +1898,7 @@ Plan an export without running it.
 | `--loudness <number>` | Normalise the mix to this many LUFS, for example -14. |
 | `--target-size <target-size>` | Come in under this size: 8MB. |
 | `--pixel-format <pixel-format>` | yuv420p10le for ten bits, yuv422p10le for 4:2:2 ten bit. |
+| `--audio-only` | Write the sound alone, in a sound file for its encoder: .m4a, .opus, .flac, .wav or .mp3. |
 | `--start <time>` | Export from here. |
 | `--end <time>` | Export to here. |
 
@@ -3035,6 +3038,7 @@ Save an export preset of your own.
 | `--loudness <number>` | Normalise the mix to this many LUFS, for example -14. |
 | `--target-size <target-size>` | Come in under this size: 8MB. |
 | `--pixel-format <pixel-format>` | yuv420p10le for ten bits, yuv422p10le for 4:2:2 ten bit. |
+| `--audio-only` | Write the sound alone, in a sound file for its encoder: .m4a, .opus, .flac, .wav or .mp3. |
 
 ## `jazz project`
 
@@ -4248,6 +4252,7 @@ Cut stretches out of one recording and write them back to back: by default a sma
 | `--loudness <loudness>` | Measure the mix and bring it to this integrated loudness, peaks held under -1 dBFS: -14. |
 | `--target-size <target-size>` | Come in under this size: 8MB, in binary units as Discord counts. The picture steps down when it must; the file is checked and encoded again if it is over. |
 | `--pixel-format <pixel-format>` | The pixel format: yuv420p10le for ten bits, yuv422p10le for 4:2:2 ten bit. Always BT.709. |
+| `--audio-only` | Write the sound alone, in a sound file for the preset's encoder: AAC in .m4a, Opus in .opus, FLAC, WAV or MP3. |
 | `--start <start>` | Export from here, in sequence time. |
 | `--end <end>` | Export to here, in sequence time. |
 

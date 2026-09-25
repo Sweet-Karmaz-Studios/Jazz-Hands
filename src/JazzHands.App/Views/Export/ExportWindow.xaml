@@ -270,6 +270,13 @@
                             Content="Reset"
                             Command="{Binding ResetOverridesCommand, Mode=OneWay}"
                             AutomationProperties.Name="Reset the overrides" />
+                    <CheckBox DockPanel.Dock="Left" Margin="0,0,16,0"
+                              VerticalAlignment="Center"
+                              Content="Sound only"
+                              IsChecked="{Binding SoundOnly, Mode=TwoWay}"
+                              ToolTip="Write the mix alone: AAC in .m4a, Opus in .opus, FLAC, WAV or MP3, by the preset's sound"
+                              Foreground="{DynamicResource Brush.Text.Primary}"
+                              AutomationProperties.Name="Sound only" />
                     <TextBlock Text="An empty box keeps the preset's own."
                                FontSize="{DynamicResource Text.Caption}" />
                 </DockPanel>

@@ -84,6 +84,7 @@ public sealed record ExportRequest(
 /// <param name="Loudness">Normalise the mix to this many LUFS.</param>
 /// <param name="TargetBytes">Come in under this many bytes; 0 for the preset's target, if it has one.</param>
 /// <param name="PixelFormat">The pixel format to encode, for ten bits or 4:2:2: yuv420p10le, yuv422p10le; null for the preset's.</param>
+/// <param name="AudioOnly">Write the preset's sound alone, in a sound file for its encoder: AAC in .m4a, Opus in .opus, FLAC, WAV or MP3.</param>
 public sealed record ExportOverrides(
     int MaxWidth = 0,
     int MaxHeight = 0,
@@ -96,7 +97,8 @@ public sealed record ExportOverrides(
     int Channels = 0,
     double? Loudness = null,
     long TargetBytes = 0,
-    string? PixelFormat = null) : IEquatable<ExportOverrides>
+    string? PixelFormat = null,
+    bool AudioOnly = false) : IEquatable<ExportOverrides>
 {
     /// <summary>True when it changes nothing.</summary>
     public bool IsEmpty => this == new ExportOverrides();
