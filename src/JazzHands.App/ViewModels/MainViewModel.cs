@@ -60,6 +60,7 @@ public sealed partial class MainViewModel : ObservableObject
         History.HistoryPanelViewModel? history = null,
         Logging.LogPanelViewModel? log = null,
         Markers.MarkersPanelViewModel? markers = null,
+        Curves.CurveEditorPanelViewModel? curves = null,
         JazzHands.Engine.Settings.SettingsSection<EditorSettings>? editor = null,
         StatusBarViewModel? statusBar = null,
         JazzHands.App.Shell.DesktopStatus? desktop = null,
@@ -146,7 +147,7 @@ public sealed partial class MainViewModel : ObservableObject
             Panels.Add(console);
         }
 
-        foreach (ToolViewModel? panel in new ToolViewModel?[] { history, log, markers })
+        foreach (ToolViewModel? panel in new ToolViewModel?[] { history, log, markers, curves })
         {
             if (panel is not null)
             {

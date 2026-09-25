@@ -12,7 +12,7 @@ public sealed record WorkspaceDefinition(string Name, IReadOnlyList<string> Show
     public static IReadOnlyList<WorkspaceDefinition> BuiltIn { get; } =
     [
         new("Edit",
-            ["media", "effects", "subtitles", "meters", "exportQueue", "console", "history", "markers", "log", "inspector", "preview"],
+            ["media", "effects", "subtitles", "meters", "exportQueue", "console", "history", "markers", "curves", "log", "inspector", "preview"],
             ["media", "inspector", "preview"]),
         new("Color",
             ["color", "scopes", "media", "inspector", "preview"],

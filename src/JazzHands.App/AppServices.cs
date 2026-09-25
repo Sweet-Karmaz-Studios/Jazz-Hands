@@ -293,7 +293,8 @@ public static class AppServices
                 provider.GetRequiredService<IUiDispatcher>());
         });
 
-        // The shell's own panels: the undo history, the log the editor keeps in memory, the markers.
+        // The shell's own panels: the undo history, the log the editor keeps in memory, the markers,
+        // and the curve editor.
         services.AddSingleton(provider => new ViewModels.History.HistoryPanelViewModel(
             provider.GetRequiredService<ISession>(),
             provider.GetRequiredService<IUiDispatcher>()));
@@ -306,6 +307,15 @@ public static class AppServices
             IPreviewEngine preview = provider.GetRequiredService<IPreviewEngine>();
             return new ViewModels.Markers.MarkersPanelViewModel(
                 provider.GetRequiredService<ISession>(),
+                provider.GetRequiredService<IUiDispatcher>(),
+                () => preview.Position);
+        });
+        services.AddSingleton(provider =>
+        {
+            IPreviewEngine preview = provider.GetRequiredService<IPreviewEngine>();
+            return new ViewModels.Curves.CurveEditorPanelViewModel(
+                provider.GetRequiredService<ISession>(),
+                provider.GetRequiredService<SelectionService>(),
                 provider.GetRequiredService<IUiDispatcher>(),
                 () => preview.Position);
         });

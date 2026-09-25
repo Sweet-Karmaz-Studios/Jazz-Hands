@@ -1,0 +1,74 @@
+<UserControl x:Class="JazzHands.App.Views.Curves.CurveEditorPanelView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:JazzHands.App.ViewModels.Curves"
+             xmlns:controls="clr-namespace:JazzHands.App.Controls"
+             xmlns:model="clr-namespace:JazzHands.Core.Model;assembly=JazzHands.Core"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:CurveEditorPanelViewModel}"
+             d:DesignWidth="720"
+             d:DesignHeight="300"
+             Background="{DynamicResource Brush.Background.Panel}">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="Visible" />
+    </UserControl.Resources>
+    <DockPanel Margin="8">
+        <!-- Eases for the selected keyframes, the view, and the clipboard. -->
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                <Button Style="{StaticResource Button.Text}" Content="Hold" Command="{Binding EaseCommand, Mode=OneWay}" CommandParameter="{x:Static model:Interp.Hold}" ToolTip="Hold the value until the next keyframe" AutomationProperties.Name="Hold" />
+                <Button Style="{StaticResource Button.Text}" Content="Linear" Command="{Binding EaseCommand, Mode=OneWay}" CommandParameter="{x:Static model:Interp.Linear}" ToolTip="A straight line to the next keyframe" AutomationProperties.Name="Linear" />
+                <Button Style="{StaticResource Button.Text}" Content="Ease in" Command="{Binding EaseCommand, Mode=OneWay}" CommandParameter="{x:Static model:Interp.EaseIn}" ToolTip="Start slowly" AutomationProperties.Name="Ease in" />
+                <Button Style="{StaticResource Button.Text}" Content="Ease out" Command="{Binding EaseCommand, Mode=OneWay}" CommandParameter="{x:Static model:Interp.EaseOut}" ToolTip="Arrive slowly" AutomationProperties.Name="Ease out" />
+                <Button Style="{StaticResource Button.Text}" Content="Ease in out" Command="{Binding EaseCommand, Mode=OneWay}" CommandParameter="{x:Static model:Interp.EaseInOut}" ToolTip="Slow at both ends" AutomationProperties.Name="Ease in and out" />
+                <Button Style="{StaticResource Button.Text}" Content="Bezier" Command="{Binding EaseCommand, Mode=OneWay}" CommandParameter="{x:Static model:Interp.Bezier}" ToolTip="A curve you shape with its handles" AutomationProperties.Name="Bezier" />
+            </StackPanel>
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <ToggleButton Style="{StaticResource Button.Text}" Content="Normalized" IsChecked="{Binding IsNormalized, Mode=TwoWay}" ToolTip="Draw each curve from its own lowest to its own highest, so numbers of different sizes can be compared" AutomationProperties.Name="Normalized view" />
+                <ToggleButton Style="{StaticResource Button.Text}" Content="Snap" IsChecked="{Binding SnapToFrames, Mode=TwoWay}" ToolTip="Dragged keyframes land on frames" AutomationProperties.Name="Snap to frames" />
+                <Button Style="{StaticResource Button.Text}" Content="Copy" Command="{Binding CopyCommand, Mode=OneWay}" ToolTip="Copy the selected keyframes (Ctrl+C in the graph)" AutomationProperties.Name="Copy keyframes" />
+                <Button Style="{StaticResource Button.Text}" Content="Paste" Command="{Binding PasteCommand, Mode=OneWay}" ToolTip="Paste them at the playhead (Ctrl+V in the graph)" AutomationProperties.Name="Paste keyframes" />
+                <Button Style="{StaticResource Button.Text}" Content="Delete" Command="{Binding DeleteCommand, Mode=OneWay}" ToolTip="Remove the selected keyframes (Delete in the graph)" AutomationProperties.Name="Delete keyframes" />
+            </StackPanel>
+            <TextBlock Text="{Binding Status, Mode=OneWay}" Margin="8,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="{DynamicResource Text.Caption}" Foreground="{DynamicResource Brush.Warning}" />
+        </DockPanel>
+
+        <!-- Which curves show. -->
+        <ListBox DockPanel.Dock="Left"
+                 Width="190"
+                 Margin="0,0,6,0"
+                 ItemsSource="{Binding Channels, Mode=OneWay}"
+                 Background="{DynamicResource Brush.Background.Base}"
+                 BorderThickness="0"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 AutomationProperties.Name="Keyframed parameters">
+            <ListBox.ItemTemplate>
+                <DataTemplate DataType="{x:Type vm:CurveChannel}">
+                    <DockPanel Margin="0,1" ToolTip="{Binding OwnerName, Mode=OneWay}">
+                        <CheckBox Style="{StaticResource CheckBox.Dark}" DockPanel.Dock="Left" VerticalAlignment="Center" IsChecked="{Binding IsShown, Mode=TwoWay}" AutomationProperties.Name="Show this curve" />
+                        <Border DockPanel.Dock="Left" Width="10" Height="10" Margin="4,0,6,0" CornerRadius="2" Background="{Binding Color, Mode=OneWay}" />
+                        <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="{DynamicResource Text.Caption}">
+                            <Run Text="{Binding OwnerName, Mode=OneWay}" Foreground="{DynamicResource Brush.Text.Secondary}" /><Run Text=" " /><Run Text="{Binding Label, Mode=OneWay}" Foreground="{DynamicResource Brush.Text.Primary}" />
+                        </TextBlock>
+                    </DockPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <Grid>
+            <controls:KeyframeGraph Model="{Binding Mode=OneWay}"
+                                    Revision="{Binding Revision, Mode=OneWay}"
+                                    AutomationProperties.Name="Keyframe curves" />
+            <TextBlock Text="{Binding Empty, Mode=OneWay}"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       TextWrapping="Wrap"
+                       Margin="24"
+                       IsHitTestVisible="False"
+                       Foreground="{DynamicResource Brush.Text.Secondary}"
+                       Visibility="{Binding ShowEmpty, Mode=OneWay, Converter={StaticResource Visible}}" />
+        </Grid>
+    </DockPanel>
+</UserControl>

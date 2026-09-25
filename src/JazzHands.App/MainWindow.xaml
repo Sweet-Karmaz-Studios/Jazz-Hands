@@ -23,6 +23,8 @@
         xmlns:historyvm="clr-namespace:JazzHands.App.ViewModels.History"
         xmlns:logvm="clr-namespace:JazzHands.App.ViewModels.Logging"
         xmlns:markersvm="clr-namespace:JazzHands.App.ViewModels.Markers"
+        xmlns:curvesvm="clr-namespace:JazzHands.App.ViewModels.Curves"
+        xmlns:curvesviews="clr-namespace:JazzHands.App.Views.Curves"
         xmlns:inspector="clr-namespace:JazzHands.App.Views.Inspector"
         xmlns:inspectorvm="clr-namespace:JazzHands.App.ViewModels.Inspector"
         xmlns:effects="clr-namespace:JazzHands.App.Views.Effects"
@@ -104,6 +106,9 @@
         </DataTemplate>
         <DataTemplate DataType="{x:Type markersvm:MarkersPanelViewModel}">
             <shellviews:MarkersPanelView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type curvesvm:CurveEditorPanelViewModel}">
+            <curvesviews:CurveEditorPanelView />
         </DataTemplate>
     </Window.Resources>
 
