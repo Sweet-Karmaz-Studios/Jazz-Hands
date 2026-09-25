@@ -89,6 +89,12 @@ public sealed record RenderOptions
     /// </summary>
     public bool Subtitles { get; init; } = true;
 
+    /// <summary>
+    /// The most motion blur samples a frame takes, whatever a clip asks for: fewer while the
+    /// preview plays or scrubs, all of them for a still or an export.
+    /// </summary>
+    public int MaxBlurSamples { get; init; } = MotionBlur.MaxSamples;
+
     /// <summary>What the preview gets at a given quality divisor: 1, 2 or 4.</summary>
     public static RenderOptions ForDivisor(int divisor) => new() { Scale = 1.0f / Math.Max(1, divisor) };
 }
@@ -242,7 +248,8 @@ public static class RenderGraphBuilder
                 continue;
             }
 
-            layers.Add(Layer(clip, local, source, frameSize, options, Steady(project, clip, time, source.Size, frames, options)) with { Effects = effects });
+            LayerNode layer = Layer(clip, local, source, frameSize, options, Steady(project, clip, time, source.Size, frames, options)) with { Effects = effects };
+            layers.Add(Blurred(project, sequence, track, clip, time, source, layer, frameSize, (width, height), frames, options, depth, settings.FrameRate) ?? layer);
         }
 
         return new RenderGraph(width, height, layers.ToImmutable())
@@ -554,6 +561,69 @@ public static class RenderGraphBuilder
             Float(transform.Rotation, Intrinsic.Rotation, local),
             Float2(transform.Anchor, Intrinsic.Anchor, local),
             1.0f);
+    }
+
+    /// <summary>
+    /// A clip with motion blur whose placement moves: the layer at each moment across the shutter,
+    /// to be averaged. Null when no blur applies, the clip does not move, or every moment lands in
+    /// the same place, so a still layer draws exactly as it would without blur.
+    /// </summary>
+    /// <remarks>
+    /// The source is the frame at the frame's own time, placed at each moment; a generator is
+    /// drawn again at each moment, so a title animating its own parameters is blurred too.
+    /// </remarks>
+    private static LayerNode? Blurred(
+        Project project,
+        Sequence sequence,
+        Track track,
+        Clip clip,
+        Flicks time,
+        (LayerSource Source, Vector2 Size, ConformPolicy Policy) source,
+        LayerNode layer,
+        Vector2 frameSize,
+        (int Width, int Height) output,
+        IFrameProvider frames,
+        RenderOptions options,
+        int depth,
+        Rational frameRate)
+    {
+        if (options.MaxBlurSamples <= 1 || MotionBlur.For(clip, track, sequence) is not { } blur || !Moves(clip))
+        {
+            return null;
+        }
+
+        bool generated = source.Source is GeneratorLayerSource;
+        var samples = ImmutableArray.CreateBuilder<LayerNode>();
+        foreach (Flicks at in blur.Moments(time, frameRate, options.MaxBlurSamples))
+        {
+            (LayerSource Source, Vector2 Size, ConformPolicy Policy) picture = generated
+                && Source(project, clip, at, track.Order, frameSize, output, frames, options, depth, frameRate) is { } redrawn
+                    ? redrawn
+                    : source;
+            samples.Add(Layer(clip, at - clip.Start, picture, frameSize, options, Steady(project, clip, at, picture.Size, frames, options))
+                with { Effects = layer.Effects, Blend = BlendMode.Normal });
+        }
+
+        LayerNode first = samples[0];
+        if (!generated && samples.All(sample => sample.Transform == first.Transform && sample.Crop == first.Crop && sample.Opacity == first.Opacity && sample.Masks.SequenceEqual(first.Masks)))
+        {
+            return null;
+        }
+
+        return new LayerNode(new MotionBlurLayerSource(samples.ToImmutable()), output.Width, output.Height, Matrix3x2.Identity, LayerNode.NoCrop, 1.0f, clip.BlendMode, [], options.Scale);
+    }
+
+    /// <summary>True when something the compositor places a clip by is keyframed: what motion blur blurs.</summary>
+    private static bool Moves(Clip clip)
+    {
+        Transform transform = clip.Transform ?? Transform.Identity;
+        return transform.Position.IsAnimated
+            || transform.Scale.IsAnimated
+            || transform.Rotation.IsAnimated
+            || transform.Anchor.IsAnimated
+            || clip.Crop is { } crop && (crop.Left.IsAnimated || crop.Top.IsAnimated || crop.Right.IsAnimated || crop.Bottom.IsAnimated)
+            || clip.Masks.Any(mask => mask.Bounds?.IsAnimated == true || mask.PathData?.IsAnimated == true || mask.Feather?.IsAnimated == true || mask.Expansion?.IsAnimated == true)
+            || clip.GeneratorId is not null && clip.Effects.Any(effect => EffectChains.IsOwnParameters(clip, effect) && effect.Parameters.Any(parameter => parameter.Value.IsAnimated));
     }
 
     /// <summary>

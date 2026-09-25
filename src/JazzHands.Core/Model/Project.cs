@@ -372,6 +372,7 @@ public sealed record Marker(
 /// <param name="Cue">What a cue on a subtitle track says and where it sits; null on every other clip.</param>
 /// <param name="Remap">A speed curve over clip time that replaces <paramref name="Speed"/>: time remapping and speed ramps (<see cref="Animation.TimeRemap"/>).</param>
 /// <param name="Retime">How a picture between two source frames is shown when the clip plays at another speed or rate: the nearer frame, or a blend of both.</param>
+/// <param name="MotionBlur">Motion blur on the clip's animated placement, over its track's and sequence's; null to follow them.</param>
 public sealed record Clip(
     string Id,
     TimeRange Range,
@@ -402,7 +403,8 @@ public sealed record Clip(
     ToneMapping? ToneMap = null,
     Cue? Cue = null,
     AnimatedValue? Remap = null,
-    RetimeMode Retime = RetimeMode.Nearest) : IEquatable<Clip>
+    RetimeMode Retime = RetimeMode.Nearest,
+    MotionBlur? MotionBlur = null) : IEquatable<Clip>
 {
     /// <summary>Playback rate, defaulting to normal speed.</summary>
     public Rational EffectiveSpeed => Speed ?? Rational.One;
@@ -511,6 +513,7 @@ public sealed record Clip(
 /// the exported stream. Null is undetermined.
 /// </param>
 /// <param name="SubtitleStyle">How a subtitle track's cues look; null for the default style.</param>
+/// <param name="MotionBlur">Motion blur for the animated clips on it, over the sequence's, unless a clip says otherwise; null to follow the sequence.</param>
 public sealed record Track(
     string Id,
     TrackKind Kind,
@@ -528,7 +531,8 @@ public sealed record Track(
     AnimatedValue? Pan = null,
     bool? SyncLock = null,
     string? Language = null,
-    SubtitleStyle? SubtitleStyle = null) : IEquatable<Track>
+    SubtitleStyle? SubtitleStyle = null,
+    MotionBlur? MotionBlur = null) : IEquatable<Track>
 {
     /// <summary>The first position after the last clip, or zero for an empty track.</summary>
     public Flicks Duration => Clips.IsEmpty ? Flicks.Zero : Clips[^1].End;
@@ -704,6 +708,7 @@ public sealed record QuickTrim(string MediaId) : IEquatable<QuickTrim>;
 /// leave one closes it, rippling the sync-locked tracks. Null is off.
 /// </param>
 /// <param name="Master">The master bus: its volume and the limiter that ends the mix. Null is unity with the limiter on at -1 dBTP.</param>
+/// <param name="MotionBlur">Motion blur for every animated layer in it, unless a track or clip says otherwise; null for none.</param>
 public sealed record Sequence(
     string Id,
     string Name,
@@ -713,7 +718,8 @@ public sealed record Sequence(
     TimeRange? InOut = null,
     QuickTrim? QuickTrim = null,
     bool? Magnetic = null,
-    MasterBus? Master = null) : IEquatable<Sequence>
+    MasterBus? Master = null,
+    MotionBlur? MotionBlur = null) : IEquatable<Sequence>
 {
     /// <summary>The first position after the last clip on any track.</summary>
     public Flicks Duration

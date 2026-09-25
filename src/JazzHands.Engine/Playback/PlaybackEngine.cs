@@ -47,6 +47,9 @@ namespace JazzHands.Engine.Playback;
 /// </remarks>
 public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
 {
+    /// <summary>The most motion blur moments a frame takes while playing.</summary>
+    public const int PlayingBlurSamples = 4;
+
     private static readonly double TicksPerMillisecond = Stopwatch.Frequency / 1000.0;
 
     private readonly ILogger _log = Log.ForContext<PlaybackEngine>();
@@ -146,10 +149,11 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
         proxies?.Changed += OnProxiesChanged;
         _interrupted = Interrupted;
 
-        // Made once, so rendering a frame builds no options.
+        // Made once, so rendering a frame builds no options. Motion blur takes a few moments a
+        // frame while playing, and all of them once the playhead stops.
         foreach (int divisor in new[] { 1, 2, 4 })
         {
-            _playingOptions[divisor] = RenderOptions.ForDivisor(divisor);
+            _playingOptions[divisor] = RenderOptions.ForDivisor(divisor) with { MaxBlurSamples = PlayingBlurSamples };
             _parkedOptions[divisor] = RenderOptions.ForDivisor(divisor) with { CacheLayers = true };
         }
 

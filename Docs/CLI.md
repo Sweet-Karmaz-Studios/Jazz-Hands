@@ -1072,6 +1072,23 @@ Enable or disable a clip without removing it.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+### `jazz clip set-motion-blur <project> <clip-id>`
+
+Set motion blur on a clip's animated movement.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The clip id. |
+
+| Option | Meaning |
+|---|---|
+| `--angle <number>` | Shutter angle in degrees: 180 is half a frame. Default: 180. |
+| `--samples <n>` | Moments averaged, 2 to 64. Default: 32. |
+| `--off` | Turn it off for this clip. |
+| `--inherit` | Follow the track and sequence instead. |
+| `--no-save` | Do not write the project back. |
+
 ### `jazz clip set-opacity <project> <clip-id>`
 
 Set how opaque a clip's picture is.
@@ -3160,6 +3177,22 @@ Choose the sequence the editor shows.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+### `jazz sequence set-motion-blur <project>`
+
+Set motion blur for every animated layer in a sequence.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--angle <number>` | Shutter angle in degrees: 180 is half a frame. Default: 180. |
+| `--samples <n>` | Moments averaged, 2 to 64. Default: 32. |
+| `--off` | Turn it off. |
+| `--sequence <id>` | Which sequence. |
+| `--no-save` | Do not write the project back. |
+
 ### `jazz sequence set-settings <project> <sequence-id>`
 
 Give a sequence its own frame rate, size or audio format.
@@ -3680,6 +3713,23 @@ Lock or unlock a track.
 
 | Option | Meaning |
 |---|---|
+| `--no-save` | Do not write the project back. |
+
+### `jazz track set-motion-blur <project> <track-id>`
+
+Set motion blur for the animated clips on a track.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<track-id>` | The track id. |
+
+| Option | Meaning |
+|---|---|
+| `--angle <number>` | Shutter angle in degrees: 180 is half a frame. Default: 180. |
+| `--samples <n>` | Moments averaged, 2 to 64. Default: 32. |
+| `--off` | Turn it off on this track. |
+| `--inherit` | Follow the sequence instead. |
 | `--no-save` | Do not write the project back. |
 
 ### `jazz track set-mute <project> <track-id> <muted>`

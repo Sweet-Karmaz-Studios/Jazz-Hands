@@ -40,6 +40,13 @@ public sealed record NestedLayerSource(RenderGraph Graph) : LayerSource;
 /// <param name="Transition">Which transition, its parameters and how far through it the frame is.</param>
 public sealed record TransitionLayerSource(LayerNode? Outgoing, LayerNode? Incoming, TransitionNode Transition) : LayerSource;
 
+/// <summary>
+/// A layer with motion blur: the same layer placed at moments across the shutter, each drawn over
+/// nothing, averaged into one frame-sized picture in linear light.
+/// </summary>
+/// <param name="Samples">The layer at each moment, each with its own place, opacity, masks and effects.</param>
+public sealed record MotionBlurLayerSource(ImmutableArray<LayerNode> Samples) : LayerSource;
+
 /// <summary>A transition at one frame, with its parameters evaluated and its progress eased.</summary>
 /// <param name="Effect">The transition's type and parameters, as an effect node: its time is from the start of its span, its owner length the span's.</param>
 /// <param name="Progress">How far through it the frame is, 0 to 1, after easing.</param>

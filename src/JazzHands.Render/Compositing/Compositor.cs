@@ -74,6 +74,7 @@ public sealed class Compositor : IDisposable
     private readonly bool _ownsPool;
     private readonly ID3D11SamplerState[] _samplers;
     private readonly ID3D11BlendState _over;
+    private readonly ID3D11BlendState _add;
     private readonly ID3D11ShaderResourceView?[] _views = new ID3D11ShaderResourceView?[4];
     private readonly ID3D11ShaderResourceView?[] _planeViews = new ID3D11ShaderResourceView?[4];
     private readonly Dictionary<Type, ID3D11Buffer> _constants = [];
@@ -111,6 +112,9 @@ public sealed class Compositor : IDisposable
 
         // Premultiplied over, colour and alpha alike: the Normal composite, done by the output merger.
         _over = device.Device.CreateBlendState(new BlendDescription(Blend.One, Blend.InverseSourceAlpha, Blend.One, Blend.InverseSourceAlpha));
+
+        // Plain addition, for adding a motion blur's moments together at their shares.
+        _add = device.Device.CreateBlendState(new BlendDescription(Blend.One, Blend.One, Blend.One, Blend.One));
     }
 
     /// <summary>Where every intermediate target comes from.</summary>
@@ -262,6 +266,7 @@ public sealed class Compositor : IDisposable
         }
 
         _over.Dispose();
+        _add.Dispose();
 
         if (_ownsPool)
         {
@@ -657,6 +662,9 @@ public sealed class Compositor : IDisposable
             case TransitionLayerSource transition:
                 return Mix(graph, layer, transition);
 
+            case MotionBlurLayerSource blur:
+                return Average(graph, blur);
+
             default:
                 throw new NotSupportedException($"{layer.Source.GetType().Name} is not a source the compositor knows.");
         }
@@ -691,6 +699,33 @@ public sealed class Compositor : IDisposable
         Pool.Return(outgoing);
         Pool.Return(incoming);
         return output;
+    }
+
+    /// <summary>
+    /// A layer with motion blur: each moment drawn over nothing, frame sized, with its own place,
+    /// opacity, masks and effects, and added in at an equal share, which is their average in
+    /// premultiplied linear light.
+    /// </summary>
+    private RenderTarget Average(RenderGraph graph, MotionBlurLayerSource source)
+    {
+        RenderTarget sum = Empty(graph);
+        if (source.Samples.IsDefaultOrEmpty)
+        {
+            return sum;
+        }
+
+        // Bilinear, not bicubic: at an exact texel an identity draw then copies it unchanged.
+        RenderGraph exact = graph with { Bicubic = false };
+        var whole = new LayerNode(new SolidLayerSource(Vector4.Zero), graph.Width, graph.Height, Matrix3x2.Identity, LayerNode.NoCrop, 1.0f, BlendMode.Normal, []);
+        float share = 1.0f / source.Samples.Length;
+        foreach (LayerNode sample in source.Samples)
+        {
+            RenderTarget placed = Alone(graph, sample);
+            DrawQuad(exact, whole, placed, sum.View, share, _add);
+            Pool.Return(placed);
+        }
+
+        return sum;
     }
 
     /// <summary>One side of a transition drawn over nothing, frame sized; transparent when there is no picture.</summary>

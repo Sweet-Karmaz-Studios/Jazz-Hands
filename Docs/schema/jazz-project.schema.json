@@ -339,6 +339,16 @@
             "blend",
             "opticalFlow"
           ]
+        },
+        "motionBlur": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/motionBlur"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -988,6 +998,20 @@
         "duration"
       ]
     },
+    "motionBlur": {
+      "type": "object",
+      "properties": {
+        "shutterAngle": {
+          "type": "number"
+        },
+        "samples": {
+          "type": "integer"
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
     "paramValue": {
       "description": "The value of an animatable parameter. A number is a float, a boolean is a bool, a string is text, an array of two or four numbers is a vector, and everything else carries a type tag.",
       "anyOf": [
@@ -1174,6 +1198,16 @@
           "anyOf": [
             {
               "$ref": "#/$defs/masterBus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "motionBlur": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/motionBlur"
             },
             {
               "type": "null"
@@ -1416,6 +1450,16 @@
           "anyOf": [
             {
               "$ref": "#/$defs/subtitleStyle"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "motionBlur": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/motionBlur"
             },
             {
               "type": "null"
