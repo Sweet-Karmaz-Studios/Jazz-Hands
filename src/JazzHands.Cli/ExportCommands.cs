@@ -309,6 +309,25 @@ public static class ExportCommands
             text.AppendLine();
         }
 
+        if (plan.Subtitles is { } subtitles)
+        {
+            foreach (ExportSubtitleTrack track in subtitles.Tracks)
+            {
+                string language = track.Language is { } code ? $" ({code})" : string.Empty;
+                text.AppendLine(subtitles.Delivery switch
+                {
+                    SubtitleDelivery.Burn => $"  Subtitles: {track.Name}{language}, burned into the picture.",
+                    SubtitleDelivery.Sidecar => $"  Subtitles: {track.Name}{language}, to {track.SidecarPath}.",
+                    _ => $"  Subtitles: {track.Name}{language}, as a stream of {track.Codec}{(track.Default ? ", on by default" : string.Empty)}.",
+                });
+            }
+        }
+
+        if (!plan.Chapters.IsEmpty)
+        {
+            text.AppendLine(CultureInfo.InvariantCulture, $"  Chapters: {string.Join(", ", plan.Chapters.Select(chapter => $"{chapter.Title} at {Timecode.FormatClock(chapter.Start)}"))}.");
+        }
+
         return text.ToString().TrimEnd();
     }
 
