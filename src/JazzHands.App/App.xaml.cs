@@ -21,7 +21,28 @@ public partial class App : Application
     private Shell.TrayHost? _tray;
     private Shell.StartupTimes? _startup;
     private bool _measuring;
-    private Task<Render.RenderDevice>? _device;
+    private readonly Task<Render.RenderDevice>? _device;
+
+    /// <summary>
+    /// Starts creating the render device before anything else: the GPU chosen in Settings, unless
+    /// JAZZ_GPU says otherwise for this run, on another thread while WPF loads its resources and
+    /// the rest starts. Creating it takes about 220 ms that nothing waits on until the playback
+    /// engine is made (Phase 32). A spike makes its own.
+    /// </summary>
+    public App()
+    {
+        if (Environment.GetCommandLineArgs().Contains("--spike", StringComparer.Ordinal))
+        {
+            return;
+        }
+
+        if (Environment.GetEnvironmentVariable("JAZZ_GPU") is null && Render.GpuChoice.TryParse(EditorSettings.Store().Current.Gpu, out Render.GpuChoice? gpu))
+        {
+            Render.RenderDevice.Preferred = gpu;
+        }
+
+        _device = Task.Run(() => Render.RenderDevice.Create());
+    }
 
     /// <inheritdoc />
     protected override void OnStartup(StartupEventArgs e)
@@ -57,19 +78,7 @@ public partial class App : Application
 
         base.OnStartup(e);
 
-        // The GPU chosen in Settings, unless JAZZ_GPU says otherwise for this run. The device is
-        // created on another thread while the rest starts: 150 ms or so that nothing waits on
-        // until the playback engine is made (Phase 32).
         EditorSettings editor = EditorSettings.Store().Current;
-        if (Environment.GetEnvironmentVariable("JAZZ_GPU") is null && Render.GpuChoice.TryParse(editor.Gpu, out Render.GpuChoice? gpu))
-        {
-            Render.RenderDevice.Preferred = gpu;
-        }
-
-        if (!spike)
-        {
-            _device = Task.Run(() => Render.RenderDevice.Create());
-        }
 
         if (Shell.StartupTimes.MeasurePath(e.Args) is { } measured)
         {
