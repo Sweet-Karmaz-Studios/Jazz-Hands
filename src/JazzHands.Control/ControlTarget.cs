@@ -27,6 +27,14 @@ public sealed class ControlTarget
 
     /// <summary><c>gui</c> for the editor, <c>serve</c> for <c>jazz serve</c>.</summary>
     public string Kind { get; init; } = "serve";
+
+    /// <summary>
+    /// Methods the host answers itself, by name: the editor's <c>app.open</c> and <c>app.activate</c>,
+    /// which a second launch uses to hand its project to the one already running. Each gets the
+    /// params and returns the result, or throws <see cref="JsonRpcException"/>.
+    /// </summary>
+    public IReadOnlyDictionary<string, Func<System.Text.Json.Nodes.JsonObject, Task<System.Text.Json.Nodes.JsonNode?>>> HostMethods { get; init; } =
+        new Dictionary<string, Func<System.Text.Json.Nodes.JsonObject, Task<System.Text.Json.Nodes.JsonNode?>>>(StringComparer.Ordinal);
 }
 
 /// <summary>

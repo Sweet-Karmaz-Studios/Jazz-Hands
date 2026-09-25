@@ -439,6 +439,11 @@ public sealed class ControlServer : IAsyncDisposable
                 return Render(args);
         }
 
+        if (_target.HostMethods.TryGetValue(method, out Func<JsonObject, Task<JsonNode?>>? host))
+        {
+            return await host(args).ConfigureAwait(false);
+        }
+
         CommandMetadata metadata = CommandRegistry.Require(method);
         object built = CommandRegistry.FromJson(method, args, FrameRate());
         if (metadata.IsQuery)
