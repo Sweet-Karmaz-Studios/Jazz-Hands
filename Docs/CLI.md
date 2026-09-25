@@ -623,6 +623,34 @@ Set an audio clip's pan, or a keyframe of it.
 | `--at <time>` | Set a keyframe at this time on the sequence. |
 | `--no-save` | Do not write the project back. |
 
+### `jazz audio sync <project>`
+
+Move a clip so its sound lines up with another clip's: a separate microphone with the camera, by their waveforms.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--clip <id>` | Required. The clip to move. |
+| `--to <id>` | Required. The clip to line it up with. |
+| `--force` | Move it even when the match is unsure. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz audio sync-offset <project>`
+
+How far to move a clip so its sound lines up with another clip's, and how sure the match is.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--clip <id>` | Required. The clip that would move. |
+| `--to <id>` | Required. The clip it lines up with. |
+
 ## `jazz cache`
 
 The thumbnail, waveform and proxy cache: what it holds, its size limit, emptying it.
