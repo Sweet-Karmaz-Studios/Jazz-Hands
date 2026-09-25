@@ -1,0 +1,43 @@
+<UserControl x:Class="JazzHands.App.Views.Shell.MarkersPanelView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:JazzHands.App.ViewModels.Markers"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:MarkersPanelViewModel}"
+             d:DesignWidth="360"
+             d:DesignHeight="300"
+             Background="{DynamicResource Brush.Background.Panel}">
+    <DockPanel Margin="8">
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+            <Button DockPanel.Dock="Right" Style="{StaticResource Button.Text}" Content="Add at playhead" Command="{Binding AddCommand, Mode=OneWay}" ToolTip="A marker where the playhead is (M)" AutomationProperties.Name="Add a marker at the playhead" />
+            <TextBlock Text="{Binding Status, Mode=OneWay}" VerticalAlignment="Center" TextWrapping="Wrap" FontSize="{DynamicResource Text.Caption}" Foreground="{DynamicResource Brush.Text.Secondary}" />
+        </DockPanel>
+        <ListBox ItemsSource="{Binding Rows, Mode=OneWay}"
+                 SelectedItem="{Binding Selected, Mode=TwoWay}"
+                 Background="{DynamicResource Brush.Background.Base}"
+                 BorderThickness="0"
+                 HorizontalContentAlignment="Stretch"
+                 AutomationProperties.Name="Markers">
+            <ListBox.ItemTemplate>
+                <DataTemplate DataType="{x:Type vm:MarkerRowViewModel}">
+                    <Grid Margin="0,2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="90" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="10" Height="10" Margin="0,0,8,0" CornerRadius="2" Background="{Binding Color, Mode=OneWay}" />
+                        <TextBlock Grid.Column="1" Text="{Binding Time, Mode=OneWay}" ToolTip="{Binding Frames, Mode=OneWay}" VerticalAlignment="Center" FontFamily="{DynamicResource Font.Mono}" FontSize="{DynamicResource Text.Caption}" Foreground="{DynamicResource Brush.Text.Secondary}" />
+                        <TextBox Grid.Column="2" Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="Marker name" />
+                        <CheckBox Style="{StaticResource CheckBox.Dark}" Grid.Column="3" Margin="8,0" VerticalAlignment="Center" Content="Chapter" IsChecked="{Binding IsChapter, Mode=TwoWay}" ToolTip="Written into exports as a chapter" />
+                        <Button Grid.Column="4" Style="{StaticResource Button.Icon}" Content="&#xE711;" Command="{Binding DataContext.RemoveCommand, RelativeSource={RelativeSource AncestorType=ListBox}, Mode=OneWay}" CommandParameter="{Binding Mode=OneWay}" ToolTip="Remove this marker" AutomationProperties.Name="Remove marker" />
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </DockPanel>
+</UserControl>

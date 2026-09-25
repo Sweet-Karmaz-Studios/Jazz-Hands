@@ -1,0 +1,67 @@
+<UserControl x:Class="JazzHands.App.Views.Shell.HistoryPanelView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:JazzHands.App.ViewModels.History"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:HistoryPanelViewModel}"
+             d:DesignWidth="360"
+             d:DesignHeight="300"
+             Background="{DynamicResource Brush.Background.Panel}">
+    <DockPanel Margin="8">
+        <TextBlock DockPanel.Dock="Top"
+                   Margin="0,0,0,8"
+                   Text="{Binding Status, Mode=OneWay}"
+                   FontSize="{DynamicResource Text.Caption}"
+                   Foreground="{DynamicResource Brush.Text.Secondary}" />
+        <!-- A click on a step, or Enter on the selected one, goes to just after it. The row is a
+             grid with a mouse binding rather than a button: Button.Text draws its content as text. -->
+        <ListBox x:Name="Steps"
+                 ItemsSource="{Binding Rows, Mode=OneWay}"
+                 Background="{DynamicResource Brush.Background.Base}"
+                 BorderThickness="0"
+                 HorizontalContentAlignment="Stretch"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 VirtualizingPanel.IsVirtualizing="True"
+                 ToolTip="Click a step to go back to just after it"
+                 AutomationProperties.Name="Undo history">
+            <ListBox.InputBindings>
+                <KeyBinding Key="Return" Command="{Binding GoToCommand, Mode=OneWay}" CommandParameter="{Binding SelectedItem, ElementName=Steps}" />
+            </ListBox.InputBindings>
+            <ListBox.ItemTemplate>
+                <DataTemplate DataType="{x:Type vm:HistoryRow}">
+                    <Grid Background="Transparent" AutomationProperties.Name="{Binding Label, Mode=OneWay}">
+                        <Grid.InputBindings>
+                            <MouseBinding MouseAction="LeftClick"
+                                          Command="{Binding DataContext.GoToCommand, RelativeSource={RelativeSource AncestorType=ListBox}, Mode=OneWay}"
+                                          CommandParameter="{Binding Mode=OneWay}" />
+                        </Grid.InputBindings>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="64" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{Binding Time, Mode=OneWay}" FontFamily="{DynamicResource Font.Mono}" FontSize="{DynamicResource Text.Caption}" Foreground="{DynamicResource Brush.Text.Disabled}" />
+                        <TextBlock Grid.Column="1" Text="{Binding Label, Mode=OneWay}" TextTrimming="CharacterEllipsis">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsUndone, Mode=OneWay}" Value="True">
+                                            <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Disabled}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsCurrent, Mode=OneWay}" Value="True">
+                                            <Setter Property="FontWeight" Value="SemiBold" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <TextBlock Grid.Column="2" Margin="8,0,0,0" Text="{Binding Who, Mode=OneWay}" FontFamily="{DynamicResource Font.Mono}" FontSize="{DynamicResource Text.Caption}" Foreground="{DynamicResource Brush.Accent}" />
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </DockPanel>
+</UserControl>

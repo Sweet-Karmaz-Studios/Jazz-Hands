@@ -22,14 +22,17 @@ namespace JazzHands.App.ViewModels;
 /// The window: the panels it holds and the title it shows.
 /// </summary>
 /// <remarks>
-/// Phase 27 gives this the layout service, the workspaces and the menu built from the command
-/// registry. Right now it owns one panel and the two things the window itself needs to know.
+/// The panels, the menu (MainViewModel.Shell), the workspaces and the window's place
+/// (MainViewModel.Workspaces), the status bar and the project commands.
 /// </remarks>
 public sealed partial class MainViewModel : ObservableObject
 {
     private readonly ISession _session;
     private readonly IFileDialogService? _files;
     private readonly IDialogService? _dialogs;
+    private readonly IUiDispatcher _ui;
+    private readonly JazzHands.Engine.Settings.SettingsSection<RecentProjects>? _recent;
+    private readonly JazzHands.Engine.Settings.SettingsSection<EditorSettings>? _editor;
 
     [ObservableProperty]
     private string _title = "Jazz Hands";
@@ -52,7 +55,13 @@ public sealed partial class MainViewModel : ObservableObject
         Grading.ColorPanelViewModel? color = null,
         MixerPanelViewModel? mixer = null,
         Subtitles.SubtitlesPanelViewModel? subtitles = null,
-        Remote.CommandConsoleViewModel? console = null)
+        Remote.CommandConsoleViewModel? console = null,
+        JazzHands.Engine.Settings.SettingsSection<RecentProjects>? recent = null,
+        History.HistoryPanelViewModel? history = null,
+        Logging.LogPanelViewModel? log = null,
+        Markers.MarkersPanelViewModel? markers = null,
+        JazzHands.Engine.Settings.SettingsSection<EditorSettings>? editor = null,
+        StatusBarViewModel? statusBar = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(media);
@@ -135,8 +144,27 @@ public sealed partial class MainViewModel : ObservableObject
             Panels.Add(console);
         }
 
+        foreach (ToolViewModel? panel in new ToolViewModel?[] { history, log, markers })
+        {
+            if (panel is not null)
+            {
+                Panels.Add(panel);
+            }
+        }
+
         _session.ProjectChanged += (_, _) => ui.Post(UpdateTitle);
         UpdateTitle();
+
+        _ui = ui;
+        _recent = recent;
+        _editor = editor;
+        StatusBar = statusBar;
+        if (statusBar is not null)
+        {
+            Said += (_, message) => statusBar.Notifications.Show(NotificationLevel.Information, message);
+        }
+
+        InitializeShell();
     }
 
     /// <summary>The media panel, which the menu needs by name.</summary>
@@ -174,6 +202,9 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>The colour wheels and curves panel, when the host made one.</summary>
     public Grading.ColorPanelViewModel? Color { get; }
+
+    /// <summary>The status bar and the notifications, when the host has them.</summary>
+    public StatusBarViewModel? StatusBar { get; }
 
     /// <summary>The Command Console, when the host has a control server.</summary>
     public Remote.CommandConsoleViewModel? Console { get; }
@@ -256,6 +287,8 @@ public sealed partial class MainViewModel : ObservableObject
         {
             timeline.Status = message;
         }
+
+        Said?.Invoke(this, message);
     }
 
     private void UpdateTitle()

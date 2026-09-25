@@ -48,10 +48,32 @@ public static class AppServices
         services.AddSingleton<IUiDispatcher, WpfDispatcher>();
         services.AddSingleton<IFileDialogService, FileDialogService>();
         services.AddSingleton<IDialogService>(provider =>
-            new DialogService(provider.GetRequiredService<ImportViewModel>, provider.GetRequiredService<ExportDialogViewModel>));
+            new DialogService(
+                provider.GetRequiredService<ImportViewModel>,
+                provider.GetRequiredService<ExportDialogViewModel>,
+                provider.GetRequiredService<ViewModels.Settings.SettingsViewModel>));
 
         services.AddTransient<ImportViewModel>();
         services.AddTransient<ExportDialogViewModel>();
+
+        // The person's settings, a section each of %APPDATA%\JazzHands\settings.json, and the
+        // Settings dialog over them, made fresh each time it opens so it reads what is there.
+        services.AddSingleton(_ => EditorSettings.Store());
+        services.AddSingleton(_ => Services.RecentProjects.Store());
+        services.AddSingleton<IPlaybackPreferences>(provider => new EnginePlaybackPreferences(
+            provider.GetService<Transport>(),
+            provider.GetService<Engine.Caching.ProxyService>()));
+        services.AddTransient(provider => new ViewModels.Keys.KeymapEditorViewModel(
+            provider.GetRequiredService<Input.KeymapService>(),
+            provider.GetRequiredService<IFileDialogService>()));
+        services.AddTransient(provider => new ViewModels.Settings.SettingsViewModel(
+            provider.GetRequiredService<ISession>(),
+            provider.GetRequiredService<Engine.Settings.SettingsSection<EditorSettings>>(),
+            provider.GetRequiredService<Engine.Caching.CacheSettingsStore>(),
+            provider.GetRequiredService<ControlSettingsStore>(),
+            provider.GetRequiredService<IPlaybackPreferences>(),
+            provider.GetRequiredService<ViewModels.Keys.KeymapEditorViewModel>(),
+            SafeAdapters()));
 
         // The export queue: jobs from the dialog, the CLI with --attach and MCP alike, kept in
         // %LOCALAPPDATA%JazzHandsqueue.db so they outlive the window. It renders on a device of
@@ -74,7 +96,9 @@ public static class AppServices
         services.AddSingleton(provider =>
         {
             ProjectSettings settings = project.ActiveSequence is { } sequence ? project.SettingsFor(sequence) : project.Settings;
-            Transport transport = Transport.ForDefaultDevice(settings.SampleRate, settings.ChannelCount);
+            EditorSettings editor = provider.GetRequiredService<Engine.Settings.SettingsSection<EditorSettings>>().Current;
+            Transport transport = Transport.ForDefaultDevice(settings.SampleRate, settings.ChannelCount, editor.AudioDevice);
+            transport.ScrubAudio = editor.ScrubAudio;
             transport.Attach(provider.GetRequiredService<Session>());
             return transport;
         });
@@ -212,6 +236,7 @@ public static class AppServices
         // The control server: the pipe always, TCP when the settings say so. App starts it once
         // the window is up and disposes it before the session, so clients hear session.closed.
         services.AddSingleton(_ => new ControlSettingsStore());
+        services.AddSingleton<Shell.AppHostMethods>();
         services.AddSingleton(provider => new ControlServer(
             new ControlTarget
             {
@@ -220,6 +245,7 @@ public static class AppServices
                 Playback = provider.GetRequiredService<PlaybackEngine>(),
                 Exports = provider.GetRequiredService<IExportService>(),
                 Kind = "gui",
+                HostMethods = provider.GetRequiredService<Shell.AppHostMethods>().Methods,
             },
             provider.GetRequiredService<ControlSettingsStore>().Current.ToOptions("Jazz Hands")));
         services.AddSingleton(provider => new ViewModels.Remote.CommandConsoleViewModel(
@@ -227,8 +253,65 @@ public static class AppServices
             provider.GetRequiredService<IUiDispatcher>(),
             provider.GetRequiredService<IFileDialogService>()));
 
+        // Notifications: the corner toasts and the bell's history. What the engine notices on its own
+        // (a decoder falling back, a file missing) reaches them as warnings.
+        services.AddSingleton(provider =>
+        {
+            var notifications = new NotificationService(provider.GetRequiredService<IUiDispatcher>());
+            provider.GetRequiredService<Session>().Notices.Raised += (_, notice) => notifications.Show(
+                notice.Level switch { Core.Diagnostics.DiagnosticLevel.Error => NotificationLevel.Error, Core.Diagnostics.DiagnosticLevel.Warning => NotificationLevel.Warning, _ => NotificationLevel.Information },
+                notice.Message);
+            return notifications;
+        });
+        services.AddSingleton<INotificationService>(provider => provider.GetRequiredService<NotificationService>());
+        services.AddSingleton(provider =>
+        {
+            IPreviewEngine preview = provider.GetRequiredService<IPreviewEngine>();
+            TimelineDocuments timelines = provider.GetRequiredService<TimelineDocuments>();
+            return new Shell.StatusBarViewModel(
+                provider.GetRequiredService<ISession>(),
+                provider.GetRequiredService<NotificationService>(),
+                () => timelines.ActiveTimeline,
+                () => preview.Position,
+                provider.GetRequiredService<IExportService>(),
+                provider.GetRequiredService<ControlServer>(),
+                provider.GetRequiredService<RenderDevice>().AdapterName,
+                provider.GetRequiredService<IUiDispatcher>());
+        });
+
+        // The shell's own panels: the undo history, the log the editor keeps in memory, the markers.
+        services.AddSingleton(provider => new ViewModels.History.HistoryPanelViewModel(
+            provider.GetRequiredService<ISession>(),
+            provider.GetRequiredService<IUiDispatcher>()));
+        services.AddSingleton(provider => new ViewModels.Logging.LogPanelViewModel(
+            Engine.Logging.LogSetup.RingBuffer,
+            provider.GetRequiredService<IUiDispatcher>(),
+            text => System.Windows.Clipboard.SetText(text)));
+        services.AddSingleton(provider =>
+        {
+            IPreviewEngine preview = provider.GetRequiredService<IPreviewEngine>();
+            return new ViewModels.Markers.MarkersPanelViewModel(
+                provider.GetRequiredService<ISession>(),
+                provider.GetRequiredService<IUiDispatcher>(),
+                () => preview.Position);
+        });
+
         services.AddSingleton<MainViewModel>();
 
         return services;
+    }
+
+    // The adapters for the Settings dialog's GPU list; none when DXGI will not say, so the dialog still opens.
+    private static IReadOnlyList<string> SafeAdapters()
+    {
+        try
+        {
+            return Render.RenderDevice.Adapters();
+        }
+        catch (Exception error) when (error is System.Runtime.InteropServices.COMException or SharpGen.Runtime.SharpGenException or DllNotFoundException)
+        {
+            Serilog.Log.Warning(error, "The GPU adapters could not be listed");
+            return [];
+        }
     }
 }

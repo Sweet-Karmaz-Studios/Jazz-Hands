@@ -38,6 +38,7 @@
   <ItemGroup Label="UI">
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageVersion Include="Dirkster.AvalonDock" Version="5.0.0" />
+    <PackageVersion Include="Dirkster.AvalonDock.Serializer.Xml" Version="5.0.0" />
   </ItemGroup>
 
   <ItemGroup Label="Front ends">

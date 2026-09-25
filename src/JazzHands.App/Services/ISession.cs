@@ -27,6 +27,9 @@ public interface ISession
     /// <summary>Where the project lives, or empty when it has never been saved.</summary>
     string ProjectPath { get; }
 
+    /// <summary>True when there are changes since the last save.</summary>
+    bool IsDirty { get; }
+
     /// <summary>Runs a command through the dispatcher.</summary>
     Task<CommandResult> ExecuteAsync(ICommand command, CancellationToken cancellationToken = default);
 
@@ -50,6 +53,9 @@ public sealed class EngineSession(Session session) : ISession
 
     /// <inheritdoc />
     public string ProjectPath => session.ProjectPath;
+
+    /// <inheritdoc />
+    public bool IsDirty => session.IsDirty;
 
     /// <inheritdoc />
     public Task<CommandResult> ExecuteAsync(ICommand command, CancellationToken cancellationToken = default) =>

@@ -19,13 +19,16 @@
         xmlns:exportvm="clr-namespace:JazzHands.App.ViewModels.Export"
         xmlns:remote="clr-namespace:JazzHands.App.Views.Remote"
         xmlns:remotevm="clr-namespace:JazzHands.App.ViewModels.Remote"
+        xmlns:shellviews="clr-namespace:JazzHands.App.Views.Shell"
+        xmlns:historyvm="clr-namespace:JazzHands.App.ViewModels.History"
+        xmlns:logvm="clr-namespace:JazzHands.App.ViewModels.Logging"
+        xmlns:markersvm="clr-namespace:JazzHands.App.ViewModels.Markers"
         xmlns:inspector="clr-namespace:JazzHands.App.Views.Inspector"
         xmlns:inspectorvm="clr-namespace:JazzHands.App.ViewModels.Inspector"
         xmlns:effects="clr-namespace:JazzHands.App.Views.Effects"
         xmlns:effectsvm="clr-namespace:JazzHands.App.ViewModels.Effects"
         xmlns:grading="clr-namespace:JazzHands.App.Views.Grading"
         xmlns:gradingvm="clr-namespace:JazzHands.App.ViewModels.Grading"
-        xmlns:color="clr-namespace:JazzHands.Render.Color;assembly=JazzHands.Render"
         xmlns:vm="clr-namespace:JazzHands.App.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -44,7 +47,6 @@
     </Window.TaskbarItemInfo>
 
     <Window.Resources>
-        <media:EnumMatchConverter x:Key="EnumMatch" />
         <!-- Which view draws which panel. Implicit, keyed by viewmodel type, so adding a panel in
              Phase 27 is a template here and a registration in AppServices. -->
         <DataTemplate DataType="{x:Type mediavm:MediaPanelViewModel}">
@@ -83,6 +85,15 @@
         <DataTemplate DataType="{x:Type remotevm:CommandConsoleViewModel}">
             <remote:CommandConsoleView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type historyvm:HistoryPanelViewModel}">
+            <shellviews:HistoryPanelView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type logvm:LogPanelViewModel}">
+            <shellviews:LogPanelView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type markersvm:MarkersPanelViewModel}">
+            <shellviews:MarkersPanelView />
+        </DataTemplate>
     </Window.Resources>
 
     <Grid>
@@ -90,54 +101,40 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
+        <!-- The menu is the main viewmodel's, built from the keymap so each item shows the keys
+             bound to it now. Ticks are read as a menu opens (MenuOpened in code-behind). -->
         <Menu Grid.Row="0"
+              ItemsSource="{Binding Menu, Mode=OneWay}"
+              MenuItem.SubmenuOpened="OnSubmenuOpened"
               Background="{DynamicResource Brush.Background.Raised}"
               Foreground="{DynamicResource Brush.Text.Primary}">
-            <MenuItem Header="_File">
-                <MenuItem Header="_Import media..." Command="{Binding Media.ImportCommand, Mode=OneWay}" />
-                <MenuItem Header="Quick _Trim a recording..." Command="{Binding QuickTrimFileCommand, Mode=OneWay}" />
-                <Separator />
-                <MenuItem Header="_Export..." Command="{Binding ExportCommand, Mode=OneWay}" />
-                <Separator />
-                <MenuItem Header="E_xit" Command="{Binding ExitCommand, Mode=OneWay}" />
-            </MenuItem>
-            <MenuItem Header="_Playback">
-                <MenuItem Header="_Play or pause" InputGestureText="Space" Command="{Binding Preview.TogglePlayCommand, Mode=OneWay}" />
-                <MenuItem Header="_Stop" Command="{Binding Preview.StopCommand, Mode=OneWay}" />
-                <MenuItem Header="Back one _frame" InputGestureText="Left" Command="{Binding Preview.StepBackCommand, Mode=OneWay}" />
-                <MenuItem Header="Forward one f_rame" InputGestureText="Right" Command="{Binding Preview.StepForwardCommand, Mode=OneWay}" />
-                <MenuItem Header="Go to st_art" InputGestureText="Home" Command="{Binding Preview.GoToStartCommand, Mode=OneWay}" />
-                <MenuItem Header="Go to _end" InputGestureText="End" Command="{Binding Preview.GoToEndCommand, Mode=OneWay}" />
-                <Separator />
-                <MenuItem Header="Mark _in" InputGestureText="I" Command="{Binding Preview.SetInCommand, Mode=OneWay}" />
-                <MenuItem Header="Mark _out" InputGestureText="O" Command="{Binding Preview.SetOutCommand, Mode=OneWay}" />
-                <MenuItem Header="_Clear in and out" InputGestureText="Ctrl+Shift+X" Command="{Binding Preview.ClearInOutCommand, Mode=OneWay}" />
-                <MenuItem Header="_Loop" InputGestureText="Ctrl+L" IsCheckable="True" IsChecked="{Binding Preview.Loop, Mode=TwoWay}" />
-                <Separator />
-                <MenuItem Header="F_ull screen" InputGestureText="F11" Command="{Binding Preview.ToggleFullScreenCommand, Mode=OneWay}" />
-            </MenuItem>
-            <MenuItem Header="_Window">
-                <MenuItem Header="_Color workspace" Command="{Binding ShowColorWorkspaceCommand, Mode=OneWay}" />
-                <MenuItem Header="_Audio workspace" Command="{Binding ShowAudioWorkspaceCommand, Mode=OneWay}" />
-                <MenuItem Header="Command _Console" Command="{Binding ShowConsoleCommand, Mode=OneWay}" />
-                <Separator />
-                <MenuItem Header="Preview _display">
-                    <MenuItem Header="_sRGB monitor"
-                              Command="{Binding Preview.SetDisplayCommand, Mode=OneWay}"
-                              CommandParameter="{x:Static color:DisplayTransfer.Srgb}"
-                              IsChecked="{Binding Preview.Display, Mode=OneWay, Converter={StaticResource EnumMatch}, ConverterParameter=Srgb}" />
-                    <MenuItem Header="Gamma _2.2 monitor"
-                              Command="{Binding Preview.SetDisplayCommand, Mode=OneWay}"
-                              CommandParameter="{x:Static color:DisplayTransfer.Gamma22}"
-                              IsChecked="{Binding Preview.Display, Mode=OneWay, Converter={StaticResource EnumMatch}, ConverterParameter=Gamma22}" />
-                    <MenuItem Header="BT.1886 _reference display"
-                              Command="{Binding Preview.SetDisplayCommand, Mode=OneWay}"
-                              CommandParameter="{x:Static color:DisplayTransfer.Bt1886}"
-                              IsChecked="{Binding Preview.Display, Mode=OneWay, Converter={StaticResource EnumMatch}, ConverterParameter=Bt1886}" />
-                </MenuItem>
-            </MenuItem>
+            <Menu.ItemContainerStyle>
+                <Style TargetType="MenuItem">
+                    <Setter Property="Header" Value="{Binding Header, Mode=OneTime}" />
+                    <Setter Property="Command" Value="{Binding Command, Mode=OneTime}" />
+                    <Setter Property="CommandParameter" Value="{Binding CommandParameter, Mode=OneTime}" />
+                    <Setter Property="InputGestureText" Value="{Binding Gesture, Mode=OneWay}" />
+                    <Setter Property="IsCheckable" Value="False" />
+                    <Setter Property="IsChecked" Value="{Binding IsChecked, Mode=OneWay}" />
+                    <Setter Property="ToolTip" Value="{Binding ToolTip, Mode=OneTime}" />
+                    <Setter Property="ItemsSource" Value="{Binding Items, Mode=OneTime}" />
+                    <Setter Property="ItemContainerStyle" Value="{Binding ItemContainerStyle, RelativeSource={RelativeSource AncestorType=Menu}}" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsSeparator, Mode=OneTime}" Value="True">
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="MenuItem">
+                                        <Separator />
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Menu.ItemContainerStyle>
         </Menu>
 
         <!--
@@ -179,6 +176,40 @@
             </layout:LayoutRoot>
         </dock:DockingManager>
 
+        <!-- Notifications: up to three toasts in the bottom right, each for five seconds. -->
+        <ItemsControl Grid.Row="1"
+                      Margin="0,0,16,16"
+                      HorizontalAlignment="Right"
+                      VerticalAlignment="Bottom"
+                      MaxWidth="360"
+                      ItemsSource="{Binding StatusBar.Notifications.Toasts, Mode=OneWay}"
+                      AutomationProperties.Name="Notifications">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <Border Margin="0,8,0,0"
+                            Padding="12,8"
+                            CornerRadius="4"
+                            Background="{DynamicResource Brush.Background.Raised}"
+                            BorderThickness="1">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border.Strong}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Level, Mode=OneWay}" Value="Warning">
+                                        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Warning}" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Level, Mode=OneWay}" Value="Error">
+                                        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Error}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <TextBlock Text="{Binding Text, Mode=OneWay}" TextWrapping="Wrap" Foreground="{DynamicResource Brush.Text.Primary}" />
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
         <!-- While the control server listens where other machines can reach it, say so, always. -->
         <Border Grid.Row="2"
                 Padding="8,4"
@@ -198,6 +229,52 @@
             <TextBlock Text="{Binding Console.NetworkWarning, Mode=OneWay}"
                        TextWrapping="Wrap"
                        Foreground="{DynamicResource Brush.Warning}" />
+        </Border>
+
+        <!-- The status bar: tool and snapping; playhead and format; exports, cache, GPU, remote; the bell. -->
+        <Border Grid.Row="3"
+                Padding="8,2"
+                Background="{DynamicResource Brush.Background.Raised}"
+                BorderBrush="{DynamicResource Brush.Border}"
+                BorderThickness="0,1,0,0"
+                TextElement.FontSize="{DynamicResource Text.Caption}"
+                TextElement.Foreground="{DynamicResource Brush.Text.Secondary}"
+                AutomationProperties.Name="Status bar">
+            <DockPanel LastChildFill="False">
+                <TextBlock DockPanel.Dock="Left" Text="{Binding StatusBar.Tool, Mode=OneWay}" VerticalAlignment="Center" />
+                <ToggleButton x:Name="Bell"
+                              DockPanel.Dock="Right"
+                              Style="{StaticResource Button.Icon}"
+                              Margin="8,0,0,0"
+                              Content="&#xEA8F;"
+                              Checked="OnBellOpened"
+                              ToolTip="{Binding StatusBar.Notifications.Unread, Mode=OneWay, StringFormat='Notifications ({0} new)'}"
+                              AutomationProperties.Name="Notifications" />
+                <Popup DockPanel.Dock="Right"
+                       PlacementTarget="{Binding ElementName=Bell}"
+                       Placement="Top"
+                       StaysOpen="False"
+                       IsOpen="{Binding IsChecked, ElementName=Bell, Mode=TwoWay}">
+                    <Border Width="380" MaxHeight="360" Padding="8" Background="{DynamicResource Brush.Background.Panel}" BorderBrush="{DynamicResource Brush.Border.Strong}" BorderThickness="1">
+                        <ListBox ItemsSource="{Binding StatusBar.Notifications.History, Mode=OneWay}" Background="Transparent" BorderThickness="0" AutomationProperties.Name="Notification history">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource Brush.Text.Primary}">
+                                        <Run Text="{Binding Time, Mode=OneWay}" Foreground="{DynamicResource Brush.Text.Disabled}" />
+                                        <Run Text="{Binding Text, Mode=OneWay}" />
+                                    </TextBlock>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Border>
+                </Popup>
+                <TextBlock DockPanel.Dock="Right" Margin="16,0,0,0" Text="{Binding StatusBar.Remote, Mode=OneWay}" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Accent}" />
+                <TextBlock DockPanel.Dock="Right" Margin="16,0,0,0" Text="{Binding StatusBar.Gpu, Mode=OneWay}" VerticalAlignment="Center" />
+                <TextBlock DockPanel.Dock="Right" Margin="16,0,0,0" Text="{Binding StatusBar.Cache, Mode=OneWay}" VerticalAlignment="Center" />
+                <TextBlock DockPanel.Dock="Right" Margin="16,0,0,0" Text="{Binding StatusBar.ExportsText, Mode=OneWay}" VerticalAlignment="Center" />
+                <TextBlock DockPanel.Dock="Left" Margin="24,0,0,0" Text="{Binding StatusBar.Timecode, Mode=OneWay}" VerticalAlignment="Center" FontFamily="{DynamicResource Font.Mono}" Foreground="{DynamicResource Brush.Text.Primary}" />
+                <TextBlock DockPanel.Dock="Left" Margin="12,0,0,0" Text="{Binding StatusBar.Format, Mode=OneWay}" VerticalAlignment="Center" />
+            </DockPanel>
         </Border>
     </Grid>
 </Window>

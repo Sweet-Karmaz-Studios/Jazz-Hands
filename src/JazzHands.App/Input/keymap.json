@@ -1,5 +1,5 @@
 {
-  "comment": "Default key bindings. Each names a jazz command and its arguments as JSON-RPC would send them. $selection is the selected clips (a command that takes one clip runs once per clip, as one undo step), $playhead the playhead, $clipsAtPlayhead the selected clips under the playhead or, with none selected there, every clip under it. $in and $out are the in and out points, which Enter keeps and Backspace cuts in a Quick Trim. Commands that start with ui. are the editor's own: tools, snapping, the clipboard and match frame. Put a keymap.json with the same shape in %APPDATA%/JazzHands to change a key; a binding there with an empty command frees the key.",
+  "comment": "Default key bindings. Each names a jazz command and its arguments as JSON-RPC would send them. $selection is the selected clips (a command that takes one clip runs once per clip, as one undo step), $playhead the playhead, $clipsAtPlayhead the selected clips under the playhead or, with none selected there, every clip under it. $in and $out are the in and out points, which Enter keeps and Backspace cuts in a Quick Trim. Commands that start with ui. are the editor's own: tools, snapping, the clipboard, match frame, and the window's dialogs. Put a keymap.json with the same shape in %APPDATA%/JazzHands to change a key; a binding there with an empty command frees the key.",
   "bindings": [
     { "keys": "Delete", "command": "clip.remove", "args": { "clipId": "$selection" } },
     { "keys": "Shift+Delete", "command": "clip.ripple-delete", "args": { "clipIds": "$selection" } },
@@ -16,6 +16,7 @@
     { "keys": "Shift+.", "command": "clip.nudge", "args": { "clipIds": "$selection", "frames": 10 }, "repeat": true },
     { "keys": "I", "command": "playback.set-in" },
     { "keys": "O", "command": "playback.set-out" },
+    { "keys": "M", "command": "marker.add", "args": { "at": "$playhead" } },
     { "keys": "Ctrl+K", "command": "clip.split", "args": { "clipId": "$clipsAtPlayhead", "at": "$playhead" } },
     { "keys": "Ctrl+A", "command": "selection.set", "args": { "ids": "$allClips" } },
     { "keys": "Enter", "command": "trim.add-segment", "args": { "in": "$in", "out": "$out" } },
@@ -35,6 +36,13 @@
     { "keys": "Ctrl+C", "command": "ui.copy" },
     { "keys": "Ctrl+X", "command": "ui.cut" },
     { "keys": "Ctrl+V", "command": "ui.paste" },
-    { "keys": "Ctrl+Shift+V", "command": "ui.paste-insert" }
+    { "keys": "Ctrl+Shift+V", "command": "ui.paste-insert" },
+    { "keys": "Ctrl+N", "command": "ui.new" },
+    { "keys": "Ctrl+O", "command": "ui.open" },
+    { "keys": "Ctrl+S", "command": "ui.save" },
+    { "keys": "Ctrl+Shift+S", "command": "ui.save-as" },
+    { "keys": "Ctrl+I", "command": "ui.import" },
+    { "keys": "Ctrl+M", "command": "ui.export" },
+    { "keys": "Ctrl+,", "command": "ui.settings" }
   ]
 }

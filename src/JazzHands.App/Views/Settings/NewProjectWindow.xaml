@@ -1,0 +1,50 @@
+<Window x:Class="JazzHands.App.Views.Settings.NewProjectWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:JazzHands.App.ViewModels.Settings"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        d:DataContext="{d:DesignInstance vm:NewProjectViewModel}"
+        Title="New project"
+        SizeToContent="Height"
+        Width="460"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Background="{DynamicResource Brush.Background.Panel}"
+        Foreground="{DynamicResource Brush.Text.Primary}">
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="80" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <TextBlock Grid.Row="0" Grid.Column="0" Text="Name" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" />
+        <TextBox x:Name="NameBox"
+                 Grid.Row="0"
+                 Grid.Column="1"
+                 Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                 AutomationProperties.Name="Project name" />
+
+        <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,0,0" Text="Shape" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" />
+        <ComboBox Style="{StaticResource ComboBox.Compact}"
+                  Grid.Row="1"
+                  Grid.Column="1"
+                  Margin="0,8,0,0"
+                  ItemsSource="{Binding Source={x:Static vm:NewProjectViewModel.Presets}, Mode=OneTime}"
+                  SelectedItem="{Binding Preset, Mode=TwoWay}"
+                  AutomationProperties.Name="Frame rate and size" />
+
+        <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,16,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Style="{StaticResource Button.Text}" Content="Cancel" IsCancel="True" Command="{Binding CancelCommand, Mode=OneWay}" AutomationProperties.Name="Cancel" />
+            <Button Style="{StaticResource Button.Text}" Margin="8,0,0,0" Content="Create" IsDefault="True" Command="{Binding CreateCommand, Mode=OneWay}" AutomationProperties.Name="Create the project" />
+        </StackPanel>
+    </Grid>
+</Window>

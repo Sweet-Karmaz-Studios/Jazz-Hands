@@ -146,6 +146,119 @@ public sealed class Keymap
         return keymap;
     }
 
+    /// <summary>A keymap of exactly these bindings; a later binding of a key wins.</summary>
+    public static Keymap From(IEnumerable<KeymapBinding> bindings)
+    {
+        ArgumentNullException.ThrowIfNull(bindings);
+        var map = new Dictionary<KeyChord, KeymapBinding>();
+        foreach (KeymapBinding binding in bindings.Where(binding => binding.Command.Length > 0))
+        {
+            map[binding.Gesture] = binding;
+        }
+
+        return new Keymap(map);
+    }
+
+    /// <summary>What a binding's command does, in a few words: the registry's description, or the editor action's name.</summary>
+    public static string Describe(string command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        if (UiActions.Describe(command) is { } action)
+        {
+            return action;
+        }
+
+        return CommandRegistry.Find(command)?.Description ?? command;
+    }
+
+    /// <summary>
+    /// Writes a person's keymap file holding only what differs from the defaults: bindings that
+    /// are new or changed, and an empty command for each default key that was freed. The defaults
+    /// can then change in a later version without a person's file hiding the change.
+    /// </summary>
+    public static void SaveUser(string path, IEnumerable<KeymapBinding> bindings)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentNullException.ThrowIfNull(bindings);
+
+        Dictionary<KeyChord, KeymapBinding> defaults = Defaults()._bindings;
+        Dictionary<KeyChord, KeymapBinding> wanted = From(bindings)._bindings;
+        var entries = new JsonArray();
+
+        foreach (KeymapBinding binding in wanted.Values.OrderBy(binding => binding.Keys, StringComparer.Ordinal))
+        {
+            if (!defaults.TryGetValue(binding.Gesture, out KeymapBinding? original) || !Same(original, binding))
+            {
+                entries.Add(ToJson(binding));
+            }
+        }
+
+        foreach (KeymapBinding freed in defaults.Values.Where(binding => !wanted.ContainsKey(binding.Gesture)).OrderBy(binding => binding.Keys, StringComparer.Ordinal))
+        {
+            entries.Add(new JsonObject { ["keys"] = freed.Keys, ["command"] = string.Empty });
+        }
+
+        Write(path, entries, "Key bindings that differ from Jazz Hands' defaults. An empty command frees a key.");
+    }
+
+    /// <summary>Writes every binding to a file another machine can import.</summary>
+    public static void Export(string path, IEnumerable<KeymapBinding> bindings)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentNullException.ThrowIfNull(bindings);
+        Write(path, new JsonArray([.. From(bindings)._bindings.Values.OrderBy(binding => binding.Keys, StringComparer.Ordinal).Select(binding => (JsonNode?)ToJson(binding))]), "A Jazz Hands keymap.");
+    }
+
+    /// <summary>One binding from its parts, checked as a keymap file's line is.</summary>
+    /// <exception cref="FormatException">The keys or the command are not ones a binding can have.</exception>
+    public static KeymapBinding Bind(string keys, string command, JsonObject? args = null, bool repeat = false)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        KeyChord gesture = KeyChord.Parse(keys);
+        if (UiActions.IsAction(command) ? !UiActions.Known.Contains(command) : CommandRegistry.Find(command) is null)
+        {
+            throw new FormatException($"There is no command called '{command}'.");
+        }
+
+        return new KeymapBinding(keys.Trim(), gesture, command, args is null ? [] : (JsonObject)args.DeepClone(), repeat);
+    }
+
+    /// <summary>True when two bindings send the same command with the same arguments.</summary>
+    public static bool Same(KeymapBinding left, KeymapBinding right)
+    {
+        ArgumentNullException.ThrowIfNull(left);
+        ArgumentNullException.ThrowIfNull(right);
+        return left.Gesture == right.Gesture
+            && string.Equals(left.Command, right.Command, StringComparison.Ordinal)
+            && left.Repeat == right.Repeat
+            && JsonNode.DeepEquals(left.Args, right.Args);
+    }
+
+    private static JsonObject ToJson(KeymapBinding binding)
+    {
+        var entry = new JsonObject { ["keys"] = binding.Keys, ["command"] = binding.Command };
+        if (binding.Args.Count > 0)
+        {
+            entry["args"] = binding.Args.DeepClone();
+        }
+
+        if (binding.Repeat)
+        {
+            entry["repeat"] = true;
+        }
+
+        return entry;
+    }
+
+    private static void Write(string path, JsonArray entries, string comment)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+        var document = new JsonObject { ["comment"] = comment, ["bindings"] = entries };
+        string temporary = path + ".tmp";
+        File.WriteAllText(temporary, document.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+        File.Move(temporary, path, overwrite: true);
+    }
+
     /// <summary>The binding for a key, when there is one.</summary>
     public KeymapBinding? Find(Key key, ModifierKeys modifiers) =>
         _bindings.GetValueOrDefault(new KeyChord(key, modifiers));

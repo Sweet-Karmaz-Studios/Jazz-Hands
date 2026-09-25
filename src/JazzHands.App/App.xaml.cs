@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using JazzHands.App.Services;
 using JazzHands.Core.Model;
 using JazzHands.Core.Serialization;
 using JazzHands.Engine.Commands;
@@ -49,11 +50,28 @@ public partial class App : Application
 
         base.OnStartup(e);
 
+        // One editor at a time: a second launch hands its project to the first and goes.
+        EditorSettings editor = EditorSettings.Store().Current;
+        string? project = spike ? null : Shell.Startup.ProjectToOpen(e.Args, editor, Services.RecentProjects.Store().Current);
+        if (!spike && !e.Args.Contains(Shell.Startup.NewInstance, StringComparer.Ordinal)
+            && Shell.Startup.TryHandOffAsync(project).GetAwaiter().GetResult())
+        {
+            Shutdown(0);
+            return;
+        }
+
+        // The GPU chosen in Settings, unless JAZZ_GPU says otherwise for this run.
+        if (Environment.GetEnvironmentVariable("JAZZ_GPU") is null && Render.GpuChoice.TryParse(editor.Gpu, out Render.GpuChoice? gpu))
+        {
+            Render.RenderDevice.Preferred = gpu;
+        }
+
         try
         {
-            MainWindow = CreateStartupWindow(e.Args, spike);
+            MainWindow = CreateStartupWindow(project, spike, e.Args);
             MainWindow.Show();
             StartControlServer();
+            AfterStart(editor);
         }
         catch (Exception ex)
         {
@@ -97,10 +115,8 @@ public partial class App : Application
     /// taking the application down, because the alternative is an editor that cannot be started
     /// to fix the file that stops it starting.
     /// </remarks>
-    private static (Project Project, string Path) OpenProject(string[] args)
+    private static (Project Project, string Path) OpenProject(string? path)
     {
-        string? path = args.FirstOrDefault(argument => argument.EndsWith(".jazz", StringComparison.OrdinalIgnoreCase));
-
         if (path is null)
         {
             return (Project.CreateNew("Untitled"), string.Empty);
@@ -142,7 +158,46 @@ public partial class App : Application
         }
     }
 
-    private Window CreateStartupWindow(string[] args, bool spike)
+    /// <summary>
+    /// What follows the window: the methods a second launch calls, the project on the recent
+    /// list, and the preview quality Settings chose.
+    /// </summary>
+    private void AfterStart(EditorSettings editor)
+    {
+        if (_services is null || MainWindow is not MainWindow window)
+        {
+            return;
+        }
+
+        ViewModels.MainViewModel model = _services.GetRequiredService<ViewModels.MainViewModel>();
+        Dictionary<string, Func<System.Text.Json.Nodes.JsonObject, Task<System.Text.Json.Nodes.JsonNode?>>> methods = _services.GetRequiredService<Shell.AppHostMethods>().Methods;
+        methods["app.activate"] = _ => Dispatcher.InvokeAsync(() =>
+        {
+            window.BringToFront();
+            return (System.Text.Json.Nodes.JsonNode?)new System.Text.Json.Nodes.JsonObject { ["ok"] = true };
+        }).Task;
+        methods["app.open"] = args => Dispatcher.InvokeAsync(async () =>
+        {
+            window.BringToFront();
+            string path = args["path"]?.GetValue<string>() ?? throw new Control.JsonRpcException(Control.JsonRpc.InvalidParams, "app.open needs a path.");
+            bool opened = await model.OpenAsync(path).ConfigureAwait(true);
+            return (System.Text.Json.Nodes.JsonNode?)new System.Text.Json.Nodes.JsonObject { ["opened"] = opened };
+        }).Task.Unwrap();
+
+        Session session = _services.GetRequiredService<Session>();
+        if (session.ProjectPath.Length > 0)
+        {
+            _services.GetRequiredService<Engine.Settings.SettingsSection<Services.RecentProjects>>().Update(recent => recent.With(session.ProjectPath));
+            model.BuildMenu();
+        }
+
+        if (editor.PreviewQuality != "auto" && Enum.TryParse(editor.PreviewQuality, ignoreCase: true, out Core.Commands.PreviewQuality quality))
+        {
+            _ = session.ExecuteAsync(new Core.Commands.SetQualityCommand(quality));
+        }
+    }
+
+    private Window CreateStartupWindow(string? projectPath, bool spike, string[] args)
     {
 #if SPIKES
         if (spike)
@@ -160,7 +215,7 @@ public partial class App : Application
                 + "    dotnet build src\\JazzHands.App -c Release -p:JazzSpikes=true");
         }
 #endif
-        (Project project, string path) = OpenProject(args);
+        (Project project, string path) = OpenProject(projectPath);
 
         var services = new ServiceCollection();
         services.AddJazzHandsApp(project, path);
