@@ -285,10 +285,15 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
         TrackKind kind = descriptor.Kind == EffectKind.AudioGenerator ? TrackKind.Audio : TrackKind.Video;
         Flicks at = _playback?.Position ?? Flicks.Zero;
         Flicks end = at + GeneratorLength;
+        // The lowest free track above everything with a picture there, so the generator is seen.
+        bool Busy(Track track) => track.Clips.Any(clip => clip.Start < end && at < clip.Start + clip.Duration);
+        int covered = kind == TrackKind.Audio
+            ? int.MinValue
+            : sequence.Tracks.Where(track => track.Kind is TrackKind.Video or TrackKind.Adjustment && Busy(track)).Select(track => track.Order).DefaultIfEmpty(int.MinValue).Max();
         Track? free = sequence.Tracks
-            .Where(track => track.Kind == kind && !track.Locked)
-            .OrderByDescending(track => track.Order)
-            .FirstOrDefault(track => !track.Clips.Any(clip => clip.Start < end && at < clip.Start + clip.Duration));
+            .Where(track => track.Kind == kind && !track.Locked && track.Order > covered)
+            .OrderBy(track => track.Order)
+            .FirstOrDefault(track => !Busy(track));
 
         if (free is not null)
         {

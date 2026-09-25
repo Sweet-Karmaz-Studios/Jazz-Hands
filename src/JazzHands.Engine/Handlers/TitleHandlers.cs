@@ -212,8 +212,9 @@ public sealed class AddTitleHandler : ICommandHandler<AddTitleCommand>
     }
 
     /// <summary>
-    /// The track a title goes on: the one named, or the highest video track free for its whole
-    /// length, or a new video track above everything when none is.
+    /// The track a title goes on: the one named, or the lowest video track free for its whole length
+    /// above every track with a picture or an adjustment there (a title under the shot would not be
+    /// seen), or a new video track above everything when none is.
     /// </summary>
     private static (Sequence Sequence, Track Track, bool Made) Place(Project project, AddTitleCommand command, TimeRange range)
     {
@@ -239,9 +240,14 @@ public sealed class AddTitleHandler : ICommandHandler<AddTitleCommand>
         }
 
         Sequence sequence = HandlerHelp.Sequence(project, command.SequenceId);
+        int covered = sequence.Tracks
+            .Where(track => track.Kind is TrackKind.Video or TrackKind.Adjustment && EditOps.Overlaps(track, probe))
+            .Select(track => track.Order)
+            .DefaultIfEmpty(int.MinValue)
+            .Max();
         Track? free = sequence.Tracks
-            .Where(track => track.Kind == TrackKind.Video && !track.Locked)
-            .OrderByDescending(track => track.Order)
+            .Where(track => track.Kind == TrackKind.Video && !track.Locked && track.Order > covered)
+            .OrderBy(track => track.Order)
             .FirstOrDefault(track => !EditOps.Overlaps(track, probe));
 
         if (free is not null)
