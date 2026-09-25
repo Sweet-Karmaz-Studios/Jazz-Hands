@@ -4296,6 +4296,35 @@ Place a timed combination of effects (a hit, a heavy hit, a boss intro) at a mom
 | `--sequence <id>` | Which sequence. |
 | `--no-save` | Do not write the project back. |
 
+### `jazz vfx find-static <project> <clip-id>`
+
+Find what stands still over a clip's moving picture (a game HUD, a watermark, debug text), as regions to hide.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The clip id. |
+
+| Option | Meaning |
+|---|---|
+| `--samples <n>` | How many frames are compared. Default: 24. Default: 24. |
+
+### `jazz vfx hide-static <project> <clip-id>`
+
+Hide a clip's HUD or watermark by blur, pixelate, fill from a clean frame, or crop; finds the regions when none are given.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The clip id. |
+
+| Option | Meaning |
+|---|---|
+| `--how <blur|pixelate|fill|crop>` | blur, pixelate, fill or crop. Default: blur. Default: blur. |
+| `--regions <regions>` | x,y,width,height in source pixels, several separated by ;. |
+| `--plate <time>` | fill: the moment the clean frame is taken from. |
+| `--no-save` | Do not write the project back. |
+
 ### `jazz vfx presets <project>`
 
 The effect presets vfx.apply-preset places, with what each is made of.
