@@ -328,7 +328,7 @@ public sealed class UnnestClipHandler : ICommandHandler<UnnestClipCommand>
                 continue;
             }
 
-            Track destination = Destination(working, source)
+            Track destination = Destination(working, nested, source, found.Track)
                 ?? throw new CommandException(
                     "no-room",
                     $"'{host.Name}' has no {source.Kind.ToString().ToLowerInvariant()} track to put '{source.Name}' back on.");
@@ -369,19 +369,22 @@ public sealed class UnnestClipHandler : ICommandHandler<UnnestClipCommand>
 
     /// <summary>The track in the host that a nested track should come back to.</summary>
     /// <remarks>
-    /// Matched by kind and then by position among tracks of that kind, so the second audio track
-    /// of a nest lands on the second audio track of the host rather than wherever it fits.
+    /// Matched by kind and then by place among tracks of that kind. Tracks of the compound clip's
+    /// own kind count up from the track it was on, so a nest of the clips on a title track comes
+    /// back onto that track rather than onto the first track of its kind; the others count from the
+    /// host's first. Past the last track of a kind, the last one takes them.
     /// </remarks>
-    private static Track? Destination(Sequence host, Track source)
+    private static Track? Destination(Sequence host, Sequence nested, Track source, Track anchor)
     {
         Track[] candidates = [.. host.Tracks.Where(track => track.Kind == source.Kind).OrderBy(track => track.Order)];
-
         if (candidates.Length == 0)
         {
             return null;
         }
 
-        return candidates[Math.Min(source.Order, candidates.Length - 1)];
+        int place = nested.Tracks.Where(track => track.Kind == source.Kind).OrderBy(track => track.Order).TakeWhile(track => track.Id != source.Id).Count();
+        int start = anchor.Kind == source.Kind ? Math.Max(0, Array.FindIndex(candidates, track => track.Id == anchor.Id)) : 0;
+        return candidates[Math.Min(start + place, candidates.Length - 1)];
     }
 
     private static bool IsUsed(Project project, string sequenceId) =>
