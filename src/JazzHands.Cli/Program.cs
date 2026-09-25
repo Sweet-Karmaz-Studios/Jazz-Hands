@@ -129,6 +129,7 @@ namespace JazzHands.Cli
                 root.Subcommands.Add(ApplyCommand.Build());
                 root.Subcommands.Add(RpcCommands.BuildRpc());
                 root.Subcommands.Add(RpcCommands.BuildAttachedFrame());
+                root.Subcommands.Add(McpCommand.Build());
                 return root;
             }
 
@@ -140,6 +141,7 @@ namespace JazzHands.Cli
             root.Subcommands.Add(CliDocs.Build());
             root.Subcommands.Add(RpcCommands.BuildRpc());
             root.Subcommands.Add(RpcCommands.BuildServe());
+            root.Subcommands.Add(McpCommand.Build());
             GeneratedCommands.AddTo(root);
             root.Subcommands.Add(BuildPerfCommand());
             return root;

@@ -286,6 +286,16 @@ Open a project headless and serve it over the control server until Ctrl+C: a GUI
 | `--token <token>` | The token TCP clients must say; made up when left out, and printed. |
 | `--save-on-exit` | Save the project when stopped with Ctrl+C, if it has changes. |
 
+### `jazz mcp`
+
+Serve the Model Context Protocol on stdin and stdout for Claude Code: 'claude mcp add jazz -- jazz mcp --attach'.
+
+| Option | Meaning |
+|---|---|
+| `--project <project>` | Open this project here instead of attaching to an editor; a path that does not exist yet starts a new project there. |
+| `--save-on-exit` | With --project, save it when the client disconnects, if it changed. |
+| `--list-tools` | Print the tools and what each does, then exit. With --json, their schemas too. |
+
 ### `jazz describe <project>`
 
 Describe the project for a person or a model: settings, media, a sequence's tracks and clips in order, gaps, transitions, markers and problems.

@@ -4,10 +4,14 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>jazz</AssemblyName>
     <Description>The jazz command line tool.</Description>
+    <!-- jazz-mcp is an exe referenced for its server; jazz publishes self-contained, it does not. -->
+    <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\JazzHands.Control\JazzHands.Control.csproj" />
+    <!-- jazz mcp runs the MCP server in process; jazz-mcp.exe runs the same one. -->
+    <ProjectReference Include="..\JazzHands.Mcp\JazzHands.Mcp.csproj" />
   </ItemGroup>
 
   <ItemGroup>
