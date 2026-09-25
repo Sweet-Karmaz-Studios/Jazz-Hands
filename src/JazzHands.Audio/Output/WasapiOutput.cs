@@ -38,7 +38,7 @@ public sealed partial class WasapiOutput : IAudioOutput
     private const long HundredNanosecondsPerSecond = 10_000_000;
 
     private readonly ILogger _log = Log.ForContext<WasapiOutput>();
-    private readonly string? _deviceId;
+    private volatile string? _deviceId;
     private readonly long _bufferHns;
     private readonly WaveFormat _format;
     private readonly AutoResetEvent _changed = new(false);
@@ -95,6 +95,26 @@ public sealed partial class WasapiOutput : IAudioOutput
 
     /// <summary>Times the output moved to another device.</summary>
     public int DeviceSwitches { get; private set; }
+
+    /// <summary>
+    /// The device chosen, or null to follow the Windows default. Setting it while playing moves the
+    /// sound there at the next buffer, the way an unplugged device is handled, with no restart.
+    /// </summary>
+    public string? DeviceId
+    {
+        get => _deviceId;
+        set
+        {
+            if (string.Equals(_deviceId, value, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            _deviceId = value;
+            _deviceChanged = true;
+            _changed.Set();
+        }
+    }
 
     /// <inheritdoc />
     public long FramesPlayed
