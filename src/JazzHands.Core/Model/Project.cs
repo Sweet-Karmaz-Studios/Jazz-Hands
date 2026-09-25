@@ -34,6 +34,19 @@ public enum TrackKind
     Adjustment,
 }
 
+/// <summary>How a clip shows a moment that falls between two of its source frames.</summary>
+public enum RetimeMode
+{
+    /// <summary>The frame that started at or before it, which is what every clip at normal speed shows. The default.</summary>
+    Nearest,
+
+    /// <summary>The two frames either side, crossfaded by how far between them the moment is: smoother slow motion.</summary>
+    Blend,
+
+    /// <summary>Motion interpolated frames. A placeholder in this version: it blends, as <see cref="Blend"/> does.</summary>
+    OpticalFlow,
+}
+
 /// <summary>How a clip is combined with what is underneath it.</summary>
 public enum BlendMode
 {
@@ -358,6 +371,7 @@ public sealed record Marker(
 /// <param name="ToneMap">How an HDR source is tone mapped for this clip, over the project's default. Null for the project's.</param>
 /// <param name="Cue">What a cue on a subtitle track says and where it sits; null on every other clip.</param>
 /// <param name="Remap">A speed curve over clip time that replaces <paramref name="Speed"/>: time remapping and speed ramps (<see cref="Animation.TimeRemap"/>).</param>
+/// <param name="Retime">How a picture between two source frames is shown when the clip plays at another speed or rate: the nearer frame, or a blend of both.</param>
 public sealed record Clip(
     string Id,
     TimeRange Range,
@@ -387,7 +401,8 @@ public sealed record Clip(
     bool? Hold = null,
     ToneMapping? ToneMap = null,
     Cue? Cue = null,
-    AnimatedValue? Remap = null) : IEquatable<Clip>
+    AnimatedValue? Remap = null,
+    RetimeMode Retime = RetimeMode.Nearest) : IEquatable<Clip>
 {
     /// <summary>Playback rate, defaulting to normal speed.</summary>
     public Rational EffectiveSpeed => Speed ?? Rational.One;

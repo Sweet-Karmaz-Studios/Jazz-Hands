@@ -105,3 +105,34 @@ public sealed class RampClipSpeedHandler : ICommandHandler<RampClipSpeedCommand>
         return RemapHelp.Apply(project, found, new KeyframedValue(kept.Concat(ramp)), context);
     }
 }
+
+/// <summary>Sets how a clip shows the moments between its source frames.</summary>
+public sealed class SetClipRetimeHandler : ICommandHandler<SetClipRetimeCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, SetClipRetimeCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        if (!Enum.IsDefined(command.Mode))
+        {
+            throw new CommandException("invalid-value", $"{(int)command.Mode} is not a retime mode.");
+        }
+
+        ClipLocation found = HandlerHelp.Clip(project, command.ClipId);
+        HandlerHelp.RequireUnlocked(found.Track);
+        if (!found.Clip.IsMedia)
+        {
+            throw new CommandException("not-media", "Only a clip of a media file has source frames to blend.");
+        }
+
+        if (found.Clip.Retime == command.Mode)
+        {
+            return project;
+        }
+
+        context.Changed(command.ClipId);
+        return project.ReplaceTrack(found.Track.ReplaceClip(found.Clip with { Retime = command.Mode }));
+    }
+}

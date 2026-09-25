@@ -105,6 +105,9 @@ public static class RenderGraphBuilder
     /// <summary>The generator type for a flat colour.</summary>
     public const string SolidGenerator = "gen.solid";
 
+    /// <summary>The transition a blended retime mixes two source frames with.</summary>
+    private const string Crossfade = "transition.crossfade";
+
     /// <summary>Builds the graph for a sequence at a time.</summary>
     public static RenderGraph Build(Project project, Sequence sequence, Flicks time, IFrameProvider frames, RenderOptions options)
     {
@@ -226,7 +229,7 @@ public static class RenderGraphBuilder
                 continue;
             }
 
-            if (Source(project, clip, time, track.Order, frameSize, frames, options, depth, settings.FrameRate) is not { } source)
+            if (Source(project, clip, time, track.Order, frameSize, (width, height), frames, options, depth, settings.FrameRate) is not { } source)
             {
                 continue;
             }
@@ -279,7 +282,7 @@ public static class RenderGraphBuilder
 
             Flicks local = time - clip.Start;
             Flicks shown = TransitionTiming.ClampToSource(project, clip, time);
-            if (Source(project, clip, shown, lane, frameSize, frames, options, depth, frameRate) is not { } source)
+            if (Source(project, clip, shown, lane, frameSize, output, frames, options, depth, frameRate) is not { } source)
             {
                 return null;
             }
@@ -353,6 +356,7 @@ public static class RenderGraphBuilder
         Flicks time,
         int lane,
         Vector2 frameSize,
+        (int Width, int Height) output,
         IFrameProvider frames,
         RenderOptions options,
         int depth,
@@ -383,6 +387,11 @@ public static class RenderGraphBuilder
             Vector2 size = frame.Width > 0 && frame.Height > 0
                 ? new Vector2(frame.Width, frame.Height)
                 : new Vector2(frame.Frame.Width, frame.Frame.Height);
+
+            if (Blended(project, clip, time, lane, frame, size, output, frames, options, frameRate) is { } blended)
+            {
+                return (blended, size, policy);
+            }
 
             return (new FrameLayerSource(frame.Frame, frame.Color, frame.Identity), size, policy);
         }
@@ -429,6 +438,94 @@ public static class RenderGraphBuilder
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// A retimed clip's picture between two source frames: the frame showing and the one after,
+    /// crossfaded by how far between them the moment is (<see cref="RetimeMode.Blend"/>). Null when
+    /// the clip shows its nearest frame, the moment is on a frame, or there is no frame after.
+    /// </summary>
+    /// <remarks>
+    /// Both frames are drawn to the output's size and mixed by the crossfade transition, and the
+    /// mix is then placed as the clip's picture: a clip scaled up past the frame is blended at the
+    /// frame's resolution. The frame after is asked for as a freeze frame of that source frame on
+    /// the same decoder lane, so playing forwards decodes each frame once.
+    /// </remarks>
+    private static TransitionLayerSource? Blended(
+        Project project,
+        Clip clip,
+        Flicks time,
+        int lane,
+        SourceFrame shown,
+        Vector2 size,
+        (int Width, int Height) output,
+        IFrameProvider frames,
+        RenderOptions options,
+        Rational frameRate)
+    {
+        if (clip.Retime == RetimeMode.Nearest
+            || clip.IsHold
+            || clip.MediaId is not { } mediaId
+            || project.MediaItem(mediaId)?.Info?.Streams.FirstOrDefault(stream => stream.Index == clip.SourceStreamIndex)?.FrameRate is not { Num: > 0 } rate
+            || options.Effects.Find(Crossfade) is not { Kind: EffectKind.Transition } crossfade)
+        {
+            return null;
+        }
+
+        // Where the moment falls in source frames. A reversed clip shows the frame before the
+        // position, as the frame server does, and blends towards the one after it.
+        Flicks position = clip.SourceTimeAt(time);
+        if (position < Flicks.Zero)
+        {
+            return null;
+        }
+
+        Int128 scaled = (Int128)position.Value * rate.Num;
+        Int128 perFrame = (Int128)rate.Den * Flicks.PerSecond;
+        Int128 whole = scaled / perFrame;
+        float between = (float)((double)(scaled - (whole * perFrame)) / (double)perFrame);
+        long frame = (long)whole - (clip.Reverse ? 1 : 0);
+        if (frame < 0 || between < 1.0f / 512.0f)
+        {
+            return null;
+        }
+
+        Flicks half = new(Flicks.FromFrames(1, rate).Value / 2);
+        Clip after = clip with
+        {
+            Hold = true,
+            Remap = null,
+            Speed = null,
+            SourceIn = Flicks.FromFrames(frame + 1 + (clip.Reverse ? 1 : 0), rate) + half,
+        };
+
+        if (frames.Frame(project, after, time, lane) is not { } next)
+        {
+            return null;
+        }
+
+        LayerNode Side(SourceFrame picture) => new(
+            new FrameLayerSource(picture.Frame, picture.Color, picture.Identity),
+            (int)size.X,
+            (int)size.Y,
+            Matrix3x2.CreateScale(output.Width / size.X, output.Height / size.Y),
+            LayerNode.NoCrop,
+            1.0f,
+            BlendMode.Normal,
+            [],
+            options.Scale);
+
+        var effect = new EffectNode(crossfade, ParameterSet.Evaluate(crossfade, null, Flicks.Zero))
+        {
+            InstanceId = clip.Id + ":retime",
+            LocalTime = Flicks.Zero,
+            Seed = StableSeed(clip.Id),
+            OwnerLength = clip.Duration,
+            SequenceTime = time,
+            FrameRate = frameRate,
+        };
+
+        return new TransitionLayerSource(Side(shown), Side(next), new TransitionNode(effect, between));
     }
 
     /// <summary>

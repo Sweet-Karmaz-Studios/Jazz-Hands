@@ -331,6 +331,14 @@
               "type": "null"
             }
           ]
+        },
+        "retime": {
+          "type": "string",
+          "enum": [
+            "nearest",
+            "blend",
+            "opticalFlow"
+          ]
         }
       },
       "required": [
