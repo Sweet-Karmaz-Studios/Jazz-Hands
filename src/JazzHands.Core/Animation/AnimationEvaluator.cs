@@ -99,6 +99,10 @@ public sealed class AnimationEvaluator
             (ParamValue.Color a, ParamValue.Color b) =>
                 new ParamValue.Color(Vector4.Lerp(a.Value, b.Value, t)),
 
+            // Mask outlines morph point by point; outlines that cannot hold until the next keyframe.
+            (ParamValue.Path a, ParamValue.Path b) =>
+                MaskShapes.Interpolate(a.Value, b.Value, t) is { } shape ? new ParamValue.Path(shape) : from,
+
             _ => from,
         };
     }

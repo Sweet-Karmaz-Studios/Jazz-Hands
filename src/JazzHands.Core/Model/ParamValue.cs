@@ -145,12 +145,12 @@ public abstract record ParamValue
         public override string ToString() => Value;
     }
 
-    /// <summary>A vector path, for masks. Holds between keyframes until Phase 16 adds shape morphing.</summary>
+    /// <summary>A vector path, for masks. Morphs between keyframes with the same number of figures (<see cref="Animation.MaskShapes"/>).</summary>
     /// <param name="Value">The path, in SVG path syntax.</param>
     public sealed record Path(string Value) : ParamValue
     {
         /// <inheritdoc />
-        public override bool IsContinuous => false;
+        public override bool IsContinuous => true;
 
         /// <inheritdoc />
         public override string TypeName => "path";
