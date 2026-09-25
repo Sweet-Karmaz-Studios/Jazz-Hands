@@ -121,12 +121,19 @@ public sealed partial class StatusBarViewModel : ObservableObject
         }
         else if (Interlocked.Exchange(ref _reading, 1) == 0)
         {
-            // Off the UI thread: the read asks the database. One at a time.
+            // Off the UI thread: the read asks the database. One at a time, and the next one
+            // allowed whatever happened to this one.
             _ = Task.Run(() =>
             {
-                string cache = ReadCache();
-                _ui.Post(() => Cache = cache);
-                Volatile.Write(ref _reading, 0);
+                try
+                {
+                    string cache = ReadCache();
+                    _ui.Post(() => Cache = cache);
+                }
+                finally
+                {
+                    Volatile.Write(ref _reading, 0);
+                }
             });
         }
     }
@@ -138,7 +145,7 @@ public sealed partial class StatusBarViewModel : ObservableObject
             CacheStatsInfo stats = _session.Query(new GetCacheStatsQuery());
             return string.Create(CultureInfo.InvariantCulture, $"Cache {ExportPresets.FormatBytes(stats.BlobBytes + stats.DatabaseBytes)}{(stats.CapBytes > 0 ? $" of {ExportPresets.FormatBytes(stats.CapBytes)}" : string.Empty)}");
         }
-        catch (Exception error) when (error is CommandException or InvalidOperationException or System.IO.IOException)
+        catch (Exception error) when (error is CommandException or InvalidOperationException or System.IO.IOException or System.Data.Common.DbException)
         {
             return string.Empty;
         }
