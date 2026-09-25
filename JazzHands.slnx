@@ -15,6 +15,9 @@
     <Project Path="src/JazzHands.Render/JazzHands.Render.csproj" />
   </Folder>
   <Folder Name="/tools/">
+    <Project Path="tools/JazzHands.IconGen/JazzHands.IconGen.csproj">
+      <Platform Project="x64" />
+    </Project>
     <Project Path="tools/JazzHands.SchemaGen/JazzHands.SchemaGen.csproj">
       <Platform Project="x64" />
     </Project>

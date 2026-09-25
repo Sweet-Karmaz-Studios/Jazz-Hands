@@ -1,0 +1,441 @@
+<!--
+    The Jazz Hands mark, as vector drawings. Each candidate is a 256 unit drawing (the tile and the
+    mark), and hand-placed 16 and 20 unit versions whose shapes sit on whole pixels, because a
+    scaled-down drawing blurs fingers one pixel wide into a smudge. tools/JazzHands.IconGen reads
+    this file as loose XAML (no code behind, no x:Class) and renders the icons and the contact sheet.
+
+    Every drawing starts with a transparent square the size of its grid, so its bounds are the whole
+    icon and nothing is stretched to fit.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <SolidColorBrush x:Key="Icon.Tile" Color="#FF3D7FF5" />
+    <RectangleGeometry x:Key="Icon.Grid.256" Rect="0,0,256,256" />
+    <RectangleGeometry x:Key="Icon.Grid.20" Rect="0,0,20,20" />
+    <RectangleGeometry x:Key="Icon.Grid.16" Rect="0,0,16,16" />
+    <RectangleGeometry x:Key="Icon.TileShape.256" Rect="8,8,240,240" RadiusX="52" RadiusY="52" />
+    <RectangleGeometry x:Key="Icon.TileShape.20" Rect="0,0,20,20" RadiusX="4" RadiusY="4" />
+    <RectangleGeometry x:Key="Icon.TileShape.16" Rect="0,0,16,16" RadiusX="3" RadiusY="3" />
+
+    <!-- An open hand, fingers spread: the palm, four fingers fanned from one line and the thumb. -->
+    <GeometryGroup x:Key="Mark.Hand" FillRule="Nonzero">
+        <GeometryGroup.Transform>
+            <TranslateTransform X="10" Y="-12" />
+        </GeometryGroup.Transform>
+        <RectangleGeometry Rect="80,134,98,82" RadiusX="32" RadiusY="32" />
+        <RectangleGeometry Rect="84.5,78,19,84" RadiusX="9.5" RadiusY="9.5">
+            <RectangleGeometry.Transform>
+                <RotateTransform Angle="-13" CenterX="94" CenterY="148" />
+            </RectangleGeometry.Transform>
+        </RectangleGeometry>
+        <RectangleGeometry Rect="108.5,66,19,96" RadiusX="9.5" RadiusY="9.5">
+            <RectangleGeometry.Transform>
+                <RotateTransform Angle="-4" CenterX="118" CenterY="148" />
+            </RectangleGeometry.Transform>
+        </RectangleGeometry>
+        <RectangleGeometry Rect="131.5,72,19,90" RadiusX="9.5" RadiusY="9.5">
+            <RectangleGeometry.Transform>
+                <RotateTransform Angle="6" CenterX="141" CenterY="148" />
+            </RectangleGeometry.Transform>
+        </RectangleGeometry>
+        <RectangleGeometry Rect="152.5,90,19,72" RadiusX="9.5" RadiusY="9.5">
+            <RectangleGeometry.Transform>
+                <RotateTransform Angle="17" CenterX="162" CenterY="148" />
+            </RectangleGeometry.Transform>
+        </RectangleGeometry>
+        <RectangleGeometry Rect="81,120,22,76" RadiusX="11" RadiusY="11">
+            <RectangleGeometry.Transform>
+                <RotateTransform Angle="-50" CenterX="92" CenterY="186" />
+            </RectangleGeometry.Transform>
+        </RectangleGeometry>
+    </GeometryGroup>
+
+    <!-- The same hand placed by the pixel, for 16 and 20 pixel icons. -->
+    <GeometryGroup x:Key="Mark.Hand.20">
+        <RectangleGeometry Rect="6,10,9,6" RadiusX="1.5" RadiusY="1.5" />
+        <RectangleGeometry Rect="6,5,2,6" />
+        <RectangleGeometry Rect="9,3,2,8" />
+        <RectangleGeometry Rect="12,4,2,7" />
+        <RectangleGeometry Rect="14,7,1,4" />
+        <RectangleGeometry Rect="4,10,2,2" />
+        <RectangleGeometry Rect="3,8,2,2" />
+    </GeometryGroup>
+    <GeometryGroup x:Key="Mark.Hand.16">
+        <RectangleGeometry Rect="5,8,7,5" />
+        <RectangleGeometry Rect="5,4,1,4" />
+        <RectangleGeometry Rect="7,3,1,5" />
+        <RectangleGeometry Rect="9,3,1,5" />
+        <RectangleGeometry Rect="11,5,1,3" />
+        <RectangleGeometry Rect="3,7,1,2" />
+        <RectangleGeometry Rect="4,9,1,2" />
+    </GeometryGroup>
+
+    <!-- A: the open hand. -->
+    <DrawingImage x:Key="Icon.Candidate.Hand">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource Icon.Grid.256}" />
+                <GeometryDrawing Brush="{StaticResource Icon.Tile}" Geometry="{StaticResource Icon.TileShape.256}" />
+                <GeometryDrawing Brush="White" Geometry="{StaticResource Mark.Hand}" />
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+    <DrawingImage x:Key="Icon.Candidate.Hand.20">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource Icon.Grid.20}" />
+                <GeometryDrawing Brush="{StaticResource Icon.Tile}" Geometry="{StaticResource Icon.TileShape.20}" />
+                <GeometryDrawing Brush="White" Geometry="{StaticResource Mark.Hand.20}" />
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+    <DrawingImage x:Key="Icon.Candidate.Hand.16">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource Icon.Grid.16}" />
+                <GeometryDrawing Brush="{StaticResource Icon.Tile}" Geometry="{StaticResource Icon.TileShape.16}" />
+                <GeometryDrawing Brush="White" Geometry="{StaticResource Mark.Hand.16}" />
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- B: the hand smaller and tilted, waving: two lines of motion off its fingertips. -->
+    <DrawingImage x:Key="Icon.Candidate.Wave">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource Icon.Grid.256}" />
+                <GeometryDrawing Brush="{StaticResource Icon.Tile}" Geometry="{StaticResource Icon.TileShape.256}" />
+                <DrawingGroup>
+                    <DrawingGroup.Transform>
+                        <TransformGroup>
+                            <ScaleTransform ScaleX="0.8" ScaleY="0.8" CenterX="128" CenterY="140" />
+                            <RotateTransform Angle="-14" CenterX="128" CenterY="140" />
+                            <TranslateTransform X="-16" Y="10" />
+                        </TransformGroup>
+                    </DrawingGroup.Transform>
+                    <GeometryDrawing Brush="White" Geometry="{StaticResource Mark.Hand}" />
+                </DrawingGroup>
+                <GeometryDrawing Geometry="M 162,52 A 50,50 0 0 1 200,96 M 172,26 A 78,78 0 0 1 226,98">
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="White" Thickness="14" StartLineCap="Round" EndLineCap="Round" />
+                    </GeometryDrawing.Pen>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+    <DrawingImage x:Key="Icon.Candidate.Wave.20">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource Icon.Grid.20}" />
+                <GeometryDrawing Brush="{StaticResource Icon.Tile}" Geometry="{StaticResource Icon.TileShape.20}" />
+                <GeometryDrawing Brush="White">
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <RectangleGeometry Rect="5,10,8,6" RadiusX="1.5" RadiusY="1.5" />
+                            <RectangleGeometry Rect="5,5,1,5" />
+                            <RectangleGeometry Rect="7,4,1,6" />
+                            <RectangleGeometry Rect="9,4,1,6" />
+                            <RectangleGeometry Rect="11,6,1,4" />
+                            <RectangleGeometry Rect="3,9,2,2" />
+                            <RectangleGeometry Rect="13,3,1,1" />
+                            <RectangleGeometry Rect="14,4,1,1" />
+                            <RectangleGeometry Rect="15,5,1,3" />
+                            <RectangleGeometry Rect="15,1,1,1" />
+                            <RectangleGeometry Rect="16,2,1,1" />
+                            <RectangleGeometry Rect="17,3,1,4" />
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+    <DrawingImage x:Key="Icon.Candidate.Wave.16">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource Icon.Grid.16}" />
+                <GeometryDrawing Brush="{StaticResource Icon.Tile}" Geometry="{StaticResource Icon.TileShape.16}" />
+                <GeometryDrawing Brush="White">
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <RectangleGeometry Rect="4,8,6,5" />
+                            <RectangleGeometry Rect="4,4,1,4" />
+                            <RectangleGeometry Rect="6,3,1,5" />
+                            <RectangleGeometry Rect="8,4,1,4" />
+                            <RectangleGeometry Rect="2,7,1,2" />
+                            <RectangleGeometry Rect="3,9,1,1" />
+                            <RectangleGeometry Rect="11,2,1,1" />
+                            <RectangleGeometry Rect="12,3,1,1" />
+                            <RectangleGeometry Rect="13,4,1,3" />
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- C: play, with a flourish: a rounded play triangle and three short rays off its point. -->
+    <DrawingImage x:Key="Icon.Candidate.Play">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource Icon.Grid.256}" />
+                <GeometryDrawing Brush="{StaticResource Icon.Tile}" Geometry="{StaticResource Icon.TileShape.256}" />
+                <GeometryDrawing Brush="White" Geometry="M 70,76 L 160,128 L 70,180 Z">
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="White" Thickness="28" LineJoin="Round" />
+                    </GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M 184,94 L 206,78 M 190,128 L 216,128 M 184,162 L 206,178">
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="White" Thickness="13" StartLineCap="Round" EndLineCap="Round" />
+                    </GeometryDrawing.Pen>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+    <DrawingImage x:Key="Icon.Candidate.Play.20">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource Icon.Grid.20}" />
+                <GeometryDrawing Brush="{StaticResource Icon.Tile}" Geometry="{StaticResource Icon.TileShape.20}" />
+                <GeometryDrawing Brush="White" Geometry="M 5,4 L 13,10 L 5,16 Z" />
+                <GeometryDrawing Brush="White">
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <RectangleGeometry Rect="15,9,3,2" />
+                            <RectangleGeometry Rect="14,5,2,2" />
+                            <RectangleGeometry Rect="14,13,2,2" />
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+    <DrawingImage x:Key="Icon.Candidate.Play.16">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource Icon.Grid.16}" />
+                <GeometryDrawing Brush="{StaticResource Icon.Tile}" Geometry="{StaticResource Icon.TileShape.16}" />
+                <GeometryDrawing Brush="White" Geometry="M 4,3 L 10.5,8 L 4,13 Z" />
+                <GeometryDrawing Brush="White">
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <RectangleGeometry Rect="12,7,2,2" />
+                            <RectangleGeometry Rect="11,4,1,1" />
+                            <RectangleGeometry Rect="11,11,1,1" />
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!--
+        The icons Jazz Hands ships, from the chosen candidate. Until one is chosen (Phase 27a),
+        they are A's. To change the design, point these at another candidate's drawings and run
+        gen-icons build.
+    -->
+    <!-- Drawings of their own rather than StaticResource aliases, which compiled XAML does not find. -->
+    <DrawingImage x:Key="Icon.App">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource Icon.Grid.256}" />
+                <GeometryDrawing Brush="{StaticResource Icon.Tile}" Geometry="{StaticResource Icon.TileShape.256}" />
+                <GeometryDrawing Brush="White" Geometry="{StaticResource Mark.Hand}" />
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+    <DrawingImage x:Key="Icon.App.20">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource Icon.Grid.20}" />
+                <GeometryDrawing Brush="{StaticResource Icon.Tile}" Geometry="{StaticResource Icon.TileShape.20}" />
+                <GeometryDrawing Brush="White" Geometry="{StaticResource Mark.Hand.20}" />
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+    <DrawingImage x:Key="Icon.App.16">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource Icon.Grid.16}" />
+                <GeometryDrawing Brush="{StaticResource Icon.Tile}" Geometry="{StaticResource Icon.TileShape.16}" />
+                <GeometryDrawing Brush="White" Geometry="{StaticResource Mark.Hand.16}" />
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- The notification area: the mark alone, white for a dark taskbar, black for a light one. -->
+    <DrawingImage x:Key="Icon.Tray.White">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource Icon.Grid.256}" />
+                <DrawingGroup>
+                    <DrawingGroup.Transform>
+                        <ScaleTransform ScaleX="1.3" ScaleY="1.3" CenterX="128" CenterY="130" />
+                    </DrawingGroup.Transform>
+                    <GeometryDrawing Brush="White" Geometry="{StaticResource Mark.Hand}" />
+                </DrawingGroup>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+    <DrawingImage x:Key="Icon.Tray.White.20">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource Icon.Grid.20}" />
+                <GeometryDrawing Brush="White" Geometry="{StaticResource Mark.Hand.20}" />
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+    <DrawingImage x:Key="Icon.Tray.White.16">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource Icon.Grid.16}" />
+                <GeometryDrawing Brush="White" Geometry="{StaticResource Mark.Hand.16}" />
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+    <DrawingImage x:Key="Icon.Tray.Black">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource Icon.Grid.256}" />
+                <DrawingGroup>
+                    <DrawingGroup.Transform>
+                        <ScaleTransform ScaleX="1.3" ScaleY="1.3" CenterX="128" CenterY="130" />
+                    </DrawingGroup.Transform>
+                    <GeometryDrawing Brush="#FF1B1B1B" Geometry="{StaticResource Mark.Hand}" />
+                </DrawingGroup>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+    <DrawingImage x:Key="Icon.Tray.Black.20">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource Icon.Grid.20}" />
+                <GeometryDrawing Brush="#FF1B1B1B" Geometry="{StaticResource Mark.Hand.20}" />
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+    <DrawingImage x:Key="Icon.Tray.Black.16">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource Icon.Grid.16}" />
+                <GeometryDrawing Brush="#FF1B1B1B" Geometry="{StaticResource Mark.Hand.16}" />
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- A .jazz file: a page with the tile on it. -->
+    <DrawingImage x:Key="Icon.Document">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource Icon.Grid.256}" />
+                <GeometryDrawing Brush="#FFF3F3F3" Geometry="M 44,12 H 166 L 212,58 V 244 H 44 Z">
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FF8A8A8A" Thickness="6" LineJoin="Round" />
+                    </GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFD6D6D6" Geometry="M 166,12 V 58 H 212 Z">
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FF8A8A8A" Thickness="6" LineJoin="Round" />
+                    </GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <DrawingGroup>
+                    <DrawingGroup.Transform>
+                        <TransformGroup>
+                            <ScaleTransform ScaleX="0.56" ScaleY="0.56" />
+                            <TranslateTransform X="56" Y="92" />
+                        </TransformGroup>
+                    </DrawingGroup.Transform>
+                    <GeometryDrawing Brush="{StaticResource Icon.Tile}" Geometry="{StaticResource Icon.TileShape.256}" />
+                    <GeometryDrawing Brush="White" Geometry="{StaticResource Mark.Hand}" />
+                </DrawingGroup>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+    <DrawingImage x:Key="Icon.Document.16">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource Icon.Grid.16}" />
+                <GeometryDrawing Brush="#FFF3F3F3" Geometry="M 2.5,0.5 H 10.5 L 13.5,3.5 V 15.5 H 2.5 Z">
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FF8A8A8A" Thickness="1" />
+                    </GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="{StaticResource Icon.Tile}" Geometry="M 4,6 H 12 V 14 H 4 Z" />
+                <GeometryDrawing Brush="White" Geometry="M 6,10 H 10 V 13 H 6 Z M 6,8 H 7 V 10 H 6 Z M 8,7 H 9 V 10 H 8 Z M 10,8 H 11 V 11 H 10 Z" />
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- The buttons on the taskbar thumbnail, 16 units, white: previous edit, play or pause, next edit. -->
+    <DrawingImage x:Key="Icon.Thumb.Previous">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource Icon.Grid.16}" />
+                <GeometryDrawing Brush="White" Geometry="M 3,3 H 5 V 13 H 3 Z M 13,3 V 13 L 6,8 Z" />
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+    <DrawingImage x:Key="Icon.Thumb.PlayPause">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource Icon.Grid.16}" />
+                <GeometryDrawing Brush="White" Geometry="M 2,3 L 8,8 L 2,13 Z M 10,3 H 12 V 13 H 10 Z M 13.5,3 H 15.5 V 13 H 13.5 Z" />
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+    <DrawingImage x:Key="Icon.Thumb.Next">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource Icon.Grid.16}" />
+                <GeometryDrawing Brush="White" Geometry="M 3,3 V 13 L 10,8 Z M 11,3 H 13 V 13 H 11 Z" />
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- Badges over the taskbar button, 16 units: exporting, an export failed, a client attached. -->
+    <DrawingImage x:Key="Icon.Badge.Exporting">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource Icon.Grid.16}" />
+                <GeometryDrawing Brush="#FF3DBE7C">
+                    <GeometryDrawing.Geometry>
+                        <EllipseGeometry Center="8,8" RadiusX="7.5" RadiusY="7.5" />
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M 8,3.5 V 11 M 4.8,8 L 8,11.2 L 11.2,8">
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="White" Thickness="1.8" StartLineCap="Round" EndLineCap="Round" LineJoin="Round" />
+                    </GeometryDrawing.Pen>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+    <DrawingImage x:Key="Icon.Badge.Failed">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource Icon.Grid.16}" />
+                <GeometryDrawing Brush="#FFE5484D">
+                    <GeometryDrawing.Geometry>
+                        <EllipseGeometry Center="8,8" RadiusX="7.5" RadiusY="7.5" />
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="White" Geometry="M 7,3 H 9 V 9.5 H 7 Z M 7,11 H 9 V 13 H 7 Z" />
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+    <DrawingImage x:Key="Icon.Badge.Attached">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource Icon.Grid.16}" />
+                <GeometryDrawing Brush="#FF8A63F0">
+                    <GeometryDrawing.Geometry>
+                        <EllipseGeometry Center="8,8" RadiusX="7.5" RadiusY="7.5" />
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="White" Geometry="M 8,2.5 Q 8.6,7.4 13.5,8 Q 8.6,8.6 8,13.5 Q 7.4,8.6 2.5,8 Q 7.4,7.4 8,2.5 Z" />
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+</ResourceDictionary>

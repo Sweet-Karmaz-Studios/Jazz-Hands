@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <ApplicationIcon>..\JazzHands.App\Assets\jazz.ico</ApplicationIcon>
     <OutputType>Exe</OutputType>
     <AssemblyName>jazz-mcp</AssemblyName>
     <RootNamespace>JazzHands.Mcp</RootNamespace>
