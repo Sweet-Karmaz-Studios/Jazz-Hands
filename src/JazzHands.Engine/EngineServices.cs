@@ -35,7 +35,9 @@ public static class EngineServices
         services.TryAddSingleton(provider =>
         {
             Caching.CacheSettings settings = provider.GetRequiredService<Caching.CacheSettingsStore>().Current;
-            return new Media.Import.CacheManager(settings.Location) { CapBytes = settings.CapBytes };
+            // JAZZ_CACHE_DIR, when set, wins over the settings: tests and CI keep their caches apart.
+            string? location = Environment.GetEnvironmentVariable(Media.Import.CacheManager.FolderVariable) is { Length: > 0 } folder ? folder : settings.Location;
+            return new Media.Import.CacheManager(location) { CapBytes = settings.CapBytes };
         });
 
         // Thumbnails, waveforms and proxies. The first two start their worker threads when first

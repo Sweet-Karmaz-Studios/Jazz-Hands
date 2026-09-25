@@ -51,11 +51,13 @@ public sealed partial class CacheManager : IDisposable
         _blobBytes = SumBlobBytes();
     }
 
-    /// <summary>The per-user cache folder.</summary>
-    public static string DefaultFolder => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "JazzHands",
-        "cache");
+    /// <summary>The environment variable that moves the cache elsewhere, for tests and CI.</summary>
+    public const string FolderVariable = "JAZZ_CACHE_DIR";
+
+    /// <summary>The per-user cache folder, or the one <see cref="FolderVariable"/> names.</summary>
+    public static string DefaultFolder => Environment.GetEnvironmentVariable(FolderVariable) is { Length: > 0 } folder
+        ? folder
+        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "JazzHands", "cache");
 
     /// <summary>Where this cache lives.</summary>
     public string Folder { get; }
