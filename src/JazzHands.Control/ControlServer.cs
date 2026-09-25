@@ -241,7 +241,8 @@ public sealed class ControlServer : IAsyncDisposable
         ObjectDisposedException.ThrowIf(_disposed != 0, this);
 
         ControlConnection local = LocalConnection(issuer);
-        var request = new JsonObject { ["jsonrpc"] = "2.0", ["id"] = 1, ["method"] = method, ["params"] = parameters?.DeepClone() };
+        // Through text, as a pipe would carry it, so the values are read the way a client's are.
+        var request = new JsonObject { ["jsonrpc"] = "2.0", ["id"] = 1, ["method"] = method, ["params"] = parameters is null ? null : JsonNode.Parse(parameters.ToJsonString()) };
         return (JsonObject)(await HandleAsync(local, request).ConfigureAwait(false))!;
     }
 
@@ -418,6 +419,8 @@ public sealed class ControlServer : IAsyncDisposable
                 return Catalog();
             case "session.hello":
                 return Hello(connection, args);
+            case "session.project":
+                return JsonNode.Parse(JazzHands.Core.Serialization.ProjectFile.Render(_target.Session.Project));
             case "session.info":
                 return Info();
             case "session.subscribe":
@@ -619,6 +622,7 @@ public sealed class ControlServer : IAsyncDisposable
         ("rpc.list", "Every method, with its params"),
         ("session.hello", "Name the connection ({client}), and give the token when TCP asks for one"),
         ("session.info", "The open project: name, path, version, unsaved changes, frame rate, size, lock, clients"),
+        ("session.project", "The open project as its .jazz document, the JSON the file would hold"),
         ("session.subscribe", "Hear events: {events: [...]} from " + string.Join(", ", EventNames)),
         ("session.unsubscribe", "Stop hearing events: {events: [...]}, or all of them"),
         ("session.lock", "Hold the session for a batch of your own: {reason, seconds}; others are refused until you let go or it runs out"),
