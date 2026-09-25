@@ -13,3 +13,5 @@ On clips:
 On the mix: `audio_set_master_volume` and `audio_set_limiter` for the sequence, and `track_set_volume` for a track. `audio_meter` measures a stretch: peak, true peak, RMS and integrated loudness (LUFS). Online video aims for about -14 LUFS with peaks under -1 dBTP; `export_enqueue` can also normalise loudness as it writes.
 
 Effects on sound (EQ, compressor, gate, de-esser, limiter, reverb, delay) are `effect_add` with an `audio.` type on a clip or an audio track.
+
+`audio_beats` finds a music clip's beats and tempo and marks them on the sequence as beat markers, downbeats flagged; `audio_beat_analysis` answers without marking. Cut to them with `edit_cut_to_beats` (jazz://docs/edit).

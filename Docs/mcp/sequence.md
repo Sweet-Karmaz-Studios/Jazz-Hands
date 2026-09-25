@@ -7,3 +7,5 @@ A sequence is a timeline: tracks of clips, markers, in and out points and a mast
 - `sequence_list` gives each sequence's id, name, duration and settings.
 
 A sequence can also be a clip in another: `clip_add` with `sequenceId` nests it, and `clip_nest` makes one from clips.
+
+For Shorts, Reels and TikTok, `sequence_reframe` makes a vertical version (1080x1920 by default) that nests the sequence: a window cut from it in front (`window` is its shape; its clip's position in the window sequence is the pan, or `follow` a point track) over a blurred copy, or with `mode: fit` the whole picture across the width. Titles and other graphics are lifted over the vertical frame rather than cut. Templates placed in it use their portrait layouts; export with the `youtube-shorts`, `reels` or `tiktok` presets.

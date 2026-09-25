@@ -1,0 +1,5 @@
+# Motion templates
+
+A template is a finished piece of a trailer, a hero intro, a feature callout, an end card, a countdown, a coming soon sting, a wishlist button, made of ordinary clips, titles and effects, with the values that change from one use to the next as parameters. When you build a trailer from a brief, work in templates: place one for each beat of the brief with `template_apply`, filling in its text, colours and clips, rather than issuing dozens of separate commands. Each placement is one undo, and everything it makes can be edited afterwards like anything else.
+
+`template_list` says what each template makes and what every parameter is for; give values in `params` as `name=value` strings. A template placed in a portrait sequence (after `sequence_reframe`) uses its portrait layout when it has one. `template_save_selection` turns clips you have built into a template of your own, with the parameters you name in `promote` (for example `text` and `fill`) left to fill in next time.

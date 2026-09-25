@@ -1,0 +1,3 @@
+# Layouts
+
+`layout_apply` places clips that sit on stacked tracks at the same time into a layout, setting each one's position, scale and crop so it fills its cell: `facecam` (the first fills the frame, the second in a corner with a `video.frame`: pick the `corner`, its `size` as a fraction of the width and a `margin`), `side-by-side`, `before-after` (both fill the frame and the second is cut from the left at `split`; keyframe its `crop.left` to wipe between them), `grid-2` (top and bottom), `grid-3` (one large, two small) and `grid-4`. A `gap` in pixels separates cells. It does not move clips in time, so put them on tracks over each other first. `layout_list` names the layouts and how many clips each takes.
