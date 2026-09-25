@@ -87,7 +87,10 @@ public static class SmartSegments
 
             if (!toTheEnd && tailStart < cutOut)
             {
-                segments.Add(new SmartSegment(tailStart, cutOut, Encode: true, From: OnFrame(index.AtOrBefore(tailStart - slack))));
+                // Leading pictures come from decoding the group before; a closed group's tail
+                // starts at its own keyframe.
+                Flicks from = tailStart == last ? last : OnFrame(index.AtOrBefore(tailStart - slack));
+                segments.Add(new SmartSegment(tailStart, cutOut, Encode: true, From: from));
             }
         }
 

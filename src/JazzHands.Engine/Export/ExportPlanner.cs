@@ -8,6 +8,7 @@ using JazzHands.Core.Serialization;
 using JazzHands.Core.Time;
 using JazzHands.Media.Decode;
 using JazzHands.Media.Encode;
+using JazzHands.Media.SmartCut;
 
 namespace JazzHands.Engine.Export;
 
@@ -25,7 +26,9 @@ namespace JazzHands.Engine.Export;
 /// A copy cuts on keyframes. Asked for a copy whose cuts are not on keyframes, the planner
 /// refuses and names the nearest ones, unless told to snap, in which case it moves each cut to
 /// the nearest keyframe and reports every move with the frame it landed on. Auto never snaps by
-/// itself: it encodes instead, so a cut is exactly where it was put unless someone said otherwise.
+/// itself: it smart cuts instead, copying between the cuts and encoding only the frames around
+/// them with an encoder matched to the source, or encodes everything when the source cannot be
+/// matched, so a cut is exactly where it was put unless someone said otherwise.
 ///
 /// Refusals are <see cref="CommandException"/>s, so the CLI, the queue and the dialog all say the
 /// same thing.
@@ -74,15 +77,42 @@ public static class ExportPlanner
         return plan with { Estimate = ExportEstimates.For(plan, CopiedBytes(project, plan)) };
     }
 
-    /// <summary>For a copy, about how many of the source's bytes it takes: its share of the file by time.</summary>
+    /// <summary>
+    /// Plans a Quick Trim's export: a smart cut when the source allows one, so the cuts are exact
+    /// and almost nothing is encoded again, and a copy on keyframes when it does not.
+    /// </summary>
+    public static ExportPlan PlanSmartOrCopy(
+        Project project,
+        string projectPath,
+        ExportRequest request,
+        KeyframeLookup keyframes,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        try
+        {
+            return Plan(project, projectPath, request with { Mode = ExportMode.Smart }, keyframes, cancellationToken);
+        }
+        catch (CommandException error) when (error.Code == "cannot-smart-cut")
+        {
+            ExportPlan copy = Plan(project, projectPath, request with { Mode = ExportMode.Copy }, keyframes, cancellationToken);
+            string why = error.Message.Replace(" Export with --mode encode instead.", string.Empty, StringComparison.Ordinal);
+            return copy with { Reasons = [.. copy.Reasons, $"Copying rather than smart cutting. {why}"] };
+        }
+    }
+
+    /// <summary>For a copy or a smart cut, about how many of the source's bytes it takes: its share of the file by time.</summary>
     private static long CopiedBytes(Project project, ExportPlan plan)
     {
-        if (plan.Copy is not { } copy || project.MediaItem(copy.MediaId) is not { Info: { } info } media || media.Duration <= Flicks.Zero)
+        (string? mediaId, EquatableArray<TimeRange> ranges) = plan.Copy is { } copy ? (copy.MediaId, copy.SourceRanges)
+            : plan.Smart is { } smart ? (smart.MediaId, smart.SourceRanges)
+            : (null, default);
+        if (mediaId is null || project.MediaItem(mediaId) is not { Info: { } info } media || media.Duration <= Flicks.Zero)
         {
             return 0;
         }
 
-        double kept = copy.SourceRanges.Sum(range => range.Duration.ToSeconds());
+        double kept = ranges.Sum(range => range.Duration.ToSeconds());
         return (long)(info.SizeBytes * Math.Min(1.0, kept / media.Duration.ToSeconds()));
     }
 
@@ -256,6 +286,13 @@ public static class ExportPlanner
                 $"This cannot be exported by stream copy: {string.Join(" ", reasons)} Export with --mode encode instead.");
         }
 
+        if (request.Mode == ExportMode.Smart && copy is null)
+        {
+            throw new CommandException(
+                "cannot-smart-cut",
+                $"This cannot be smart cut: {string.Join(" ", reasons)} Export with --mode encode instead.");
+        }
+
         if (copy is not null && request.Mode != ExportMode.Encode)
         {
             if (request.Mode == ExportMode.Auto && !PresetMatches(preset, copy, settings, reasons))
@@ -266,6 +303,16 @@ public static class ExportPlanner
         else
         {
             copy = null;
+        }
+
+        if (copy is not null && request.Mode == ExportMode.Smart)
+        {
+            // Cuts are exact, so nothing snaps; a smart cut that only copies is a copy.
+            KeyframeIndex index = keyframes.Get(copy.Media, copy.Path, copy.VideoStream, cancellationToken);
+            return SmartPlan(request, preset, sequence, output, container, ranges, copy, index, reasons)
+                ?? throw new CommandException(
+                    "cannot-smart-cut",
+                    $"This cannot be smart cut: {string.Join(" ", reasons)} Export with --mode encode instead.");
         }
 
         if (copy is not null)
@@ -289,7 +336,13 @@ public static class ExportPlanner
                         $"{where} A stream copy can only cut on keyframes. Let the cuts move there (--snap-to-keyframes; jazz trim does unless --exact), or export with --mode encode to cut exactly.");
                 }
 
-                reasons.Add($"{where} Encoding so every cut lands exactly where it was put; ask for a copy with snapping to keep the source untouched.");
+                reasons.Add(where);
+                if (SmartPlan(request, preset, sequence, output, container, ranges, copy, index, reasons) is { } smart)
+                {
+                    return smart;
+                }
+
+                reasons.Add("Encoding so every cut lands exactly where it was put; ask for a copy with snapping to keep the source untouched.");
                 copy = null;
             }
             else if (snapped.IsEmpty)
@@ -302,17 +355,23 @@ public static class ExportPlanner
             {
                 // An open group of pictures: the pictures shown just before a keyframe are decoded
                 // after it and refer to it, so a stretch that stops at that keyframe cannot keep
-                // them. Smart cut re-encodes them; until it exists, say so.
+                // them. A smart cut encodes them again.
                 const string OpenGop =
                     "The source uses open groups of pictures, so each stretch that ends at a keyframe loses the few pictures shown just before it, which depend on that keyframe.";
 
                 if (request.Mode == ExportMode.Copy)
                 {
-                    reasons.Add($"{OpenGop} Encode for an exact cut; smart cut (Phase 23) will keep them.");
+                    reasons.Add($"{OpenGop} Smart cut (--mode smart) keeps them.");
                     return CopyPlan(request, preset, sequence, output, container, ranges, copy, snapped, snaps, reasons);
                 }
 
-                reasons.Add($"{OpenGop} Encoding instead, so no picture is lost.");
+                reasons.Add(OpenGop);
+                if (SmartPlan(request, preset, sequence, output, container, ranges, copy, index, reasons) is { } smart)
+                {
+                    return smart;
+                }
+
+                reasons.Add("Encoding instead, so no picture is lost.");
                 copy = null;
             }
             else
@@ -850,6 +909,109 @@ public static class ExportPlanner
         return back < forward || (back == forward && !preferLater) ? before : later;
     }
 
+    /// <summary>
+    /// A smart cut of a file a copy could take: exact cuts, the groups of pictures between them
+    /// copied and the frames around each cut encoded again with an encoder matched to the source.
+    /// Null, with the reason added, when the source cannot be smart cut.
+    /// </summary>
+    private static ExportPlan? SmartPlan(
+        ExportRequest request,
+        ExportPreset preset,
+        Sequence sequence,
+        string output,
+        string container,
+        ImmutableArray<TimeRange> ranges,
+        CopySource copy,
+        KeyframeIndex index,
+        List<string> reasons)
+    {
+        if (copy.Video.IsVariableFrameRate || copy.Video.FrameRate is not { } rate)
+        {
+            reasons.Add($"'{copy.Media.Name}' has no constant frame rate, and a smart cut joins its frames on one.");
+            return null;
+        }
+
+        int gop = SmartSegments.GopFrames(index, rate);
+        // --encoder chooses the matched encoder too: libx264 keeps a smart cut off a busy GPU.
+        IReadOnlyList<string> asked = request.Overrides?.Encoders is { IsEmpty: false } named ? [.. named] : [];
+        SmartCutChecks.Answer answer = SmartCutChecks.For(copy.Path, copy.VideoStream, copy.AudioStreams, gop, asked);
+        if (answer.Source is null)
+        {
+            reasons.Add(answer.Reason ?? "The source cannot be smart cut.");
+            return null;
+        }
+
+        Flicks fileEnd = Flicks.Min(index.Duration, copy.Media.Duration);
+        IReadOnlyList<SmartSegment> pieces = SmartSegments.For(index, copy.Source, rate, fileEnd);
+        if (pieces.Count == 0)
+        {
+            throw new CommandException("nothing-to-export", "Every stretch is shorter than a frame, so there is nothing to export.");
+        }
+
+        if (pieces.All(piece => !piece.Encode))
+        {
+            // Every cut is on a keyframe and loses nothing: a copy is the same file, without
+            // opening an encoder.
+            reasons.Insert(0, "Every cut is on a keyframe, so nothing needs encoding again: copying the source's packets.");
+            return CopyPlan(
+                request,
+                preset,
+                sequence,
+                output,
+                container,
+                ranges,
+                copy,
+                [.. pieces.Select(piece => TimeRange.FromBounds(piece.Start, piece.End))],
+                [],
+                reasons);
+        }
+
+        var smart = new ExportSmart(
+            copy.Media.Id,
+            copy.Path,
+            copy.VideoStream,
+            new EquatableArray<int>(copy.AudioStreams),
+            new EquatableArray<TimeRange>(copy.Source),
+            [.. pieces.Select(piece => new ExportSegment(piece.Start, piece.End, piece.Encode, piece.From))],
+            rate,
+            new EquatableArray<string>(answer.Encoders),
+            gop,
+            new EquatableArray<string>(copy.StreamNames));
+
+        Flicks duration = Flicks.Zero;
+        foreach (SmartSegment piece in pieces)
+        {
+            duration += piece.Duration;
+        }
+
+        int encoded = pieces.Count(piece => piece.Encode);
+        reasons.Insert(0, string.Create(
+            CultureInfo.InvariantCulture,
+            $"Smart cut: {encoded} piece(s) around the cuts, {smart.EncodedFrames} frame(s), encoded again with {answer.Encoders[0]}; the other {smart.CopiedFrames} frame(s) are the source's own packets."));
+
+        if (answer.Skipped is { } skipped)
+        {
+            reasons.Add(skipped);
+        }
+
+        if (!copy.AudioStreams.IsEmpty)
+        {
+            reasons.Add("The sound is cut to the sample: PCM in its packets, anything else encoded again with its own codec.");
+        }
+
+        return new ExportPlan(
+            sequence.Id,
+            preset.Name,
+            ExportMode.Smart,
+            output,
+            container,
+            duration,
+            new EquatableArray<TimeRange>(ranges),
+            Reasons: [.. reasons],
+            External: false,
+            Smart: smart);
+    }
+
     private static ExportPlan CopyPlan(
         ExportRequest request,
         ExportPreset preset,
@@ -868,9 +1030,12 @@ public static class ExportPlanner
             duration += stretch.Duration;
         }
 
-        reasons.Insert(0, request.Mode == ExportMode.Copy
-            ? "Copying the source's packets, as asked: no quality lost, and fast."
-            : "Copying the source's packets: the timeline plays one file untouched, so nothing needs encoding.");
+        if (request.Mode != ExportMode.Smart)
+        {
+            reasons.Insert(0, request.Mode == ExportMode.Copy
+                ? "Copying the source's packets, as asked: no quality lost, and fast."
+                : "Copying the source's packets: the timeline plays one file untouched, so nothing needs encoding.");
+        }
 
         if (snaps.Count > 0)
         {

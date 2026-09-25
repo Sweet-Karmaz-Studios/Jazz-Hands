@@ -476,7 +476,7 @@ public sealed class ExportQueue : IExportService, IDisposable
                     job.State = ExportJobState.Running;
                     job.Hardware = onHardware;
                     job.Progress = default;
-                    Note(job, onHardware ? $"Started on the GPU with {string.Join(" then ", plan.Video!.Encoders)}." : $"Started{(plan.Video is { } video ? $" with {string.Join(" then ", video.Encoders)}" : plan.Mode == ExportMode.Copy ? " as a stream copy" : string.Empty)}.");
+                    Note(job, onHardware ? $"Started on the GPU with {string.Join(" then ", plan.Video!.Encoders)}." : $"Started{(plan.Video is { } video ? $" with {string.Join(" then ", video.Encoders)}" : plan.Mode == ExportMode.Copy ? " as a stream copy" : plan.Smart is { } smart ? $" as a smart cut with {string.Join(" then ", smart.Encoders)}" : string.Empty)}.");
                     Update(job);
 
                     ExportPlan run = plan;

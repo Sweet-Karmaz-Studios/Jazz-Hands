@@ -14,6 +14,12 @@ public enum ExportMode
 
     /// <summary>Render every frame through the compositor and encode it.</summary>
     Encode,
+
+    /// <summary>
+    /// Copy the source's packets between the cuts and encode again only the frames from each cut
+    /// to the next keyframe, with an encoder matched to the source: exact cuts, almost no loss.
+    /// </summary>
+    Smart,
 }
 
 /// <summary>What an export does with the sequence's subtitle tracks.</summary>
@@ -152,6 +158,7 @@ public sealed record ExportChapter(Flicks Start, Flicks End, string Title) : IEq
 /// <param name="Chapters">The chapters it carries, at their times in the output.</param>
 /// <param name="TargetBytes">The size the file must come in under, or 0. The exporter checks it and encodes again, smaller, when it does not.</param>
 /// <param name="Estimate">About how big the file is and how long it takes, for the dialog and the dry run.</param>
+/// <param name="Smart">What to copy and what to encode again, for a smart cut.</param>
 public sealed record ExportPlan(
     string SequenceId,
     string Preset,
@@ -169,7 +176,8 @@ public sealed record ExportPlan(
     ExportSubtitles? Subtitles = null,
     EquatableArray<ExportChapter> Chapters = default,
     long TargetBytes = 0,
-    ExportEstimate? Estimate = null) : IEquatable<ExportPlan>;
+    ExportEstimate? Estimate = null,
+    ExportSmart? Smart = null) : IEquatable<ExportPlan>;
 
 /// <summary>The video side of an encode.</summary>
 /// <param name="Codec">h264, hevc, av1, vp9, prores, dnxhr, ffv1, gif or png.</param>
@@ -237,3 +245,44 @@ public sealed record ExportCopy(
 /// <param name="Snapped">The keyframe it moved to.</param>
 /// <param name="Frame">That keyframe's frame number in the source.</param>
 public sealed record KeyframeSnap(string Edge, Flicks Requested, Flicks Snapped, long Frame) : IEquatable<KeyframeSnap>;
+
+/// <summary>A smart cut: one file, its picture in pieces copied or encoded again, and its sound.</summary>
+/// <param name="MediaId">The file.</param>
+/// <param name="SourcePath">Its full path when the plan was made.</param>
+/// <param name="VideoStream">The picture stream.</param>
+/// <param name="AudioStreams">The sound streams, in track order; a muted lane is left out.</param>
+/// <param name="SourceRanges">The stretches of the file the export plays, in source time.</param>
+/// <param name="Segments">The picture's pieces, back to back.</param>
+/// <param name="FrameRate">The picture's constant rate.</param>
+/// <param name="Encoders">The matched encoders to try, in order.</param>
+/// <param name="GopFrames">The source's frames between keyframes, which the matched encoder's groups follow.</param>
+/// <param name="StreamNames">What each sound stream is called, in the same order.</param>
+public sealed record ExportSmart(
+    string MediaId,
+    string SourcePath,
+    int VideoStream,
+    EquatableArray<int> AudioStreams,
+    EquatableArray<TimeRange> SourceRanges,
+    EquatableArray<ExportSegment> Segments,
+    Rational FrameRate,
+    EquatableArray<string> Encoders,
+    int GopFrames,
+    EquatableArray<string> StreamNames = default) : IEquatable<ExportSmart>
+{
+    /// <summary>Frames encoded again, over all the pieces.</summary>
+    public long EncodedFrames => Segments.Where(segment => segment.Encode).Sum(segment => segment.Duration.ToFrames(FrameRate, RoundingMode.Nearest));
+
+    /// <summary>Frames copied, over all the pieces.</summary>
+    public long CopiedFrames => Segments.Where(segment => !segment.Encode).Sum(segment => segment.Duration.ToFrames(FrameRate, RoundingMode.Nearest));
+}
+
+/// <summary>One piece of a smart cut's picture, in source time.</summary>
+/// <param name="Start">The first frame shown.</param>
+/// <param name="End">The first frame not shown.</param>
+/// <param name="Encode">Encoded again; otherwise copied.</param>
+/// <param name="From">For an encode, the keyframe decoding starts at; for a copy, the keyframe it stops reading at, or null for the end of the file.</param>
+public sealed record ExportSegment(Flicks Start, Flicks End, bool Encode, Flicks? From = null) : IEquatable<ExportSegment>
+{
+    /// <summary>How long it plays.</summary>
+    public Flicks Duration => End - Start;
+}

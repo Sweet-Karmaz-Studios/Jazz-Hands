@@ -7,6 +7,7 @@ using JazzHands.Core.Model;
 using JazzHands.Core.Subtitles;
 using JazzHands.Core.Time;
 using JazzHands.Media.Encode;
+using JazzHands.Media.SmartCut;
 using Serilog;
 
 namespace JazzHands.Engine.Export;
@@ -182,6 +183,7 @@ public static class Exporter
         CancellationToken cancellationToken) => plan.Mode switch
         {
             ExportMode.Copy => Copy(plan, project, temporary, progress, cancellationToken),
+            ExportMode.Smart => Smart(plan, project, temporary, progress, cancellationToken),
             _ when plan.Video is null => EncodeSound(plan, project, projectPath, temporary, progress, cancellationToken),
             _ when plan.External => ExternalFfmpegExporter.Run(plan, project, projectPath, temporary, environment, progress, cancellationToken),
             _ => Encode(plan, project, projectPath, temporary, environment, progress, cancellationToken),
@@ -248,6 +250,53 @@ public static class Exporter
 
         StreamCopyResult copied = StreamCopier.Copy(job, relay, cancellationToken);
         return new ExportResult(temporary, copied.Bytes, copied.Duration, "copy", 0, copied.Elapsed, []);
+    }
+
+    /// <summary>
+    /// A smart cut: the source's packets between the cuts, the frames around them encoded again
+    /// with a matched encoder, then the file checked packet by packet before it is kept.
+    /// </summary>
+    private static ExportResult Smart(ExportPlan plan, Project project, string temporary, IProgress<ExportProgress>? progress, CancellationToken cancellationToken)
+    {
+        ExportSmart smart = plan.Smart ?? throw new ArgumentException("A smart cut plan says what to copy and what to encode.", nameof(plan));
+        (MatchSource? source, string? reason) = SmartCutter.Describe(smart.SourcePath, smart.VideoStream, smart.GopFrames);
+        if (source is null)
+        {
+            throw new ExportException($"'{smart.SourcePath}' can no longer be smart cut: {reason}");
+        }
+
+        using MuxExtras? extras = Extras(plan, project);
+        var job = new SmartCutJob(
+            temporary,
+            smart.SourcePath,
+            smart.VideoStream,
+            [.. smart.Segments.Select(segment => new SmartSegment(segment.Start, segment.End, segment.Encode, segment.From))],
+            [.. smart.AudioStreams],
+            [.. smart.SourceRanges],
+            smart.FrameRate,
+            [.. smart.Encoders],
+            plan.Container,
+            FastStart: plan.Container is "mp4" or "mov",
+            Extras: extras);
+
+        IProgress<CopyProgress>? relay = progress is null
+            ? null
+            : new Synchronous<CopyProgress>(step => progress.Report(new ExportProgress(step.Fraction, 0, 0, 0, step.Bytes, "smart")));
+
+        SmartCutResult result = SmartCutter.Run(job, source, relay, cancellationToken);
+        long frames = smart.EncodedFrames + smart.CopiedFrames;
+        IReadOnlyList<string> problems = SmartCutVerifier.Check(temporary, source, frames, smart.AudioStreams.Length, cancellationToken: cancellationToken);
+        if (problems.Count > 0)
+        {
+            throw new ExportException($"The smart cut did not check out: {string.Join(" ", problems)} Export with --mode encode instead.");
+        }
+
+        var notes = new List<string>(result.Notes)
+        {
+            string.Create(CultureInfo.InvariantCulture, $"{result.EncodedFrames} frame(s) encoded again with {result.Encoder ?? "nothing"}, {result.CopiedPackets} copied; every frame checked in place."),
+        };
+
+        return new ExportResult(temporary, result.Bytes, result.Duration, $"smart ({result.Encoder ?? "copy"})", result.EncodedFrames, result.Elapsed, notes);
     }
 
     /// <summary>A sound-only export: the mix straight into the encoder, with no picture to render.</summary>

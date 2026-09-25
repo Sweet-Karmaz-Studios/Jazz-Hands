@@ -46,7 +46,7 @@ namespace JazzHands.Core.Commands;
 public sealed record EnqueueExportCommand(
     [property: Arg(0, "Where to write the file")] string Output,
     [property: Option("preset", "Which preset; jazz presets list shows them")] string Preset = ExportPresets.Default,
-    [property: Option("mode", "copy, encode, or auto")] ExportMode Mode = ExportMode.Auto,
+    [property: Option("mode", "auto, smart, copy, or encode")] ExportMode Mode = ExportMode.Auto,
     [property: Option("sequence", "Which sequence")] string? SequenceId = null,
     [property: Option("snap-to-keyframes", "For a copy, move cuts to the nearest keyframe")] bool SnapToKeyframes = false,
     [property: Option("use-in-out", "Export only between the in and out points")] bool UseInOut = false,

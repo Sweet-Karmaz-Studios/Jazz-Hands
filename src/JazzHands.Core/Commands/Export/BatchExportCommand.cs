@@ -32,6 +32,6 @@ public sealed record BatchExportCommand(
     [property: Option("markers", "Export each range marker")] bool Markers = false,
     [property: Option("ranges", "Export each of these stretches: 00:10-00:20,01:00-01:30")] EquatableArray<TimeRange> Ranges = default,
     [property: Option("name-contains", "Only markers whose name contains this")] string? NameContains = null,
-    [property: Option("mode", "copy, encode, or auto")] ExportMode Mode = ExportMode.Auto,
+    [property: Option("mode", "auto, smart, copy, or encode")] ExportMode Mode = ExportMode.Auto,
     [property: Option("sequence", "Which sequence")] string? SequenceId = null,
     [property: Option("priority", "low, normal or high")] ExportPriority Priority = ExportPriority.Normal) : ICommand;

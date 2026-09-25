@@ -177,7 +177,7 @@ public sealed unsafe class MatchedEncoder : IDisposable
     /// Whether a chain can match a source: opens it with a global header, reads the parameter sets
     /// it would write, and compares what they describe with the source's.
     /// </summary>
-    /// <returns>The encoder that matched and null, or null and why none did.</returns>
+    /// <returns>The encoder that matched and why any before it did not (or null), or null and why none did.</returns>
     public static (string? Encoder, string? Reason) Check(MatchSource source, IReadOnlyList<string> encoders)
     {
         ArgumentNullException.ThrowIfNull(source);
@@ -201,10 +201,10 @@ public sealed unsafe class MatchedEncoder : IDisposable
                 string? differences = written is null ? "its parameter sets could not be read" : source.Signature.Differences(written);
                 if (differences is null)
                 {
-                    return (encoder.Name, null);
+                    return (encoder.Name, skipped.Count == 0 ? null : string.Join("; ", skipped));
                 }
 
-                skipped.Add($"{encoder.Name}: writes {differences}");
+                skipped.Add($"{encoder.Name}: the source against what it writes, {differences}");
                 remaining.RemoveRange(0, remaining.IndexOf(encoder.Name) + 1);
             }
         }
@@ -361,6 +361,12 @@ public sealed unsafe class MatchedEncoder : IDisposable
             Set("cq", "18");
             Set("b", "0");
             Set("bf", "0");
+
+            // NVENC takes its profile from its own option, which starts at main, not from the context.
+            if (NvencProfile(source) is { } profile)
+            {
+                Set("profile", profile);
+            }
         }
         else if (name == "libx264")
         {
@@ -381,4 +387,18 @@ public sealed unsafe class MatchedEncoder : IDisposable
 
         return options;
     }
+
+    /// <summary>NVENC's name for the source's profile, or null to leave NVENC's choice (AV1 is Main whatever it is told, and refuses to be told).</summary>
+    private static string? NvencProfile(MatchSource source) => (source.Codec, source.Profile) switch
+    {
+        ("h264", 66 or 578) => "baseline",
+        ("h264", 77) => "main",
+        ("h264", 100) => "high",
+        ("h264", 110) => "high10",
+        ("h264", 244) => "high444p",
+        ("hevc", 1) => "main",
+        ("hevc", 2) => "main10",
+        ("hevc", 4) => "rext",
+        _ => null,
+    };
 }

@@ -48,6 +48,13 @@ public static class ExportEstimates
             return new ExportEstimate(sourceBytes, sourceBytes / 400_000_000.0);
         }
 
+        if (plan.Smart is { } smart)
+        {
+            // The same share of the source, and a few frames around each cut decoded and encoded
+            // again: a matched encoder at high quality manages a few dozen a second even at 4K.
+            return new ExportEstimate(sourceBytes, (sourceBytes / 400_000_000.0) + (smart.EncodedFrames / 40.0));
+        }
+
         double bits = 0;
         double time = 0;
         if (plan.Video is { } video)
