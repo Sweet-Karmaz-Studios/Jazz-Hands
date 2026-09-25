@@ -32,7 +32,7 @@ namespace JazzHands.App.ViewModels.Audio;
 /// peak is the audio thread's, and a clip lights the strip's indicator until it is clicked.
 /// </para>
 /// </remarks>
-public sealed partial class MixerPanelViewModel : ToolViewModel, IDisposable
+public sealed partial class MixerPanelViewModel : ToolViewModel, IDisposable, Shell.IQuietWhileHidden
 {
     /// <summary>The id the layout knows the panel by.</summary>
     public const string PanelId = "mixer";
@@ -225,6 +225,10 @@ public sealed partial class MixerPanelViewModel : ToolViewModel, IDisposable
     }
 
     /// <inheritdoc />
+    /// <summary>Stops polling while the window is hidden, and starts again when it shows.</summary>
+    public void SetQuiet(bool quiet) =>
+        _timer?.Change(quiet ? Timeout.InfiniteTimeSpan : TickInterval, quiet ? Timeout.InfiniteTimeSpan : TickInterval);
+
     public void Dispose() => _timer?.Dispose();
 
     /// <summary>A fader's value as its label: signed, one decimal, or -inf at the bottom.</summary>

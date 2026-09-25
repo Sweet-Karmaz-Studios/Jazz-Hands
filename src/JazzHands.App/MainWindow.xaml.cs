@@ -18,10 +18,11 @@ namespace JazzHands.App;
 /// move the selection as a list's keys should, and the rest still drive playback. The keymap
 /// (Settings, Keymap) decides what each key does; the transport keys stay the preview's.
 /// </remarks>
-public partial class MainWindow : Window
+public partial class MainWindow : Window, Shell.IAppWindow
 {
     private readonly MainViewModel _model;
     private bool _closing;
+    private readonly System.Windows.Threading.DispatcherTimer? _statusTimer;
 
     /// <summary>Creates the window.</summary>
     /// <param name="model">The window's viewmodel, from the host.</param>
@@ -45,6 +46,7 @@ public partial class MainWindow : Window
             timer.Tick += (_, _) => status.Refresh();
             Loaded += (_, _) => timer.Start();
             Closed += (_, _) => timer.Stop();
+            _statusTimer = timer;
         }
     }
 
@@ -94,10 +96,39 @@ public partial class MainWindow : Window
     }
 
     /// <inheritdoc />
+    public bool IsInFront => IsVisible && WindowState != WindowState.Minimized && IsActive;
+
+    /// <inheritdoc />
+    public void ShowInFront()
+    {
+        _statusTimer?.Start();
+        BringToFront();
+    }
+
+    /// <inheritdoc />
+    public void HideToTray()
+    {
+        _statusTimer?.Stop();
+        Hide();
+    }
+
+    /// <inheritdoc />
     protected override async void OnClosing(System.ComponentModel.CancelEventArgs e)
     {
         ArgumentNullException.ThrowIfNull(e);
-        if (_closing)
+
+        // With a lifetime the close button hides the window (or starts a quit that asks first);
+        // the window only really closes as the application shuts down.
+        if (_model.Lifetime is { } lifetime && !lifetime.IsQuitting)
+        {
+            e.Cancel = lifetime.CloseRequested();
+            if (e.Cancel)
+            {
+                return;
+            }
+        }
+
+        if (_closing || _model.Lifetime?.IsQuitting == true)
         {
             _model.RememberWindow(WindowState == WindowState.Normal ? new Rect(Left, Top, Width, Height) : RestoreBounds, WindowState == WindowState.Maximized);
             base.OnClosing(e);

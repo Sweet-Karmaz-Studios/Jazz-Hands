@@ -18,6 +18,7 @@ namespace JazzHands.App;
 public partial class App : Application
 {
     private ServiceProvider? _services;
+    private Shell.TrayHost? _tray;
 
     /// <inheritdoc />
     protected override void OnStartup(StartupEventArgs e)
@@ -50,14 +51,31 @@ public partial class App : Application
 
         base.OnStartup(e);
 
-        // One editor at a time: a second launch hands its project to the first and goes.
+        // The taskbar, the jump list and notifications key on this; it must come before any window.
+        if (!spike)
+        {
+            Shell.ShellRegistration.SetProcessAppId();
+        }
+
+        // One editor at a time: a second launch hands what it was asked (a project, a Quick Trim,
+        // a notification's link) to the first and goes, whatever the first's window is doing.
         EditorSettings editor = EditorSettings.Store().Current;
-        string? project = spike ? null : Shell.Startup.ProjectToOpen(e.Args, editor, Services.RecentProjects.Store().Current);
+        Shell.LaunchRequest launch = Shell.LaunchRequest.Parse(e.Args);
+        string? project = spike ? null
+            : launch.Action is Shell.LaunchAction.Show or Shell.LaunchAction.Background
+                ? Shell.Startup.ProjectToOpen(e.Args, editor, Services.RecentProjects.Store().Current)
+                : null;
         if (!spike && !e.Args.Contains(Shell.Startup.NewInstance, StringComparer.Ordinal)
-            && Shell.Startup.TryHandOffAsync(project).GetAwaiter().GetResult())
+            && Shell.Startup.TryHandOffAsync(launch).GetAwaiter().GetResult())
         {
             Shutdown(0);
             return;
+        }
+
+        // The window is a view of the session: closing it hides it, and only a quit ends the process.
+        if (!spike)
+        {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
         }
 
         // The GPU chosen in Settings, unless JAZZ_GPU says otherwise for this run.
@@ -69,9 +87,13 @@ public partial class App : Application
         try
         {
             MainWindow = CreateStartupWindow(project, spike, e.Args);
-            MainWindow.Show();
+            if (launch.Action != Shell.LaunchAction.Background || spike)
+            {
+                MainWindow.Show();
+            }
+
             StartControlServer();
-            AfterStart(editor);
+            AfterStart(launch);
         }
         catch (Exception ex)
         {
@@ -97,8 +119,10 @@ public partial class App : Application
         // The session owns the autosave timer, the history log and the probe cache's SQLite
         // connection. Blocking here is the one place it is right: the process is going away and
         // an unflushed autosave is lost work.
-        // The control server goes first so its clients hear session.closed while the session is
-        // still there to describe.
+        // The notification area icon goes first, so nothing is left in the taskbar that clicks to
+        // nowhere. The control server next, so its clients hear session.closed while the session
+        // is still there to describe.
+        _tray?.Dispose();
         _services?.GetService<Control.ControlServer>()?.DisposeAsync().AsTask().GetAwaiter().GetResult();
         _services?.GetService<Session>()?.DisposeAsync().AsTask().GetAwaiter().GetResult();
         _services?.Dispose();
@@ -159,10 +183,11 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// What follows the window: the methods a second launch calls, the project on the recent
-    /// list, and the preview quality Settings chose.
+    /// What follows the window: the notification area and the lifetime, the method a second
+    /// launch calls, Windows' side of things (the file types, the jump list, notifications), the
+    /// project on the recent list, the preview quality Settings chose, and what this launch asked.
     /// </summary>
-    private void AfterStart(EditorSettings editor)
+    private void AfterStart(Shell.LaunchRequest launch)
     {
         if (_services is null || MainWindow is not MainWindow window)
         {
@@ -170,30 +195,166 @@ public partial class App : Application
         }
 
         ViewModels.MainViewModel model = _services.GetRequiredService<ViewModels.MainViewModel>();
-        Dictionary<string, Func<System.Text.Json.Nodes.JsonObject, Task<System.Text.Json.Nodes.JsonNode?>>> methods = _services.GetRequiredService<Shell.AppHostMethods>().Methods;
-        methods["app.activate"] = _ => Dispatcher.InvokeAsync(() =>
-        {
-            window.BringToFront();
-            return (System.Text.Json.Nodes.JsonNode?)new System.Text.Json.Nodes.JsonObject { ["ok"] = true };
-        }).Task;
-        methods["app.open"] = args => Dispatcher.InvokeAsync(async () =>
-        {
-            window.BringToFront();
-            string path = args["path"]?.GetValue<string>() ?? throw new Control.JsonRpcException(Control.JsonRpc.InvalidParams, "app.open needs a path.");
-            bool opened = await model.OpenAsync(path).ConfigureAwait(true);
-            return (System.Text.Json.Nodes.JsonNode?)new System.Text.Json.Nodes.JsonObject { ["opened"] = opened };
-        }).Task.Unwrap();
-
         Session session = _services.GetRequiredService<Session>();
-        if (session.ProjectPath.Length > 0)
+        Engine.Settings.SettingsSection<EditorSettings> editor = _services.GetRequiredService<Engine.Settings.SettingsSection<EditorSettings>>();
+        Engine.Settings.SettingsSection<RecentProjects> recent = _services.GetRequiredService<Engine.Settings.SettingsSection<RecentProjects>>();
+        Shell.AppLifetime lifetime = _services.GetRequiredService<Shell.AppLifetime>();
+        Shell.DesktopStatus desktop = _services.GetRequiredService<Shell.DesktopStatus>();
+
+        _tray = _services.GetRequiredService<Shell.TrayHost>();
+        lifetime.Attach(window, _tray.Notify, model.ReadyToCloseAsync, _services.GetRequiredService<IDialogService>());
+        if (launch.Action == Shell.LaunchAction.Background)
         {
-            _services.GetRequiredService<Engine.Settings.SettingsSection<Services.RecentProjects>>().Update(recent => recent.With(session.ProjectPath));
-            model.BuildMenu();
+            lifetime.StartHidden();
         }
 
-        if (editor.PreviewQuality != "auto" && Enum.TryParse(editor.PreviewQuality, ignoreCase: true, out Core.Commands.PreviewQuality quality))
+        _services.GetRequiredService<Shell.AppHostMethods>().Methods["app.launch"] = args => Dispatcher.InvokeAsync(async () =>
+        {
+            await HandleLaunchAsync(Shell.LaunchRequest.FromJson(args)).ConfigureAwait(true);
+            return (System.Text.Json.Nodes.JsonNode?)new System.Text.Json.Nodes.JsonObject { ["ok"] = true };
+        }).Task.Unwrap();
+
+        // Windows notifications, with the notification area's balloon when Windows will not.
+        var notifications = new Shell.DesktopNotifications(() => editor.Current.WindowsNotifications, _tray.Notify);
+        desktop.ExportFinished += (_, job) => notifications.ExportFinished(job);
+        desktop.ProxiesFinished += (_, count) => notifications.ProxiesReady(count);
+        desktop.ClientArrived += (_, client) =>
+        {
+            if (editor.Current.NotifyClientAttached)
+            {
+                notifications.ClientAttached(client);
+            }
+        };
+
+        // Clients come and go without a queue event; the status looks every two seconds.
+        var clients = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        clients.Tick += (_, _) => desktop.Refresh();
+        clients.Start();
+
+        // Windows' side: the .jazz type, the jazzhands: links, the Explorer verbs, starting with Windows.
+        string exe = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "JazzHands.exe");
+        var registration = new Shell.ShellRegistration(new Shell.CurrentUserRegistry());
+        try
+        {
+            if (registration.Register(exe, Path.Combine(AppContext.BaseDirectory, "Assets")))
+            {
+                Shell.ShellRegistration.NotifyExplorer();
+            }
+
+            if (registration.StartsWithWindows != editor.Current.StartWithWindows)
+            {
+                registration.SetStartWithWindows(editor.Current.StartWithWindows, exe);
+            }
+        }
+        catch (Exception error) when (error is UnauthorizedAccessException or IOException or System.Security.SecurityException)
+        {
+            Log.ForContext<App>().Warning(error, "Windows could not be told about Jazz Hands; .jazz files and the Explorer verbs may not work");
+        }
+
+        // Settings that apply at once, whoever changed them: the dialog, or settings.set.
+        IPlaybackPreferences playback = _services.GetRequiredService<IPlaybackPreferences>();
+        editor.Saved += (_, settings) => Dispatcher.InvokeAsync(() =>
+        {
+            if (playback.Device != settings.AudioDevice)
+            {
+                playback.Device = settings.AudioDevice;
+            }
+
+            playback.ScrubAudio = settings.ScrubAudio;
+            try
+            {
+                if (registration.StartsWithWindows != settings.StartWithWindows)
+                {
+                    registration.SetStartWithWindows(settings.StartWithWindows, exe);
+                }
+            }
+            catch (Exception error) when (error is UnauthorizedAccessException or IOException or System.Security.SecurityException)
+            {
+                Log.ForContext<App>().Warning(error, "Starting with Windows could not be changed");
+            }
+        });
+
+        // The jump list follows the recent projects.
+        void ApplyJumpList(RecentProjects projects) =>
+            System.Windows.Shell.JumpList.SetJumpList(this, Shell.JumpLists.Build(projects.Paths, exe, LogSetup.DefaultLogDirectory));
+        recent.Saved += (_, projects) => Dispatcher.InvokeAsync(() => ApplyJumpList(projects));
+
+        if (session.ProjectPath.Length > 0)
+        {
+            recent.Update(projects => projects.With(session.ProjectPath));
+            model.BuildMenu();
+
+            if (new Engine.Recovery.RecoveryService().Find(session.ProjectPath) is { } offer)
+            {
+                notifications.RecoveryAvailable(session.ProjectPath, offer.Describe());
+            }
+        }
+        else
+        {
+            ApplyJumpList(recent.Current);
+        }
+
+        if (editor.Current.PreviewQuality != "auto" && Enum.TryParse(editor.Current.PreviewQuality, ignoreCase: true, out Core.Commands.PreviewQuality quality))
         {
             _ = session.ExecuteAsync(new Core.Commands.SetQualityCommand(quality));
+        }
+
+        if (launch.Action is not (Shell.LaunchAction.Show or Shell.LaunchAction.Background))
+        {
+            _ = HandleLaunchAsync(launch);
+        }
+    }
+
+    /// <summary>
+    /// Does what a launch asked: this one's, or a second launch's handed over as <c>app.launch</c>.
+    /// </summary>
+    private async Task HandleLaunchAsync(Shell.LaunchRequest launch)
+    {
+        if (_services is null)
+        {
+            return;
+        }
+
+        ViewModels.MainViewModel model = _services.GetRequiredService<ViewModels.MainViewModel>();
+        Shell.AppLifetime lifetime = _services.GetRequiredService<Shell.AppLifetime>();
+        if (launch.Action is not (Shell.LaunchAction.Background or Shell.LaunchAction.Reveal))
+        {
+            lifetime.Show();
+        }
+
+        switch (launch.Action)
+        {
+            case Shell.LaunchAction.Show or Shell.LaunchAction.Background when launch.Project is { } project:
+                await model.OpenAsync(project).ConfigureAwait(true);
+                break;
+
+            case Shell.LaunchAction.NewProject:
+                await model.NewProjectAsync().ConfigureAwait(true);
+                break;
+
+            case Shell.LaunchAction.QuickTrim when launch.Files.Count > 0:
+                await model.QuickTrimAsync(launch.Files[0]).ConfigureAwait(true);
+                break;
+
+            case Shell.LaunchAction.QuickTrim:
+                model.QuickTrimFileCommand.Execute(null);
+                break;
+
+            case Shell.LaunchAction.AddMedia when launch.Files.Count > 0:
+                await _services.GetRequiredService<IDialogService>().ShowImportAsync(launch.Files).ConfigureAwait(true);
+                break;
+
+            case Shell.LaunchAction.ExportQueue:
+                model.ShowPanel("exportQueue");
+                _services.GetRequiredService<Shell.DesktopStatus>().Acknowledge();
+                break;
+
+            case Shell.LaunchAction.Reveal when launch.Files.Count > 0 && File.Exists(launch.Files[0]):
+                using (System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{launch.Files[0]}\""))
+                {
+                }
+
+                break;
         }
     }
 

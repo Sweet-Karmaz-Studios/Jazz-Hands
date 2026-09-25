@@ -75,6 +75,19 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private bool _openLastProject;
 
+    /// <summary>Closing the window keeps Jazz Hands in the notification area (true) or quits.</summary>
+    [ObservableProperty]
+    private bool _closeToTray;
+
+    [ObservableProperty]
+    private bool _startWithWindows;
+
+    [ObservableProperty]
+    private bool _windowsNotifications;
+
+    [ObservableProperty]
+    private bool _notifyClientAttached;
+
     [ObservableProperty]
     private bool _controlTcp;
 
@@ -133,6 +146,10 @@ public sealed partial class SettingsViewModel : ObservableObject
         _exportPreset = Choose(Presets, _appliedEditor.ExportPreset);
         _exportFolder = _appliedEditor.ExportFolder ?? string.Empty;
         _openLastProject = _appliedEditor.OpenLastProject;
+        _closeToTray = _appliedEditor.CloseToTray;
+        _startWithWindows = _appliedEditor.StartWithWindows;
+        _windowsNotifications = _appliedEditor.WindowsNotifications;
+        _notifyClientAttached = _appliedEditor.NotifyClientAttached;
         _controlTcp = _appliedControl.Tcp;
         _controlPort = _appliedControl.Port;
         _controlAddress = _appliedControl.Address;
@@ -173,6 +190,10 @@ public sealed partial class SettingsViewModel : ObservableObject
             ExportPreset = ExportPreset.Value,
             ExportFolder = ExportFolder.Trim().Length > 0 ? ExportFolder.Trim() : null,
             OpenLastProject = OpenLastProject,
+            CloseToTray = CloseToTray,
+            StartWithWindows = StartWithWindows,
+            WindowsNotifications = WindowsNotifications,
+            NotifyClientAttached = NotifyClientAttached,
         };
 
         // The speakers and the scrub sound: the transport, straight away.
@@ -200,6 +221,10 @@ public sealed partial class SettingsViewModel : ObservableObject
             ExportPreset = editor.ExportPreset,
             ExportFolder = editor.ExportFolder,
             OpenLastProject = editor.OpenLastProject,
+            CloseToTray = editor.CloseToTray,
+            StartWithWindows = editor.StartWithWindows,
+            WindowsNotifications = editor.WindowsNotifications,
+            NotifyClientAttached = editor.NotifyClientAttached,
         });
         _appliedEditor = editor;
 

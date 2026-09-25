@@ -53,6 +53,10 @@ public sealed partial class PreviewPanelViewModel : ToolViewModel
     private readonly IFullScreenPreview? _fullScreen;
     private readonly IDisplaySettings? _displaySettings;
 
+    /// <summary>True while the window is hidden: the view lets go of its surfaces until it shows again.</summary>
+    [ObservableProperty]
+    private bool _isSuspended;
+
     /// <summary>What the monitor expects; the presenters convert the delivered signal for it.</summary>
     [ObservableProperty]
     private DisplayTransfer _display;

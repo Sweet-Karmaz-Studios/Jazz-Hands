@@ -100,7 +100,7 @@ public sealed partial class StatusBarViewModel : ObservableObject
             ExportsText = running + waiting == 0
                 ? string.Empty
                 : running > 0
-                    ? string.Create(CultureInfo.InvariantCulture, $"Exporting {running}{(waiting > 0 ? $", {waiting} waiting" : string.Empty)}, {jobs.Where(job => job.State == ExportJobState.Running).Average(job => job.Progress):P0}")
+                    ? string.Create(CultureInfo.InvariantCulture, $"Exporting {running}{(waiting > 0 ? $", {waiting} waiting" : string.Empty)}, {jobs.Where(job => job.State == ExportJobState.Running).Average(job => job.Progress) * 100:0}%")
                     : string.Create(CultureInfo.InvariantCulture, $"{waiting} export(s) waiting");
         }
 

@@ -43,6 +43,21 @@ public sealed record EditorSettings
     /// <summary>Whether the window was maximised.</summary>
     public bool WindowMaximized { get; init; }
 
+    /// <summary>Closing the window keeps Jazz Hands running in the notification area; false quits.</summary>
+    public bool CloseToTray { get; init; } = true;
+
+    /// <summary>The one notification that closing hid the window rather than quitting has been shown.</summary>
+    public bool TrayNoticeShown { get; init; }
+
+    /// <summary>Start hidden in the notification area when Windows starts.</summary>
+    public bool StartWithWindows { get; init; }
+
+    /// <summary>Windows notifications for finished and failed exports, proxies and recovery.</summary>
+    public bool WindowsNotifications { get; init; } = true;
+
+    /// <summary>A Windows notification when Claude Code or another client attaches.</summary>
+    public bool NotifyClientAttached { get; init; }
+
     /// <summary>Puts hand-edited values back in range.</summary>
     public static EditorSettings Tidy(EditorSettings settings)
     {

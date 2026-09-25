@@ -27,6 +27,9 @@ public interface IDialogService
 
     /// <summary>Asks for a line of text, such as a name; null when cancelled.</summary>
     Task<string?> AskForTextAsync(string title, string prompt, string initial);
+
+    /// <summary>Asks what to do about exports still running when the person quits.</summary>
+    Task<Shell.QuitChoice> AskToQuitWithExportsAsync(int running);
 }
 
 /// <summary>What to do with unsaved changes.</summary>
@@ -150,6 +153,14 @@ public sealed class DialogService(
             MessageBoxResult.No => SaveChoice.Discard,
             _ => SaveChoice.Cancel,
         });
+    }
+
+    /// <inheritdoc />
+    public Task<Shell.QuitChoice> AskToQuitWithExportsAsync(int running)
+    {
+        var window = new Views.Shell.QuitWindow(running) { Owner = Application.Current?.MainWindow };
+        _ = window.ShowDialog();
+        return Task.FromResult(window.Choice);
     }
 
     /// <inheritdoc />

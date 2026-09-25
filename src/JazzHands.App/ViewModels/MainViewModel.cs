@@ -61,7 +61,9 @@ public sealed partial class MainViewModel : ObservableObject
         Logging.LogPanelViewModel? log = null,
         Markers.MarkersPanelViewModel? markers = null,
         JazzHands.Engine.Settings.SettingsSection<EditorSettings>? editor = null,
-        StatusBarViewModel? statusBar = null)
+        StatusBarViewModel? statusBar = null,
+        JazzHands.App.Shell.DesktopStatus? desktop = null,
+        JazzHands.App.Shell.AppLifetime? lifetime = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(media);
@@ -159,6 +161,8 @@ public sealed partial class MainViewModel : ObservableObject
         _recent = recent;
         _editor = editor;
         StatusBar = statusBar;
+        Desktop = desktop;
+        Lifetime = lifetime;
         if (statusBar is not null)
         {
             Said += (_, message) => statusBar.Notifications.Show(NotificationLevel.Information, message);
@@ -206,6 +210,24 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>The status bar and the notifications, when the host has them.</summary>
     public StatusBarViewModel? StatusBar { get; }
 
+    /// <summary>What the taskbar button and the notification area show, when the host has them.</summary>
+    public DesktopStatus? Desktop { get; }
+
+    /// <summary>Hiding, showing and quitting, when the host keeps the editor running without its window.</summary>
+    public AppLifetime? Lifetime { get; }
+
+    /// <summary>Play or pause, from the button on the taskbar thumbnail.</summary>
+    [RelayCommand]
+    private Task ThumbPlayPauseAsync() => _session.ExecuteAsync(new TogglePlaybackCommand());
+
+    /// <summary>The previous edit, from the taskbar thumbnail.</summary>
+    [RelayCommand]
+    private Task ThumbPreviousEditAsync() => _session.ExecuteAsync(new GoToCommand(GoToTarget.PrevEdit));
+
+    /// <summary>The next edit, from the taskbar thumbnail.</summary>
+    [RelayCommand]
+    private Task ThumbNextEditAsync() => _session.ExecuteAsync(new GoToCommand(GoToTarget.NextEdit));
+
     /// <summary>The Command Console, when the host has a control server.</summary>
     public Remote.CommandConsoleViewModel? Console { get; }
 
@@ -232,7 +254,13 @@ public sealed partial class MainViewModel : ObservableObject
     private void ShowConsole() => PanelsRequested?.Invoke(this, [Remote.CommandConsoleViewModel.PanelId]);
 
     [RelayCommand]
-    private static void Exit() => Application.Current?.Shutdown();
+    private Task ExitAsync() => Lifetime?.QuitFromPersonAsync() ?? ShutdownNow();
+
+    private static Task ShutdownNow()
+    {
+        Application.Current?.Shutdown();
+        return Task.CompletedTask;
+    }
 
     /// <summary>
     /// Picks a recording, brings it into the project and starts a Quick Trim of it: <c>media.add</c>
@@ -241,12 +269,16 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task QuickTrimFileAsync()
     {
-        if (_files?.OpenMovie() is not { } chosen)
+        if (_files?.OpenMovie() is { } chosen)
         {
-            return;
+            await QuickTrimAsync(chosen).ConfigureAwait(true);
         }
+    }
 
-        string path = Path.GetFullPath(chosen);
+    /// <summary>Brings a recording in and starts a Quick Trim of it: Explorer's Quick Trim with Jazz Hands.</summary>
+    public async Task QuickTrimAsync(string file)
+    {
+        string path = Path.GetFullPath(file);
         CommandResult added = await _session.ExecuteAsync(new AddMediaCommand([path])).ConfigureAwait(true);
         if (!added.Ok && added.Code != "already-imported")
         {

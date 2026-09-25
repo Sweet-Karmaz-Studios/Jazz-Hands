@@ -58,8 +58,13 @@ public static class AppServices
 
         // The person's settings, a section each of %APPDATA%\JazzHands\settings.json, and the
         // Settings dialog over them, made fresh each time it opens so it reads what is there.
-        services.AddSingleton(_ => EditorSettings.Store());
-        services.AddSingleton(_ => Services.RecentProjects.Store());
+        // settings.get and settings.set reach these sections too; when one of them writes, the
+        // section is read again, which applies what it can (the playback device, scrub sound).
+        services.AddJazzHandsControlSettings();
+        services.AddSingleton(new Engine.Settings.SettingsSectionType("editor", typeof(EditorSettings), "The editor's own preferences: playback, the GPU, export defaults, the window, closing and notifications"));
+        services.AddSingleton(new Engine.Settings.SettingsSectionType("recent", typeof(RecentProjects), "The projects opened lately, newest first"));
+        services.AddSingleton(provider => Reloaded(provider, EditorSettings.Store()));
+        services.AddSingleton(provider => Reloaded(provider, Services.RecentProjects.Store()));
         services.AddSingleton<IPlaybackPreferences>(provider => new EnginePlaybackPreferences(
             provider.GetService<Transport>(),
             provider.GetService<Engine.Caching.ProxyService>()));
@@ -76,7 +81,7 @@ public static class AppServices
             SafeAdapters()));
 
         // The export queue: jobs from the dialog, the CLI with --attach and MCP alike, kept in
-        // %LOCALAPPDATA%JazzHandsqueue.db so they outlive the window. It renders on a device of
+        // %LOCALAPPDATA%\JazzHands\queue.db so they outlive the window. It renders on a device of
         // its own, so an export never queues work in front of a preview present.
         services.AddSingleton(_ =>
         {
@@ -296,9 +301,64 @@ public static class AppServices
                 () => preview.Position);
         });
 
+        // Desktop integration (Phase 27a): what the taskbar and the notification area show, what
+        // goes quiet while the window is hidden, and the lifetime the app commands reach.
+        services.AddSingleton(provider => new Shell.DesktopStatus(
+            provider.GetService<IExportService>(),
+            provider.GetRequiredService<IUiDispatcher>(),
+            () => provider.GetService<Engine.Caching.ProxyService>()?.Folder,
+            () => provider.GetService<ControlServer>()?.Clients ?? []));
+        services.AddSingleton<Shell.IQuietWhileHidden>(provider => new Shell.QuietPreview(
+            provider.GetService<PlaybackEngine>(),
+            provider.GetService<PreviewPanelViewModel>()));
+        services.AddSingleton<Shell.IQuietWhileHidden>(provider => provider.GetRequiredService<MetersPanelViewModel>());
+        services.AddSingleton<Shell.IQuietWhileHidden>(provider => provider.GetRequiredService<MixerPanelViewModel>());
+        services.AddSingleton(provider => new Shell.AppLifetime(
+            provider.GetRequiredService<IUiDispatcher>(),
+            provider.GetRequiredService<ISession>(),
+            provider.GetService<IExportService>(),
+            provider.GetRequiredService<Engine.Settings.SettingsSection<EditorSettings>>(),
+            provider.GetServices<Shell.IQuietWhileHidden>(),
+            () => System.Windows.Application.Current?.Shutdown()));
+        services.AddSingleton<Engine.Hosting.IAppController>(provider => provider.GetRequiredService<Shell.AppLifetime>());
+        services.AddSingleton(provider => new Shell.TrayMenu(
+            provider.GetRequiredService<ISession>(),
+            provider.GetRequiredService<Shell.DesktopStatus>(),
+            provider.GetRequiredService<Shell.AppLifetime>(),
+            provider.GetRequiredService<Engine.Settings.SettingsSection<RecentProjects>>(),
+            () => provider.GetService<Engine.Caching.ProxyService>()?.Enabled ?? false,
+            async path =>
+            {
+                provider.GetRequiredService<Shell.AppLifetime>().Show();
+                await provider.GetRequiredService<MainViewModel>().OpenAsync(path).ConfigureAwait(true);
+            },
+            panel =>
+            {
+                provider.GetRequiredService<Shell.AppLifetime>().Show();
+                provider.GetRequiredService<MainViewModel>().ShowPanel(panel);
+            }));
+        services.AddSingleton(provider => new Shell.TrayHost(
+            provider.GetRequiredService<Shell.DesktopStatus>(),
+            provider.GetRequiredService<Shell.TrayMenu>(),
+            provider.GetRequiredService<Shell.AppLifetime>()));
+
         services.AddSingleton<MainViewModel>();
 
         return services;
+    }
+
+    /// <summary>A settings section that reads itself again when settings.set writes to it.</summary>
+    private static Engine.Settings.SettingsSection<T> Reloaded<T>(IServiceProvider provider, Engine.Settings.SettingsSection<T> section)
+        where T : class, new()
+    {
+        provider.GetRequiredService<Engine.Settings.SettingsCatalog>().Changed += (_, name) =>
+        {
+            if (name == section.Section)
+            {
+                section.Reload();
+            }
+        };
+        return section;
     }
 
     // The adapters for the Settings dialog's GPU list; none when DXGI will not say, so the dialog still opens.

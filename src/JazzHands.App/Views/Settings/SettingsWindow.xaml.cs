@@ -26,3 +26,13 @@ public sealed class PageIsConverter : IValueConverter
     /// <inheritdoc />
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => Binding.DoNothing;
 }
+
+/// <summary>True for false and false for true, both ways: the second of a pair of radio buttons.</summary>
+public sealed class NotConverter : IValueConverter
+{
+    /// <inheritdoc />
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value is not true;
+
+    /// <inheritdoc />
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => value is not true;
+}

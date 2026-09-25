@@ -1,0 +1,31 @@
+<!--
+    A menu item drawn from a Shell.MenuItemViewModel: the window's menu and the notification area's
+    menu share it. Nested items take the same style; a separator is an item with IsSeparator.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Style x:Key="MenuItem.FromViewModel" TargetType="MenuItem">
+        <Setter Property="Header" Value="{Binding Header, Mode=OneTime}" />
+        <Setter Property="Command" Value="{Binding Command, Mode=OneTime}" />
+        <Setter Property="CommandParameter" Value="{Binding CommandParameter, Mode=OneTime}" />
+        <Setter Property="InputGestureText" Value="{Binding Gesture, Mode=OneWay}" />
+        <Setter Property="IsCheckable" Value="False" />
+        <Setter Property="IsChecked" Value="{Binding IsChecked, Mode=OneWay}" />
+        <Setter Property="ToolTip" Value="{Binding ToolTip, Mode=OneTime}" />
+        <Setter Property="ItemsSource" Value="{Binding Items, Mode=OneTime}" />
+        <Setter Property="ItemContainerStyle" Value="{DynamicResource MenuItem.FromViewModel}" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding IsSeparator, Mode=OneTime}" Value="True">
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="MenuItem">
+                            <Separator />
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+</ResourceDictionary>

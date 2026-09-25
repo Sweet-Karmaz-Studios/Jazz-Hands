@@ -18,7 +18,7 @@ namespace JazzHands.App.ViewModels.Audio;
 /// meter readable: a peak that vanishes in a thirtieth of a second is a peak nobody saw. When no
 /// reading arrives (paused, stopped) the bars fall to the floor the same way.
 /// </remarks>
-public sealed partial class MetersPanelViewModel : ToolViewModel, IDisposable
+public sealed partial class MetersPanelViewModel : ToolViewModel, IDisposable, Shell.IQuietWhileHidden
 {
     /// <summary>The id the layout knows the panel by.</summary>
     public const string PanelId = "meters";
@@ -124,6 +124,10 @@ public sealed partial class MetersPanelViewModel : ToolViewModel, IDisposable
     }
 
     /// <inheritdoc />
+    /// <summary>Stops polling while the window is hidden, and starts again when it shows.</summary>
+    public void SetQuiet(bool quiet) =>
+        _timer?.Change(quiet ? Timeout.InfiniteTimeSpan : TickInterval, quiet ? Timeout.InfiniteTimeSpan : TickInterval);
+
     public void Dispose() => _timer?.Dispose();
 
     /// <summary>Where a level sits on the bar, from 0 at the floor to 1 at full scale.</summary>

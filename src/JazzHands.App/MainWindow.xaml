@@ -35,15 +35,26 @@
         mc:Ignorable="d"
         d:DataContext="{d:DesignInstance vm:MainViewModel}"
         Title="{Binding Title, Mode=OneWay}"
+        Icon="Assets/jazz.ico"
         Height="720"
         Width="1280"
         Background="{DynamicResource Brush.Background.Base}"
         Foreground="{DynamicResource Brush.Text.Primary}">
 
     <Window.TaskbarItemInfo>
-        <!-- The taskbar button fills as exports run, so a long one can be watched from anywhere. -->
-        <TaskbarItemInfo ProgressState="{Binding Exports.TaskbarState, Mode=OneWay, FallbackValue=None}"
-                         ProgressValue="{Binding Exports.TaskbarProgress, Mode=OneWay, FallbackValue=0}" />
+        <!-- The taskbar button fills as exports and proxies run, turns red when one fails, carries
+             a badge for exporting, failed or a client attached, and has play and edit buttons on
+             its thumbnail. -->
+        <TaskbarItemInfo ProgressState="{Binding Desktop.ProgressState, Mode=OneWay, FallbackValue=None}"
+                         ProgressValue="{Binding Desktop.ProgressValue, Mode=OneWay, FallbackValue=0}"
+                         Overlay="{Binding Desktop.Badge, Mode=OneWay, Converter={x:Static shellviews:BadgeImageConverter.Instance}}"
+                         Description="{Binding Desktop.ToolTip, Mode=OneWay, FallbackValue='Jazz Hands'}">
+            <TaskbarItemInfo.ThumbButtonInfos>
+                <ThumbButtonInfo ImageSource="{StaticResource Icon.Thumb.Previous}" Description="Previous edit" Command="{Binding ThumbPreviousEditCommand, Mode=OneTime}" />
+                <ThumbButtonInfo ImageSource="{StaticResource Icon.Thumb.PlayPause}" Description="Play or pause" Command="{Binding ThumbPlayPauseCommand, Mode=OneTime}" />
+                <ThumbButtonInfo ImageSource="{StaticResource Icon.Thumb.Next}" Description="Next edit" Command="{Binding ThumbNextEditCommand, Mode=OneTime}" />
+            </TaskbarItemInfo.ThumbButtonInfos>
+        </TaskbarItemInfo>
     </Window.TaskbarItemInfo>
 
     <Window.Resources>
@@ -109,32 +120,9 @@
         <Menu Grid.Row="0"
               ItemsSource="{Binding Menu, Mode=OneWay}"
               MenuItem.SubmenuOpened="OnSubmenuOpened"
+              ItemContainerStyle="{StaticResource MenuItem.FromViewModel}"
               Background="{DynamicResource Brush.Background.Raised}"
               Foreground="{DynamicResource Brush.Text.Primary}">
-            <Menu.ItemContainerStyle>
-                <Style TargetType="MenuItem">
-                    <Setter Property="Header" Value="{Binding Header, Mode=OneTime}" />
-                    <Setter Property="Command" Value="{Binding Command, Mode=OneTime}" />
-                    <Setter Property="CommandParameter" Value="{Binding CommandParameter, Mode=OneTime}" />
-                    <Setter Property="InputGestureText" Value="{Binding Gesture, Mode=OneWay}" />
-                    <Setter Property="IsCheckable" Value="False" />
-                    <Setter Property="IsChecked" Value="{Binding IsChecked, Mode=OneWay}" />
-                    <Setter Property="ToolTip" Value="{Binding ToolTip, Mode=OneTime}" />
-                    <Setter Property="ItemsSource" Value="{Binding Items, Mode=OneTime}" />
-                    <Setter Property="ItemContainerStyle" Value="{Binding ItemContainerStyle, RelativeSource={RelativeSource AncestorType=Menu}}" />
-                    <Style.Triggers>
-                        <DataTrigger Binding="{Binding IsSeparator, Mode=OneTime}" Value="True">
-                            <Setter Property="Template">
-                                <Setter.Value>
-                                    <ControlTemplate TargetType="MenuItem">
-                                        <Separator />
-                                    </ControlTemplate>
-                                </Setter.Value>
-                            </Setter>
-                        </DataTrigger>
-                    </Style.Triggers>
-                </Style>
-            </Menu.ItemContainerStyle>
         </Menu>
 
         <!--

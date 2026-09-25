@@ -18,8 +18,8 @@ namespace JazzHands.App.Shell;
 /// </para>
 /// <para>
 /// One editor at a time: a second launch finds the first in the instance list, asks it over the
-/// control pipe to open the project (<c>app.open</c>) or just to come to the front
-/// (<c>app.activate</c>), and exits. <c>--new-instance</c> starts a second editor on purpose. If
+/// control pipe to act on its launch (<c>app.launch</c>: open the project, start hidden, Quick
+/// Trim a file and the rest of <see cref="LaunchRequest"/>), and exits. <c>--new-instance</c> starts a second editor on purpose. If
 /// the first does not answer in a few seconds, the second starts as usual rather than leaving
 /// the person with nothing.
 /// </para>
@@ -45,14 +45,23 @@ public static partial class Startup
         return editor.OpenLastProject && recent.Paths.FirstOrDefault() is { } last && exists(last) ? last : null;
     }
 
-    /// <summary>
-    /// Hands a launch to an editor already running: true when one took it and this process should exit.
-    /// </summary>
+    /// <summary>Hands a launch with at most a project to an editor already running.</summary>
     /// <param name="project">A project to open there, or null to bring it to the front.</param>
     /// <param name="registryPath">The instance list, or null for the per-user one.</param>
     /// <param name="timeout">How long to wait for it.</param>
     /// <param name="self">This process, which is never its own editor; for tests.</param>
-    public static async Task<bool> TryHandOffAsync(string? project, string? registryPath = null, TimeSpan? timeout = null, int? self = null)
+    public static Task<bool> TryHandOffAsync(string? project, string? registryPath = null, TimeSpan? timeout = null, int? self = null) =>
+        TryHandOffAsync(new LaunchRequest(LaunchAction.Show, project is null ? [] : [Path.GetFullPath(project)]), registryPath, timeout, self);
+
+    /// <summary>
+    /// Hands a launch to an editor already running, as <c>app.launch</c>: true when one took it
+    /// and this process should exit.
+    /// </summary>
+    /// <param name="request">What the launch asks for.</param>
+    /// <param name="registryPath">The instance list, or null for the per-user one.</param>
+    /// <param name="timeout">How long to wait for it.</param>
+    /// <param name="self">This process, which is never its own editor; for tests.</param>
+    public static async Task<bool> TryHandOffAsync(LaunchRequest request, string? registryPath = null, TimeSpan? timeout = null, int? self = null)
     {
         int me = self ?? Environment.ProcessId;
         InstanceInfo? running = InstanceRegistry.List(registryPath)
@@ -69,14 +78,8 @@ public static partial class Startup
             TimeSpan wait = timeout ?? TimeSpan.FromSeconds(3);
             await using JazzClient client = await JazzClient.ConnectAsync($"pipe:{running.Pipe}", "launcher", wait, registryPath).ConfigureAwait(false);
             using var cancel = new CancellationTokenSource(wait);
-            if (project is null)
-            {
-                await client.CallAsync("app.activate", null, cancel.Token).ConfigureAwait(false);
-            }
-            else
-            {
-                await client.CallAsync("app.open", new JsonObject { ["path"] = Path.GetFullPath(project) }, cancel.Token).ConfigureAwait(false);
-            }
+            ArgumentNullException.ThrowIfNull(request);
+            await client.CallAsync("app.launch", request.ToJson(), cancel.Token).ConfigureAwait(false);
 
             Log.ForContext(typeof(Startup)).Information("Handed the launch to the editor running as {Pid}", running.Pid);
             return true;
@@ -94,7 +97,7 @@ public static partial class Startup
 }
 
 /// <summary>
-/// The methods the editor answers over the control pipe itself (<c>app.open</c>, <c>app.activate</c>),
+/// The methods the editor answers over the control pipe itself (<c>app.launch</c>),
 /// filled in by the application once its window exists.
 /// </summary>
 public sealed class AppHostMethods

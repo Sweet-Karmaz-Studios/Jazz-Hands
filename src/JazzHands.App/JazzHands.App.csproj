@@ -6,6 +6,7 @@
     <AssemblyName>JazzHands</AssemblyName>
     <Description>The Jazz Hands WPF application.</Description>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\jazz.ico</ApplicationIcon>
   </PropertyGroup>
 
   <!-- Spike windows are throwaway harnesses under Spikes/. They are compiled in Debug, and in
@@ -25,6 +26,13 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="JazzHands.App.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The icons, made by tools/JazzHands.IconGen from Themes/Icon/Icons.xaml. The notification
+         area and the file association load them from beside the executable. -->
+    <Content Include="Assets\*.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Resource Include="Assets\jazz.ico" />
   </ItemGroup>
 
   <ItemGroup>

@@ -110,7 +110,7 @@ public partial class PreviewPanelView : UserControl
 
     private void Attach()
     {
-        if (_presenter is not null || _model?.Engine.Device is not { } device)
+        if (_presenter is not null || _model is null || _model.IsSuspended || _model.Engine.Device is not { } device)
         {
             return;
         }
@@ -145,6 +145,19 @@ public partial class PreviewPanelView : UserControl
     {
         switch (e.PropertyName)
         {
+            case nameof(PreviewPanelViewModel.IsSuspended):
+                // Hidden: the presenter and its shared surfaces go, and come back at the next show.
+                if (_model?.IsSuspended == true)
+                {
+                    Detach();
+                }
+                else if (IsLoaded)
+                {
+                    Attach();
+                }
+
+                break;
+
             case nameof(PreviewPanelViewModel.Zoom):
                 _panX = 0;
                 _panY = 0;
