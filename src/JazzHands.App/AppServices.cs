@@ -203,6 +203,11 @@ public static class AppServices
             provider.GetRequiredService<IMixerFeed>(),
             provider.GetRequiredService<IUiDispatcher>(),
             provider.GetRequiredService<IPreviewEngine>()));
+        services.AddSingleton(provider => new ViewModels.Subtitles.SubtitlesPanelViewModel(
+            provider.GetRequiredService<ISession>(),
+            provider.GetRequiredService<IUiDispatcher>(),
+            provider.GetRequiredService<IFileDialogService>(),
+            provider.GetRequiredService<IPreviewEngine>()));
         services.AddSingleton<MainViewModel>();
 
         return services;

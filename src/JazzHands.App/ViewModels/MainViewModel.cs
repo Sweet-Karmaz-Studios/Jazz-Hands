@@ -50,7 +50,8 @@ public sealed partial class MainViewModel : ObservableObject
         Effects.EffectsPanelViewModel? effects = null,
         Grading.ScopesPanelViewModel? scopes = null,
         Grading.ColorPanelViewModel? color = null,
-        MixerPanelViewModel? mixer = null)
+        MixerPanelViewModel? mixer = null,
+        Subtitles.SubtitlesPanelViewModel? subtitles = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(media);
@@ -68,6 +69,7 @@ public sealed partial class MainViewModel : ObservableObject
         Scopes = scopes;
         Color = color;
         Mixer = mixer;
+        Subtitles = subtitles;
         _files = files;
         _dialogs = dialogs;
 
@@ -81,6 +83,11 @@ public sealed partial class MainViewModel : ObservableObject
         if (meters is not null)
         {
             Panels.Add(meters);
+        }
+
+        if (subtitles is not null)
+        {
+            Panels.Add(subtitles);
         }
 
         if (mixer is not null)
@@ -148,6 +155,9 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>The scopes panel, when the host made one.</summary>
     public Grading.ScopesPanelViewModel? Scopes { get; }
+
+    /// <summary>The Subtitles panel, when the host made one.</summary>
+    public Subtitles.SubtitlesPanelViewModel? Subtitles { get; }
 
     /// <summary>The Audio Mixer, when the window has a transport to meter.</summary>
     public MixerPanelViewModel? Mixer { get; }

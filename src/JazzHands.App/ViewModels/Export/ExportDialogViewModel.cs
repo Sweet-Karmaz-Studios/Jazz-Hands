@@ -52,6 +52,21 @@ public sealed partial class ExportDialogViewModel : ObservableObject
     [ObservableProperty]
     private bool _useExternalFfmpeg;
 
+    /// <summary>What subtitle tracks can become, in words, for the dialog's picker.</summary>
+    public static IReadOnlyList<SubtitleChoice> SubtitleChoices { get; } =
+    [
+        new(SubtitleDelivery.Soft, "In the file, to turn on and off"),
+        new(SubtitleDelivery.Burn, "Burned into the picture"),
+        new(SubtitleDelivery.Sidecar, "As files beside it"),
+        new(SubtitleDelivery.None, "Left out"),
+    ];
+
+    [ObservableProperty]
+    private SubtitleDelivery _subtitles = SubtitleDelivery.Soft;
+
+    [ObservableProperty]
+    private bool _chapters = true;
+
     [ObservableProperty]
     private string _summary = string.Empty;
 
@@ -129,7 +144,7 @@ public sealed partial class ExportDialogViewModel : ObservableObject
     public Task RefreshPlanAsync()
     {
         int version = ++_planVersion;
-        var query = new PlanExportQuery(OutputPath, Preset?.Name ?? ExportPresets.Default, Mode, SequenceId, SnapToKeyframes, UseInOut, UseExternalFfmpeg);
+        var query = new PlanExportQuery(OutputPath, Preset?.Name ?? ExportPresets.Default, Mode, SequenceId, SnapToKeyframes, UseInOut, UseExternalFfmpeg, Subtitles, Chapters: Chapters);
         IsPlanning = true;
 
         return Task.Run(() =>
@@ -190,6 +205,10 @@ public sealed partial class ExportDialogViewModel : ObservableObject
 
     partial void OnUseExternalFfmpegChanged(bool value) => RefreshPlan();
 
+    partial void OnSubtitlesChanged(SubtitleDelivery value) => RefreshPlan();
+
+    partial void OnChaptersChanged(bool value) => RefreshPlan();
+
     [RelayCommand]
     private void Browse()
     {
@@ -209,7 +228,9 @@ public sealed partial class ExportDialogViewModel : ObservableObject
             SequenceId,
             SnapToKeyframes,
             UseInOut,
-            UseExternalFfmpeg)).ConfigureAwait(true);
+            UseExternalFfmpeg,
+            Subtitles,
+            Chapters: Chapters)).ConfigureAwait(true);
 
         if (result.Ok)
         {
@@ -257,7 +278,18 @@ public sealed partial class ExportDialogViewModel : ObservableObject
             ? $"Copy, {(plan.Copy!.AudioStreams.IsEmpty ? "no sound" : $"{plan.Copy.AudioStreams.Length} sound stream(s)")}"
             : $"Encode {plan.Video!.Width}x{plan.Video.Height} {plan.Video.Codec}{(plan.Audio is null ? string.Empty : $" with {plan.Audio.Encoder}")}";
 
-        Summary = $"{what}, {Timecode.FormatClock(plan.Duration)}, to {Path.GetFileName(plan.OutputPath)}";
+        string extras = string.Concat(
+            plan.Subtitles is { } subtitles
+                ? subtitles.Delivery switch
+                {
+                    SubtitleDelivery.Burn => ", subtitles burned in",
+                    SubtitleDelivery.Sidecar => $", {subtitles.Tracks.Length} subtitle file(s) beside it",
+                    _ => $", {subtitles.Tracks.Length} subtitle stream(s)",
+                }
+                : string.Empty,
+            plan.Chapters.IsEmpty ? string.Empty : $", {plan.Chapters.Length} chapter(s)");
+
+        Summary = $"{what}, {Timecode.FormatClock(plan.Duration)}{extras}, to {Path.GetFileName(plan.OutputPath)}";
     }
 
     private string SuggestedPath(Project project, Sequence? sequence)
@@ -275,3 +307,8 @@ public sealed partial class ExportDialogViewModel : ObservableObject
         return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), $"{name}.mp4");
     }
 }
+
+/// <summary>A way to export subtitle tracks, with the words the dialog shows for it.</summary>
+/// <param name="Value">The delivery.</param>
+/// <param name="Label">What the picker says.</param>
+public sealed record SubtitleChoice(SubtitleDelivery Value, string Label);

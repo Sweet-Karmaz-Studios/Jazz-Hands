@@ -1,0 +1,150 @@
+<UserControl x:Class="JazzHands.App.Views.Subtitles.SubtitlesPanelView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:JazzHands.App.ViewModels.Subtitles"
+             xmlns:controls="clr-namespace:JazzHands.App.Controls"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:SubtitlesPanelViewModel}"
+             Background="{DynamicResource Brush.Background.Panel}">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="Visible" />
+
+        <Style x:Key="Caption" TargetType="{x:Type TextBlock}">
+            <Setter Property="FontSize" Value="{DynamicResource Text.Caption}" />
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+        </Style>
+
+        <Style x:Key="Field" TargetType="{x:Type TextBox}" BasedOn="{StaticResource TextBox.Field}">
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+    </UserControl.Resources>
+
+    <DockPanel Margin="{DynamicResource Space.Normal}">
+        <!-- The track: which one, and making, importing and exporting one. -->
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+            <Button DockPanel.Dock="Right" Style="{StaticResource Button.Text}" Content="Export..." Command="{Binding ExportCommand, Mode=OneWay}"
+                    IsEnabled="{Binding HasTrack, Mode=OneWay}" ToolTip="Write this track as an SRT, VTT or ASS file" />
+            <Button DockPanel.Dock="Right" Style="{StaticResource Button.Text}" Content="Import..." Command="{Binding ImportCommand, Mode=OneWay}"
+                    ToolTip="Bring in an SRT, VTT or ASS file, onto this track or a new one" />
+            <Button DockPanel.Dock="Right" Style="{StaticResource Button.Text}" Content="+ Track" Command="{Binding AddTrackCommand, Mode=OneWay}"
+                    ToolTip="Make a subtitle track" />
+            <TextBlock Text="Track" Style="{StaticResource Caption}" />
+            <ComboBox Style="{StaticResource ComboBox.Compact}" ItemsSource="{Binding Tracks, Mode=OneWay}" SelectedItem="{Binding SelectedTrack, Mode=TwoWay}"
+                      AutomationProperties.Name="Subtitle track">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate DataType="{x:Type vm:SubtitleTrackChoice}">
+                        <TextBlock Text="{Binding Name, Mode=OneWay}" />
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+        </DockPanel>
+
+        <TextBlock DockPanel.Dock="Bottom" Margin="0,4,0,0" Text="{Binding Status, Mode=OneWay}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
+                   Style="{StaticResource Caption}" Foreground="{DynamicResource Brush.Warning}" />
+
+        <Grid>
+            <TextBlock Text="This sequence has no subtitle track. Make one, or import a file."
+                       HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap">
+                <TextBlock.Style>
+                    <Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource Caption}">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding HasTrack, Mode=OneWay}" Value="True">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+
+            <DockPanel Visibility="{Binding HasTrack, Mode=OneWay, Converter={StaticResource Visible}}">
+                <!-- The track's look and language. -->
+                <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                    <TextBlock Text="Font" Style="{StaticResource Caption}" />
+                    <TextBox Style="{StaticResource Field}" Width="110" Text="{Binding StyleFont, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                             AutomationProperties.Name="Subtitle font" />
+                    <TextBlock Text="Size" Style="{StaticResource Caption}" />
+                    <controls:NumberBox Width="56" Margin="0,0,4,0" Value="{Binding StyleSize, Mode=TwoWay}" Minimum="0.5" Maximum="50" Step="0.1" Decimals="1"
+                                        Unit="%" AutomationProperties.Name="Subtitle size" ToolTip="{Binding StyleSizeText, Mode=OneWay}" />
+                    <TextBlock Text="Colour" Style="{StaticResource Caption}" Margin="8,0,6,0" />
+                    <TextBox Style="{StaticResource Field}" Width="72" Text="{Binding StyleColor, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                             AutomationProperties.Name="Subtitle colour" />
+                    <CheckBox Content="Box" IsChecked="{Binding StyleBoxed, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,8,0"
+                              ToolTip="A translucent box behind each cue instead of a shadow" />
+                    <TextBlock Text="Language" Style="{StaticResource Caption}" />
+                    <TextBox Style="{StaticResource Field}" Width="44" Text="{Binding Language, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                             ToolTip="ISO 639-2: eng, fra, deu, jpn" AutomationProperties.Name="Subtitle language" />
+                </WrapPanel>
+
+                <!-- Find and replace, and the tools that change every cue. -->
+                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                    <Button DockPanel.Dock="Right" Style="{StaticResource Button.Text}" Content="Replace all" Command="{Binding ReplaceAllCommand, Mode=OneWay}" />
+                    <CheckBox DockPanel.Dock="Right" Content="Aa" IsChecked="{Binding MatchCase, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,6,0"
+                              ToolTip="Match capitals exactly" />
+                    <TextBlock DockPanel.Dock="Left" Text="Find" Style="{StaticResource Caption}" />
+                    <TextBox DockPanel.Dock="Right" Style="{StaticResource Field}" Width="100" Text="{Binding ReplaceWith, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="Replace with" AutomationProperties.Name="Replace with" />
+                    <TextBlock DockPanel.Dock="Right" Text="with" Style="{StaticResource Caption}" />
+                    <TextBox Style="{StaticResource Field}" Text="{Binding Find, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="Find" AutomationProperties.Name="Find" />
+                </DockPanel>
+
+                <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                    <Button Style="{StaticResource Button.Text}" Content="+ Cue at playhead" Command="{Binding AddCueCommand, Mode=OneWay}" />
+                    <Button Style="{StaticResource Button.Text}" Content="Remove cue" Command="{Binding RemoveCueCommand, Mode=OneWay}" />
+                    <Button Style="{StaticResource Button.Text}" Content="Split long cues" Command="{Binding SplitLongCommand, Mode=OneWay}"
+                            ToolTip="Break cues into lines of at most 42 characters and 2 lines" />
+                    <TextBlock Text="Shift all by" Style="{StaticResource Caption}" Margin="8,0,6,0" />
+                    <TextBox Style="{StaticResource Field}" Width="48" Text="{Binding ShiftBy, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="Seconds; negative is earlier" AutomationProperties.Name="Shift by seconds" />
+                    <Button Style="{StaticResource Button.Text}" Content="Shift" Command="{Binding ShiftCommand, Mode=OneWay}" />
+                </WrapPanel>
+
+                <!-- The cues: when they show and what they say, each editable in place. -->
+                <ListBox ItemsSource="{Binding Cues, Mode=OneWay}" SelectedItem="{Binding SelectedCue, Mode=TwoWay}"
+                         HorizontalContentAlignment="Stretch" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         Background="{DynamicResource Brush.Background.Input}" BorderBrush="{DynamicResource Brush.Border}"
+                         AutomationProperties.Name="Cues">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:CueRowViewModel}">
+                            <Border x:Name="Row" Padding="2" BorderThickness="3,0,0,0" BorderBrush="Transparent">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Margin="0,0,6,0">
+                                        <TextBox Style="{StaticResource TextBox.Field}" Width="96" FontFamily="{DynamicResource Font.Mono}"
+                                                 Text="{Binding StartText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" ToolTip="When it appears"
+                                                 AutomationProperties.Name="Cue start" />
+                                        <TextBox Style="{StaticResource TextBox.Field}" Width="96" Margin="0,2,0,0" FontFamily="{DynamicResource Font.Mono}"
+                                                 Text="{Binding EndText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" ToolTip="When it goes"
+                                                 AutomationProperties.Name="Cue end" />
+                                    </StackPanel>
+                                    <TextBox x:Name="Words" Grid.Column="1" Style="{StaticResource TextBox.Field}" AcceptsReturn="True" TextWrapping="Wrap"
+                                             Text="{Binding Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             ToolTip="What it says: [i]italic[/i], [b]bold[/b], a new line for a second line"
+                                             AutomationProperties.Name="Cue text" />
+                                </Grid>
+                            </Border>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding IsCurrent, Mode=OneWay}" Value="True">
+                                    <Setter TargetName="Row" Property="BorderBrush" Value="{DynamicResource Brush.Accent}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsLong, Mode=OneWay}" Value="True">
+                                    <Setter TargetName="Words" Property="BorderBrush" Value="{DynamicResource Brush.Warning}" />
+                                    <Setter TargetName="Words" Property="ToolTip" Value="A line is longer than 42 characters. Split long cues breaks it." />
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+        </Grid>
+    </DockPanel>
+</UserControl>

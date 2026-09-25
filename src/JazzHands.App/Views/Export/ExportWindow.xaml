@@ -7,7 +7,7 @@
         mc:Ignorable="d"
         d:DataContext="{d:DesignInstance vm:ExportDialogViewModel}"
         Title="{Binding Heading, Mode=OneWay}"
-        Height="560"
+        Height="620"
         Width="640"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
@@ -103,6 +103,21 @@
                       IsChecked="{Binding UseExternalFfmpeg, Mode=TwoWay}"
                       Foreground="{DynamicResource Brush.Text.Primary}"
                       AutomationProperties.Name="Use external ffmpeg" />
+            <DockPanel Margin="0,8,0,0">
+                <TextBlock DockPanel.Dock="Left" Text="Subtitles" VerticalAlignment="Center" Margin="0,0,8,0"
+                           Foreground="{DynamicResource Brush.Text.Primary}" />
+                <ComboBox Style="{StaticResource ComboBox.Compact}"
+                          ItemsSource="{Binding Source={x:Static vm:ExportDialogViewModel.SubtitleChoices}, Mode=OneTime}"
+                          DisplayMemberPath="Label"
+                          SelectedValuePath="Value"
+                          SelectedValue="{Binding Subtitles, Mode=TwoWay}"
+                          AutomationProperties.Name="Subtitles" />
+            </DockPanel>
+            <CheckBox Margin="0,4,0,0"
+                      Content="Chapters from the chapter marks"
+                      IsChecked="{Binding Chapters, Mode=TwoWay}"
+                      Foreground="{DynamicResource Brush.Text.Primary}"
+                      AutomationProperties.Name="Chapters" />
         </StackPanel>
 
         <TextBlock Grid.Row="4"

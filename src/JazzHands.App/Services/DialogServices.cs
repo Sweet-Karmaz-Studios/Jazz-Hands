@@ -28,6 +28,12 @@ public interface IFileDialogService
 
     /// <summary>Asks where an export goes, starting from a suggestion, or null when the user cancelled.</summary>
     string? SaveExport(string suggested);
+
+    /// <summary>Picks a subtitle file to import, or null when the user cancelled.</summary>
+    string? OpenSubtitles();
+
+    /// <summary>Asks where a subtitle file goes, starting from a suggestion, or null when the user cancelled.</summary>
+    string? SaveSubtitles(string suggested);
 }
 
 /// <summary>The real dialogs.</summary>
@@ -131,6 +137,34 @@ public sealed class FileDialogService : IFileDialogService
                 ".mov" => 3,
                 _ => 1,
             },
+            OverwritePrompt = true,
+        };
+
+        return dialog.ShowDialog() == true ? dialog.FileName : null;
+    }
+
+    /// <inheritdoc />
+    public string? OpenSubtitles()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Import subtitles",
+            CheckFileExists = true,
+            Filter = "Subtitles|*.srt;*.vtt;*.ass;*.ssa|SubRip|*.srt|WebVTT|*.vtt|ASS|*.ass;*.ssa",
+        };
+
+        return dialog.ShowDialog() == true ? dialog.FileName : null;
+    }
+
+    /// <inheritdoc />
+    public string? SaveSubtitles(string suggested)
+    {
+        var dialog = new SaveFileDialog
+        {
+            Title = "Export subtitles to",
+            FileName = System.IO.Path.GetFileName(suggested),
+            InitialDirectory = System.IO.Path.GetDirectoryName(suggested),
+            Filter = "SubRip|*.srt|WebVTT|*.vtt|ASS|*.ass",
             OverwritePrompt = true,
         };
 
