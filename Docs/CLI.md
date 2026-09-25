@@ -337,6 +337,48 @@ Take back the last command.
 | `--steps <n>` | How many commands to take back. Default: 1. |
 | `--no-save` | Do not write the project back. |
 
+## `jazz app`
+
+Commands and queries about app.
+
+### `jazz app hide <project>`
+
+Hide the editor to the notification area, where it keeps running.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--no-save` | Do not write the project back. |
+
+### `jazz app quit <project>`
+
+Quit the editor.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--force` | Quit even with unsaved changes or a running export. |
+| `--wait-for-exports` | Let the exports finish first, then quit. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz app show <project>`
+
+Show the editor's window and bring it to the front.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--no-save` | Do not write the project back. |
+
 ## `jazz audio`
 
 Sound on clips: gain, pan, fades, channel maps, muting a stream, detaching sound; the master volume and limiter; the meters.
@@ -2924,6 +2966,36 @@ Give a sequence its own frame rate, size or audio format.
 | `--channels <n>` | Audio channel count. |
 | `--color-space <color-space>` | Working colour space. |
 | `--inherit` | Drop the override and follow the project. |
+| `--no-save` | Do not write the project back. |
+
+## `jazz settings`
+
+Commands and queries about settings.
+
+### `jazz settings get <project>`
+
+List the editor's settings with their values and defaults.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--section <section>` | Only this section. |
+
+### `jazz settings set <project> <key> <value>`
+
+Change one of the editor's settings.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<key>` | The setting, as section.name (see settings.get). |
+| `<value>` | Its new value: JSON, or plain text. |
+
+| Option | Meaning |
+|---|---|
 | `--no-save` | Do not write the project back. |
 
 ## `jazz subtitle`

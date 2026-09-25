@@ -365,6 +365,7 @@ public static class RpcCommands
 
         await using ServiceProvider services = new ServiceCollection()
             .AddJazzHandsEngine()
+            .AddJazzHandsControlSettings()
             .AddSingleton<IExportService>(new ForegroundExportService())
             .BuildServiceProvider();
         await using var session = new Session(project, services, File.Exists(path) ? path : string.Empty) { DefaultIssuer = "serve" };

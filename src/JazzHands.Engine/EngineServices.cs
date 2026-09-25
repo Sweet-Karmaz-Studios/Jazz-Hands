@@ -25,6 +25,13 @@ public static class EngineServices
         // would cost more than the probe it saves. Where it lives and how big it may get are the
         // editor's settings; a test registers its own store first to keep away from the real one.
         services.TryAddSingleton(_ => new Caching.CacheSettingsStore());
+
+        // The settings the settings commands reach: the cache section here, the others added by
+        // the control server and the editor as they register.
+        services.AddSingleton(new Settings.SettingsSectionType("cache", typeof(Caching.CacheSettings), "Where the cache lives and how big it may get (from the next start; cache.configure changes it now)"));
+        services.TryAddSingleton(provider => new Settings.SettingsCatalog(
+            provider.GetRequiredService<Caching.CacheSettingsStore>().Path,
+            provider.GetServices<Settings.SettingsSectionType>()));
         services.TryAddSingleton(provider =>
         {
             Caching.CacheSettings settings = provider.GetRequiredService<Caching.CacheSettingsStore>().Current;

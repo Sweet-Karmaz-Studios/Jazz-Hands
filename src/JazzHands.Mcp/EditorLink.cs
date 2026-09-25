@@ -176,6 +176,7 @@ public sealed class HeadlessLink : EditorLink
 
         ServiceProvider services = new ServiceCollection()
             .AddJazzHandsEngine()
+            .AddJazzHandsControlSettings()
             .AddSingleton<IExportService>(new ForegroundExportService())
             .BuildServiceProvider();
         var session = new Session(project, services, full, recovery: full.Length > 0) { DefaultIssuer = "mcp" };

@@ -67,6 +67,8 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
 
     private IPreviewTarget[] _targets = [];
     private volatile bool _disposing;
+    private volatile bool _suspended;
+    private bool _released;
     private Session? _session;
 
     // What to play. Written by any thread, read by the composition thread.
@@ -573,6 +575,35 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
         return SpinWait.SpinUntil(() => PresentedFrames > before, timeout);
     }
 
+    /// <summary>
+    /// While true the preview holds nothing of its own: playback pauses, and the composition
+    /// thread lets go of its decoders, frame cache, hardware context and textures and sleeps.
+    /// Set false again, it rebuilds them and draws the frame the playhead is on. For a hidden
+    /// window, which must not hold video memory or wake the processor.
+    /// </summary>
+    public bool Suspended
+    {
+        get => _suspended;
+        set
+        {
+            if (value == _suspended)
+            {
+                return;
+            }
+
+            if (value)
+            {
+                Pause();
+            }
+
+            _suspended = value;
+            _wake.Set();
+        }
+    }
+
+    /// <summary>True once the composition thread has let go of everything, while suspended.</summary>
+    public bool Released => Volatile.Read(ref _released);
+
     /// <inheritdoc />
     public void Dispose()
     {
@@ -645,18 +676,49 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
                 _log.Debug("The composition thread could not join the multimedia class scheduler");
             }
 
-            if (_options.HardwareDecode && _device.SupportsVideo)
-            {
-                hardware = HardwareDeviceContext.CreateShared(_device.Device.NativePointer, _device.ImmediateContext.NativePointer);
-            }
-
-            frames = new FrameServer(_device, hardware, _options.FrameCacheBytes, _notices, _cacheManager)
-            {
-                Substitute = _proxies is { } proxies ? proxies.Substitute : null,
-            };
-
             while (!_disposing)
             {
+                // Suspended (the window hidden): nothing is kept that only the preview needs, and
+                // the thread sleeps until woken rather than ticking.
+                if (_suspended)
+                {
+                    if (frames is not null)
+                    {
+                        resolution?.Dispose();
+                        resolution = null;
+                        ReleaseProgram();
+                        _scopes?.Dispose();
+                        _scopes = null;
+                        frames.Dispose();
+                        frames = null;
+                        hardware?.Dispose();
+                        hardware = null;
+                        _device.ImmediateContext.Flush();
+                        Volatile.Write(ref _released, true);
+                        _log.Information("The preview let go of its decoders, frame cache and textures while hidden");
+                    }
+
+                    _wake.WaitOne();
+                    continue;
+                }
+
+                if (frames is null)
+                {
+                    if (_options.HardwareDecode && _device.SupportsVideo)
+                    {
+                        hardware = HardwareDeviceContext.CreateShared(_device.Device.NativePointer, _device.ImmediateContext.NativePointer);
+                    }
+
+                    frames = new FrameServer(_device, hardware, _options.FrameCacheBytes, _notices, _cacheManager)
+                    {
+                        Substitute = _proxies is { } proxies ? proxies.Substitute : null,
+                    };
+
+                    // The frame on screen went with the textures; the same one is drawn again.
+                    _lastKey = default;
+                    Volatile.Write(ref _released, false);
+                }
+
                 bool playing = _transport.State == TransportState.Playing;
 
                 // The timer resolution is raised only while something is moving.

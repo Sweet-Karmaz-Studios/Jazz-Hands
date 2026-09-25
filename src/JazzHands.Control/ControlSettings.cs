@@ -111,3 +111,17 @@ public sealed class ControlSettingsStore
         }
     }
 }
+
+/// <summary>Registers the control server's settings with the settings commands.</summary>
+public static class ControlSettingsServices
+{
+    /// <summary>Adds the <c>control</c> section to <c>settings.get</c> and <c>settings.set</c>.</summary>
+    public static Microsoft.Extensions.DependencyInjection.IServiceCollection AddJazzHandsControlSettings(this Microsoft.Extensions.DependencyInjection.IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton(
+            services,
+            new Engine.Settings.SettingsSectionType("control", typeof(ControlSettings), "How jazz --attach and MCP reach the editor (from the next start)"));
+        return services;
+    }
+}

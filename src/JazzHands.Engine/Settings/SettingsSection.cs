@@ -39,7 +39,7 @@ public sealed class SettingsSection<T>
         Current = Read();
     }
 
-    /// <summary>Raised after <see cref="Save"/> with what was saved.</summary>
+    /// <summary>Raised after <see cref="Save"/> or <see cref="Reload"/> with what the section now holds.</summary>
     public event EventHandler<T>? Saved;
 
     /// <summary>The section's name.</summary>
@@ -69,6 +69,23 @@ public sealed class SettingsSection<T>
         }
 
         Saved?.Invoke(this, settings);
+    }
+
+    /// <summary>
+    /// Reads the section again, after something else wrote it (<c>settings.set</c>), and raises
+    /// <see cref="Saved"/> with what it now holds.
+    /// </summary>
+    public T Reload()
+    {
+        T read;
+        lock (_gate)
+        {
+            read = Read();
+            Current = read;
+        }
+
+        Saved?.Invoke(this, read);
+        return read;
     }
 
     /// <summary>Changes the section with a function of what it holds, and saves it.</summary>

@@ -114,6 +114,7 @@ public static class ApplyCommand
 
         await using ServiceProvider services = new ServiceCollection()
             .AddJazzHandsEngine()
+            .AddJazzHandsControlSettings()
             .AddSingleton<IExportService>(new ForegroundExportService())
             .BuildServiceProvider();
         await using var session = new Session(load.Project, services, path) { DefaultIssuer = "cli" };

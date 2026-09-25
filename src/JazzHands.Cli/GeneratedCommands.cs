@@ -1,6 +1,7 @@
 using System.CommandLine;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using JazzHands.Control;
 using JazzHands.Core.Commands;
 using JazzHands.Core.Model;
 using JazzHands.Core.Serialization;
@@ -295,6 +296,7 @@ public static class GeneratedCommands
             // A headless process has no queue to leave an export in, so one queued here runs now.
             using ServiceProvider services = new ServiceCollection()
                 .AddJazzHandsEngine()
+                .AddJazzHandsControlSettings()
                 .AddSingleton<Engine.Export.IExportService>(new Engine.Export.ForegroundExportService())
                 .BuildServiceProvider();
             return Execute(metadata, built, load, path, services, json, !metadata.Standalone && !parse.GetValue(noSave)).GetAwaiter().GetResult();
