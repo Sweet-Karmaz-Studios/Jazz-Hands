@@ -306,7 +306,7 @@
 
             <StackPanel Visibility="{Binding HasTarget, Mode=OneWay, Converter={StaticResource Visible}}">
                 <!-- A title's text, font, alignment and animations; its other parameters are rows below. -->
-                <ContentControl Content="{Binding Title, Mode=OneWay}" Focusable="False">
+                <ContentControl Content="{Binding TitleSection, Mode=OneWay}" Focusable="False">
                     <ContentControl.ContentTemplate>
                         <DataTemplate DataType="{x:Type vm:TitleSectionViewModel}">
                             <StackPanel Margin="0,10,0,0">

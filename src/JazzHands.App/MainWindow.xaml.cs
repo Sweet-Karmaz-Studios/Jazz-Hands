@@ -29,6 +29,7 @@ public partial class MainWindow : Window, Shell.IAppWindow
     public MainWindow(MainViewModel model)
     {
         InitializeComponent();
+        ThemeDockTabs();
         _model = model;
         DataContext = model;
         model.PanelsRequested += (_, ids) => BringForward(ids);
@@ -51,6 +52,52 @@ public partial class MainWindow : Window, Shell.IAppWindow
             _statusTimer = timer;
         }
     }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Style, Style> DockTabs = new();
+    private static Style? _dockTab;
+
+    /// <summary>
+    /// Gives AvalonDock's panel and document tabs the dark theme's look (<c>Dock.Tab</c>): its pane
+    /// controls set their own tab style, which takes the light Windows template, and the theme's
+    /// text on it was white on white. AvalonDock's styles live in its own theme, out of reach of a
+    /// resource lookup, so each pane control is given ours as it loads: AvalonDock's tab setters
+    /// (visibility, tooltip) kept, the template ours.
+    /// </summary>
+    private void ThemeDockTabs()
+    {
+        if (_dockTab is not null)
+        {
+            return;
+        }
+
+        _dockTab = (Style)Dock.FindResource("Dock.Tab");
+        foreach (Type pane in new[] { typeof(AvalonDock.Controls.LayoutAnchorablePaneControl), typeof(AvalonDock.Controls.LayoutDocumentPaneControl) })
+        {
+            EventManager.RegisterClassHandler(pane, LoadedEvent, new RoutedEventHandler((sender, args) =>
+            {
+                if (sender is ItemsControl { ItemContainerStyle: { } own } control && _dockTab is { } tab && !Ours.TryGetValue(own, out _))
+                {
+                    control.ItemContainerStyle = DockTabs.GetValue(own, style => Themed(style, tab));
+                }
+            }));
+        }
+    }
+
+    /// <summary>A tab style that is <paramref name="tab"/> with AvalonDock's own tab setters, all but its template.</summary>
+    private static Style Themed(Style own, Style tab)
+    {
+        var item = new Style(typeof(TabItem), tab);
+        foreach (Setter setter in own.Setters.OfType<Setter>().Where(setter => setter.Property != TemplateProperty))
+        {
+            item.Setters.Add(new Setter(setter.Property, setter.Value));
+        }
+
+        item.Seal();
+        Ours.Add(item, item);
+        return item;
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Style, Style> Ours = new();
 
     private void OnBellOpened(object sender, RoutedEventArgs e) => _model.StatusBar?.Notifications.MarkRead();
 

@@ -141,6 +141,36 @@
                              AnchorablesSource="{Binding Panels, Mode=OneWay}"
                              DocumentsSource="{Binding Timelines.Documents, Mode=OneWay}"
                              ActiveContent="{Binding Timelines.Active, Mode=TwoWay}">
+            <dock:DockingManager.Resources>
+                <!-- AvalonDock's own tabs are the light Windows ones, and the theme's text on them was
+                     white on white: panel tabs in a shared pane and the timeline's document tab. Its
+                     pane controls set their tab style themselves, so the panes below are given this one. -->
+                <Style x:Key="Dock.Tab" TargetType="{x:Type TabItem}">
+                    <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="{x:Type TabItem}">
+                                <Border x:Name="Chrome"
+                                        Background="{DynamicResource Brush.Background.Panel}"
+                                        BorderBrush="{DynamicResource Brush.Border}"
+                                        BorderThickness="0,0,1,0"
+                                        Padding="8,3">
+                                    <ContentPresenter ContentSource="Header" VerticalAlignment="Center" RecognizesAccessKey="True" />
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Brush.Background.Hover}" />
+                                    </Trigger>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Brush.Background.Selected}" />
+                                        <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </dock:DockingManager.Resources>
             <dock:DockingManager.LayoutUpdateStrategy>
                 <shell:PanelPlacement />
             </dock:DockingManager.LayoutUpdateStrategy>
@@ -158,10 +188,13 @@
                 <layout:LayoutPanel Orientation="Horizontal">
                     <layout:LayoutAnchorablePane Name="ToolsPane" DockWidth="380" />
                     <layout:LayoutPanel Orientation="Vertical">
-                        <layout:LayoutAnchorablePane Name="ProgramPane" DockHeight="*" />
-                        <!-- One timeline tab per sequence. A pixel height, not a star: a star-sized
-                             document pane takes the whole column from the preview. -->
-                        <layout:LayoutDocumentPane DockHeight="300" />
+                        <!-- The preview has the pixel height and the timeline takes the rest: AvalonDock
+                             always makes the document pane the star in its column and pins the others
+                             to their height when it first lays them out, which on a fresh start is the
+                             preview's 25 pixel minimum (the preview was a star and vanished). -->
+                        <layout:LayoutAnchorablePane Name="ProgramPane" DockHeight="560" DockMinHeight="200" />
+                        <!-- One timeline tab per sequence. -->
+                        <layout:LayoutDocumentPane />
                     </layout:LayoutPanel>
                     <!-- The inspector, beside the preview and the timeline, where the selected clip is changed. -->
                     <layout:LayoutAnchorablePane Name="InspectorPane" DockWidth="380" />

@@ -204,13 +204,28 @@ public static class RpcCommands
         var parameters = new Argument<string?>("params") { Description = "Its params as a JSON object: '{\"clipId\": \"...\", \"at\": \"2s\"}'. None when left out.", Arity = ArgumentArity.ZeroOrOne };
         var command = new Command("call", "Call one method and print the result as JSON.") { method, parameters };
 
-        command.SetAction(parse => Attached(true, async client =>
+        command.SetAction(parse =>
         {
-            JsonNode? given = parse.GetValue(parameters) is { Length: > 0 } text ? JsonNode.Parse(text) : null;
-            JsonNode? result = await client.CallAsync(parse.GetValue(method)!, given).ConfigureAwait(false);
-            Console.Out.WriteLine(result?.ToJsonString(Pretty) ?? "null");
-            return ExitCode.Ok;
-        }));
+            // Read before connecting: params that are not JSON are a usage error, said plainly,
+            // not a crash (PowerShell 5 strips the inner quotes of '{"to":"2s"}', for one).
+            JsonNode? given;
+            try
+            {
+                given = parse.GetValue(parameters) is { Length: > 0 } text ? JsonNode.Parse(text) : null;
+            }
+            catch (JsonException error)
+            {
+                Fail(true, "bad-params", $"The params are not JSON: {error.Message} In PowerShell 5, escape the inner quotes: '{{\\\"to\\\":\\\"2s\\\"}}'.");
+                return ExitCode.UsageError;
+            }
+
+            return Attached(true, async client =>
+            {
+                JsonNode? result = await client.CallAsync(parse.GetValue(method)!, given).ConfigureAwait(false);
+                Console.Out.WriteLine(result?.ToJsonString(Pretty) ?? "null");
+                return ExitCode.Ok;
+            });
+        });
 
         return command;
     }

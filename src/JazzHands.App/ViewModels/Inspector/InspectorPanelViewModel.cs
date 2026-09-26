@@ -80,7 +80,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
 
     /// <summary>The text section, when the clip is a title; null otherwise.</summary>
     [ObservableProperty]
-    private TitleSectionViewModel? _title;
+    private TitleSectionViewModel? _titleSection;
 
     /// <summary>Creates the panel.</summary>
     public InspectorPanelViewModel(
@@ -368,7 +368,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         _targets = [.. _selection.Ids.Where(id => project.FindClip(id) is not null)];
 
         Sections.Clear();
-        Title = null;
+        TitleSection = null;
         Effects.Clear();
         _pending.Clear();
 
@@ -400,7 +400,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
 
         ParamOwner owner = ParamTargets.Find(project, clip.Id)!;
         bool title = string.Equals(clip.GeneratorId, TitleParams.GeneratorId, StringComparison.Ordinal);
-        Title = title ? new TitleSectionViewModel(clip.Id, RunAsync, () => _session.Query(new ListFontsQuery())) : null;
+        TitleSection = title ? new TitleSectionViewModel(clip.Id, RunAsync, () => _session.Query(new ListFontsQuery())) : null;
         foreach (EffectDescriptor section in ParamTargets.Sections(owner, EffectCatalog.Registry))
         {
             if (title && string.Equals(section.TypeId, TitleParams.GeneratorId, StringComparison.Ordinal))
@@ -632,7 +632,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         }
 
         ParamOwner owner = ParamTargets.Find(project, clip.Id)!;
-        if (Title is { } title && clip.Effects.FirstOrDefault(effect => EffectChains.IsOwnParameters(clip, effect)) is var own)
+        if (TitleSection is { } title && clip.Effects.FirstOrDefault(effect => EffectChains.IsOwnParameters(clip, effect)) is var own)
         {
             EffectDescriptor descriptor = EffectCatalog.Registry.Find(TitleParams.GeneratorId)!;
             title.Load(
