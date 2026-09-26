@@ -4,7 +4,8 @@ namespace JazzHands.Core.Commands;
 /// <remarks>
 /// Refuses with <c>unsaved-changes</c> when the project has changes that are not saved, and with
 /// <c>exports-running</c> while an export runs, unless told what to do about them. The answer
-/// comes back before the editor goes, so a client hears it.
+/// comes back before the editor goes, so a client hears it; <c>jazz app quit --attach</c> then waits
+/// for the process to end, which the uninstaller relies on.
 /// </remarks>
 /// <param name="Force">Quit even with unsaved changes or a running export, which is cancelled.</param>
 /// <param name="WaitForExports">Wait for the running and queued exports to finish, then quit.</param>

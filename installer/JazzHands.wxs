@@ -85,16 +85,20 @@
     </Component>
 
     <!--
-      Uninstalling: the editor asked to quit (it may not be running; that is fine) before the files
-      go, and the settings and cache removed after them when asked. Quietly: no console.
+      Uninstalling or upgrading: a running editor is asked to quit, and waited for, before
+      InstallValidate looks for files in use, so it goes rather than being named in a files in use
+      dialog. Immediate, so it runs before that check and as the person; install folder known after
+      CostFinalize. If it refuses (unsaved changes, exports running) or is not running, nothing
+      happens here and Windows asks about the files as usual. The settings and cache are removed
+      after the files when asked. Quietly: no console.
     -->
-    <SetProperty Id="QuitRunning" Value="&quot;[INSTALLFOLDER]jazz.exe&quot; app quit --attach" Before="QuitRunning" Sequence="execute" Condition="REMOVE=&quot;ALL&quot;" />
-    <CustomAction Id="QuitRunning" DllEntry="WixQuietExec" BinaryRef="Wix4UtilCA_X64" Execute="deferred" Impersonate="yes" Return="ignore" />
+    <SetProperty Id="WixQuietExecCmdLine" Value="&quot;[INSTALLFOLDER]jazz.exe&quot; app quit --attach" After="CostFinalize" Sequence="execute" Condition="REMOVE=&quot;ALL&quot; OR WIX_UPGRADE_DETECTED" />
+    <CustomAction Id="QuitRunning" DllEntry="WixQuietExec" BinaryRef="Wix4UtilCA_X64" Execute="immediate" Return="ignore" />
     <SetProperty Id="RemoveUserData" Value="&quot;[SystemFolder]cmd.exe&quot; /c rmdir /s /q &quot;[AppDataFolder]JazzHands&quot; &amp; rmdir /s /q &quot;[LocalAppDataFolder]JazzHands&quot;" Before="RemoveUserData" Sequence="execute" Condition="REMOVE=&quot;ALL&quot; AND REMOVEUSERDATA=&quot;1&quot;" />
     <CustomAction Id="RemoveUserData" DllEntry="WixQuietExec" BinaryRef="Wix4UtilCA_X64" Execute="deferred" Impersonate="yes" Return="ignore" />
 
     <InstallExecuteSequence>
-      <Custom Action="QuitRunning" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot;" />
+      <Custom Action="QuitRunning" After="SetWixQuietExecCmdLine" Condition="REMOVE=&quot;ALL&quot; OR WIX_UPGRADE_DETECTED" />
       <Custom Action="RemoveUserData" After="RemoveFiles" Condition="REMOVE=&quot;ALL&quot; AND REMOVEUSERDATA=&quot;1&quot;" />
     </InstallExecuteSequence>
 

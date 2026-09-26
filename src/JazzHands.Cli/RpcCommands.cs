@@ -62,6 +62,14 @@ public static class RpcCommands
                 Console.Out.WriteLine($"{metadata.Name}: {changed} item(s) changed in the editor ({Where(client)}).");
             }
 
+            // The editor answers before it goes; the uninstaller needs it gone before it checks
+            // which files are in use, so wait for the process (not when it waits for exports).
+            if (built is QuitAppCommand { WaitForExports: false } && !await client.WaitForServerExitAsync(QuitTimeout).ConfigureAwait(false))
+            {
+                Fail(json, "still-running", $"The editor accepted app.quit but was still running after {QuitTimeout.TotalSeconds:0} seconds.");
+                return ExitCode.CommandError;
+            }
+
             return ExitCode.Ok;
         });
     }
@@ -170,6 +178,9 @@ public static class RpcCommands
             return error.Code == JsonRpc.MediaError ? ExitCode.MediaError : ExitCode.CommandError;
         }
     }
+
+    /// <summary>How long <c>jazz app quit --attach</c> waits for the editor's process to end.</summary>
+    internal static readonly TimeSpan QuitTimeout = TimeSpan.FromSeconds(60);
 
     private static async Task<int> AttachedAsync(bool json, Func<JazzClient, Task<int>> body)
     {

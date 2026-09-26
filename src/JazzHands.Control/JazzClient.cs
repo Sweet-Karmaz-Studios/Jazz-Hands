@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.IO.Pipes;
 using System.Net;
 using System.Net.Sockets;
@@ -84,6 +85,44 @@ public sealed class JazzClient : IAsyncDisposable
 
     /// <summary>True once the connection has gone.</summary>
     public bool IsClosed => _channel.IsClosed;
+
+    /// <summary>
+    /// Waits for the server's process (its <c>session.hello</c> pid) to end, as after
+    /// <c>app.quit</c>, which answers before the editor goes. True when it has ended, or when there
+    /// is nothing to wait for (no pid, or a server in this very process).
+    /// </summary>
+    public Task<bool> WaitForServerExitAsync(TimeSpan timeout) =>
+        Hello?["pid"]?.GetValue<int>() is int pid && pid != Environment.ProcessId
+            ? WaitForExitAsync(pid, timeout)
+            : Task.FromResult(true);
+
+    /// <summary>Waits for a process to end. True when it has, or was never there; false after the timeout.</summary>
+    public static async Task<bool> WaitForExitAsync(int pid, TimeSpan timeout)
+    {
+        Process process;
+        try
+        {
+            process = Process.GetProcessById(pid);
+        }
+        catch (ArgumentException)
+        {
+            return true;
+        }
+
+        using (process)
+        {
+            using var limit = new CancellationTokenSource(timeout);
+            try
+            {
+                await process.WaitForExitAsync(limit.Token).ConfigureAwait(false);
+                return true;
+            }
+            catch (OperationCanceledException)
+            {
+                return false;
+            }
+        }
+    }
 
     /// <summary>Connects and says hello.</summary>
     /// <param name="target">Which instance; see the remarks.</param>
