@@ -1,0 +1,52 @@
+# Licenses
+
+## Jazz Hands
+
+Copyright (c) Sweet Karmaz Studios.
+
+Jazz Hands is licensed under the **GNU General Public License, version 3** (`LICENSE.txt`). It has
+to be: it ships and links the GPL build of FFmpeg, which includes GPL components such as x264 and
+x265, and a program that links them is a derivative work under the GPL. Anyone given a copy of
+Jazz Hands is entitled to its complete corresponding source under the same licence, and may
+change and share it on the same terms.
+
+## FFmpeg
+
+`ffmpeg\` holds FFmpeg 8.1 (the libraries `avcodec`, `avformat`, `avfilter`, `avutil`, `avdevice`,
+`swresample`, `swscale`, and `ffmpeg.exe`) as built by BtbN's FFmpeg-Builds, autobuild tag
+`autobuild-2026-09-22-13-18`, the "gpl shared" build for win64. That build includes, among others,
+x264, x265, SVT-AV1, dav1d, libvpx, libopus, libvorbis, LAME and vid.stab, under the GPL version 3
+or later as a whole (`ffmpeg\LICENSE.txt`).
+
+- FFmpeg: <https://ffmpeg.org>; its source for this build: the FFmpeg repository at the commit the
+  tag names, and the build scripts at <https://github.com/BtbN/FFmpeg-Builds>, which fetch every
+  component's source.
+- FFmpeg is a trademark of Fabrice Bellard.
+
+## .NET libraries
+
+Each is used as published on nuget.org, unmodified.
+
+| Library | Licence | Where |
+|---|---|---|
+| .NET runtime, WPF, Windows Forms interop, Microsoft.Extensions.*, System.CommandLine, System.IO.Hashing, Microsoft.Data.Sqlite | MIT | <https://github.com/dotnet> |
+| C#/WinRT (WinRT.Runtime) | MIT | <https://github.com/microsoft/CsWinRT> |
+| FFmpeg.AutoGen | MIT | <https://github.com/Ruslan-B/FFmpeg.AutoGen> |
+| Vortice.Windows (Direct3D 11, Direct3D 9, DXGI, Direct2D, D3DCompiler, Mathematics) | MIT | <https://github.com/amerkoleci/Vortice.Windows> |
+| SharpGen.Runtime | MIT | <https://github.com/SharpGenTools/SharpGenTools> |
+| NAudio | MIT | <https://github.com/naudio/NAudio> |
+| CommunityToolkit.Mvvm | MIT | <https://github.com/CommunityToolkit/dotnet> |
+| AvalonDock (Dirkster) | Microsoft Public License (Ms-PL) | <https://github.com/Dirkster99/AvalonDock> |
+| Serilog and its sinks | Apache 2.0 | <https://serilog.net> |
+| Model Context Protocol C# SDK | Apache 2.0 | <https://github.com/modelcontextprotocol/csharp-sdk> |
+| SQLitePCLRaw | Apache 2.0 | <https://github.com/ericsink/SQLitePCL.raw> |
+| SQLite (e_sqlite3) | Public domain | <https://sqlite.org> |
+| Ulid | MIT | <https://github.com/Cysharp/Ulid> |
+| Humanizer | MIT | <https://github.com/Humanizr/Humanizer> |
+| JsonSchema.Net, JsonPointer.Net, Json.More.Net | MIT source; the published binaries come with the json-everything EULA | <https://github.com/json-everything/json-everything> |
+
+## Fonts and icons
+
+No fonts are shipped: titles use the fonts installed in Windows (Segoe UI by default) or a
+project's own `fonts\` folder. The icons in `Assets\` are drawn for Jazz Hands
+(`tools\JazzHands.IconGen`) and are under the same licence as the program.

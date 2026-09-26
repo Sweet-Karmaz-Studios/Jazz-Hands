@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The Jazz Hands installer (Phase 34): per user, no administrator needed, into
+  %LOCALAPPDATA%\Programs\Jazz Hands. tools\publish.ps1 builds it from the published files:
+
+    wix build installer\JazzHands.wxs -ext WixToolset.UI.wixext -ext WixToolset.Util.wixext
+      -arch x64 -d Version=1.0.0 -d Files=<published files> -d Assets=src\JazzHands.App\Assets
+
+  It installs the files, puts jazz on the PATH and adds the Start menu shortcut, and writes nothing
+  under Software\Classes: in a per-user install on the reference machine those writes (and a
+  process the uninstaller started to take them back) did not reach the user's classes, so where
+  they went could not be checked. The .jazz association and the Explorer verbs are written by the
+  editor itself when it first starts (ShellRegistration), in the person's own session. Uninstalling
+  asks a running editor to quit and removes what the installer wrote. Settings and the cache stay
+  unless REMOVEUSERDATA=1 is given to the uninstall:
+
+    msiexec /x JazzHands-1.0.0-win-x64.msi REMOVEUSERDATA=1
+
+  Unsigned (Docs/DESIGN.md, "Signing"); the classic Explorer verbs only, since the Windows 11
+  first-level menu needs a signed package.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+
+  <?define AppId = "SweetKarmazStudios.JazzHands" ?>
+
+  <Package Name="Jazz Hands"
+           Manufacturer="Sweet Karmaz Studios"
+           Version="$(Version)"
+           UpgradeCode="EBAD72A4-0034-4E0E-BAA6-9144CA00F872"
+           Scope="perUser"
+           Compressed="yes">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer Jazz Hands is already installed." />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <Icon Id="JazzIcon" SourceFile="$(Assets)\jazz.ico" />
+    <Property Id="ARPPRODUCTICON" Value="JazzIcon" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/Sweet-Karmaz-Studios/Jazz-Hands" />
+    <Property Id="ARPNOREPAIR" Value="1" />
+
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="LocalPrograms" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="Jazz Hands" />
+      </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder" />
+
+    <Feature Id="Main" Title="Jazz Hands" Description="The editor, jazz on the PATH, jazz-mcp, and .jazz files opening in the editor." Level="1" AllowAbsent="no" Display="expand" ConfigurableDirectory="INSTALLFOLDER">
+      <ComponentGroupRef Id="Program" />
+      <ComponentRef Id="PathEntry" />
+      <ComponentRef Id="StartMenu" />
+
+      <Feature Id="StartWithWindows" Title="Start Jazz Hands with Windows" Description="Starts in the notification area when you sign in, so a project or a Quick Trim opens at once. Settings can change it later." Level="2">
+        <ComponentRef Id="RunEntry" />
+      </Feature>
+    </Feature>
+
+    <!-- Everything publish.ps1 put in files\. -->
+    <ComponentGroup Id="Program" Directory="INSTALLFOLDER">
+      <Files Include="$(Files)\**" />
+    </ComponentGroup>
+
+    <!-- jazz on the user's PATH. -->
+    <Component Id="PathEntry" Directory="INSTALLFOLDER" Guid="3C2E8F5B-8A57-4B36-9A5F-6C1B9E7C2A11">
+      <Environment Id="PATH" Name="PATH" Value="[INSTALLFOLDER]" Permanent="no" Part="last" Action="set" System="no" />
+      <RegistryValue Root="HKCU" Key="Software\Sweet Karmaz Studios\Jazz Hands" Name="PathEntry" Type="integer" Value="1" KeyPath="yes" />
+      <!-- The install folder goes, whatever the editor left in it. -->
+      <util:RemoveFolderEx Id="RemoveInstallFolder" On="uninstall" Property="INSTALLFOLDER" />
+    </Component>
+
+    <!-- The Start menu shortcut carries the AppUserModelID, which the jump list and notifications key on. -->
+    <Component Id="StartMenu" Directory="ProgramMenuFolder" Guid="A1B2C3D4-5E6F-4A8B-9C0D-1E2F3A4B5C6D">
+      <Shortcut Id="StartMenuShortcut" Name="Jazz Hands" Description="Edit video" Target="[INSTALLFOLDER]JazzHands.exe" WorkingDirectory="INSTALLFOLDER" Icon="JazzIcon">
+        <ShortcutProperty Key="System.AppUserModel.ID" Value="$(AppId)" />
+      </Shortcut>
+      <RegistryValue Root="HKCU" Key="Software\Sweet Karmaz Studios\Jazz Hands" Name="StartMenu" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <Component Id="RunEntry" Directory="INSTALLFOLDER" Guid="5F6E7D8C-9B0A-4C1D-8E2F-3A4B5C6D7E8F">
+      <RegistryValue Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Run" Name="Jazz Hands" Type="string" Value="&quot;[INSTALLFOLDER]JazzHands.exe&quot; --background" KeyPath="yes" />
+    </Component>
+
+    <!--
+      Uninstalling: the editor asked to quit (it may not be running; that is fine), then everything
+      it registered for itself taken back (the verbs and association the keys above also remove,
+      and start with Windows set from Settings). Both before the files go. Quietly: no console.
+    -->
+    <SetProperty Id="QuitRunning" Value="&quot;[INSTALLFOLDER]jazz.exe&quot; app quit --attach" Before="QuitRunning" Sequence="execute" Condition="REMOVE=&quot;ALL&quot;" />
+    <CustomAction Id="QuitRunning" DllEntry="WixQuietExec" BinaryRef="Wix4UtilCA_X64" Execute="deferred" Impersonate="yes" Return="ignore" />
+    <SetProperty Id="RemoveUserData" Value="&quot;[SystemFolder]cmd.exe&quot; /c rmdir /s /q &quot;[AppDataFolder]JazzHands&quot; &amp; rmdir /s /q &quot;[LocalAppDataFolder]JazzHands&quot;" Before="RemoveUserData" Sequence="execute" Condition="REMOVE=&quot;ALL&quot; AND REMOVEUSERDATA=&quot;1&quot;" />
+    <CustomAction Id="RemoveUserData" DllEntry="WixQuietExec" BinaryRef="Wix4UtilCA_X64" Execute="deferred" Impersonate="yes" Return="ignore" />
+
+    <InstallExecuteSequence>
+      <Custom Action="QuitRunning" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot;" />
+      <Custom Action="RemoveUserData" After="RemoveFiles" Condition="REMOVE=&quot;ALL&quot; AND REMOVEUSERDATA=&quot;1&quot;" />
+    </InstallExecuteSequence>
+
+    <WixVariable Id="WixUILicenseRtf" Value="$(sys.SOURCEFILEDIR)License.rtf" />
+    <ui:WixUI Id="WixUI_FeatureTree" />
+  </Package>
+</Wix>

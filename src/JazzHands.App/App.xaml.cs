@@ -23,6 +23,9 @@ public partial class App : Application
     private bool _measuring;
     private readonly Task<Render.RenderDevice>? _device;
     private int _crashed;
+
+    /// <summary>What the uninstaller runs: remove everything registered with Windows, show nothing, exit.</summary>
+    public const string UnregisterSwitch = "--unregister";
     private Mutex? _single;
 
     /// <summary>
@@ -91,6 +94,16 @@ public partial class App : Application
         base.OnStartup(e);
 
         EditorSettings editor = EditorSettings.Store().Current;
+
+        // The uninstaller's: take back everything Windows was told, and go (Phase 34).
+        if (e.Args.Contains(UnregisterSwitch, StringComparer.Ordinal))
+        {
+            new Shell.ShellRegistration(new Shell.CurrentUserRegistry()).Unregister();
+            Shell.ShellRegistration.NotifyExplorer();
+            Log.ForContext<App>().Information("Removed the .jazz association, the Explorer verbs, the links and start with Windows");
+            Shutdown(0);
+            return;
+        }
 
         if (Shell.StartupTimes.MeasurePath(e.Args) is { } measured)
         {
@@ -396,13 +409,13 @@ public partial class App : Application
         var registration = new Shell.ShellRegistration(new Shell.CurrentUserRegistry());
         try
         {
-            // An isolated run (JAZZ_HOME: the UI tests) leaves the person's Windows alone.
-            if (!Core.JazzFolders.IsIsolated && registration.Register(exe, Path.Combine(AppContext.BaseDirectory, "Assets")))
+            // The portable copy, and an isolated run (JAZZ_HOME: the UI tests), leave Windows alone.
+            if (Shell.Portable.MayRegister && registration.Register(exe, Path.Combine(AppContext.BaseDirectory, "Assets")))
             {
                 Shell.ShellRegistration.NotifyExplorer();
             }
 
-            if (!Core.JazzFolders.IsIsolated && registration.StartsWithWindows != editor.Current.StartWithWindows)
+            if (Shell.Portable.MayRegister && registration.StartsWithWindows != editor.Current.StartWithWindows)
             {
                 registration.SetStartWithWindows(editor.Current.StartWithWindows, exe);
             }
@@ -424,7 +437,7 @@ public partial class App : Application
             playback.ScrubAudio = settings.ScrubAudio;
             try
             {
-                if (registration.StartsWithWindows != settings.StartWithWindows)
+                if (Shell.Portable.MayRegister && registration.StartsWithWindows != settings.StartWithWindows)
                 {
                     registration.SetStartWithWindows(settings.StartWithWindows, exe);
                 }
@@ -438,7 +451,7 @@ public partial class App : Application
         // The jump list follows the recent projects; an isolated run leaves the person's alone.
         void ApplyJumpList(RecentProjects projects)
         {
-            if (!Core.JazzFolders.IsIsolated)
+            if (Shell.Portable.MayRegister)
             {
                 System.Windows.Shell.JumpList.SetJumpList(this, Shell.JumpLists.Build(projects.Paths, exe, LogSetup.DefaultLogDirectory));
             }

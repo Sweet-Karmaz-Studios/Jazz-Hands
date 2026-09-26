@@ -38,7 +38,7 @@
     <Company>Sweet Karmaz Studios</Company>
     <Authors>Sweet Karmaz Studios</Authors>
     <Copyright>Copyright (c) Sweet Karmaz Studios</Copyright>
-    <VersionPrefix>0.1.0</VersionPrefix>
+    <VersionPrefix>1.0.0</VersionPrefix>
     <RootNamespace>$(MSBuildProjectName)</RootNamespace>
     <!-- AssemblyName is deliberately not set here. It defaults to the project name already, and
          setting it in Directory.Build.props breaks WPF: the XAML markup compiler builds a
