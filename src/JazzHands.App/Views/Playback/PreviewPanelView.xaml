@@ -119,8 +119,15 @@
                 BorderBrush="{DynamicResource Brush.Border}"
                 BorderThickness="0,1,0,0"
                 Padding="8,4">
-            <DockPanel LastChildFill="True">
-                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
+            <!-- Three columns, the transport in the middle at its own width: in a narrow preview the
+                 readouts either side are clipped, never the play button. -->
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left" ClipToBounds="True">
                     <TextBlock Text="{Binding Timecode, Mode=OneWay}"
                                FontFamily="{DynamicResource Font.Mono}"
                                FontSize="{DynamicResource Text.Heading}"
@@ -155,7 +162,7 @@
                     </TextBlock>
                 </StackPanel>
 
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right" ClipToBounds="True">
                     <TextBlock Text="{Binding InOut, Mode=OneWay}"
                                Margin="0,0,8,0"
                                VerticalAlignment="Center"
@@ -202,7 +209,7 @@
                             ToolTip="Full screen on the other monitor (F11)" AutomationProperties.Name="Full screen" />
                 </StackPanel>
 
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" ClipToBounds="True">
+                <StackPanel Grid.Column="1" Margin="12,0" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
                     <Button Style="{StaticResource Button.Icon}" Content="&#xE892;"
                             Command="{Binding GoToStartCommand, Mode=OneWay}"
                             ToolTip="Go to start (Home)" AutomationProperties.Name="Go to start" />
@@ -233,7 +240,7 @@
                             Command="{Binding SetOutCommand, Mode=OneWay}"
                             ToolTip="Mark out (O); go to out (Shift+O)" AutomationProperties.Name="Mark out" />
                 </StackPanel>
-            </DockPanel>
+            </Grid>
         </Border>
     </Grid>
 </UserControl>

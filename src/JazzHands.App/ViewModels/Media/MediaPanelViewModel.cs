@@ -160,9 +160,12 @@ public sealed partial class MediaPanelViewModel : ToolViewModel
     /// <summary>How many items the project has, whatever the filter is showing.</summary>
     public int TotalCount => _all.Count;
 
+    /// <summary>True when the project has no media: the list says how to bring some in.</summary>
+    public bool IsEmpty => _all.Count == 0;
+
     /// <summary>What the status bar says about how much of the bin is on screen.</summary>
     public string CountSummary => Items.Count == TotalCount
-        ? $"{TotalCount} items"
+        ? (TotalCount == 1 ? "1 item" : $"{TotalCount} items")
         : $"{Items.Count} of {TotalCount} items";
 
     /// <summary>True when the table is showing. Bound to the list's visibility.</summary>
@@ -212,6 +215,7 @@ public sealed partial class MediaPanelViewModel : ToolViewModel
         BuildFolders();
         ApplyFilter();
         OnPropertyChanged(nameof(TotalCount));
+        OnPropertyChanged(nameof(IsEmpty));
         SuggestProxies();
 
         foreach (MediaItemViewModel row in rebuilt)

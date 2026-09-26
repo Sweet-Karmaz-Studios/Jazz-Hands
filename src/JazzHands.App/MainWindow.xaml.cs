@@ -40,7 +40,12 @@ public partial class MainWindow : Window, Shell.IAppWindow
         // The layout can be saved and restored only once the docking manager holds the panels.
         // Safe mode starts from the built-in layouts in a folder of its own, whatever was saved.
         string? layouts = Shell.SafeMode.Folder is { } safe ? System.IO.Path.Combine(safe, "layouts") : null;
-        Loaded += (_, _) => model.AttachWorkspaces(new Shell.LayoutService(Dock, ContentFor, layouts, notify: model.Notify));
+        Loaded += (_, _) =>
+        {
+            FitProgramPane();
+            model.AttachWorkspaces(new Shell.LayoutService(Dock, ContentFor, layouts, notify: model.Notify));
+            Dock.SizeChanged += (_, e) => KeepProgramPaneShare(e);
+        };
 
         // The status bar reads the playhead and the queue four times a second while the window is up.
         if (model.StatusBar is { } status)
@@ -51,6 +56,38 @@ public partial class MainWindow : Window, Shell.IAppWindow
             Closed += (_, _) => timer.Stop();
             _statusTimer = timer;
         }
+    }
+
+    /// <summary>
+    /// Gives the preview about 55% of the middle column and the timeline the rest, for the window's
+    /// size now, before the built-in layout is captured. A fixed height (AvalonDock needs the
+    /// preview to have one) left the timeline a sliver in a 1366x768 window.
+    /// </summary>
+    private void FitProgramPane()
+    {
+        if (Dock.Layout.Descendents().OfType<LayoutAnchorablePane>().FirstOrDefault(pane => pane.Name == Shell.PanelPlacement.ProgramPane) is { } program
+            && Dock.ActualHeight > 0)
+        {
+            program.DockHeight = new GridLength(Math.Max(program.DockMinHeight, Math.Round(Dock.ActualHeight * 0.55)));
+        }
+    }
+
+    /// <summary>
+    /// Keeps the preview's share of the column as the window changes height, so shrinking the
+    /// window shrinks the preview and the timeline alike instead of the timeline alone, and always
+    /// leaves the timeline room for a couple of tracks.
+    /// </summary>
+    private void KeepProgramPaneShare(SizeChangedEventArgs e)
+    {
+        if (!e.HeightChanged || e.PreviousSize.Height <= 0
+            || Dock.Layout.Descendents().OfType<LayoutAnchorablePane>().FirstOrDefault(pane => pane.Name == Shell.PanelPlacement.ProgramPane) is not { DockHeight.IsAbsolute: true } program)
+        {
+            return;
+        }
+
+        double share = program.DockHeight.Value / e.PreviousSize.Height;
+        double height = Math.Clamp(Math.Round(e.NewSize.Height * share), program.DockMinHeight, Math.Max(program.DockMinHeight, e.NewSize.Height - 240));
+        program.DockHeight = new GridLength(height);
     }
 
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Style, Style> DockTabs = new();
@@ -212,7 +249,9 @@ public partial class MainWindow : Window, Shell.IAppWindow
     /// <summary>Shows panels and puts each in front of its pane.</summary>
     private void BringForward(IReadOnlyList<string> ids)
     {
-        foreach (LayoutAnchorable panel in Dock.Layout.Descendents().OfType<LayoutAnchorable>())
+        // A list first: showing a hidden panel moves it out of the layout's hidden set, and
+        // enumerating the layout while it changes threw (Window, a hidden panel crashed the editor).
+        foreach (LayoutAnchorable panel in Dock.Layout.Descendents().OfType<LayoutAnchorable>().ToList())
         {
             if (ids.Contains(panel.ContentId))
             {

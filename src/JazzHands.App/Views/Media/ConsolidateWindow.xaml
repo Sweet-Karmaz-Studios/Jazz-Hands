@@ -33,7 +33,7 @@
         <TextBlock Margin="0,4,0,0" Text="{Binding Status, Mode=OneWay}" Foreground="{DynamicResource Brush.Text.Secondary}" TextWrapping="Wrap" />
         <StackPanel Margin="0,12,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button Style="{StaticResource Button.Text}" Content="Cancel" IsCancel="True" Command="{Binding CancelCommand, Mode=OneWay}" AutomationProperties.Name="Cancel" />
-            <Button Style="{StaticResource Button.Text}" Margin="8,0,0,0" Content="Go" IsDefault="True" Command="{Binding RunCommand, Mode=OneWay}" AutomationProperties.Name="Gather the project" />
+            <Button Style="{StaticResource Button.Primary}" Margin="8,0,0,0" Content="Go" IsDefault="True" Command="{Binding RunCommand, Mode=OneWay}" AutomationProperties.Name="Gather the project" />
         </StackPanel>
     </StackPanel>
 </Window>

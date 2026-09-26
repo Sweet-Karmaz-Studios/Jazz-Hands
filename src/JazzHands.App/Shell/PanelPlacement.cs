@@ -21,7 +21,7 @@ public sealed class PanelPlacement : ILayoutUpdateStrategy
     /// <summary>The pane on the right, where the inspector goes, with the curves and the history.</summary>
     public const string InspectorPane = "InspectorPane";
 
-    /// <summary>The pane under the inspector, for the panels that watch: meters, mixer, export queue, console, log.</summary>
+    /// <summary>The pane under the inspector, for the panels that watch: scopes, meters, export queue, console, log.</summary>
     public const string UtilityPane = "UtilityPane";
 
     /// <summary>Which pane each panel opens in when no saved layout says; the rest go to <see cref="ToolsPane"/>.</summary>
@@ -31,8 +31,9 @@ public sealed class PanelPlacement : ILayoutUpdateStrategy
         ["inspector"] = InspectorPane,
         ["curves"] = InspectorPane,
         ["history"] = InspectorPane,
+        ["mixer"] = ProgramPane,
+        ["scopes"] = UtilityPane,
         ["meters"] = UtilityPane,
-        ["mixer"] = UtilityPane,
         ["exportQueue"] = UtilityPane,
         ["console"] = UtilityPane,
         ["log"] = UtilityPane,

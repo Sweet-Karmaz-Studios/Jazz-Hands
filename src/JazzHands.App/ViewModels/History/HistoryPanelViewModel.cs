@@ -89,7 +89,7 @@ public sealed partial class HistoryPanelViewModel : ToolViewModel
         }
 
         int undone = history.Count(entry => entry.IsUndone);
-        Status = string.Create(CultureInfo.InvariantCulture, $"{history.Length - undone} step(s){(undone > 0 ? $", {undone} undone" : string.Empty)}");
+        Status = string.Create(CultureInfo.InvariantCulture, $"{Services.Words.Count(history.Length - undone, "step")}{(undone > 0 ? $", {undone} undone" : string.Empty)}");
     }
 
     /// <summary>Takes the project to just after a step: undoes what came after, or redoes up to it.</summary>

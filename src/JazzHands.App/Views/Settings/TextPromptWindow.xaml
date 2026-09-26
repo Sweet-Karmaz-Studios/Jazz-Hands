@@ -13,7 +13,7 @@
         <TextBox x:Name="Input" AutomationProperties.Name="Answer" />
         <StackPanel Margin="0,16,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button Style="{StaticResource Button.Text}" Content="Cancel" IsCancel="True" AutomationProperties.Name="Cancel" />
-            <Button Style="{StaticResource Button.Text}" Margin="8,0,0,0" Content="OK" IsDefault="True" Click="OnOk" AutomationProperties.Name="OK" />
+            <Button Style="{StaticResource Button.Primary}" Margin="8,0,0,0" Content="OK" IsDefault="True" Click="OnOk" AutomationProperties.Name="OK" />
         </StackPanel>
     </StackPanel>
 </Window>

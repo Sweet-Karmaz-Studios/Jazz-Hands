@@ -329,8 +329,8 @@ public sealed partial class ExportDialogViewModel : ObservableObject
     /// <summary>A few words on what a mode would do, beside it in the list.</summary>
     private static string Availability(ExportPlan plan) => plan switch
     {
-        { Smart: { } smart } => string.Create(CultureInfo.InvariantCulture, $"Exact cuts, {smart.EncodedFrames} frame(s) encoded again."),
-        { Mode: ExportMode.Copy, Snaps.Length: > 0 } => string.Create(CultureInfo.InvariantCulture, $"{plan.Snaps.Length} cut(s) move to keyframes."),
+        { Smart: { } smart } => string.Create(CultureInfo.InvariantCulture, $"Exact cuts, {Words.Count(smart.EncodedFrames, "frame")} encoded again."),
+        { Mode: ExportMode.Copy, Snaps.Length: > 0 } => string.Create(CultureInfo.InvariantCulture, $"{Words.Count(plan.Snaps.Length, "cut")} move to keyframes."),
         { Mode: ExportMode.Copy } => "Every cut is on a keyframe.",
         _ => string.Empty,
     };
@@ -546,9 +546,9 @@ public sealed partial class ExportDialogViewModel : ObservableObject
         }
 
         string what = plan.Mode == ExportMode.Copy
-            ? $"Copy, {(plan.Copy!.AudioStreams.IsEmpty ? "no sound" : $"{plan.Copy.AudioStreams.Length} sound stream(s)")}"
+            ? $"Copy, {(plan.Copy!.AudioStreams.IsEmpty ? "no sound" : Words.Count(plan.Copy.AudioStreams.Length, "sound stream"))}"
             : plan.Smart is { } smart
-                ? string.Create(CultureInfo.InvariantCulture, $"Smart cut, {smart.EncodedFrames} frame(s) encoded again with {smart.Encoders[0]}, {(smart.AudioStreams.IsEmpty ? "no sound" : $"{smart.AudioStreams.Length} sound stream(s)")}")
+                ? string.Create(CultureInfo.InvariantCulture, $"Smart cut, {Words.Count(smart.EncodedFrames, "frame")} encoded again with {smart.Encoders[0]}, {(smart.AudioStreams.IsEmpty ? "no sound" : Words.Count(smart.AudioStreams.Length, "sound stream"))}")
             : plan.Video is { } video
                 ? string.Create(CultureInfo.InvariantCulture, $"Encode {video.Width}x{video.Height} {video.Codec} at {video.FrameRate.ToDouble():0.###} fps{(plan.Audio is null ? string.Empty : $" with {plan.Audio.Encoder}")}")
                 : $"Sound only, {plan.Audio!.Encoder}";
@@ -558,11 +558,11 @@ public sealed partial class ExportDialogViewModel : ObservableObject
                 ? subtitles.Delivery switch
                 {
                     SubtitleDelivery.Burn => ", subtitles burned in",
-                    SubtitleDelivery.Sidecar => $", {subtitles.Tracks.Length} subtitle file(s) beside it",
-                    _ => $", {subtitles.Tracks.Length} subtitle stream(s)",
+                    SubtitleDelivery.Sidecar => $", {Words.Count(subtitles.Tracks.Length, "subtitle file")} beside it",
+                    _ => $", {Words.Count(subtitles.Tracks.Length, "subtitle stream")}",
                 }
                 : string.Empty,
-            plan.Chapters.IsEmpty ? string.Empty : $", {plan.Chapters.Length} chapter(s)");
+            plan.Chapters.IsEmpty ? string.Empty : $", {Words.Count(plan.Chapters.Length, "chapter")}");
 
         Summary = $"{what}, {Timecode.FormatClock(plan.Duration)}{extras}, to {Path.GetFileName(plan.OutputPath)}";
         Estimate = plan.Estimate is { } estimate

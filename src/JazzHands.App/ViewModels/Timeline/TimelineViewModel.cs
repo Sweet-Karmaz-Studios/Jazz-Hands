@@ -71,6 +71,8 @@ public sealed partial class TimelineViewModel : DocumentViewModel
     private bool _selectionQueued;
     private Flicks _playhead;
     private bool _fitted;
+    private bool _viewportKnown;
+    private double _fittedPixelsPerSecond = double.NaN;
     private readonly Lock _flashGate = new();
     private readonly HashSet<string> _pendingFlash = new(StringComparer.Ordinal);
     private bool _flashQueued;
@@ -127,6 +129,9 @@ public sealed partial class TimelineViewModel : DocumentViewModel
 
     /// <summary>What is on it.</summary>
     public TimelineContent Content { get; private set; } = TimelineContent.Empty;
+
+    /// <summary>True when the sequence has no clips: the timeline says how to begin.</summary>
+    public bool IsEmpty => !Content.Clips.Any();
 
     /// <summary>Where the view is: zoom, scroll and the track rows.</summary>
     public TimelineGeometry Geometry { get; private set; } = TimelineGeometry.Empty;
@@ -219,15 +224,24 @@ public sealed partial class TimelineViewModel : DocumentViewModel
 
         ViewportWidth = width;
         ViewportHeight = height;
+        _viewportKnown = true;
 
-        if (!_fitted && Content.ClipCount > 0)
+        // Fitted once there are clips, and fitted again as the width settles for as long as the
+        // zoom is still the fitted one: a tab is first measured narrow while it is laid out.
+        if (Content.ClipCount > 0 && (!_fitted || Geometry.PixelsPerSecond == _fittedPixelsPerSecond))
         {
-            _fitted = true;
-            SetGeometry(Geometry.Fit(Content.Sequence.Duration, width));
+            FitView();
             return;
         }
 
         SetGeometry(Geometry with { VerticalOffset = Math.Clamp(Geometry.VerticalOffset, 0.0, VerticalMaximum) });
+    }
+
+    private void FitView()
+    {
+        _fitted = true;
+        SetGeometry(Geometry.Fit(Content.Sequence.Duration, ViewportWidth));
+        _fittedPixelsPerSecond = Geometry.PixelsPerSecond;
     }
 
     /// <summary>Fits the whole sequence in the view.</summary>
@@ -412,10 +426,19 @@ public sealed partial class TimelineViewModel : DocumentViewModel
         UpdateQuickTrim(project);
 
         OnPropertyChanged(nameof(Content));
+        OnPropertyChanged(nameof(IsEmpty));
         OnPropertyChanged(nameof(Magnetic));
         OnPropertyChanged(nameof(ScrollMaximum));
         OnPropertyChanged(nameof(VerticalMaximum));
         OnPropertyChanged(nameof(Timecode));
+
+        // The first clips to arrive after the timeline has its size are fitted to the view, as they
+        // are when there are clips before it has one: a Quick Trim's tab is sized before its
+        // recording lands on it, and opened at the default zoom the recording was a sliver.
+        if (!_fitted && _viewportKnown && Content.ClipCount > 0)
+        {
+            FitView();
+        }
 
         // A clip that went away takes its ghost with it; one that moved is where the model says.
         ClearGesture();

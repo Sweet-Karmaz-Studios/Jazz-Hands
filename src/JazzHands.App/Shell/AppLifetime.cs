@@ -161,7 +161,7 @@ public sealed class AppLifetime : IAppController
         {
             throw new CommandException(
                 "exports-running",
-                $"{running} export(s) are still running. Quit with --wait-for-exports to let them finish first, or --force to cancel them.");
+                $"{(running == 1 ? "1 export is" : $"{running} exports are")} still running. Quit with --wait-for-exports to let them finish first, or --force to cancel them.");
         }
 
         _ui.Post(() =>

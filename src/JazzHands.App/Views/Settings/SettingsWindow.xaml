@@ -241,7 +241,7 @@
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                 <Button Style="{StaticResource Button.Text}" Content="Cancel" IsCancel="True" Command="{Binding CancelCommand, Mode=OneWay}" AutomationProperties.Name="Cancel" />
                 <Button Style="{StaticResource Button.Text}" Margin="8,0,0,0" Content="Apply" Command="{Binding ApplyCommand, Mode=OneWay}" AutomationProperties.Name="Apply" />
-                <Button Style="{StaticResource Button.Text}" Margin="8,0,0,0" Content="OK" IsDefault="True" Command="{Binding OkCommand, Mode=OneWay}" AutomationProperties.Name="OK" />
+                <Button Style="{StaticResource Button.Primary}" Margin="8,0,0,0" Content="OK" IsDefault="True" Command="{Binding OkCommand, Mode=OneWay}" AutomationProperties.Name="OK" />
             </StackPanel>
             <TextBlock Text="{Binding Status, Mode=OneWay}" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" />
         </DockPanel>

@@ -127,7 +127,7 @@ public sealed partial class MediaPanelViewModel
         ICommand[] reprobes = [.. _states.Where(pair => pair.Value == MediaFileState.Changed).Select(pair => (ICommand)new ReprobeMediaCommand(pair.Key))];
         if (reprobes.Length > 0)
         {
-            await RunAsync(new BatchCommand([.. reprobes], "Update changed media"), $"Updated {reprobes.Length} changed file(s).").ConfigureAwait(true);
+            await RunAsync(new BatchCommand([.. reprobes], "Update changed media"), $"Updated {Services.Words.Count(reprobes.Length, "changed file")}.").ConfigureAwait(true);
         }
     }
 

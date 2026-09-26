@@ -250,6 +250,22 @@
 
             <timeline:TimelineControl Grid.Column="1" Grid.Row="0" x:Name="Timeline" AutomationProperties.Name="Timeline" />
 
+            <!-- An empty sequence says how to begin; it lets the mouse through to the timeline. -->
+            <TextBlock Grid.Column="1"
+                       Grid.Row="0"
+                       Margin="24,64,24,0"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Top"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       IsHitTestVisible="False"
+                       Foreground="{DynamicResource Brush.Text.Secondary}"
+                       Visibility="{Binding IsEmpty, Mode=OneWay, Converter={StaticResource Visible}}">
+                <Run Text="Drag media from the Media panel onto a track to start." />
+                <LineBreak />
+                <Run Text="Space plays, J K L shuttle, I and O mark in and out, Ctrl+K splits at the playhead, C is the razor." />
+            </TextBlock>
+
             <ScrollBar Grid.Column="2"
                        Grid.Row="0"
                        Orientation="Vertical"
@@ -402,7 +418,7 @@
 
                     <Button Grid.Row="4"
                             Margin="0,8,0,0"
-                            Style="{StaticResource Button.Text}"
+                            Style="{StaticResource Button.Primary}"
                             HorizontalAlignment="Right"
                             Content="Export..."
                             Command="{Binding ExportCommand, Mode=OneWay}"

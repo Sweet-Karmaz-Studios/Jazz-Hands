@@ -110,6 +110,9 @@ public partial class App : Application
             return;
         }
 
+        // Every window's frame dark, like the rest of the editor.
+        Shell.DarkTitleBar.ForEveryWindow();
+
         // The taskbar, the jump list and notifications key on this; it must come before any window.
         if (!spike)
         {

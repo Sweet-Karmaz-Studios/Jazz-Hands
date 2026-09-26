@@ -326,7 +326,7 @@
                     IsCancel="True"
                     Command="{Binding CancelCommand, Mode=OneWay}"
                     AutomationProperties.Name="Cancel" />
-            <Button Style="{StaticResource Button.Text}"
+            <Button Style="{StaticResource Button.Primary}"
                     Margin="8,0,0,0"
                     Content="Add to queue"
                     IsDefault="True"

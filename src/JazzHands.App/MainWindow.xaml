@@ -200,8 +200,8 @@
                          panels that watch (meters, the export queue, the console, the log), so no pane
                          holds so many tabs that their names are cut short. -->
                     <layout:LayoutPanel Orientation="Vertical" DockWidth="380">
-                        <layout:LayoutAnchorablePane Name="InspectorPane" DockHeight="*" />
-                        <layout:LayoutAnchorablePane Name="UtilityPane" DockHeight="320" DockMinHeight="120" />
+                        <layout:LayoutAnchorablePane Name="InspectorPane" DockHeight="2*" />
+                        <layout:LayoutAnchorablePane Name="UtilityPane" DockHeight="*" DockMinHeight="120" />
                     </layout:LayoutPanel>
                 </layout:LayoutPanel>
             </layout:LayoutRoot>

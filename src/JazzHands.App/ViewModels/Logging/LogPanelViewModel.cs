@@ -113,7 +113,7 @@ public sealed partial class LogPanelViewModel : ToolViewModel
         }
 
         _copy?.Invoke(text.ToString());
-        Status = string.Create(CultureInfo.InvariantCulture, $"Copied {Rows.Count} line(s).");
+        Status = string.Create(CultureInfo.InvariantCulture, $"Copied {Services.Words.Count(Rows.Count, "line")}.");
     }
 
     /// <summary>Empties the list and the ring.</summary>

@@ -19,7 +19,7 @@ public sealed record WorkspaceDefinition(string Name, IReadOnlyList<string> Show
             ["color", "inspector", "preview"]),
         new("Audio",
             ["mixer", "meters", "media", "inspector", "preview", "markers"],
-            ["mixer", "inspector", "preview"]),
+            ["mixer", "inspector"]),
         new("Trim",
             ["media", "markers", "history", "preview"],
             ["media", "preview"]),

@@ -285,7 +285,7 @@ public sealed partial class KeymapEditorViewModel : ObservableObject
         Input.Keymap imported = Input.Keymap.Load(path, out IReadOnlyList<string> problems);
         Load(imported.Bindings);
         Status = problems.Count > 0
-            ? $"Imported, with {problems.Count} line(s) skipped: {problems[0]}"
+            ? $"Imported, with {Services.Words.Count(problems.Count, "line")} skipped: {problems[0]}"
             : "Imported. Save to use it.";
     }
 

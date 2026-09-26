@@ -106,7 +106,7 @@
 
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="180" MinWidth="120" />
+                <ColumnDefinition Width="120" MinWidth="80" />
                 <ColumnDefinition Width="4" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
@@ -288,6 +288,16 @@
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
+
+            <!-- An empty bin says how to fill it. -->
+            <TextBlock Grid.Column="2"
+                       Margin="12,36,12,0"
+                       VerticalAlignment="Top"
+                       TextWrapping="Wrap"
+                       IsHitTestVisible="False"
+                       Foreground="{DynamicResource Brush.Text.Secondary}"
+                       Text="No media yet. Import (Ctrl+I) brings in recordings, music and images; then drag them onto the timeline."
+                       Visibility="{Binding IsEmpty, Mode=OneWay, Converter={StaticResource BoolToVisible}}" />
         </Grid>
 
         <StatusBar Grid.Row="3"
