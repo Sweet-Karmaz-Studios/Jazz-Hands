@@ -382,6 +382,18 @@ Show the editor's window and bring it to the front.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+### `jazz app unregister <project>`
+
+Remove Jazz Hands from Windows (file association, Explorer verbs, start with Windows) before uninstalling.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--no-save` | Do not write the project back. |
+
 ## `jazz audio`
 
 Sound on clips: gain, pan, fades, channel maps, muting a stream, detaching sound; the master volume and limiter; the meters.

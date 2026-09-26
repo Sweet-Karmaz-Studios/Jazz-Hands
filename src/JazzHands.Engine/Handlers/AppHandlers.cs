@@ -50,3 +50,11 @@ public sealed class QuitAppHandler : ICommandHandler<QuitAppCommand>
         return AppHelp.Drive(project, context, app => app.Quit(command.Force, command.WaitForExports));
     }
 }
+
+/// <summary>Takes the editor's registration back from Windows.</summary>
+public sealed class UnregisterAppHandler : ICommandHandler<UnregisterAppCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, UnregisterAppCommand command, HandlerContext context) =>
+        AppHelp.Drive(project, context, app => app.Unregister());
+}

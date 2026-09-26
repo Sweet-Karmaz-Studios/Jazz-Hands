@@ -152,6 +152,9 @@
                 <TextBlock Style="{StaticResource Note}" Margin="0,0,0,12" Text="Running in the notification area, exports finish and jazz --attach and Claude Code stay connected. Right-click its icon to quit." />
                 <CheckBox Style="{StaticResource CheckBox.Dark}" Margin="0,0,0,8" Content="Windows notifications when exports finish or fail and proxies are ready" IsChecked="{Binding WindowsNotifications, Mode=TwoWay}" />
                 <CheckBox Style="{StaticResource CheckBox.Dark}" Margin="0,0,0,8" Content="A notification when Claude Code or another client attaches" IsChecked="{Binding NotifyClientAttached, Mode=TwoWay}" />
+                <TextBlock Margin="0,16,0,4" Text="Uninstalling" Foreground="{DynamicResource Brush.Text.Secondary}" />
+                <TextBlock Style="{StaticResource Note}" Margin="0,0,0,8" Text="Jazz Hands tells Windows about .jazz files, its Explorer verbs and starting with Windows itself, so the uninstaller cannot take them back. Remove them here first, then uninstall." />
+                <Button Style="{StaticResource Button.Text}" HorizontalAlignment="Left" Content="Remove from Windows" Command="{Binding RemoveFromWindowsCommand, Mode=OneWay}" AutomationProperties.Name="Remove from Windows" />
             </StackPanel>
 
             <!-- Keymap -->

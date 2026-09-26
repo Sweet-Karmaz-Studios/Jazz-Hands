@@ -24,7 +24,7 @@ public partial class App : Application
     private readonly Task<Render.RenderDevice>? _device;
     private int _crashed;
 
-    /// <summary>What the uninstaller runs: remove everything registered with Windows, show nothing, exit.</summary>
+    /// <summary>The step before uninstalling: remove everything registered with Windows, show nothing, exit.</summary>
     public const string UnregisterSwitch = "--unregister";
     private Mutex? _single;
 
@@ -95,11 +95,10 @@ public partial class App : Application
 
         EditorSettings editor = EditorSettings.Store().Current;
 
-        // The uninstaller's: take back everything Windows was told, and go (Phase 34).
+        // Before uninstalling: take back everything Windows was told, and go (Phase 34).
         if (e.Args.Contains(UnregisterSwitch, StringComparer.Ordinal))
         {
-            new Shell.ShellRegistration(new Shell.CurrentUserRegistry()).Unregister();
-            Shell.ShellRegistration.NotifyExplorer();
+            Shell.ShellRegistration.UnregisterCurrentUser();
             Log.ForContext<App>().Information("Removed the .jazz association, the Explorer verbs, the links and start with Windows");
             Shutdown(0);
             return;

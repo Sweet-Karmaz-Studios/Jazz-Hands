@@ -287,6 +287,26 @@ public sealed partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     private void Cancel() => CloseRequested?.Invoke(this, EventArgs.Empty);
 
+    /// <summary>
+    /// Takes the .jazz association, the Explorer verbs and start with Windows back from Windows
+    /// (<c>app.unregister</c>), the step before uninstalling.
+    /// </summary>
+    [RelayCommand]
+    public async Task RemoveFromWindowsAsync()
+    {
+        var problems = new List<string>();
+        if (await Run(new UnregisterAppCommand(), problems).ConfigureAwait(true))
+        {
+            StartWithWindows = false;
+            _appliedEditor = _appliedEditor with { StartWithWindows = false };
+            Status = "Removed from Windows. Uninstall Jazz Hands now; if it starts again first, it registers .jazz files and the Explorer verbs again.";
+        }
+        else
+        {
+            Status = string.Join(" ", problems);
+        }
+    }
+
     private async Task<bool> Run(ICommand command, List<string> problems)
     {
         CommandResult result = await _session.ExecuteAsync(command).ConfigureAwait(true);

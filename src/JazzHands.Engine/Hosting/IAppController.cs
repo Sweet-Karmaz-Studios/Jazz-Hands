@@ -24,4 +24,10 @@ public interface IAppController
     /// <param name="force">Quit whatever is unsaved or running.</param>
     /// <param name="waitForExports">Let the exports finish first.</param>
     void Quit(bool force, bool waitForExports);
+
+    /// <summary>
+    /// Removes the <c>.jazz</c> association, the Explorer verbs, the links and start with Windows,
+    /// or refuses with <c>not-registered</c> in a copy that leaves Windows alone.
+    /// </summary>
+    void Unregister();
 }

@@ -74,6 +74,7 @@ public sealed class AppLifetime : IAppController
     private readonly SettingsSection<EditorSettings> _editor;
     private readonly IReadOnlyList<IQuietWhileHidden> _quiet;
     private readonly Action _shutdown;
+    private readonly Action? _unregister;
     private IAppWindow? _window;
     private Action<string, string>? _notify;
     private Func<Task<bool>>? _readyToClose;
@@ -89,7 +90,8 @@ public sealed class AppLifetime : IAppController
     /// <param name="editor">The editor's settings: close to the notification area or quit.</param>
     /// <param name="quiet">What stops while hidden.</param>
     /// <param name="shutdown">Ends the application; its exit disposes everything in order.</param>
-    public AppLifetime(IUiDispatcher ui, ISession session, IExportService? exports, SettingsSection<EditorSettings> editor, IEnumerable<IQuietWhileHidden> quiet, Action shutdown)
+    /// <param name="unregister">Takes the registration back from Windows; null in a copy that never registers.</param>
+    public AppLifetime(IUiDispatcher ui, ISession session, IExportService? exports, SettingsSection<EditorSettings> editor, IEnumerable<IQuietWhileHidden> quiet, Action shutdown, Action? unregister = null)
     {
         ArgumentNullException.ThrowIfNull(ui);
         ArgumentNullException.ThrowIfNull(session);
@@ -102,6 +104,7 @@ public sealed class AppLifetime : IAppController
         _editor = editor;
         _quiet = [.. quiet];
         _shutdown = shutdown;
+        _unregister = unregister;
         _exports?.Changed += (_, _) => _ui.Post(QuitIfExportsDone);
     }
 
@@ -176,6 +179,26 @@ public sealed class AppLifetime : IAppController
 
             QuitNow();
         });
+    }
+
+    /// <inheritdoc />
+    public void Unregister()
+    {
+        if (_unregister is null)
+        {
+            throw new CommandException(
+                "not-registered",
+                "This copy of Jazz Hands does not register itself with Windows (it is portable, or isolated with JAZZ_HOME), so there is nothing to remove.");
+        }
+
+        // The setting first, or applying it would put the Run entry straight back.
+        if (_editor.Current.StartWithWindows)
+        {
+            _editor.Update(current => current with { StartWithWindows = false });
+        }
+
+        _unregister();
+        _log.Information("Removed the .jazz association, the Explorer verbs, the links and start with Windows");
     }
 
     /// <summary>

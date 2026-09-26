@@ -167,6 +167,16 @@ public sealed partial class ShellRegistration
         _registry.Delete(Run, RunValue);
     }
 
+    /// <summary>
+    /// Removes the registration from this user's own registry and tells Explorer: what Settings'
+    /// Remove from Windows, <c>app.unregister</c> and <c>JazzHands.exe --unregister</c> do.
+    /// </summary>
+    public static void UnregisterCurrentUser()
+    {
+        new ShellRegistration(new CurrentUserRegistry()).Unregister();
+        NotifyExplorer();
+    }
+
     /// <summary>True when Jazz Hands starts with Windows.</summary>
     public bool StartsWithWindows => _registry.Get(Run, RunValue) is not null;
 

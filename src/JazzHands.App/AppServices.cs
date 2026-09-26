@@ -343,7 +343,8 @@ public static class AppServices
             provider.GetService<IExportService>(),
             provider.GetRequiredService<Engine.Settings.SettingsSection<EditorSettings>>(),
             provider.GetServices<Shell.IQuietWhileHidden>(),
-            () => System.Windows.Application.Current?.Shutdown()));
+            () => System.Windows.Application.Current?.Shutdown(),
+            Shell.Portable.MayRegister ? Shell.ShellRegistration.UnregisterCurrentUser : null));
         services.AddSingleton<Engine.Hosting.IAppController>(provider => provider.GetRequiredService<Shell.AppLifetime>());
         services.AddSingleton(provider => new Shell.TrayMenu(
             provider.GetRequiredService<ISession>(),
