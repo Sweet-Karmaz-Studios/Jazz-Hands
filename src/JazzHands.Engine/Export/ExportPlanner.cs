@@ -295,7 +295,7 @@ public static class ExportPlanner
 
         if (copy is not null && request.Mode != ExportMode.Encode)
         {
-            if (request.Mode == ExportMode.Auto && !PresetMatches(preset, copy, settings, reasons))
+            if (request.Mode == ExportMode.Auto && !PresetMatches(preset, copy, settings, sequence.QuickTrim is not null, reasons))
             {
                 copy = null;
             }
@@ -762,7 +762,7 @@ public static class ExportPlanner
     }
 
     /// <summary>In Auto, a copy only when it is also what the preset would have written.</summary>
-    private static bool PresetMatches(ExportPreset preset, CopySource copy, ProjectSettings settings, List<string> reasons)
+    private static bool PresetMatches(ExportPreset preset, CopySource copy, ProjectSettings settings, bool quickTrim, List<string> reasons)
     {
         if (preset.Video is not { } video)
         {
@@ -808,8 +808,45 @@ public static class ExportPlanner
             return false;
         }
 
+        // The sound as well, on a timeline: a preset writes one mix in its own codec. A copy of an
+        // OBS recording would keep the game, the microphone and the chat as separate streams, and
+        // YouTube and most players play only the first. A Quick Trim keeps the recording's streams
+        // as they are, which is what it is for.
+        if (quickTrim || copy.AudioStreams.IsEmpty)
+        {
+            return true;
+        }
+
+        if (preset.Audio is not { } audio)
+        {
+            reasons.Add($"{preset.Name} writes no sound, so it is encoded.");
+            return false;
+        }
+
+        if (copy.AudioStreams.Length > 1)
+        {
+            reasons.Add($"The source's {copy.AudioStreams.Length} sound streams ({string.Join(", ", copy.StreamNames)}) are mixed into one, as {preset.Name} writes, so it is encoded. Ask for --mode copy to keep them apart.");
+            return false;
+        }
+
+        string wanted = SoundCodecOf(audio.Encoder);
+        if (copy.Media.Info?.Streams.FirstOrDefault(stream => stream.Index == copy.AudioStreams[0]) is { } sound
+            && !string.Equals(sound.Codec, wanted, StringComparison.OrdinalIgnoreCase))
+        {
+            reasons.Add($"The source sound is {sound.Codec} and {preset.Name} writes {wanted}, so it is encoded. Ask for --mode copy to keep the source's sound.");
+            return false;
+        }
+
         return true;
     }
+
+    /// <summary>The codec a preset's sound encoder writes, as a probe names it.</summary>
+    private static string SoundCodecOf(string encoder) => encoder.ToLowerInvariant() switch
+    {
+        "libopus" => "opus",
+        "libmp3lame" => "mp3",
+        string other => other,
+    };
 
     /// <summary>The preset codec a source codec is: FFmpeg calls DNxHR dnxhd.</summary>
     private static string CodecOf(string source) => source.ToLowerInvariant() switch
