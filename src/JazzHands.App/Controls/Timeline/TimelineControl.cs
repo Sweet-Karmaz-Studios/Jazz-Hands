@@ -53,6 +53,24 @@ public sealed class TimelineControl : FrameworkElement
     private readonly List<string> _goneTracks = [];
     private readonly HashSet<string> _drawnTracks = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Makes the timeline visible to UI Automation (screen readers, and the UI suite, which drops
+    /// media on it): a drawn element with no peer of its own is left out of the tree.
+    /// </summary>
+    protected override System.Windows.Automation.Peers.AutomationPeer OnCreateAutomationPeer() => new TimelinePeer(this);
+
+    private sealed class TimelinePeer(TimelineControl owner) : System.Windows.Automation.Peers.FrameworkElementAutomationPeer(owner)
+    {
+        protected override System.Windows.Automation.Peers.AutomationControlType GetAutomationControlTypeCore() =>
+            System.Windows.Automation.Peers.AutomationControlType.Pane;
+
+        protected override string GetClassNameCore() => nameof(TimelineControl);
+
+        protected override bool IsContentElementCore() => true;
+
+        protected override bool IsControlElementCore() => true;
+    }
+
     private TimelineViewModel? _model;
     private TimelineLayers _dirty = TimelineLayers.All;
     private bool _renderingHooked;

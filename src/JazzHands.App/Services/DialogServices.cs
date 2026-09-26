@@ -280,9 +280,38 @@ public sealed class FileDialogService : IFileDialogService
 {
     private const string Movies = "Recordings|*.mp4;*.mkv;*.mov;*.m4v;*.webm;*.avi;*.mxf|Everything|*.*";
 
+    /// <summary>
+    /// The UI suite's answer to the next file picker, in an isolated run only (<c>JAZZ_HOME</c>):
+    /// <c>ui-pick.txt</c> in that home, a path a line, read once and deleted. The Windows picker is
+    /// the shell's, not ours, and does not answer UI Automation reliably; what the suite tests is
+    /// what the editor does with the files. A person's editor is never isolated, so never reads it.
+    /// </summary>
+    internal static IReadOnlyList<string>? TestPick()
+    {
+        if (JazzHands.Core.JazzFolders.Home is not { } home)
+        {
+            return null;
+        }
+
+        string file = System.IO.Path.Combine(home, "ui-pick.txt");
+        if (!System.IO.File.Exists(file))
+        {
+            return null;
+        }
+
+        string[] paths = [.. System.IO.File.ReadAllLines(file).Where(line => line.Length > 0)];
+        System.IO.File.Delete(file);
+        return paths;
+    }
+
     /// <inheritdoc />
     public IReadOnlyList<string> OpenMedia()
     {
+        if (TestPick() is { } picked)
+        {
+            return picked;
+        }
+
         var dialog = new OpenFileDialog
         {
             Title = "Import media",
@@ -302,6 +331,11 @@ public sealed class FileDialogService : IFileDialogService
     /// <inheritdoc />
     public string? OpenMovie()
     {
+        if (TestPick() is { } picked)
+        {
+            return picked.FirstOrDefault();
+        }
+
         var dialog = new OpenFileDialog
         {
             Title = "Quick Trim a recording",
