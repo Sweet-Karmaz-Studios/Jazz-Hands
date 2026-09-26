@@ -139,6 +139,7 @@
             <!-- List mode: the columns the phase prompt asks for. -->
             <ListView Grid.Column="2"
                       x:Name="ItemList"
+                      AutomationProperties.Name="Media"
                       Background="{DynamicResource Brush.Background.Base}"
                       BorderBrush="{DynamicResource Brush.Border}"
                       Foreground="{DynamicResource Brush.Text.Primary}"
@@ -240,6 +241,7 @@
 
             <!-- Grid mode: tiles with a thumbnail, which scrubs through the file under the mouse. -->
             <ListBox Grid.Column="2"
+                     AutomationProperties.Name="Media tiles"
                      Background="{DynamicResource Brush.Background.Base}"
                      BorderBrush="{DynamicResource Brush.Border}"
                      ItemsSource="{Binding Items, Mode=OneWay}"

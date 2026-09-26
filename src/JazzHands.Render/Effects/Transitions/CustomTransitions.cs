@@ -66,7 +66,7 @@ public static class CustomTransitions
 
     /// <summary><c>%APPDATA%\JazzHands\transitions</c>.</summary>
     public static string DefaultFolder { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "JazzHands", "transitions");
+        JazzHands.Core.JazzFolders.Roaming, "transitions");
 
     /// <summary>True in a debug build, where the hosts watch the folder for new and edited files.</summary>
     public static bool WatchByDefault =>

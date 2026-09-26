@@ -77,7 +77,7 @@ public sealed class RecoveryService
     public static string UntitledFolder =>
         Environment.GetEnvironmentVariable(FolderVariable) is { Length: > 0 } folder
             ? folder
-            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "JazzHands", "recovery");
+            : Path.Combine(JazzHands.Core.JazzFolders.Local, "recovery");
 
     /// <summary>True when a crash left a recovery copy or a history beside a project, whether or not they are worth offering.</summary>
     public static bool HasLeftovers(string projectPath)

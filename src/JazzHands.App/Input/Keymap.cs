@@ -97,8 +97,7 @@ public sealed class Keymap
 
     /// <summary>Where a person's own bindings live.</summary>
     public static string UserPath { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "JazzHands",
+        JazzHands.Core.JazzFolders.Roaming,
         "keymap.json");
 
     /// <summary>The embedded defaults.</summary>

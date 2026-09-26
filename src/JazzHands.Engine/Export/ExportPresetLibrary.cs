@@ -25,7 +25,7 @@ public static class ExportPresetLibrary
 
     /// <summary>The folder a person's own presets are read from and saved to; a test may point it elsewhere.</summary>
     public static string UserFolder { get; set; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "JazzHands", "export-presets");
+        JazzHands.Core.JazzFolders.Roaming, "export-presets");
 
     /// <summary>The presets that ship with the editor.</summary>
     public static ImmutableArray<ExportPreset> BuiltIn => BuiltIns.Value;

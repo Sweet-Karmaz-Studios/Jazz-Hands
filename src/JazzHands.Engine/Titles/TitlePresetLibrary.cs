@@ -29,7 +29,7 @@ public static class TitlePresetLibrary
 
     /// <summary>The folder a person's own presets are read from; a test may point it elsewhere.</summary>
     public static string UserFolder { get; set; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "JazzHands", "titles");
+        JazzHands.Core.JazzFolders.Roaming, "titles");
 
     /// <summary>The presets that ship with the editor.</summary>
     public static ImmutableArray<TitlePreset> BuiltIn => BuiltIns.Value;

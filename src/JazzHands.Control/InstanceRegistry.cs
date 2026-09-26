@@ -30,7 +30,7 @@ public static class InstanceRegistry
     /// <summary>The per-user list, or the file <c>JAZZ_INSTANCES</c> names, which keeps test instances off the real one.</summary>
     public static string DefaultPath { get; } = Environment.GetEnvironmentVariable("JAZZ_INSTANCES") is { Length: > 0 } chosen
         ? Path.GetFullPath(chosen)
-        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "JazzHands", "instances.json");
+        : Path.Combine(JazzHands.Core.JazzFolders.Local, "instances.json");
 
     /// <summary>Adds or replaces an instance.</summary>
     public static void Register(InstanceInfo instance, string? path = null)

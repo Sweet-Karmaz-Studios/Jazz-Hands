@@ -46,8 +46,7 @@ public static class LogSetup
 
     /// <summary>The directory rolling log files are written to.</summary>
     public static string DefaultLogDirectory => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "JazzHands",
+        JazzHands.Core.JazzFolders.Local,
         "logs");
 
     /// <summary>

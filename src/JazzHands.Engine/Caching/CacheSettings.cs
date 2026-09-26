@@ -43,8 +43,7 @@ public sealed class CacheSettingsStore
 
     /// <summary>The per-user settings file.</summary>
     public static string DefaultPath => System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "JazzHands",
+        JazzHands.Core.JazzFolders.Roaming,
         "settings.json");
 
     /// <summary>The file.</summary>

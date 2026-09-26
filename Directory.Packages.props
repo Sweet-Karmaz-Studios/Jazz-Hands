@@ -56,6 +56,9 @@
   <ItemGroup Label="Test">
     <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.0.0" />
     <PackageVersion Include="xunit.v3" Version="4.0.1" />
+    <!-- UI automation of the real editor window: tests/JazzHands.UiTests, headed, run by hand (Phase 33). -->
+    <PackageVersion Include="FlaUI.Core" Version="5.0.0" />
+    <PackageVersion Include="FlaUI.UIA3" Version="5.0.0" />
     <!-- The assertion library on its own, for JazzHands.TestSupport: xunit.v3 refuses to be
          referenced by a project that is not an executable test project, and a library of helpers
          is not one. -->

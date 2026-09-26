@@ -47,6 +47,9 @@
     <Project Path="tests/JazzHands.Media.Tests/JazzHands.Media.Tests.csproj">
       <Platform Project="x64" />
     </Project>
+    <Project Path="tests/JazzHands.UiTests/JazzHands.UiTests.csproj">
+      <Platform Project="x64" />
+    </Project>
     <Project Path="tests/JazzHands.TestSupport/JazzHands.TestSupport.csproj">
       <Platform Project="x64" />
     </Project>

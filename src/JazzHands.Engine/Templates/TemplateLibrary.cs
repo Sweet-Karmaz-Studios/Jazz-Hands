@@ -19,7 +19,7 @@ public static class TemplateLibrary
 
     /// <summary>The folder a person's own templates are read from and saved to; a test may point it elsewhere.</summary>
     public static string UserFolder { get; set; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "JazzHands", "templates");
+        JazzHands.Core.JazzFolders.Roaming, "templates");
 
     /// <summary>The templates that ship with the editor.</summary>
     public static ImmutableArray<MotionTemplate> BuiltIn => BuiltIns.Value;

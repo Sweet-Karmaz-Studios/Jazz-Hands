@@ -26,7 +26,7 @@ public sealed class FileEffectFavorites : IEffectFavorites
     /// <summary>Reads the file, or starts empty when there is none or it cannot be read.</summary>
     public FileEffectFavorites(string? path = null)
     {
-        _path = path ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "JazzHands", "effect-favorites.json");
+        _path = path ?? Path.Combine(JazzHands.Core.JazzFolders.Roaming, "effect-favorites.json");
         _ids = new HashSet<string>(StringComparer.Ordinal);
 
         try

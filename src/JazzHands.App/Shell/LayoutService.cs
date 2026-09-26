@@ -72,7 +72,7 @@ public sealed class LayoutService : IWorkspaces
 
     /// <summary>The per-user folder of layouts.</summary>
     public static string DefaultFolder { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "JazzHands", "layouts");
+        JazzHands.Core.JazzFolders.Local, "layouts");
 
     /// <inheritdoc />
     public string Current { get; private set; }

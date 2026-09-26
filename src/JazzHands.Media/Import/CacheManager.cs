@@ -57,7 +57,7 @@ public sealed partial class CacheManager : IDisposable
     /// <summary>The per-user cache folder, or the one <see cref="FolderVariable"/> names.</summary>
     public static string DefaultFolder => Environment.GetEnvironmentVariable(FolderVariable) is { Length: > 0 } folder
         ? folder
-        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "JazzHands", "cache");
+        : Path.Combine(JazzHands.Core.JazzFolders.Local, "cache");
 
     /// <summary>Where this cache lives.</summary>
     public string Folder { get; }

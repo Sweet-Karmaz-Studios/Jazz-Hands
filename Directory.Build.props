@@ -59,14 +59,14 @@
   </PropertyGroup>
 
   <!-- Test projects: xUnit v3 runs as an executable on Microsoft.Testing.Platform. -->
-  <PropertyGroup Condition="$(MSBuildProjectName.EndsWith('.Tests'))">
+  <PropertyGroup Condition="$(MSBuildProjectName.EndsWith('.Tests')) or '$(MSBuildProjectName)' == 'JazzHands.UiTests'">
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <OutputType>Exe</OutputType>
     <UseAppHost>true</UseAppHost>
   </PropertyGroup>
 
-  <ItemGroup Condition="$(MSBuildProjectName.EndsWith('.Tests'))">
+  <ItemGroup Condition="$(MSBuildProjectName.EndsWith('.Tests')) or '$(MSBuildProjectName)' == 'JazzHands.UiTests'">
     <Using Include="Xunit" />
   </ItemGroup>
 

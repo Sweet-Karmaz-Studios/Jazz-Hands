@@ -42,8 +42,7 @@ public static partial class ShaderLibrary
 
     /// <summary>Where compiled bytecode is kept between runs.</summary>
     public static string CacheDirectory { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "JazzHands",
+        JazzHands.Core.JazzFolders.Local,
         "cache",
         "shaders");
 

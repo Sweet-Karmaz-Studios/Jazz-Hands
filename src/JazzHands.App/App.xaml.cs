@@ -387,12 +387,13 @@ public partial class App : Application
         var registration = new Shell.ShellRegistration(new Shell.CurrentUserRegistry());
         try
         {
-            if (registration.Register(exe, Path.Combine(AppContext.BaseDirectory, "Assets")))
+            // An isolated run (JAZZ_HOME: the UI tests) leaves the person's Windows alone.
+            if (!Core.JazzFolders.IsIsolated && registration.Register(exe, Path.Combine(AppContext.BaseDirectory, "Assets")))
             {
                 Shell.ShellRegistration.NotifyExplorer();
             }
 
-            if (registration.StartsWithWindows != editor.Current.StartWithWindows)
+            if (!Core.JazzFolders.IsIsolated && registration.StartsWithWindows != editor.Current.StartWithWindows)
             {
                 registration.SetStartWithWindows(editor.Current.StartWithWindows, exe);
             }
@@ -425,9 +426,15 @@ public partial class App : Application
             }
         });
 
-        // The jump list follows the recent projects.
-        void ApplyJumpList(RecentProjects projects) =>
-            System.Windows.Shell.JumpList.SetJumpList(this, Shell.JumpLists.Build(projects.Paths, exe, LogSetup.DefaultLogDirectory));
+        // The jump list follows the recent projects; an isolated run leaves the person's alone.
+        void ApplyJumpList(RecentProjects projects)
+        {
+            if (!Core.JazzFolders.IsIsolated)
+            {
+                System.Windows.Shell.JumpList.SetJumpList(this, Shell.JumpLists.Build(projects.Paths, exe, LogSetup.DefaultLogDirectory));
+            }
+        }
+
         recent.Saved += (_, projects) => Dispatcher.InvokeAsync(() => ApplyJumpList(projects));
 
         if (session.ProjectPath.Length > 0)

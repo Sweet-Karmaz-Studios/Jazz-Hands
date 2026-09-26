@@ -164,8 +164,7 @@ public sealed class ExportQueue : IExportService, IDisposable
 
     /// <summary>The per-user queue file.</summary>
     public static string DefaultPath { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "JazzHands",
+        JazzHands.Core.JazzFolders.Local,
         "queue.db");
 
     /// <summary>Where this queue is kept.</summary>

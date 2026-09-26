@@ -24,7 +24,7 @@ public sealed class FileDisplaySettings : IDisplaySettings
     /// <summary>Reads the file, or starts at sRGB when there is none or it cannot be read.</summary>
     public FileDisplaySettings(string? path = null)
     {
-        _path = path ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "JazzHands", "display.json");
+        _path = path ?? Path.Combine(JazzHands.Core.JazzFolders.Roaming, "display.json");
 
         try
         {
