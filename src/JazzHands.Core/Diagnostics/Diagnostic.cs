@@ -17,7 +17,7 @@ public enum DiagnosticLevel
 /// Something a session noticed about one media item.
 /// </summary>
 /// <remarks>
-/// In Core because every surface reports it: the media panel badges a clip with it, <c>jazz
+/// In Core because every surface reports it: the editor shows it as a notice, <c>jazz
 /// diagnostics list</c> prints it, and the control server sends it. The thing that collects them
 /// lives in the engine; this is only what one of them is.
 /// </remarks>

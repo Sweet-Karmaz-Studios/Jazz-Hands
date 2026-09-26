@@ -8,6 +8,7 @@ using JazzHands.Core.Export;
 using JazzHands.Core.Model;
 using JazzHands.Core.Serialization;
 using JazzHands.Core.Time;
+using JazzHands.Engine.Settings;
 using Serilog;
 using Path = System.IO.Path;
 
@@ -37,6 +38,7 @@ public sealed partial class ExportDialogViewModel : ObservableObject
     private readonly ISession _session;
     private readonly IFileDialogService _files;
     private readonly IUiDispatcher _ui;
+    private readonly EditorSettings _defaults;
     private int _planVersion;
     private bool _trimFallback;
 
@@ -131,7 +133,11 @@ public sealed partial class ExportDialogViewModel : ObservableObject
     private ExportPlan? _plan;
 
     /// <summary>Creates the dialog's viewmodel.</summary>
-    public ExportDialogViewModel(ISession session, IFileDialogService files, IUiDispatcher ui)
+    /// <param name="session">The session whose sequence is exported.</param>
+    /// <param name="files">The file pickers.</param>
+    /// <param name="ui">The UI thread.</param>
+    /// <param name="editor">Settings, Export: the preset and folder to start from; the built-in defaults when null.</param>
+    public ExportDialogViewModel(ISession session, IFileDialogService files, IUiDispatcher ui, SettingsSection<EditorSettings>? editor = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(files);
@@ -141,7 +147,10 @@ public sealed partial class ExportDialogViewModel : ObservableObject
         _files = files;
         _ui = ui;
         Presets = session.Query(new ListPresetsQuery());
-        _preset = Presets.FirstOrDefault(preset => preset.Name == ExportPresets.Default) ?? Presets[0];
+        _defaults = editor?.Current ?? new EditorSettings();
+        _preset = Presets.FirstOrDefault(preset => string.Equals(preset.Name, _defaults.ExportPreset, StringComparison.OrdinalIgnoreCase))
+            ?? Presets.FirstOrDefault(preset => preset.Name == ExportPresets.Default)
+            ?? Presets[0];
     }
 
     /// <summary>Raised when the dialog should close.</summary>
@@ -572,8 +581,12 @@ public sealed partial class ExportDialogViewModel : ObservableObject
             return Path.Combine(Path.GetDirectoryName(file) ?? string.Empty, $"{media.Name} trim.mp4");
         }
 
+        // Otherwise Settings, Export's folder; else beside the project; else Videos for one never saved.
         string name = sequence?.Name is { Length: > 0 } given ? given : project.Name;
-        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), $"{name}.mp4");
+        string folder = _defaults.ExportFolder is { Length: > 0 } chosen ? Environment.ExpandEnvironmentVariables(chosen)
+            : _session.ProjectPath.Length > 0 ? Path.GetDirectoryName(Path.GetFullPath(_session.ProjectPath)) ?? string.Empty
+            : Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
+        return Path.Combine(folder, name + (Preset?.Extension ?? ".mp4"));
     }
 }
 

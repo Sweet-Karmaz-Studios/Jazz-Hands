@@ -121,7 +121,7 @@
                     <TextBlock Style="{StaticResource Label}" Text="Folder" />
                     <TextBox Text="{Binding ExportFolder, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Default export folder" />
                 </DockPanel>
-                <TextBlock Style="{StaticResource Note}" Text="Empty puts exports beside the project." />
+                <TextBlock Style="{StaticResource Note}" Text="Empty puts exports beside the project, or in Videos for a project not saved yet. A Quick Trim exports beside its recording." />
             </StackPanel>
 
             <!-- Remote control -->

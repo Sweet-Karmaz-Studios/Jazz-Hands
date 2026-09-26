@@ -59,7 +59,7 @@ public static class McpPrompts
     {
         string clips = args.TryGetValue("clips", out string? given) && given.Length > 0 ? given : "the footage in the project";
         string length = args.TryGetValue("length", out string? seconds) && seconds.Length > 0 ? seconds : "30";
-        string music = args.TryGetValue("music", out string? track) && track.Length > 0 ? $"Cut to the music in {track}: bring it in, put it on an audio track from 0s, and place cuts on its beats." : "There is no music; keep the game's own sound and let it breathe.";
+        string music = args.TryGetValue("music", out string? track) && track.Length > 0 ? $"Cut to the music in {track}: bring it in, put it on an audio track from 0s, mark its beats with audio_beats, and lay the build's shots along them with edit_cut_to_beats." : "There is no music; keep the game's own sound and let it breathe.";
         string title = args.TryGetValue("title", out string? card) && card.Length > 0 ? card : "the game's name and \"Wishlist now\"";
 
         string text = string.Create(CultureInfo.InvariantCulture, $"""
@@ -69,8 +69,8 @@ public static class McpPrompts
             2. Find the moments worth showing: probe_media and render_frame at candidate times; prefer action, faces and clear readable moments.
             3. Lay out the beats with apply_batch: an opening hook of 2 to 3 seconds, a build of short shots (1 to 2 s each) getting shorter, a peak, then the end card. clip_add takes the track, the time on the timeline (at), the media, where in the source to start (sourceIn) and how long (duration).
             4. {music}
-            5. Titles: title_add with the lower-third preset for any callouts, and an end card with the title-card preset saying {title} for the last 3 to 4 seconds.
-            6. Transitions sparingly: cuts on beats, a transition.crossfade or transition.dip into the end card (transition_add).
+            5. Titles: template_list, then template_apply: a hero-intro or feature-callout where they help, and the end-card template saying {title} for the last 3 to 4 seconds. title_add with the lower-third preset for a plain callout.
+            6. Impact and polish, sparingly: vfx_apply_preset (a hit or heavy hit) at the peak; vfx_hide_static when the footage shows a game HUD; cuts on beats, and a transition.crossfade or transition.dip into the end card (transition_add).
             7. Check: describe_timeline, then render_frame at each title and at the cuts you care about; contact_sheet for the whole shape. Fix what looks wrong.
             8. render_proof to proof.mp4 and report its path, length and what you would change next.
 

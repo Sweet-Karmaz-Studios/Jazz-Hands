@@ -153,6 +153,8 @@
                       Visibility="{Binding IsListMode, Mode=OneWay, Converter={StaticResource BoolToVisible}}">
                 <ListView.ContextMenu>
                     <ContextMenu>
+                        <MenuItem Header="Quick Trim" Command="{Binding QuickTrimCommand, Mode=OneWay}" ToolTip="Keep and cut stretches of this recording in a sequence of its own" />
+                        <Separator />
                         <MenuItem Header="Reveal in Explorer" Command="{Binding RevealCommand, Mode=OneWay}" />
                         <MenuItem Header="Re-read from disk" Command="{Binding ReprobeCommand, Mode=OneWay}" />
                         <MenuItem Header="Generate proxy" Command="{Binding GenerateProxyCommand, Mode=OneWay}" />

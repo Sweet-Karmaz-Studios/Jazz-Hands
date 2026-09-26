@@ -264,6 +264,7 @@ public sealed partial class MediaPanelViewModel : ToolViewModel
         SetColorCommand.NotifyCanExecuteChanged();
         RevealCommand.NotifyCanExecuteChanged();
         GenerateProxyCommand.NotifyCanExecuteChanged();
+        QuickTrimCommand.NotifyCanExecuteChanged();
         RelinkSelectedCommand.NotifyCanExecuteChanged();
         ReplaceSelectedCommand.NotifyCanExecuteChanged();
     }
@@ -355,6 +356,18 @@ public sealed partial class MediaPanelViewModel : ToolViewModel
         }
 
         await RunAsync(new GenerateProxyCommand(row.Id), $"Making a proxy of {row.Name} on the export queue.").ConfigureAwait(true);
+    }
+
+    /// <summary>Quick Trim this recording: a sequence of its own to keep and cut stretches of (<c>trim.start</c>).</summary>
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private async Task QuickTrimAsync()
+    {
+        if (SelectedItem is not { } row)
+        {
+            return;
+        }
+
+        await RunAsync(new StartTrimCommand(row.Id), $"Quick Trim of {row.Name}: mark in and out, Enter keeps, Backspace cuts.").ConfigureAwait(true);
     }
 
     [RelayCommand]

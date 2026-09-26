@@ -5,9 +5,10 @@ namespace JazzHands.Core.Serialization;
 /// </summary>
 /// <remarks>
 /// A project is one file plus a sidecar folder: <c>trailer.jazz</c> and <c>trailer.jazz.d/</c>.
-/// The file is the only thing that has to be backed up or committed. The folder holds caches,
-/// proxies, the command history and the recovery copy, all of which can be regenerated, and all
-/// of which belong in <c>.gitignore</c>.
+/// The file is the only thing that has to be backed up or committed. The folder holds the recovery copy,
+/// the command history, recoveries set aside and motion analyses, none of which needs keeping,
+/// and all of which belong in <c>.gitignore</c>. Thumbnails, waveforms and proxies are not here:
+/// they are in the per-user cache, keyed by each file's hash, so a moved project keeps them.
 ///
 /// Media paths inside the file are relative to the project file and use forward slashes, so a
 /// project copied to another machine or another drive letter still finds its footage. An absolute
@@ -33,14 +34,6 @@ public static class ProjectPaths
     /// <summary>The append-only command log used to replay after a crash.</summary>
     public static string HistoryFile(string projectPath) =>
         Path.Combine(SidecarFolder(projectPath), "history.jsonl");
-
-    /// <summary>The cache database for thumbnails, waveforms and frame indexes.</summary>
-    public static string CacheFile(string projectPath) =>
-        Path.Combine(SidecarFolder(projectPath), "cache.db");
-
-    /// <summary>The proxy media folder.</summary>
-    public static string ProxyFolder(string projectPath) =>
-        Path.Combine(SidecarFolder(projectPath), "proxies");
 
     /// <summary>Creates the sidecar folder if it is not there, and returns it.</summary>
     public static string EnsureSidecar(string projectPath)

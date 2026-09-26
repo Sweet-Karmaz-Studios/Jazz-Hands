@@ -238,6 +238,15 @@ public sealed partial class MainViewModel
     [RelayCommand]
     public Task ShowShortcutsAsync() => _dialogs?.ShowSettingsAsync("keymap") ?? Task.CompletedTask;
 
+    /// <summary>Help, Open the log folder: where the editor, jazz and jazz-mcp write their logs and crash reports.</summary>
+    [RelayCommand]
+    public static void OpenLogFolder()
+    {
+        string folder = JazzHands.Engine.Logging.LogSetup.DefaultLogDirectory;
+        Directory.CreateDirectory(folder);
+        using var explorer = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", $"\"{folder}\"") { UseShellExecute = true });
+    }
+
     /// <summary>Window, a panel: shows it and puts it in front.</summary>
     [RelayCommand]
     public void ShowPanel(string? contentId)
@@ -284,7 +293,9 @@ public sealed partial class MainViewModel
         Menu.Add(TimelineMenu());
         Menu.Add(PlaybackMenu());
         Menu.Add(WindowMenu());
-        Menu.Add(new MenuItemViewModel("_Help").With(new MenuItemViewModel("_Keyboard shortcuts...", ShowShortcutsCommand)));
+        Menu.Add(new MenuItemViewModel("_Help").With(
+            new MenuItemViewModel("_Keyboard shortcuts...", ShowShortcutsCommand),
+            new MenuItemViewModel("Open the _log folder", OpenLogFolderCommand)));
 
         // Anything bound in the keymap that the menus above do not show: a person's own bindings.
         MenuItemViewModel[] placed = [.. Menu.SelectMany(item => item.Descendants())];

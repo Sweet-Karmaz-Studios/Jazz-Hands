@@ -76,7 +76,7 @@ public sealed class SourceFrameServer : IDisposable
         if (notices is not null)
         {
             // A file that decodes in software still plays, so nothing throws and nobody would
-            // find out. This is how it reaches the media panel's badge and jazz diagnostics list.
+            // find out. This is how it reaches the editor's notices and jazz diagnostics list.
             _decoders.FellBack += OnFellBack;
         }
     }

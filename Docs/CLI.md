@@ -342,7 +342,7 @@ Take back the last command.
 
 ## `jazz app`
 
-Commands and queries about app.
+The editor's window and process: show, hide, quit, and remove it from Windows before uninstalling. Needs --attach.
 
 ### `jazz app hide <project>`
 
@@ -1563,7 +1563,7 @@ List what the session has noticed: fallbacks, missing files.
 
 ## `jazz edit`
 
-Commands and queries about edit.
+Edits made from the sequence's own markers: cut clips to the beat.
 
 ### `jazz edit cut-to-beats <project>`
 
@@ -2228,7 +2228,7 @@ Change a keyframe's value.
 
 ## `jazz layout`
 
-Commands and queries about layout.
+Clips laid out on the frame: facecam corner, side by side, before and after, grids.
 
 ### `jazz layout apply <project> <layout>`
 
@@ -3570,7 +3570,7 @@ Give a sequence its own frame rate, size or audio format.
 
 ## `jazz settings`
 
-Commands and queries about settings.
+The editor's settings: list them, change one.
 
 ### `jazz settings get <project>`
 
@@ -3794,7 +3794,7 @@ Break long subtitle cues into lines and shorter cues.
 
 ## `jazz template`
 
-Commands and queries about template.
+Motion templates: place one with its parameters filled in, list them, save a selection as one.
 
 ### `jazz template apply <project> <name>`
 
@@ -4224,7 +4224,7 @@ Set an audio track's volume in dB, or a keyframe of it.
 
 ## `jazz tracking`
 
-Commands and queries about tracking.
+Point tracking: track a point through a clip, make something follow it, remove it.
 
 ### `jazz tracking apply <project> <track-id>`
 
@@ -4538,7 +4538,7 @@ Start a Quick Trim of a file.
 
 ## `jazz vfx`
 
-Commands and queries about vfx.
+Trailer effects: timed presets such as hits and boss intros, and hiding a game's HUD or a watermark.
 
 ### `jazz vfx apply-preset <project> <preset>`
 

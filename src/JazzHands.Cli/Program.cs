@@ -20,6 +20,12 @@ try
     RootCommand root = JazzCli.BuildRootCommand();
     ParseResult parsed = root.Parse(args);
 
+    // --verbose on any verb: the engine's detail on stderr (and in the log file) for this run.
+    if (parsed.GetValue(JazzCli.VerboseOption))
+    {
+        LogSetup.ConfigureForCli(LogEventLevel.Debug);
+    }
+
     // Chosen before anything makes a device, so every render in this process is on it.
     if (parsed.GetValue(JazzCli.GpuOption) is { Length: > 0 } gpu)
     {

@@ -294,7 +294,7 @@ public sealed partial class MainViewModel : ObservableObject
 
         if (media is null)
         {
-            Say("The recording is in the project already under another name; start the Quick Trim from the media panel.");
+            Say("The recording is in the project already under another name; right-click it in the Media panel and choose Quick Trim.");
             return;
         }
 

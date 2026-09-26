@@ -73,6 +73,13 @@ public static class GeneratedCommands
     /// <summary>What each area of verbs is for, as <c>jazz --help</c> lists it.</summary>
     public static string AreaDescription(string area) => area switch
     {
+        "app" => "The editor's window and process: show, hide, quit, and remove it from Windows before uninstalling. Needs --attach.",
+        "edit" => "Edits made from the sequence's own markers: cut clips to the beat.",
+        "layout" => "Clips laid out on the frame: facecam corner, side by side, before and after, grids.",
+        "settings" => "The editor's settings: list them, change one.",
+        "template" => "Motion templates: place one with its parameters filled in, list them, save a selection as one.",
+        "tracking" => "Point tracking: track a point through a clip, make something follow it, remove it.",
+        "vfx" => "Trailer effects: timed presets such as hits and boss intros, and hiding a game's HUD or a watermark.",
         "audio" => "Sound on clips: gain, pan, fades, channel maps, muting a stream, detaching sound; the master volume and limiter; the meters.",
         "cache" => "The thumbnail, waveform and proxy cache: what it holds, its size limit, emptying it.",
         "chapter" => "Chapters: markers that become a file's chapters, from markers or imported from media.",
