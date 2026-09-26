@@ -38,6 +38,9 @@ public sealed class RenderTarget : IDisposable
     /// <summary>Roughly what it costs in video memory.</summary>
     public long Bytes => (long)Width * Height * BytesPerPixel(Format);
 
+    /// <summary>True while it waits in its pool, between a return and the next rent.</summary>
+    internal bool Idle { get; set; }
+
     /// <inheritdoc />
     public void Dispose()
     {
@@ -76,6 +79,17 @@ public sealed class RenderTargetPool : IDisposable
     private long _clock;
     private bool _disposed;
 
+    /// <summary>
+    /// Throws on a target given back twice rather than logging it and keeping one: the test
+    /// suites turn it on with the <c>JazzHands.Render.StrictPools</c> switch, so the second owner
+    /// is found by its stack (Phase 33). A target in a pool twice is handed to two renders at
+    /// once, and one draws over the other's picture.
+    /// </summary>
+    public static bool ThrowOnDoubleReturn { get; set; } = AppContext.TryGetSwitch("JazzHands.Render.StrictPools", out bool strict) && strict;
+
+    /// <summary>Targets given back while they were already in the pool; always zero when all is well.</summary>
+    public long DoubleReturns { get; private set; }
+
     /// <summary>Creates a pool over a device.</summary>
     public RenderTargetPool(RenderDevice device)
     {
@@ -112,7 +126,9 @@ public sealed class RenderTargetPool : IDisposable
 
         if (_idle.TryGetValue(key, out Stack<RenderTarget>? spare) && spare.Count > 0)
         {
-            return spare.Pop();
+            RenderTarget recycled = spare.Pop();
+            recycled.Idle = false;
+            return recycled;
         }
 
         Created++;
@@ -123,6 +139,19 @@ public sealed class RenderTargetPool : IDisposable
     public void Return(RenderTarget target)
     {
         ArgumentNullException.ThrowIfNull(target);
+        if (target.Idle)
+        {
+            // Kept once: in the pool twice it would be rented to two renders at the same time.
+            DoubleReturns++;
+            _log.Error("A {Width}x{Height} render target was given back twice; the second is ignored. {Stack}", target.Width, target.Height, Environment.StackTrace);
+            if (ThrowOnDoubleReturn)
+            {
+                throw new InvalidOperationException($"A {target.Width}x{target.Height} render target was given back to its pool twice.");
+            }
+
+            return;
+        }
+
         Outstanding--;
 
         if (_disposed)
@@ -138,6 +167,7 @@ public sealed class RenderTargetPool : IDisposable
             _idle[key] = spare;
         }
 
+        target.Idle = true;
         spare.Push(target);
     }
 

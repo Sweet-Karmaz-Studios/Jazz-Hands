@@ -23,6 +23,7 @@ public partial class App : Application
     private bool _measuring;
     private readonly Task<Render.RenderDevice>? _device;
     private int _crashed;
+    private Mutex? _single;
 
     /// <summary>
     /// Starts creating the render device before anything else: the GPU chosen in Settings, unless
@@ -110,9 +111,16 @@ public partial class App : Application
             : launch.Action is Shell.LaunchAction.Show or Shell.LaunchAction.Background
                 ? Shell.Startup.ProjectToOpen(e.Args, editor, Services.RecentProjects.Store().Current)
                 : null;
-        if (!spike && !e.Args.Contains(Shell.Startup.NewInstance, StringComparer.Ordinal)
-            && !Shell.SafeMode.IsOn
-            && Shell.Startup.TryHandOffAsync(launch).GetAwaiter().GetResult())
+        bool alone = spike || e.Args.Contains(Shell.Startup.NewInstance, StringComparer.Ordinal) || Shell.SafeMode.IsOn;
+        bool first = true;
+        if (!alone)
+        {
+            _single = Shell.Startup.Claim(out first);
+        }
+
+        if (!alone
+            && (Shell.Startup.TryHandOffAsync(launch).GetAwaiter().GetResult()
+                || (!first && Shell.Startup.HandOffToTheFirstAsync(launch, TimeSpan.FromSeconds(10)).GetAwaiter().GetResult())))
         {
             _device?.ContinueWith(made => made.Result.Dispose(), TaskContinuationOptions.OnlyOnRanToCompletion);
             Shutdown(0);
@@ -276,6 +284,7 @@ public partial class App : Application
         // Asynchronously: the control server can only be disposed that way, and a synchronous
         // dispose of the container throws for it.
         _services?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        _single?.Dispose();
 
         Shell.SafeMode.Clean();
         LogSetup.Shutdown();

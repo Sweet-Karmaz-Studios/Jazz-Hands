@@ -91,6 +91,44 @@ public static partial class Startup
         }
     }
 
+    /// <summary>
+    /// Makes this the one editor, or finds there is one already: a mutex per person (per
+    /// <c>JAZZ_HOME</c> for an isolated run), held for the life of the process. Two launches at
+    /// the same moment (two files double-clicked together) both look in the instance list before
+    /// either has written itself into it, and both would start; the mutex says which came first,
+    /// and the second waits for the first to be listed and hands over to it (Phase 33).
+    /// </summary>
+    /// <param name="first">True when this process is the first editor.</param>
+    /// <param name="scope">Whose editor; the person's, or JAZZ_HOME's, when not given. For tests.</param>
+    /// <returns>The mutex, which the caller keeps until it exits.</returns>
+    public static Mutex Claim(out bool first, string? scope = null)
+    {
+        string who = scope ?? (Core.JazzFolders.Home is { } home
+            ? Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(home.ToUpperInvariant())))[..16]
+            : "default");
+        return new Mutex(initiallyOwned: false, $@"Local\JazzHands.Editor.{who}", out first);
+    }
+
+    /// <summary>
+    /// Hands a launch to the editor that started a moment before this one, waiting for it to list
+    /// itself: true when it took the launch.
+    /// </summary>
+    public static async Task<bool> HandOffToTheFirstAsync(LaunchRequest request, TimeSpan patience)
+    {
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (clock.Elapsed < patience)
+        {
+            if (await TryHandOffAsync(request).ConfigureAwait(false))
+            {
+                return true;
+            }
+
+            await Task.Delay(250).ConfigureAwait(false);
+        }
+
+        return false;
+    }
+
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool AllowSetForegroundWindow(int processId);
