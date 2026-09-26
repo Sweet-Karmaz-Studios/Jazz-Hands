@@ -196,8 +196,13 @@
                         <!-- One timeline tab per sequence. -->
                         <layout:LayoutDocumentPane />
                     </layout:LayoutPanel>
-                    <!-- The inspector, beside the preview and the timeline, where the selected clip is changed. -->
-                    <layout:LayoutAnchorablePane Name="InspectorPane" DockWidth="380" />
+                    <!-- On the right: the inspector, where the selected clip is changed, and under it the
+                         panels that watch (meters, the export queue, the console, the log), so no pane
+                         holds so many tabs that their names are cut short. -->
+                    <layout:LayoutPanel Orientation="Vertical" DockWidth="380">
+                        <layout:LayoutAnchorablePane Name="InspectorPane" DockHeight="*" />
+                        <layout:LayoutAnchorablePane Name="UtilityPane" DockHeight="320" DockMinHeight="120" />
+                    </layout:LayoutPanel>
                 </layout:LayoutPanel>
             </layout:LayoutRoot>
         </dock:DockingManager>

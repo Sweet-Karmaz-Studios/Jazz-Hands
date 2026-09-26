@@ -92,6 +92,12 @@ public partial class MainWindow : Window, Shell.IAppWindow
             item.Setters.Add(new Setter(setter.Property, setter.Value));
         }
 
+        // Its triggers too: one of them hides the tab of a pane that holds a single panel.
+        foreach (TriggerBase trigger in own.Triggers)
+        {
+            item.Triggers.Add(trigger);
+        }
+
         item.Seal();
         Ours.Add(item, item);
         return item;
