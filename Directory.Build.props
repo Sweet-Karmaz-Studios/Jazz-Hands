@@ -68,6 +68,8 @@
 
   <ItemGroup Condition="$(MSBuildProjectName.EndsWith('.Tests')) or '$(MSBuildProjectName)' == 'JazzHands.UiTests'">
     <Using Include="Xunit" />
+    <!-- A render target given back to its pool twice throws in the tests, with the stack of the second owner. -->
+    <RuntimeHostConfigurationOption Include="JazzHands.Render.StrictPools" Value="true" />
   </ItemGroup>
 
 </Project>
