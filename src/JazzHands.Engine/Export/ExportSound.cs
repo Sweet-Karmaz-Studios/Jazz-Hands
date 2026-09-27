@@ -28,7 +28,7 @@ internal sealed class ExportSound : IDisposable
     private readonly (long Start, long Length)[] _stretches;
     private long _written;
 
-    public ExportSound(Project project, Sequence sequence, string projectPath, IReadOnlyList<TimeRange> ranges, int sampleRate, int channels)
+    public ExportSound(Project project, Sequence sequence, string projectPath, IReadOnlyList<TimeRange> ranges, int sampleRate, int channels, IReadOnlySet<string>? toMaster = null)
     {
         _server = new AudioSampleServer(new AudioBlockCache(), sampleRate, AudioReadMode.Blocking);
         _server.Update(project, projectPath);
@@ -39,7 +39,7 @@ internal sealed class ExportSound : IDisposable
         // way into the mix, and the master limiter then sees what is actually written, so the
         // fold cannot push a peak past it.
         ProjectSettings settings = project.SettingsFor(sequence) with { SampleRate = sampleRate, ChannelCount = channels };
-        _graph.Publish(AudioGraphBuilder.Build(project, sequence with { Settings = settings }));
+        _graph.Publish(AudioGraphBuilder.Build(project, sequence with { Settings = settings }, toMaster: toMaster));
         _buffer = new AudioBuffer(channels, Chunk);
         _planes = [.. Enumerable.Range(0, channels).Select(_ => new float[Chunk])];
 

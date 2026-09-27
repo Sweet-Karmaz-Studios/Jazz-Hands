@@ -32,6 +32,7 @@ namespace JazzHands.Core.Commands;
 /// <param name="PixelFormat">The pixel format to encode, for ten bits or 4:2:2.</param>
 /// <param name="Start">Export from here, in sequence time.</param>
 /// <param name="End">Export to here, in sequence time.</param>
+/// <param name="Stems">Also write a 24-bit WAV per role or per sound track beside the file (Phase 40).</param>
 [Query("export.plan", Description = "Plan an export without running it")]
 public sealed record PlanExportQuery(
     [property: Arg(0, "Where the file would go")] string Output,
@@ -57,7 +58,8 @@ public sealed record PlanExportQuery(
     [property: Option("pixel-format", "yuv420p10le for ten bits, yuv422p10le for 4:2:2 ten bit")] string? PixelFormat = null,
     [property: Option("audio-only", "Write the sound alone, in a sound file for its encoder: .m4a, .opus, .flac, .wav or .mp3")] bool AudioOnly = false,
     [property: Option("start", "Export from here")] Flicks? Start = null,
-    [property: Option("end", "Export to here")] Flicks? End = null) : IQuery<ExportPlan>
+    [property: Option("end", "Export to here")] Flicks? End = null,
+    [property: Option("stems", "none, roles or tracks: also a 24-bit WAV per role or per sound track beside the file")] StemMode Stems = StemMode.None) : IQuery<ExportPlan>
 {
     /// <summary>The export this asks about.</summary>
     public ExportRequest ToRequest() => new(
@@ -72,5 +74,6 @@ public sealed record PlanExportQuery(
         SidecarFormat,
         Chapters,
         ExportOverrideText.Parse(Size, FrameRate, Quality, Bitrate, Encoders, AudioEncoder, AudioBitrate, Channels, Loudness, TargetSize, PixelFormat, AudioOnly),
-        ExportOverrideText.Range(Start, End));
+        ExportOverrideText.Range(Start, End),
+        Stems);
 }

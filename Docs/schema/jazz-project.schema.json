@@ -58,6 +58,12 @@
       "items": {
         "$ref": "#/$defs/effectPreset"
       }
+    },
+    "roles": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/role"
+      }
     }
   },
   "required": [
@@ -1232,6 +1238,27 @@
         }
       }
     },
+    "role": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "color": {
+          "type": "string"
+        },
+        "muted": {
+          "type": "boolean"
+        },
+        "solo": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "color"
+      ]
+    },
     "sequence": {
       "type": "object",
       "properties": {
@@ -1609,6 +1636,16 @@
           "anyOf": [
             {
               "$ref": "#/$defs/trackMatte"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "role": {
+          "anyOf": [
+            {
+              "type": "string"
             },
             {
               "type": "null"

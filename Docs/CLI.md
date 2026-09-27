@@ -1904,6 +1904,7 @@ Export a sequence to a file in the foreground. 'jazz export enqueue' queues one 
 | `--sidecar-format <sidecar-format>` | srt, vtt or ass, for --subtitles sidecar. Default: srt. |
 | `--no-chapters` | Leave the chapter marks out. They go in by default: Matroska chapters, and an MP4 chapter track and chpl box, which YouTube reads. |
 | `--dry-run` | Print the plan, with the reasons for the mode and an estimate of size and time, and write nothing. |
+| `--stems <stems>` | none, roles or tracks: also a 24-bit WAV per role or per sound track beside the file. Default: none. |
 | `--size <size>` | Fit the picture inside this size, for example 1280x720. Never scales up. |
 | `--fps <fps>` | Write at this frame rate, for example 30 or 30000/1001. A slower rate takes every nth frame. |
 | `--quality <quality>` | Constant quality: CRF or CQ, lower is better. |
@@ -2046,6 +2047,7 @@ Queue an export of a sequence to a file.
 | `--open-folder` | Show the file in Explorer when it is done. |
 | `--run <run>` | A script to run when it is done, given the file's path. |
 | `--id <id>` | The id for the new job. |
+| `--stems <none|roles|tracks>` | none, roles or tracks: also a 24-bit WAV per role or per sound track beside the file. Default: none. |
 | `--no-save` | Do not write the project back. |
 
 ### `jazz export list <project>`
@@ -2112,6 +2114,7 @@ Plan an export without running it.
 | `--audio-only` | Write the sound alone, in a sound file for its encoder: .m4a, .opus, .flac, .wav or .mp3. |
 | `--start <time>` | Export from here. |
 | `--end <time>` | Export to here. |
+| `--stems <none|roles|tracks>` | none, roles or tracks: also a 24-bit WAV per role or per sound track beside the file. Default: none. |
 
 ### `jazz export resume <project> [job-id]`
 
@@ -3511,6 +3514,88 @@ Decline the recovery: set the autosave copy and command history aside and keep t
 | `--file <file>` | A rescued untitled project to remove instead. |
 | `--no-save` | Do not write the project back. |
 
+## `jazz role`
+
+What tracks are for: dialogue, music, effects, game. Mute or solo a role; export stems by it.
+
+### `jazz role add <project> <name>`
+
+Add a role.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<name>` | The role's name. |
+
+| Option | Meaning |
+|---|---|
+| `--color <color>` | Its colour, as a hex string or a name. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz role list <project>`
+
+List the roles tracks can have.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+### `jazz role mute <project> <name> <muted>`
+
+Mute or unmute a role.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<name>` | The role. |
+| `<muted>` | true to mute it. |
+
+| Option | Meaning |
+|---|---|
+| `--no-save` | Do not write the project back. |
+
+### `jazz role remove <project> <name>`
+
+Remove a role.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<name>` | The role. |
+
+| Option | Meaning |
+|---|---|
+| `--to <to>` | The role its tracks take; the first remaining one when left out. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz role rename <project> <name> <new-name>`
+
+Rename a role.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<name>` | The role. |
+| `<new-name>` | Its new name. |
+
+| Option | Meaning |
+|---|---|
+| `--no-save` | Do not write the project back. |
+
+### `jazz role solo <project> <name> <solo>`
+
+Solo or unsolo a role.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<name>` | The role. |
+| `<solo>` | true to solo it. |
+
+| Option | Meaning |
+|---|---|
+| `--no-save` | Do not write the project back. |
+
 ## `jazz rpc`
 
 Talk JSON-RPC to a running editor or 'jazz serve': call a method, list them, watch events, or pass stdin through.
@@ -4433,6 +4518,20 @@ Set an audio track's balance, or a keyframe of it.
 |---|---|
 | `--pan <number>` | Required. -1 hard left, 0 centre, 1 hard right. |
 | `--at <time>` | Set a keyframe at this time on the sequence. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz track set-role <project> <track-id> <role>`
+
+Give a track a role.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<track-id>` | The track id. |
+| `<role>` | The role; empty for the one its name suggests. |
+
+| Option | Meaning |
+|---|---|
 | `--no-save` | Do not write the project back. |
 
 ### `jazz track set-solo <project> <track-id> <solo>`

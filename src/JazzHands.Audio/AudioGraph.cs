@@ -377,7 +377,10 @@ public sealed class AudioGraph
             float from = continuing ? strip!.Last[channel] : gainFrom * Dsp.SideGain(channel, Channels, leftFrom, rightFrom);
             float to = gainTo * Dsp.SideGain(channel, Channels, leftTo, rightTo);
             Scale(_bus.Plane(channel, 0, frames), from, to);
-            Add(_bus.Plane(channel, 0, frames), _master.Plane(channel, 0, frames));
+            if (track.ToMaster)
+            {
+                Add(_bus.Plane(channel, 0, frames), _master.Plane(channel, 0, frames));
+            }
 
             strip?.Last[channel] = to;
         }

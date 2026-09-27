@@ -145,6 +145,13 @@ public sealed class TrackMix
     public long TailSamples { get; }
 
     /// <summary>
+    /// False for a track that is played (its effects run, and a ducker listening to it hears it) but
+    /// not added to the master: a stem export (Phase 40) plays every track and adds only the stem's,
+    /// so the stems add up to the mix.
+    /// </summary>
+    public bool ToMaster { get; init; } = true;
+
+    /// <summary>
     /// What carries over between blocks for this track in one graph: the gain it ended the last
     /// block at, and its meter. Given by the graph when the snapshot is published, before the
     /// audio thread can see it, and kept for the track across snapshots.

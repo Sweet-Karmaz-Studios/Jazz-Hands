@@ -548,6 +548,7 @@ public sealed record Clip(
 /// <param name="SubtitleStyle">How a subtitle track's cues look; null for the default style.</param>
 /// <param name="MotionBlur">Motion blur for the animated clips on it, over the sequence's, unless a clip says otherwise; null to follow the sequence.</param>
 /// <param name="Matte">Another track used as the matte of every clip on it, unless a clip has its own; null for none.</param>
+/// <param name="Role">Its role (Phase 40): dialogue, music, effects, game or one of the project's own; null for the one <see cref="Model.Role.Of"/> gives it.</param>
 public sealed record Track(
     string Id,
     TrackKind Kind,
@@ -567,7 +568,8 @@ public sealed record Track(
     string? Language = null,
     SubtitleStyle? SubtitleStyle = null,
     MotionBlur? MotionBlur = null,
-    TrackMatte? Matte = null) : IEquatable<Track>
+    TrackMatte? Matte = null,
+    string? Role = null) : IEquatable<Track>
 {
     /// <summary>The first position after the last clip, or zero for an empty track.</summary>
     public Flicks Duration => Clips.IsEmpty ? Flicks.Zero : Clips[^1].End;
@@ -894,6 +896,7 @@ public sealed record StoredExportPreset(
 /// <param name="Created">When the project was made.</param>
 /// <param name="Modified">When it was last changed.</param>
 /// <param name="EffectPresets">Effect chains saved with the project.</param>
+/// <param name="Roles">The roles tracks can have (Phase 40); empty for the built-in six, <see cref="Model.Role.BuiltIn"/>.</param>
 public sealed record Project(
     string Id,
     string Name,
@@ -905,7 +908,8 @@ public sealed record Project(
     EquatableArray<StoredExportPreset> Presets = default,
     DateTimeOffset Created = default,
     DateTimeOffset Modified = default,
-    EquatableArray<EffectPreset> EffectPresets = default) : IEquatable<Project>
+    EquatableArray<EffectPreset> EffectPresets = default,
+    EquatableArray<Role> Roles = default) : IEquatable<Project>
 {
     /// <summary>The schema version this build writes.</summary>
     public const int CurrentSchemaVersion = 2;

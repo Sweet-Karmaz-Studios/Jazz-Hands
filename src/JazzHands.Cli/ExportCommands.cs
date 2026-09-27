@@ -176,11 +176,12 @@ public static class ExportCommands
         };
         var sidecarFormat = new Option<string>("--sidecar-format") { Description = "srt, vtt or ass, for --subtitles sidecar.", DefaultValueFactory = _ => "srt" };
         var noChapters = new Option<bool>("--no-chapters") { Description = "Leave the chapter marks out. They go in by default: Matroska chapters, and an MP4 chapter track and chpl box, which YouTube reads." };
+        var stems = new Option<string>("--stems") { Description = "none, roles or tracks: also a 24-bit WAV per role or per sound track beside the file.", DefaultValueFactory = _ => "none" };
         var dryRun = new Option<bool>("--dry-run") { Description = "Print the plan, with the reasons for the mode and an estimate of size and time, and write nothing." };
 
         var command = new Command("export", "Export a sequence to a file in the foreground. 'jazz export enqueue' queues one in a running editor.")
         {
-            project, output, preset, mode, sequence, snap, inOut, external, subtitles, sidecarFormat, noChapters, dryRun,
+            project, output, preset, mode, sequence, snap, inOut, external, subtitles, sidecarFormat, noChapters, dryRun, stems,
         };
         var overrides = new ExportOverrideOptions();
         overrides.AddTo(command);
@@ -209,7 +210,8 @@ public static class ExportCommands
                 Choice<SubtitleFormat>(parse.GetValue(sidecarFormat)!, "sidecar-format"),
                 !parse.GetValue(noChapters),
                 overrides.Overrides(parse, rate),
-                overrides.Range(parse, rate));
+                overrides.Range(parse, rate),
+                Choice<StemMode>(parse.GetValue(stems)!, "stems"));
 
             return Export(load.Project, path, request, services, parse.GetValue(dryRun), parse.GetValue(JazzCli.JsonOption), token);
         }));

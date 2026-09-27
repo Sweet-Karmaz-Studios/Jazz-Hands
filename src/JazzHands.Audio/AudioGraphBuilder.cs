@@ -28,7 +28,11 @@ public static class AudioGraphBuilder
     /// <param name="project">The project, for its media and settings.</param>
     /// <param name="sequence">The sequence, or null for the active one.</param>
     /// <param name="effects">Where effect instances live between builds; a fresh one when null.</param>
-    public static MixSnapshot Build(Project project, Sequence? sequence = null, AudioEffectHost? effects = null)
+    /// <param name="toMaster">
+    /// For a stem (Phase 40): the tracks whose sound reaches the master. The others still play, so
+    /// what listens to them (a ducker) does as it does in the mix, but add nothing. Every track when null.
+    /// </param>
+    public static MixSnapshot Build(Project project, Sequence? sequence = null, AudioEffectHost? effects = null, IReadOnlySet<string>? toMaster = null)
     {
         ArgumentNullException.ThrowIfNull(project);
 
@@ -65,16 +69,21 @@ public static class AudioGraphBuilder
 
             AudioEffectSlot[] chain = effects.Chain(track.Effects, rate, channels, used);
             double tail = chain.Length == 0 ? 0.0 : chain.Max(slot => slot.Effect.TailSeconds);
+            // A role muted or soloed (Phase 40) mutes or solos every track of it.
+            Role? role = Role.Find(project, Role.Of(track));
             tracks.Add(new TrackMix(
                 track.Id,
                 track.Name,
-                track.Muted,
-                track.Solo,
+                track.Muted || role?.Muted == true,
+                track.Solo || role?.Solo == true,
                 ScalarCurve.From(track.Volume, 0.0f, rate),
                 ScalarCurve.From(track.Pan, 0.0f, rate),
                 clips,
                 chain,
-                (long)Math.Ceiling(tail * rate)));
+                (long)Math.Ceiling(tail * rate))
+            {
+                ToMaster = toMaster?.Contains(track.Id) ?? true,
+            });
         }
 
         effects.Retain(used);

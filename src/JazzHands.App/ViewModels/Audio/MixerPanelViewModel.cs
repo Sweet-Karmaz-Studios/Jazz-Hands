@@ -174,7 +174,7 @@ public sealed partial class MixerPanelViewModel : ToolViewModel, IDisposable, Sh
                 }
             }
 
-            strip.Apply(track, Playhead, IsSending(VolumeKey(track.Id)), IsSending(PanKey(track.Id)), tracks);
+            strip.Apply(track, Playhead, IsSending(VolumeKey(track.Id)), IsSending(PanKey(track.Id)), tracks, [.. Role.All(_session.Project)]);
         }
 
         _stripIds = [.. tracks.Select(track => track.Id)];

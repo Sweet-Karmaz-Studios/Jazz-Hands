@@ -57,6 +57,16 @@ public sealed partial class TrackHeaderViewModel : ObservableObject
     [ObservableProperty]
     private bool _canTarget;
 
+    /// <summary>The track's role (Phase 40).</summary>
+    [ObservableProperty]
+    private string _roleName = string.Empty;
+
+    /// <summary>Its role's colour.</summary>
+    [ObservableProperty]
+    private string _roleColor = "#808080";
+
+    private string _nextRole = string.Empty;
+
     internal TrackHeaderViewModel(TimelineViewModel timeline, string trackId)
     {
         _timeline = timeline;
@@ -67,8 +77,13 @@ public sealed partial class TrackHeaderViewModel : ObservableObject
     public string TrackId { get; }
 
     /// <summary>Takes on what the project now says about the track.</summary>
-    internal void Update(Track track, string label, double height, bool isTarget = false)
+    internal void Update(Track track, string label, double height, bool isTarget = false, IReadOnlyList<Role>? roles = null)
     {
+        RoleName = Role.Of(track);
+        Role[] all = [.. roles ?? Role.BuiltIn];
+        int at = Array.FindIndex(all, role => string.Equals(role.Name, RoleName, StringComparison.OrdinalIgnoreCase));
+        RoleColor = at >= 0 ? all[at].Color : "#808080";
+        _nextRole = all.Length == 0 ? string.Empty : all[(at + 1) % all.Length].Name;
         IsTarget = isTarget;
         CanTarget = track.Kind is TrackKind.Video or TrackKind.Audio;
         _committedName = track.Name;
@@ -104,6 +119,10 @@ public sealed partial class TrackHeaderViewModel : ObservableObject
     /// <summary>Locks or unlocks the track.</summary>
     [RelayCommand]
     public Task ToggleLockAsync() => _timeline.RunAsync(new SetTrackLockCommand(TrackId, !Locked));
+
+    /// <summary>Gives the track the next of the project's roles.</summary>
+    [RelayCommand]
+    public Task NextRoleAsync() => _nextRole.Length == 0 ? Task.CompletedTask : _timeline.RunAsync(new SetTrackRoleCommand(TrackId, _nextRole));
 
     /// <summary>Targets the track for edits from the source monitor, or stops.</summary>
     [RelayCommand]

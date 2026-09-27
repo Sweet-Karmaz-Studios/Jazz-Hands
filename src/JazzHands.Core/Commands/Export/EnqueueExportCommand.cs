@@ -39,6 +39,7 @@ namespace JazzHands.Core.Commands;
 /// <param name="OpenFolder">Show the file in Explorer when it is done.</param>
 /// <param name="Run">A script to run when it is done, given the file's path.</param>
 /// <param name="JobId">The id for the new job. A fresh one when left out.</param>
+/// <param name="Stems">Also write a 24-bit WAV per role or per sound track beside the file (Phase 40).</param>
 [Command("export.enqueue",
     Description = "Queue an export of a sequence to a file",
     Undoable = false,
@@ -71,7 +72,8 @@ public sealed record EnqueueExportCommand(
     [property: Option("priority", "low, normal or high")] ExportPriority Priority = ExportPriority.Normal,
     [property: Option("open-folder", "Show the file in Explorer when it is done")] bool OpenFolder = false,
     [property: Option("run", "A script to run when it is done, given the file's path")] string? Run = null,
-    [property: Option("id", "The id for the new job")] string? JobId = null) : ICommand
+    [property: Option("id", "The id for the new job")] string? JobId = null,
+    [property: Option("stems", "none, roles or tracks: also a 24-bit WAV per role or per sound track beside the file")] StemMode Stems = StemMode.None) : ICommand
 {
     /// <summary>The export this asks for.</summary>
     public ExportRequest ToRequest() => new(
@@ -86,7 +88,8 @@ public sealed record EnqueueExportCommand(
         SidecarFormat,
         Chapters,
         ExportOverrideText.Parse(Size, FrameRate, Quality, Bitrate, Encoders, AudioEncoder, AudioBitrate, Channels, Loudness, TargetSize, PixelFormat, AudioOnly),
-        ExportOverrideText.Range(Start, End));
+        ExportOverrideText.Range(Start, End),
+        Stems);
 
     /// <summary>How the queue treats the job.</summary>
     public ExportJobOptions ToOptions() => new(Priority, OpenFolder, string.IsNullOrWhiteSpace(Run) ? null : Run);

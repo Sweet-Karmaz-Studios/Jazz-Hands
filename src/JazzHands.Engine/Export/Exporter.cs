@@ -117,6 +117,12 @@ public static class Exporter
             }
 
             WriteSidecars(plan, project);
+            if (!plan.Stems.IsEmpty)
+            {
+                WriteStems(plan, project, projectPath, cancellationToken);
+                result = result with { Notes = [.. result.Notes, $"Wrote {plan.Stems.Length} {(plan.Stems.Length == 1 ? "stem" : "stems")} beside it."] };
+            }
+
             Log.Information(
                 "Exported {Path}: {Mode} with {Encoder}, {Bytes} bytes, {Duration} in {Seconds:F1} s ({Speed:F1}x real time)",
                 plan.OutputPath,
@@ -314,6 +320,51 @@ public static class Exporter
     }
 
     /// <summary>A sound-only export: the mix straight into the encoder, with no picture to render.</summary>
+    /// <summary>
+    /// Writes the stems (Phase 40): each the whole mix played again with only its tracks reaching
+    /// the master, so a ducker keyed on a track outside the stem still ducks and the stems add up
+    /// to the mix. 24-bit WAV at the mix's rate and channels, over the same stretches, so every
+    /// stem is the same number of samples as the file's sound. No loudness gain: that is the mix's.
+    /// </summary>
+    private static void WriteStems(ExportPlan plan, Project project, string projectPath, CancellationToken cancellationToken)
+    {
+        Sequence sequence = project.Sequence(plan.SequenceId)!;
+        ProjectSettings settings = project.SettingsFor(sequence);
+        int rate = plan.Audio?.SampleRate ?? settings.SampleRate;
+        int channels = plan.Audio?.Channels ?? settings.ChannelCount;
+
+        foreach (ExportStem stem in plan.Stems)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            string temporary = Path.Combine(Path.GetDirectoryName(stem.OutputPath) ?? ".", $".{Path.GetFileNameWithoutExtension(stem.OutputPath)}.{Guid.NewGuid():N}.partial.wav");
+            try
+            {
+                using (Muxer muxer = Muxer.Create(temporary, "wav"))
+                using (AudioEncoder encoder = AudioEncoder.Open(new AudioEncoderSettings("pcm_s24le", rate, channels), muxer.NeedsGlobalHeader))
+                using (var sound = new ExportSound(project, sequence, projectPath, [.. plan.Ranges], rate, channels, new HashSet<string>(stem.TrackIds, StringComparer.Ordinal)))
+                {
+                    int stream = muxer.AddStream(encoder);
+                    muxer.WriteHeader();
+                    for (long written = 0; written < sound.Total; written = Math.Min(sound.Total, written + rate))
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        sound.WriteUpTo(written + rate, encoder, muxer, stream);
+                    }
+
+                    encoder.Flush(muxer, stream);
+                    muxer.Finish();
+                }
+
+                File.Move(temporary, stem.OutputPath, overwrite: true);
+                Log.Information("Wrote the {Stem} stem of {Path}", stem.Name, plan.OutputPath);
+            }
+            finally
+            {
+                TryDelete(temporary);
+            }
+        }
+    }
+
     private static ExportResult EncodeSound(
         ExportPlan plan,
         Project project,

@@ -68,11 +68,13 @@ public static class ExportPlanner
         ExportSubtitles? subtitles = Subtitles(request, sequence, plan, container, reasons);
         bool chapters = request.Chapters && container is { Chapters: true };
 
+        EquatableArray<ExportStem> stems = Stems(project, sequence, request.Stems, plan.OutputPath, reasons);
         plan = plan with
         {
             Subtitles = subtitles,
             Chapters = chapters ? Chapters(sequence, plan.Ranges, plan.Duration) : default,
             Reasons = [.. reasons],
+            Stems = stems,
         };
 
         return plan with { Estimate = ExportEstimates.For(plan, CopiedBytes(project, plan)) };
@@ -100,6 +102,50 @@ public static class ExportPlanner
             string why = error.Message.Replace(" Export with --mode encode instead.", string.Empty, StringComparison.Ordinal);
             return copy with { Reasons = [.. copy.Reasons, $"Copying rather than smart cutting. {why}"] };
         }
+    }
+
+    /// <summary>
+    /// The stems (Phase 40): a WAV per role or per sound track heard in the mix, named after the
+    /// file and the stem, in the file's folder. A role with no sound track heard has none.
+    /// </summary>
+    internal static EquatableArray<ExportStem> Stems(Project project, Sequence sequence, StemMode mode, string outputPath, List<string> reasons)
+    {
+        if (mode == StemMode.None)
+        {
+            return default;
+        }
+
+        Track[] heard = [.. sequence.Tracks
+            .Where(track => track.Kind == TrackKind.Audio && !track.Clips.IsEmpty && Role.Heard(project, sequence, track))
+            .OrderBy(track => track.Order)];
+        IEnumerable<(string Name, string[] Ids)> groups = mode == StemMode.Roles
+            ? heard.GroupBy(track => Role.Of(track), StringComparer.OrdinalIgnoreCase)
+                .OrderBy(group => Role.All(project).IndexOf(role => string.Equals(role.Name, group.Key, StringComparison.OrdinalIgnoreCase)) is var at && at < 0 ? int.MaxValue : at)
+                .Select(group => (group.Key, group.Select(track => track.Id).ToArray()))
+            : heard.Select(track => (track.Name, new[] { track.Id }));
+
+        string folder = Path.GetDirectoryName(outputPath) ?? string.Empty;
+        string stem = Path.GetFileNameWithoutExtension(outputPath);
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var stems = new List<ExportStem>();
+        foreach ((string name, string[] ids) in groups)
+        {
+            string safe = string.Concat(name.Select(character => Path.GetInvalidFileNameChars().Contains(character) ? '_' : character)).Trim();
+            string file = $"{stem} - {safe}";
+            for (int copy = 2; !used.Add(file); copy++)
+            {
+                file = $"{stem} - {safe} {copy}";
+            }
+
+            stems.Add(new ExportStem(name, Path.Combine(folder, file + ".wav"), [.. ids]));
+        }
+
+        if (stems.Count > 0)
+        {
+            reasons.Add($"Writes {stems.Count} {(stems.Count == 1 ? "stem" : "stems")} beside it, 24-bit WAV: {string.Join(", ", stems.Select(item => item.Name))}.");
+        }
+
+        return [.. stems];
     }
 
     /// <summary>For a copy or a smart cut, about how many of the source's bytes it takes: its share of the file by time.</summary>

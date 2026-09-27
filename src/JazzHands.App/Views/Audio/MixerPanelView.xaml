@@ -362,8 +362,15 @@
                                     <!-- The track's name on its colour, and what it is ducked under. Right click for loudness and ducking. -->
                                     <StackPanel Grid.Row="0">
                                         <Border CornerRadius="2" Padding="4,1" Background="{Binding Color, Mode=OneWay}">
-                                            <TextBlock Text="{Binding Name, Mode=OneWay}" TextTrimming="CharacterEllipsis" HorizontalAlignment="Center"
-                                                       Foreground="White" FontWeight="SemiBold" ToolTip="{Binding Name, Mode=OneWay}" />
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Name, Mode=OneWay}" TextTrimming="CharacterEllipsis" HorizontalAlignment="Center"
+                                                           Foreground="White" FontWeight="SemiBold" ToolTip="{Binding Name, Mode=OneWay}" />
+                                                <Border Margin="0,1,0,1" CornerRadius="2" Background="{DynamicResource Brush.Background.Panel}">
+                                                    <TextBlock Text="{Binding RoleName, Mode=OneWay}" HorizontalAlignment="Center"
+                                                               FontSize="{DynamicResource Text.Caption}" Foreground="{Binding RoleColor, Mode=OneWay}"
+                                                               ToolTip="Its role, for stems and muting by role" />
+                                                </Border>
+                                            </StackPanel>
                                             <Border.ContextMenu>
                                                 <ContextMenu>
                                                     <MenuItem Header="Normalise to -14 LUFS" Command="{Binding NormaliseCommand, Mode=OneWay}" />

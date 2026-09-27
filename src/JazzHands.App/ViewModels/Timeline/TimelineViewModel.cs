@@ -527,11 +527,12 @@ public sealed partial class TimelineViewModel : DocumentViewModel
         }
 
         HashSet<string> targeted = [.. Core.Editing.ThreePointOps.TargetedTracks(Content.Sequence).Select(track => track.Id)];
+        Role[] roles = [.. Role.All(_session.Project)];
         for (int index = 0; index < Content.Tracks.Length; index++)
         {
             TrackView track = Content.Tracks[index];
             TrackHeaderViewModel header = existing.GetValueOrDefault(track.Id) ?? new TrackHeaderViewModel(this, track.Id);
-            header.Update(track.Track, labels.GetValueOrDefault(track.Id, string.Empty), Content.Rows[index].Height, targeted.Contains(track.Track.Id));
+            header.Update(track.Track, labels.GetValueOrDefault(track.Id, string.Empty), Content.Rows[index].Height, targeted.Contains(track.Track.Id), roles);
             ordered.Add(header);
         }
 

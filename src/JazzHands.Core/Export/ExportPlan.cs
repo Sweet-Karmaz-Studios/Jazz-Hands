@@ -53,6 +53,7 @@ public enum SubtitleDelivery
 /// <param name="Chapters">Write the sequence's chapter marks into the file.</param>
 /// <param name="Overrides">Changes to the preset for this export, or null to take it as it is.</param>
 /// <param name="Range">Export only this stretch of the sequence, in sequence time; null for all of it.</param>
+/// <param name="Stems">Also write a 24-bit WAV per role or per sound track beside the file (Phase 40).</param>
 public sealed record ExportRequest(
     string OutputPath,
     string Preset = ExportPresets.Default,
@@ -65,7 +66,8 @@ public sealed record ExportRequest(
     Subtitles.SubtitleFormat SidecarFormat = Subtitles.SubtitleFormat.Srt,
     bool Chapters = true,
     ExportOverrides? Overrides = null,
-    TimeRange? Range = null);
+    TimeRange? Range = null,
+    StemMode Stems = StemMode.None);
 
 /// <summary>
 /// Changes to a preset for one export: what the export dialog's overrides and the command line's
@@ -161,6 +163,7 @@ public sealed record ExportChapter(Flicks Start, Flicks End, string Title) : IEq
 /// <param name="TargetBytes">The size the file must come in under, or 0. The exporter checks it and encodes again, smaller, when it does not.</param>
 /// <param name="Estimate">About how big the file is and how long it takes, for the dialog and the dry run.</param>
 /// <param name="Smart">What to copy and what to encode again, for a smart cut.</param>
+/// <param name="Stems">The stem files written beside it, each a 24-bit WAV of some of the sound tracks.</param>
 public sealed record ExportPlan(
     string SequenceId,
     string Preset,
@@ -179,7 +182,32 @@ public sealed record ExportPlan(
     EquatableArray<ExportChapter> Chapters = default,
     long TargetBytes = 0,
     ExportEstimate? Estimate = null,
-    ExportSmart? Smart = null) : IEquatable<ExportPlan>;
+    ExportSmart? Smart = null,
+    EquatableArray<ExportStem> Stems = default) : IEquatable<ExportPlan>;
+
+/// <summary>Which stems an export writes beside the mix (Phase 40).</summary>
+public enum StemMode
+{
+    /// <summary>The mix only.</summary>
+    None,
+
+    /// <summary>A file per role: dialogue, music, effects, game.</summary>
+    Roles,
+
+    /// <summary>A file per sound track.</summary>
+    Tracks,
+}
+
+/// <summary>
+/// One stem: the sound of some tracks, played through the same mix as the file (every track plays,
+/// so a ducker keyed on another track still ducks) but with only these reaching the master, so the
+/// stems add up to the mix. A 24-bit WAV, sample-aligned with the file and the same length.
+/// Loudness normalisation is the mix's alone.
+/// </summary>
+/// <param name="Name">The role or the track.</param>
+/// <param name="OutputPath">Where it is written: the file's name, a dash and the stem's.</param>
+/// <param name="TrackIds">The tracks whose sound it holds.</param>
+public sealed record ExportStem(string Name, string OutputPath, EquatableArray<string> TrackIds) : IEquatable<ExportStem>;
 
 /// <summary>The video side of an encode.</summary>
 /// <param name="Codec">h264, hevc, av1, vp9, prores, dnxhr, ffv1, gif or png.</param>

@@ -23,6 +23,14 @@ public sealed partial class MixerStripViewModel : ObservableObject
     [ObservableProperty]
     private string _color = "#3A6EA5";
 
+    /// <summary>The track's role (Phase 40).</summary>
+    [ObservableProperty]
+    private string _roleName = string.Empty;
+
+    /// <summary>Its role's colour.</summary>
+    [ObservableProperty]
+    private string _roleColor = "#808080";
+
     [ObservableProperty]
     private double _volumeDb;
 
@@ -90,13 +98,15 @@ public sealed partial class MixerStripViewModel : ObservableObject
     /// <param name="keepVolume">True while the fader's own value is on its way, so it is not pulled back mid-drag.</param>
     /// <param name="keepPan">The same for the pan.</param>
     /// <param name="tracks">The sequence's sound tracks, for the ducking key's name and the Duck under menu.</param>
-    internal void Apply(Track track, Flicks playhead, bool keepVolume, bool keepPan, IReadOnlyList<Track> tracks)
+    internal void Apply(Track track, Flicks playhead, bool keepVolume, bool keepPan, IReadOnlyList<Track> tracks, IReadOnlyList<Role>? roles = null)
     {
         _applying = true;
         try
         {
             Name = track.Name;
             Color = track.Color;
+            RoleName = Role.Of(track);
+            RoleColor = (roles ?? Role.BuiltIn).FirstOrDefault(role => string.Equals(role.Name, RoleName, StringComparison.OrdinalIgnoreCase))?.Color ?? "#808080";
             IsMuted = track.Muted;
             IsSolo = track.Solo;
             IsLocked = track.Locked;
