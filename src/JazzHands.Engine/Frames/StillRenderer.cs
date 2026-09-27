@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using JazzHands.Core.Model;
 using JazzHands.Core.Time;
 using JazzHands.Render;
@@ -22,14 +23,20 @@ public sealed record StillFrame(int Width, int Height, float[] Linear, byte[] Bg
 /// </summary>
 /// <remarks>
 /// A frame server of its own on WARP, made when first asked for, so a session that never looks at
-/// a frame never makes a device and a query never competes with playback for the GPU. One frame
-/// at a time behind a lock: queries can arrive on any thread. Full quality, bilinear, the way an
-/// export would draw it.
+/// a frame never makes a device and a query never competes with playback for the GPU. Full
+/// quality, bilinear, the way an export would draw it.
+///
+/// Callers arrive on any thread (a query on the caller's, a command on the session's), but a
+/// frame server's demuxers and decoders belong to the thread that made them, and one used from
+/// another throws and is then left out as unreadable. So every frame is drawn on the renderer's
+/// own thread, made with the device, one at a time, and the caller waits for it.
 /// </remarks>
 public sealed class StillRenderer : IDisposable
 {
     private readonly Lock _gate = new();
     private readonly RenderDevice? _given;
+    private BlockingCollection<Action>? _work;
+    private Thread? _thread;
     private RenderDevice? _device;
     private FrameServer? _frames;
     private ScopeRenderer? _scopes;
@@ -47,14 +54,11 @@ public sealed class StillRenderer : IDisposable
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(sequence);
 
-        lock (_gate)
+        return OnOwnThread(() =>
         {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            _device ??= _given ?? RenderDevice.Create(forceWarp: true);
-            _frames ??= new FrameServer(_device);
-            _scopes ??= new ScopeRenderer(_device);
+            _scopes ??= new ScopeRenderer(_device!);
 
-            RenderTarget stack = _frames.Render(project, sequence, time, new RenderOptions { Bicubic = false }, projectPath);
+            RenderTarget stack = _frames!.Render(project, sequence, time, new RenderOptions { Bicubic = false }, projectPath);
             RenderTarget display = _frames.Compositor.Pool.Rent(stack.Width, stack.Height, Format.B8G8R8A8_UNorm);
             try
             {
@@ -69,7 +73,7 @@ public sealed class StillRenderer : IDisposable
                 _frames.Compositor.Pool.Return(display);
                 _frames.Compositor.Pool.Return(stack);
             }
-        }
+        });
     }
 
     /// <summary>
@@ -91,13 +95,9 @@ public sealed class StillRenderer : IDisposable
         ProjectSettings settings = project.SettingsFor(sequence);
         int height = Math.Max(2, (int)Math.Round(width * (double)settings.Height / settings.Width / 2) * 2);
 
-        lock (_gate)
+        return OnOwnThread(() =>
         {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            _device ??= _given ?? RenderDevice.Create(forceWarp: true);
-            _frames ??= new FrameServer(_device);
-
-            RenderTarget display = _frames.Compositor.Pool.Rent(width, height, Format.B8G8R8A8_UNorm);
+            RenderTarget display = _frames!.Compositor.Pool.Rent(width, height, Format.B8G8R8A8_UNorm);
             try
             {
                 // The preview renders at a fraction of the sequence's size, then fits the panel.
@@ -109,12 +109,13 @@ public sealed class StillRenderer : IDisposable
             {
                 _frames.Compositor.Pool.Return(display);
             }
-        }
+        });
     }
 
     /// <inheritdoc />
     public void Dispose()
     {
+        Thread? thread;
         lock (_gate)
         {
             if (_disposed)
@@ -123,12 +124,74 @@ public sealed class StillRenderer : IDisposable
             }
 
             _disposed = true;
-            _scopes?.Dispose();
-            _frames?.Dispose();
-            if (_given is null)
+            thread = _thread;
+            if (_work is { } work)
             {
-                _device?.Dispose();
+                // What the thread made, it frees, after anything already asked for.
+                work.Add(Release);
+                work.CompleteAdding();
             }
+        }
+
+        if (thread is not null && thread != Thread.CurrentThread)
+        {
+            thread.Join();
+            _work?.Dispose();
+        }
+    }
+
+    /// <summary>Runs a piece of work on the renderer's own thread, starting it first time, and waits for it.</summary>
+    private T OnOwnThread<T>(Func<T> job)
+    {
+        if (Thread.CurrentThread == _thread)
+        {
+            return job();
+        }
+
+        var done = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_work is null)
+            {
+                _work = new BlockingCollection<Action>();
+                BlockingCollection<Action> queue = _work;
+                _thread = new Thread(() =>
+                {
+                    foreach (Action action in queue.GetConsumingEnumerable())
+                    {
+                        action();
+                    }
+                })
+                { IsBackground = true, Name = "Jazz still renderer" };
+                _thread.Start();
+            }
+
+            _work.Add(() =>
+            {
+                try
+                {
+                    _device ??= _given ?? RenderDevice.Create(forceWarp: true);
+                    _frames ??= new FrameServer(_device);
+                    done.SetResult(job());
+                }
+                catch (Exception exception)
+                {
+                    done.SetException(exception);
+                }
+            });
+        }
+
+        return done.Task.GetAwaiter().GetResult();
+    }
+
+    private void Release()
+    {
+        _scopes?.Dispose();
+        _frames?.Dispose();
+        if (_given is null)
+        {
+            _device?.Dispose();
         }
     }
 

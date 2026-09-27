@@ -141,6 +141,11 @@ public sealed partial class WheelViewModel : ObservableObject
 /// <param name="Neutral">The text for no change.</param>
 public sealed record CurveChoice(string Name, string Label, bool Periodic, string Neutral);
 
+/// <summary>A clip the graded one can be matched to.</summary>
+/// <param name="ClipId">The reference clip.</param>
+/// <param name="Label">Its name and where it starts.</param>
+public sealed record MatchChoice(string ClipId, string Label);
+
 /// <summary>
 /// The Color panel: lift, gamma, gain and offset wheels with saturation, contrast and pivot, and a
 /// curve editor, for the selected clip's first Colour wheels and first Curves effect.
@@ -150,6 +155,8 @@ public sealed record CurveChoice(string Name, string Label, bool Periodic, strin
 /// <see cref="ParamSender"/>, so the CLI, MCP and the inspector see the same values and a drag is
 /// one undo step. With no such effect on the clip the panel offers to add one. Every control resets
 /// on its own: double-click or Backspace on a wheel or the curve, the reset button beside each.
+/// "Match to" grades the clip like another clip in its sequence (<c>color.match</c>), reading the
+/// frame under the playhead of whichever of the two it is over and the middle of the other.
 /// </remarks>
 public sealed partial class ColorPanelViewModel : ToolViewModel
 {
@@ -318,6 +325,65 @@ public sealed partial class ColorPanelViewModel : ToolViewModel
         _ui.Post(() => Status = result.Ok ? string.Empty : result.Error ?? result.Code ?? "That did not work.");
     }
 
+    /// <summary>The other pictures in the clip's sequence it can be matched to, in timeline order.</summary>
+    public System.Collections.ObjectModel.ObservableCollection<MatchChoice> MatchChoices { get; } = [];
+
+    /// <summary>True when there is something to match to and no match is running.</summary>
+    [ObservableProperty]
+    private bool _canMatch;
+
+    private bool _matching;
+
+    /// <summary>Grades the clip to look like another, on its Colour wheels (one undo step).</summary>
+    [RelayCommand]
+    private async Task MatchTo(MatchChoice? choice)
+    {
+        if (_clipId is not { } clipId || choice is null || _matching)
+        {
+            return;
+        }
+
+        Project project = _session.Project;
+        Flicks? Under(string id) => project.FindClip(id) is { } found && _playback?.Position is { } at && at >= found.Clip.Start && at < found.Clip.End ? at : null;
+
+        _matching = true;
+        CanMatch = false;
+        Status = $"Matching the colour to {choice.Label}...";
+        CommandResult result = await _session.ExecuteAsync(new MatchColorCommand(clipId, choice.ClipId, Under(clipId), Under(choice.ClipId))).ConfigureAwait(true);
+        _ui.Post(() =>
+        {
+            _matching = false;
+            Status = result.Ok ? string.Empty : result.Error ?? result.Code ?? "That did not work.";
+            Reload();
+        });
+    }
+
+    private void LoadMatchChoices(Project project, ClipLocation? found)
+    {
+        MatchChoice[] choices = found is null
+            ? []
+            : [.. found.Sequence.Tracks
+                .Where(track => track.Kind == TrackKind.Video)
+                .SelectMany(track => track.Clips)
+                .Where(clip => clip.Id != found.Clip.Id && clip.MediaId is not null)
+                .OrderBy(clip => clip.Start)
+                .Select(clip => new MatchChoice(clip.Id, $"{Name(project, clip)} at {Timecode.Format(clip.Start, project.SettingsFor(found.Sequence).FrameRate)}"))];
+
+        if (!choices.SequenceEqual(MatchChoices))
+        {
+            MatchChoices.Clear();
+            foreach (MatchChoice choice in choices)
+            {
+                MatchChoices.Add(choice);
+            }
+        }
+
+        CanMatch = !_matching && MatchChoices.Count > 0;
+
+        static string Name(Project project, Clip clip) =>
+            clip.Name.Length > 0 ? clip.Name : project.Media.FirstOrDefault(item => item.Id == clip.MediaId)?.Name ?? "a clip";
+    }
+
     /// <summary>Reads the selected clip and its effects into the controls, sending nothing.</summary>
     private void Reload()
     {
@@ -340,6 +406,7 @@ public sealed partial class ColorPanelViewModel : ToolViewModel
 
             Effect? wheels = found?.Clip.Effects.FirstOrDefault(effect => effect.TypeId == "color.wheels");
             Effect? curves = found?.Clip.Effects.FirstOrDefault(effect => effect.TypeId == "color.curves");
+            LoadMatchChoices(project, found);
             WheelsId = wheels?.Id;
             CurvesId = curves?.Id;
 

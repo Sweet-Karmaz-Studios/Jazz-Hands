@@ -1674,6 +1674,22 @@ Copy clips as JSON for clip.paste.
 
 Colour: sample the picture's colour at a point. Tone mapping is on clips and the project.
 
+### `jazz color match <project> <clip-id>`
+
+Match a clip's colour to another clip.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The clip to grade. |
+
+| Option | Meaning |
+|---|---|
+| `--to <id>` | Required. The clip whose colour to match. |
+| `--at <time>` | The clip's frame to look at, on the timeline; its middle when not given. |
+| `--reference-at <time>` | The reference's frame to look at, on the timeline; its middle when not given. |
+| `--no-save` | Do not write the project back. |
+
 ### `jazz color sample <project>`
 
 Read the picture's colour at a point.
