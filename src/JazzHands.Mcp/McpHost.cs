@@ -132,6 +132,7 @@ public static class McpHost
             new() { Uri = "jazz://cli-reference", Name = "cli reference", Description = "The jazz command line reference", MimeType = "text/markdown" },
             new() { Uri = "jazz://docs", Name = "docs", Description = "The manual's index: every area and its tools", MimeType = "text/markdown" },
             new() { Uri = "jazz://docs/workflow", Name = "workflow", Description = "How to edit with these tools: the loop, times, ids, undo, working alongside a person", MimeType = "text/markdown" },
+            new() { Uri = "jazz://transcript", Name = "transcript", Description = "What is said in the active sequence, a line per sentence, each word after its index; jazz://transcript/<clipId> for one clip. speech_transcribe hears it first", MimeType = "text/plain" },
         ];
         resources.AddRange(McpDocs.Areas.Select(area => new Resource
         {
@@ -168,6 +169,21 @@ public static class McpHost
                 return ("text/markdown", McpDocs.Index());
             case "jazz://docs/workflow":
                 return ("text/markdown", McpDocs.Workflow());
+        }
+
+        if (uri == "jazz://transcript" || uri.StartsWith("jazz://transcript/", StringComparison.Ordinal))
+        {
+            string target = uri.Length > "jazz://transcript/".Length ? uri["jazz://transcript/".Length..] : string.Empty;
+            JsonObject args = target.Length > 0 ? new JsonObject { ["targetId"] = target } : [];
+            JsonNode? transcript = await link.CallAsync("speech.transcript", args, cancellationToken).ConfigureAwait(false);
+            JsonNode? data = transcript?["data"] ?? transcript;
+            string text = data?["text"]?.GetValue<string>() ?? string.Empty;
+            if (data?["untranscribed"] is JsonArray missing && missing.Count > 0)
+            {
+                text += $"Not transcribed yet (speech_transcribe hears them): {string.Join(", ", missing.Select(id => id?.GetValue<string>()))}\n";
+            }
+
+            return ("text/plain", text.Length > 0 ? text : "Nothing is said here that has been transcribed.\n");
         }
 
         if (uri.StartsWith("jazz://docs/", StringComparison.Ordinal) && McpDocs.Page(uri["jazz://docs/".Length..]) is { } page)

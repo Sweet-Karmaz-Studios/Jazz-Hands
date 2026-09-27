@@ -31,6 +31,7 @@ public sealed class PanelPlacement : ILayoutUpdateStrategy
         ["source"] = ProgramPane,
         ["inspector"] = InspectorPane,
         ["curves"] = InspectorPane,
+        ["transcript"] = InspectorPane,
         ["history"] = InspectorPane,
         ["mixer"] = ProgramPane,
         ["scopes"] = UtilityPane,

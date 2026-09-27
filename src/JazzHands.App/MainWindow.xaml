@@ -10,6 +10,8 @@
         xmlns:audiovm="clr-namespace:JazzHands.App.ViewModels.Audio"
         xmlns:subtitles="clr-namespace:JazzHands.App.Views.Subtitles"
         xmlns:subtitlesvm="clr-namespace:JazzHands.App.ViewModels.Subtitles"
+        xmlns:transcript="clr-namespace:JazzHands.App.Views.Transcript"
+        xmlns:transcriptvm="clr-namespace:JazzHands.App.ViewModels.Transcript"
         xmlns:playback="clr-namespace:JazzHands.App.Views.Playback"
         xmlns:playbackvm="clr-namespace:JazzHands.App.ViewModels.Playback"
         xmlns:timeline="clr-namespace:JazzHands.App.Views.Timeline"
@@ -65,6 +67,9 @@
              Phase 27 is a template here and a registration in AppServices. -->
         <DataTemplate DataType="{x:Type mediavm:MediaPanelViewModel}">
             <media:MediaPanelView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type transcriptvm:TranscriptPanelViewModel}">
+            <transcript:TranscriptPanelView />
         </DataTemplate>
         <DataTemplate DataType="{x:Type subtitlesvm:SubtitlesPanelViewModel}">
             <subtitles:SubtitlesPanelView />

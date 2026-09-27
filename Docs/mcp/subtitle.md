@@ -7,3 +7,5 @@ Subtitles live on subtitle tracks, one clip per cue, with the words as markup (`
 - `subtitle_list` shows a track's cues; `subtitle_read` shows a file's without importing it; `subtitle_export` writes a track as SRT, VTT or ASS.
 
 On export (`export_enqueue`'s `subtitles`), cues can be soft (a stream the player can turn off), burned into the picture, or written beside the file as a sidecar.
+
+From speech: `subtitle_from_transcript` makes captions from what is said, and `subtitle_check` checks cues for line length, reading speed, time on screen and gaps (see jazz://docs/speech).

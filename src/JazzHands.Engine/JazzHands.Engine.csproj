@@ -14,6 +14,7 @@
     <ProjectReference Include="..\JazzHands.Media\JazzHands.Media.csproj" />
     <ProjectReference Include="..\JazzHands.Render\JazzHands.Render.csproj" />
     <ProjectReference Include="..\JazzHands.Audio\JazzHands.Audio.csproj" />
+    <ProjectReference Include="..\JazzHands.Speech\JazzHands.Speech.csproj" />
   </ItemGroup>
 
   <ItemGroup>

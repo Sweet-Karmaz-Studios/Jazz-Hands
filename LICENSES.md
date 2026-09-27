@@ -36,6 +36,18 @@ from ACES ships as a file; the port is checked against OpenColorIO (BSD-3-Clause
 only by the test tools (`tools/get-aces-reference.ps1`, `tools/aces-reference.py`) and not shipped.
 ACES is a trademark of the Academy of Motion Picture Arts and Sciences.
 
+## Machine learning models
+
+No model ships with Jazz Hands. Each is fetched from its project's own release only when the
+person asks (`model.download`, or the button in the Transcript panel that says its size), checked
+against a pinned SHA-256, and kept in `%LOCALAPPDATA%\JazzHands\models`.
+
+| Model | Licence | Where from |
+|---|---|---|
+| whisper large-v3-turbo, whisper.cpp's ggml build (speech to text, Phase 39) | MIT (OpenAI's Whisper weights and whisper.cpp's conversion) | <https://huggingface.co/ggerganov/whisper.cpp> |
+| Robust Video Matting, MobileNetV3 (Phase 43) | GPL-3.0 | <https://github.com/PeterL1n/RobustVideoMatting> |
+| DeepFilterNet 3 (Phase 43) | MIT or Apache 2.0 | <https://github.com/Rikorose/DeepFilterNet> |
+
 ## .NET libraries
 
 Each is used as published on nuget.org, unmodified.
@@ -56,6 +68,7 @@ Each is used as published on nuget.org, unmodified.
 | SQLite (e_sqlite3) | Public domain | <https://sqlite.org> |
 | Ulid | MIT | <https://github.com/Cysharp/Ulid> |
 | Humanizer | MIT | <https://github.com/Humanizr/Humanizer> |
+| Whisper.net, Whisper.net.Runtime, Whisper.net.Runtime.Vulkan (whisper.cpp and ggml inside) | MIT | <https://github.com/sandrohanea/whisper.net>, <https://github.com/ggml-org/whisper.cpp> |
 | JsonSchema.Net, JsonPointer.Net, Json.More.Net | MIT source; the published binaries come with the json-everything EULA | <https://github.com/json-everything/json-everything> |
 
 ## Fonts and icons

@@ -65,7 +65,8 @@ public sealed partial class MainViewModel : ObservableObject
         StatusBarViewModel? statusBar = null,
         JazzHands.App.Shell.DesktopStatus? desktop = null,
         JazzHands.App.Shell.AppLifetime? lifetime = null,
-        SourcePanelViewModel? source = null)
+        SourcePanelViewModel? source = null,
+        Transcript.TranscriptPanelViewModel? transcript = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(media);
@@ -85,6 +86,7 @@ public sealed partial class MainViewModel : ObservableObject
         Color = color;
         Mixer = mixer;
         Subtitles = subtitles;
+        Transcript = transcript;
         Console = console;
         _files = files;
         _dialogs = dialogs;
@@ -102,6 +104,11 @@ public sealed partial class MainViewModel : ObservableObject
         if (meters is not null)
         {
             Panels.Add(meters);
+        }
+
+        if (transcript is not null)
+        {
+            Panels.Add(transcript);
         }
 
         if (subtitles is not null)
@@ -215,6 +222,9 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>The Subtitles panel, when the host made one.</summary>
     public Subtitles.SubtitlesPanelViewModel? Subtitles { get; }
+
+    /// <summary>The Transcript panel, when the host made one.</summary>
+    public Transcript.TranscriptPanelViewModel? Transcript { get; }
 
     /// <summary>The Audio Mixer, when the window has a transport to meter.</summary>
     public MixerPanelViewModel? Mixer { get; }

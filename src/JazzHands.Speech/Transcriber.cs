@@ -13,6 +13,11 @@ namespace JazzHands.Speech;
 /// <param name="Dtw">Time words by the model's cross-attention (DTW), which follows speech more closely than token timestamps.</param>
 public sealed record TranscriberOptions(string ModelPath, string? Language = "en", bool Gpu = true, bool Dtw = true);
 
+/// <summary>What a transcription heard.</summary>
+/// <param name="Words">The words, in order.</param>
+/// <param name="Language">The language, ISO 639-1: the one asked for, or the one whisper detected.</param>
+public sealed record HeardSpeech(IReadOnlyList<TranscribedWord> Words, string Language);
+
 /// <summary>
 /// Speech to text on this machine (Phase 39): whisper.cpp through Whisper.net, 16 kHz mono in,
 /// words with their times out. The GPU is reached through Vulkan, which the graphics driver
@@ -56,6 +61,14 @@ public static class Transcriber
         float[] samples,
         TranscriberOptions options,
         IProgress<double>? progress = null,
+        CancellationToken cancellationToken = default) =>
+        (await HearAsync(samples, options, progress, cancellationToken).ConfigureAwait(false)).Words;
+
+    /// <summary>The words in 16 kHz mono samples, and the language they were heard as: the one asked for, or the one detected.</summary>
+    public static async Task<HeardSpeech> HearAsync(
+        float[] samples,
+        TranscriberOptions options,
+        IProgress<double>? progress = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(samples);
@@ -84,6 +97,34 @@ public static class Transcriber
             HeadsPreset = options.Dtw ? HeadsFor(options.ModelPath) : WhisperAlignmentHeadsPreset.None,
         };
 
+        // One hearing at a time on this machine, across processes: the model takes gigabytes of
+        // memory and video memory, and the editor and jazz may both be asked at once.
+        using var machine = new Semaphore(1, 1, MachineGate);
+        if (WaitHandle.WaitAny([machine, cancellationToken.WaitHandle]) == 1)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+
+        try
+        {
+            return await HearAloneAsync(samples, options, factoryOptions, progress, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            machine.Release();
+        }
+    }
+
+    /// <summary>The name of the semaphore that keeps to one hearing at a time on the machine.</summary>
+    internal const string MachineGate = @"Local\JazzHands.Speech";
+
+    private static async Task<HeardSpeech> HearAloneAsync(
+        float[] samples,
+        TranscriberOptions options,
+        WhisperFactoryOptions factoryOptions,
+        IProgress<double>? progress,
+        CancellationToken cancellationToken)
+    {
         using WhisperFactory factory = WhisperFactory.FromPath(options.ModelPath, factoryOptions);
         var tokens = new List<HeardToken>();
         IReadOnlyList<(int Start, int Length)> pieces = Pieces(samples);
@@ -119,7 +160,7 @@ public static class Transcriber
 
         progress?.Report(1.0);
         Log.Information("Transcribed {Seconds:F1} s in {Pieces} pieces on {Runtime} into {Tokens} tokens", samples.Length / (double)SampleRate, pieces.Count, Runtime, tokens.Count);
-        return Words(tokens, options.Dtw ? Loudness(samples) : null);
+        return new HeardSpeech(Words(tokens, options.Dtw ? Loudness(samples) : null), language ?? "en");
     }
 
     /// <summary>

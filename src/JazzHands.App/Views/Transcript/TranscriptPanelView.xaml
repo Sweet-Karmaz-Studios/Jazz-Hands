@@ -1,0 +1,130 @@
+<UserControl x:Class="JazzHands.App.Views.Transcript.TranscriptPanelView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:JazzHands.App.ViewModels.Transcript"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:TranscriptPanelViewModel}"
+             Background="{DynamicResource Brush.Background.Panel}"
+             Focusable="True">
+
+    <UserControl.InputBindings>
+        <KeyBinding Key="Delete" Command="{Binding DeleteSelectedCommand, Mode=OneWay}" />
+        <KeyBinding Key="Back" Command="{Binding DeleteSelectedCommand, Mode=OneWay}" />
+    </UserControl.InputBindings>
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="Visible" />
+
+        <Style x:Key="Caption" TargetType="{x:Type TextBlock}">
+            <Setter Property="FontSize" Value="{DynamicResource Text.Caption}" />
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+        </Style>
+
+        <!-- A word: greyed when a filler, marked when searched for, lit while it is said, filled when selected. -->
+        <DataTemplate x:Key="WordTemplate" DataType="{x:Type vm:TranscriptWordViewModel}">
+            <Border x:Name="Word" Padding="2,1" Margin="0,1,2,1" CornerRadius="2" Background="Transparent" Cursor="Hand"
+                    BorderThickness="0,0,0,2" BorderBrush="Transparent" ToolTip="{Binding Tip, Mode=OneWay}"
+                    MouseLeftButtonDown="OnWordClicked">
+                <TextBlock x:Name="Text" Text="{Binding Text, Mode=OneWay}" Foreground="{DynamicResource Brush.Text.Primary}" />
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsFiller, Mode=OneWay}" Value="True">
+                    <Setter TargetName="Text" Property="Foreground" Value="{DynamicResource Brush.Text.Disabled}" />
+                    <Setter TargetName="Text" Property="FontStyle" Value="Italic" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsMatch, Mode=OneWay}" Value="True">
+                    <Setter TargetName="Word" Property="BorderBrush" Value="{DynamicResource Brush.Warning}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsCurrent, Mode=OneWay}" Value="True">
+                    <Setter TargetName="Text" Property="Foreground" Value="{DynamicResource Brush.Accent}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsSelected, Mode=OneWay}" Value="True">
+                    <Setter TargetName="Word" Property="Background" Value="{DynamicResource Brush.Background.Selected}" />
+                </DataTrigger>
+                <Trigger SourceName="Word" Property="IsMouseOver" Value="True">
+                    <Setter TargetName="Word" Property="BorderBrush" Value="{DynamicResource Brush.Border.Strong}" />
+                </Trigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <DockPanel Margin="{DynamicResource Space.Normal}">
+        <!-- What is shown, and the tools. -->
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+            <Button DockPanel.Dock="Right" Style="{StaticResource Button.Text}" Content="Remove fillers and pauses" Command="{Binding RemoveFillersCommand, Mode=OneWay}"
+                    ToolTip="Cut every greyed filler word, and shorten every pause over a second to a quarter second. One undo" />
+            <Button DockPanel.Dock="Right" Style="{StaticResource Button.Text}" Content="Transcribe" Command="{Binding TranscribeCommand, Mode=OneWay}"
+                    ToolTip="Hear what is said here, on this computer" />
+            <TextBlock DockPanel.Dock="Left" Text="{Binding Scope, Mode=OneWay}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0"
+                       TextTrimming="CharacterEllipsis" ToolTip="The selected clip, or the whole sequence when none is selected" />
+            <TextBlock DockPanel.Dock="Left" Style="{StaticResource Caption}">
+                <Run Text="{Binding FillerText, Mode=OneWay}" />
+            </TextBlock>
+            <Border />
+        </DockPanel>
+
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+            <Button DockPanel.Dock="Right" Style="{StaticResource Button.Text}" Content="Delete selected" Command="{Binding DeleteSelectedCommand, Mode=OneWay}"
+                    ToolTip="Cut the selected words out of the picture and the sound, with the pause after them (Delete)" />
+            <Button DockPanel.Dock="Right" Style="{StaticResource Button.Text}" Content="Next" Command="{Binding FindNextCommand, Mode=OneWay}"
+                    ToolTip="Go to the next word that matches" />
+            <TextBlock DockPanel.Dock="Right" Style="{StaticResource Caption}" Margin="6,0,6,0">
+                <Run Text="{Binding MatchCount, Mode=OneWay}" /><Run Text=" found" />
+            </TextBlock>
+            <TextBlock DockPanel.Dock="Left" Text="Search" Style="{StaticResource Caption}" />
+            <TextBox Style="{StaticResource TextBox.Field}" Text="{Binding Search, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                     AutomationProperties.Name="Search the transcript" ToolTip="Words that start with what you type" />
+        </DockPanel>
+
+        <!-- The model, fetched only when asked, its size said on the button. -->
+        <Button DockPanel.Dock="Top" Margin="0,0,0,6" HorizontalAlignment="Left" Style="{StaticResource Button.Text}"
+                Content="{Binding ModelText, Mode=OneWay}" Command="{Binding DownloadModelCommand, Mode=OneWay}"
+                Visibility="{Binding NeedsModel, Mode=OneWay, Converter={StaticResource Visible}}"
+                ToolTip="From whisper.cpp's own release on Hugging Face, checked by its SHA-256. Kept in the models folder, not the cache" />
+
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,4,0,0">
+            <Button DockPanel.Dock="Right" Style="{StaticResource Button.Text}" Content="Stop" Command="{Binding CancelCommand, Mode=OneWay}"
+                    Visibility="{Binding IsBusy, Mode=OneWay, Converter={StaticResource Visible}}" />
+            <ProgressBar DockPanel.Dock="Right" Width="120" Height="4" Margin="6,0" Minimum="0" Maximum="1" Value="{Binding Progress, Mode=OneWay}"
+                         Visibility="{Binding IsBusy, Mode=OneWay, Converter={StaticResource Visible}}" />
+            <TextBlock Text="{Binding Status, Mode=OneWay}" TextTrimming="CharacterEllipsis" Style="{StaticResource Caption}" />
+        </DockPanel>
+
+        <Grid>
+            <TextBlock Text="{Binding EmptyText, Mode=OneWay}" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap"
+                       TextAlignment="Center" Style="{StaticResource Caption}" Margin="16"
+                       Visibility="{Binding IsEmpty, Mode=OneWay, Converter={StaticResource Visible}}" />
+
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+                <ItemsControl ItemsSource="{Binding Paragraphs, Mode=OneWay}" AutomationProperties.Name="Transcript">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:TranscriptParagraph}">
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="84" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding Time, Mode=OneWay}" FontFamily="{DynamicResource Font.Mono}" Style="{StaticResource Caption}"
+                                           VerticalAlignment="Top" Margin="0,2,6,0" />
+                                <TextBlock Grid.Column="1" Text="{Binding PauseText, Mode=OneWay}" FontStyle="Italic"
+                                           Foreground="{DynamicResource Brush.Text.Disabled}"
+                                           Visibility="{Binding IsPause, Mode=OneWay, Converter={StaticResource Visible}}" />
+                                <ItemsControl Grid.Column="1" ItemsSource="{Binding Words, Mode=OneWay}" ItemTemplate="{StaticResource WordTemplate}" Focusable="False">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                </ItemsControl>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Grid>
+    </DockPanel>
+</UserControl>

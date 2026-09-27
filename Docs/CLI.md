@@ -893,6 +893,22 @@ Remove a range and close the gap.
 | `--sequence <id>` | Which sequence. |
 | `--no-save` | Do not write the project back. |
 
+### `jazz clip find-fillers <project> <clip-id>`
+
+List the filler words and long pauses clip.remove-fillers would cut.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The clip id. |
+
+| Option | Meaning |
+|---|---|
+| `--words <list>` | Comma-separated filler words. Default: um,uh,er,erm,ah,hmm,mm. |
+| `--pauses <time>` | Shorten pauses longer than this, such as 0.8s. |
+| `--keep <time>` | How much of a long pause to keep. Default: 0.25 s. |
+| `--fillers` | Take out filler words. Default: on. Default: true. |
+
 ### `jazz clip freeze-frame <project> <clip-id>`
 
 Hold a frame for a while, pushing the rest on.
@@ -1249,6 +1265,38 @@ Remove a clip, leaving a gap or closing it.
 | Option | Meaning |
 |---|---|
 | `--ripple` | Close the gap behind it. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz clip remove-fillers <project> <clip-id>`
+
+Cut filler words and long pauses out of a clip.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The clip id. |
+
+| Option | Meaning |
+|---|---|
+| `--words <list>` | Comma-separated filler words. Default: um,uh,er,erm,ah,hmm,mm. |
+| `--pauses <time>` | Shorten pauses longer than this, such as 0.8s. |
+| `--keep <time>` | How much of a long pause to keep. Default: 0.25 s. |
+| `--fillers` | Take out filler words. Default: on. Default: true. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz clip remove-words <project> <clip-id>`
+
+Cut words out of a clip, closing the gap.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The clip id. |
+
+| Option | Meaning |
+|---|---|
+| `--from <n>` | Required. The first word's index, from speech.transcript. |
+| `--to <n>` | The last word's index; the first when left out. |
 | `--no-save` | Do not write the project back. |
 
 ### `jazz clip ripple-delete <project> <clip-ids>`
@@ -2959,6 +3007,32 @@ List the folders being watched for new recordings.
 |---|---|
 | `<project>` | The .jazz file to work on. |
 
+## `jazz model`
+
+The machine learning models: which are downloaded, and fetching one, checked by its SHA-256.
+
+### `jazz model download <project> <name>`
+
+Download a machine learning model, checked by its SHA-256.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<name>` | The model's name, from model.list. |
+
+| Option | Meaning |
+|---|---|
+| `--force` | Download it again even when present. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz model list <project>`
+
+List the machine learning models and whether each is downloaded.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
 ## `jazz multicam`
 
 Recordings of the same moment synced into one clip, and cut between by angle.
@@ -4217,6 +4291,35 @@ What the source monitor has open, and its marks.
 |---|---|
 | `<project>` | The .jazz file to work on. |
 
+## `jazz speech`
+
+Speech to text on this machine: transcribe, and read the words with their times; cut by them in clip.
+
+### `jazz speech transcribe <project> [target-id]`
+
+Transcribe speech into words with their times.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<target-id>` | A media, clip or sequence id; the active sequence when left out. Optional. |
+
+| Option | Meaning |
+|---|---|
+| `--stream <n>` | The sound stream's index in the file. |
+| `--language <language>` | An ISO 639-1 code such as en, or auto. Default: en. Default: en. |
+| `--again` | Transcribe again even when cached. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz speech transcript <project> [target-id]`
+
+The words said in a clip or sequence, with their times.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<target-id>` | A clip or sequence id; the active sequence when left out. Optional. |
+
 ## `jazz subtitle`
 
 Subtitles: import and export SRT, VTT and ASS; cues, their text, times and place; styles.
@@ -4239,6 +4342,19 @@ Add a subtitle cue.
 | `--id <id>` | The identifier to give it. |
 | `--no-save` | Do not write the project back. |
 
+### `jazz subtitle check <project> <track-id>`
+
+Check subtitle cues for line length, reading speed and gaps.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<track-id>` | The subtitle track id. |
+
+| Option | Meaning |
+|---|---|
+| `--max-cps <number>` | The most characters a second. Default: 20. Default: 20. |
+
 ### `jazz subtitle export <project> <track-id>`
 
 Write a subtitle track as SRT, VTT or ASS.
@@ -4252,6 +4368,23 @@ Write a subtitle track as SRT, VTT or ASS.
 |---|---|
 | `--format <srt|vtt|ass>` | srt, vtt or ass. |
 | `--out <out>` | The file to write. |
+
+### `jazz subtitle from-transcript <project> <track-id>`
+
+Make captions from the transcript.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<track-id>` | The subtitle track id. |
+
+| Option | Meaning |
+|---|---|
+| `--clip <id>` | Only this clip's words. |
+| `--max-chars <n>` | The most characters a line. |
+| `--max-lines <n>` | The most lines a cue. |
+| `--min-gap <n>` | The fewest frames between cues. Default: 2. Default: 2. |
+| `--no-save` | Do not write the project back. |
 
 ### `jazz subtitle import <project> [file]`
 

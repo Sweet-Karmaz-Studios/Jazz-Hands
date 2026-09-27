@@ -36,6 +36,7 @@ internal static class CacheHelp
         services?.GetService<ThumbnailService>()?.Forget(hash);
         services?.GetService<WaveformService>()?.Forget(hash);
         services?.GetService<SceneCutService>()?.Forget(hash);
+        services?.GetService<TranscriptionService>()?.Forget(hash);
 
         try
         {
@@ -98,6 +99,7 @@ public sealed class ClearCacheHandler : ICommandHandler<ClearCacheCommand>
         ThumbnailService? thumbnails = context.Services?.GetService<ThumbnailService>();
         WaveformService? waveforms = context.Services?.GetService<WaveformService>();
         SceneCutService? scenes = context.Services?.GetService<SceneCutService>();
+        TranscriptionService? transcripts = context.Services?.GetService<TranscriptionService>();
         ProxyService? proxies = context.Services?.GetService<ProxyService>();
 
         CacheParts parts = PartsOf(command);
@@ -123,6 +125,7 @@ public sealed class ClearCacheHandler : ICommandHandler<ClearCacheCommand>
                 if (parts.HasFlag(CacheParts.Analyses))
                 {
                     scenes?.Forget(item.Hash);
+                    transcripts?.Forget(item.Hash);
                 }
 
                 if (dropProxies)
@@ -150,6 +153,7 @@ public sealed class ClearCacheHandler : ICommandHandler<ClearCacheCommand>
         if (parts.HasFlag(CacheParts.Analyses))
         {
             scenes?.Clear();
+            transcripts?.Clear();
         }
 
         if (dropProxies)

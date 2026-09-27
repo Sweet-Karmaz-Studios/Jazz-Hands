@@ -20,3 +20,5 @@ The edits, from simple to editorial:
 Linked clips move together; grouped clips select together. `clip_nest` turns clips into a sequence of their own shown as one compound clip; `clip_unnest` undoes that.
 
 Speed: `clip_speed_preset` puts a packaged ramp on a clip at a moment: `impact` (slow into it, snap back), `traversal` (speed through `dur`), `rewind` (the seconds before, backwards and fast with a VHS look, on a track above) or `replay` (them again in slow motion with a label). `clip_set_motion_blur` blurs what a clip's animation moves; `clip_set_matte` shows it only through another track.
+
+By what is said: `clip_remove_words` and `clip_remove_fillers` cut words, fillers and long pauses out of a clip (see jazz://docs/speech).
