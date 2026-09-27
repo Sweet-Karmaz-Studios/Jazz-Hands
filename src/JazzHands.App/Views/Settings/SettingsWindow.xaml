@@ -94,7 +94,7 @@
                 </DockPanel>
                 <DockPanel Style="{StaticResource Row}">
                     <TextBlock Style="{StaticResource Label}" Text="Cache folder" />
-                    <TextBox Text="{Binding CacheLocation, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Cache folder" />
+                    <TextBox Style="{StaticResource TextBox.Hinted}" Tag="The default, in local application data" Text="{Binding CacheLocation, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Cache folder" />
                 </DockPanel>
                 <TextBlock Style="{StaticResource Note}" Text="The limit changes at once; a new folder is used from the next start. Leave the folder empty for the default in local application data." />
                 <CheckBox Style="{StaticResource CheckBox.Dark}" Margin="170,0,0,8" Content="Play proxies instead of their sources" IsChecked="{Binding PlayProxies, Mode=TwoWay}" />
@@ -119,7 +119,7 @@
                 </DockPanel>
                 <DockPanel Style="{StaticResource Row}">
                     <TextBlock Style="{StaticResource Label}" Text="Folder" />
-                    <TextBox Text="{Binding ExportFolder, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Default export folder" />
+                    <TextBox Style="{StaticResource TextBox.Hinted}" Tag="Beside the project" Text="{Binding ExportFolder, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Default export folder" />
                 </DockPanel>
                 <TextBlock Style="{StaticResource Note}" Text="Empty puts exports beside the project, or in Videos for a project not saved yet. A Quick Trim exports beside its recording." />
             </StackPanel>
@@ -129,15 +129,27 @@
                 <TextBlock Style="{StaticResource Heading}" Text="Remote control" />
                 <TextBlock Style="{StaticResource Note}" Margin="0,0,0,12" Text="jazz --attach and Claude Code reach the editor over a named pipe only you can open. TCP is for another machine, and is off unless turned on here." />
                 <CheckBox Style="{StaticResource CheckBox.Dark}" Margin="170,0,0,8" Content="Listen on TCP too" IsChecked="{Binding ControlTcp, Mode=TwoWay}" />
-                <DockPanel Style="{StaticResource Row}">
-                    <TextBlock Style="{StaticResource Label}" Text="Port" />
-                    <TextBox Text="{Binding ControlPort, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="100" HorizontalAlignment="Left" AutomationProperties.Name="TCP port" />
-                </DockPanel>
-                <DockPanel Style="{StaticResource Row}">
-                    <TextBlock Style="{StaticResource Label}" Text="Address" />
-                    <TextBox Text="{Binding ControlAddress, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="TCP address" />
-                </DockPanel>
-                <CheckBox Style="{StaticResource CheckBox.Dark}" Margin="170,0,0,8" Content="Let other machines connect (anyone with the token can edit)" IsChecked="{Binding ControlAllowRemote, Mode=TwoWay}" />
+                <!-- The port, the address and other machines apply only with TCP on: they fade with it off. -->
+                <StackPanel IsEnabled="{Binding ControlTcp, Mode=OneWay}">
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Style.Triggers>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter Property="Opacity" Value="0.45" />
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+                    <DockPanel Style="{StaticResource Row}">
+                        <TextBlock Style="{StaticResource Label}" Text="Port" />
+                        <TextBox Text="{Binding ControlPort, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="100" HorizontalAlignment="Left" AutomationProperties.Name="TCP port" />
+                    </DockPanel>
+                    <DockPanel Style="{StaticResource Row}">
+                        <TextBlock Style="{StaticResource Label}" Text="Address" />
+                        <TextBox Text="{Binding ControlAddress, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="TCP address" />
+                    </DockPanel>
+                    <CheckBox Style="{StaticResource CheckBox.Dark}" Margin="170,0,0,8" Content="Let other machines connect (anyone with the token can edit)" IsChecked="{Binding ControlAllowRemote, Mode=TwoWay}" />
+                </StackPanel>
                 <TextBlock Style="{StaticResource Note}" Text="Used from the next start. While other machines can connect, a warning stays at the bottom of the window." />
             </StackPanel>
 

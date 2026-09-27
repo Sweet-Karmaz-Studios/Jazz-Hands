@@ -29,6 +29,9 @@ public sealed record HistoryRow(int Index, string Label, string Command, string 
         "" or "local" => string.Empty,
         _ => Origin,
     };
+
+    /// <summary>Said after an undone step's label, so it is not told by its dimmer colour alone.</summary>
+    public string Mark => IsUndone ? "undone" : string.Empty;
 }
 
 /// <summary>
