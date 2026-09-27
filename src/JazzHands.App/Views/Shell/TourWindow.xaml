@@ -18,24 +18,26 @@
         ShowInTaskbar="False"
         Background="{DynamicResource Brush.Background.Panel}"
         Foreground="{DynamicResource Brush.Text.Primary}">
-    <StackPanel x:Name="Root" Margin="20,16,20,16">
-        <TextBlock Text="{Binding Counter, Mode=OneWay}"
-                   FontSize="{DynamicResource Text.Caption}"
-                   Foreground="{DynamicResource Brush.Text.Secondary}" />
-        <TextBlock Margin="0,4,0,8"
-                   Text="{Binding Step.Title, Mode=OneWay}"
-                   FontSize="{DynamicResource Text.Heading}"
-                   FontWeight="SemiBold" />
-        <!-- The height of the longest card, so the buttons do not jump from card to card. -->
-        <TextBlock MinHeight="96"
-                   Text="{Binding Step.Text, Mode=OneWay}"
-                   TextWrapping="Wrap"
-                   LineHeight="19"
-                   AutomationProperties.Name="What this card says" />
-        <DockPanel Margin="0,16,0,0" LastChildFill="False">
-            <Button DockPanel.Dock="Left" Style="{StaticResource Button.Text}" Content="Close" IsCancel="True" Click="OnClose" AutomationProperties.Name="Close the tour" />
-            <Button DockPanel.Dock="Right" Style="{StaticResource Button.Primary}" Margin="8,0,0,0" Content="{Binding NextLabel, Mode=OneWay}" IsDefault="True" Command="{Binding NextCommand, Mode=OneWay}" AutomationProperties.Name="Next card" />
-            <Button DockPanel.Dock="Right" Style="{StaticResource Button.Secondary}" Content="Back" Command="{Binding BackCommand, Mode=OneWay}" AutomationProperties.Name="Previous card" />
-        </DockPanel>
+    <StackPanel x:Name="Root" Background="{DynamicResource Brush.Background.Panel}">
+        <StackPanel Margin="20,16,20,16">
+            <TextBlock Text="{Binding Counter, Mode=OneWay}"
+                       FontSize="{DynamicResource Text.Caption}"
+                       Foreground="{DynamicResource Brush.Text.Secondary}" />
+            <TextBlock Margin="0,4,0,8"
+                       Text="{Binding Step.Title, Mode=OneWay}"
+                       FontSize="{DynamicResource Text.Heading}"
+                       FontWeight="SemiBold" />
+            <!-- The height of the longest card, so the buttons do not jump from card to card. -->
+            <TextBlock MinHeight="96"
+                       Text="{Binding Step.Text, Mode=OneWay}"
+                       TextWrapping="Wrap"
+                       LineHeight="19"
+                       AutomationProperties.Name="What this card says" />
+            <DockPanel Margin="0,16,0,0" LastChildFill="False">
+                <Button DockPanel.Dock="Left" Style="{StaticResource Button.Text}" Content="Close" IsCancel="True" Click="OnClose" AutomationProperties.Name="Close the tour" />
+                <Button DockPanel.Dock="Right" Style="{StaticResource Button.Primary}" Margin="8,0,0,0" Content="{Binding NextLabel, Mode=OneWay}" IsDefault="True" Command="{Binding NextCommand, Mode=OneWay}" AutomationProperties.Name="Next card" />
+                <Button DockPanel.Dock="Right" Style="{StaticResource Button.Secondary}" Content="Back" Command="{Binding BackCommand, Mode=OneWay}" AutomationProperties.Name="Previous card" />
+            </DockPanel>
+        </StackPanel>
     </StackPanel>
 </Window>
