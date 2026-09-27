@@ -30,6 +30,8 @@ namespace JazzHands.Core.Commands;
 /// <param name="Streams">Every stream, in container order.</param>
 /// <param name="UsedByClips">How many clips in the project play it.</param>
 /// <param name="ProxyPath">Its proxy, when one has been made.</param>
+/// <param name="Subclip">For a subclip, which item it came from and its stretch of the file.</param>
+/// <param name="Markers">Markers on the file, at source times.</param>
 public sealed record MediaItemInfo(
     string Id,
     string Name,
@@ -56,7 +58,9 @@ public sealed record MediaItemInfo(
     long SizeBytes,
     EquatableArray<MediaStream> Streams,
     int UsedByClips,
-    string? ProxyPath);
+    string? ProxyPath,
+    SubclipRange? Subclip = null,
+    EquatableArray<Marker> Markers = default);
 
 /// <summary>What reading a file said about it, before any decision to import it.</summary>
 /// <param name="Path">The file that was read.</param>

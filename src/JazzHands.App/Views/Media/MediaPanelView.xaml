@@ -177,6 +177,7 @@
                     <ContextMenu>
                         <MenuItem Header="Quick Trim" Command="{Binding QuickTrimCommand, Mode=OneWay}" ToolTip="Keep and cut stretches of this recording in a sequence of its own" />
                         <Separator />
+                        <MenuItem Header="Find scene cuts..." Command="{Binding FindSceneCutsCommand, Mode=OneWay}" ToolTip="Find where the shots change in an edited video, then mark them or make a subclip of each" />
                         <MenuItem Header="Reveal in Explorer" Command="{Binding RevealCommand, Mode=OneWay}" />
                         <MenuItem Header="Re-read from disk" Command="{Binding ReprobeCommand, Mode=OneWay}" />
                         <MenuItem Header="Generate proxy" Command="{Binding GenerateProxyCommand, Mode=OneWay}" />
@@ -236,6 +237,12 @@
                                                        Foreground="{DynamicResource Brush.Warning}"
                                                        ToolTip="{Binding ConformSummary, Mode=OneWay}"
                                                        Visibility="{Binding IsConformed, Mode=OneWay, Converter={StaticResource BoolToVisible}}" />
+                                            <TextBlock Text="  subclip"
+                                                       VerticalAlignment="Center"
+                                                       FontSize="{DynamicResource Text.Caption}"
+                                                       Foreground="{DynamicResource Brush.Text.Secondary}"
+                                                       ToolTip="{Binding SubclipSummary, Mode=OneWay}"
+                                                       Visibility="{Binding IsSubclip, Mode=OneWay, Converter={StaticResource BoolToVisible}}" />
                                         </StackPanel>
                                         <ItemsControl Margin="18,2,0,2"
                                                       ItemsSource="{Binding Streams, Mode=OneWay}"

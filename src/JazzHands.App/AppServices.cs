@@ -57,8 +57,10 @@ public static class AppServices
                 provider.GetRequiredService<ExportDialogViewModel>,
                 provider.GetRequiredService<ViewModels.Settings.SettingsViewModel>,
                 provider.GetRequiredService<MissingMediaViewModel>,
-                provider.GetRequiredService<ConsolidateViewModel>));
+                provider.GetRequiredService<ConsolidateViewModel>,
+                provider.GetRequiredService<SceneCutsViewModel>));
         services.AddTransient<MissingMediaViewModel>();
+        services.AddTransient<SceneCutsViewModel>();
         services.AddTransient<ConsolidateViewModel>();
 
         services.AddTransient<ImportViewModel>();

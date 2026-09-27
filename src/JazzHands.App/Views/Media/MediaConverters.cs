@@ -63,3 +63,21 @@ public sealed class EnumMatchConverter : IValueConverter
             : Binding.DoNothing;
     }
 }
+
+/// <summary>
+/// A fraction of a width, for placing a mark across a strip: the fraction and the strip's
+/// <c>ActualWidth</c> in, the left offset out.
+/// </summary>
+public sealed class FractionOfWidthConverter : IMultiValueConverter
+{
+    /// <inheritdoc />
+    public object Convert(object[] values, Type targetType, object? parameter, CultureInfo culture)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        return values is [double fraction, double width] ? Math.Round(fraction * width) : 0.0;
+    }
+
+    /// <inheritdoc />
+    public object[] ConvertBack(object? value, Type[] targetTypes, object? parameter, CultureInfo culture) =>
+        throw new NotSupportedException("An offset does not become a fraction.");
+}

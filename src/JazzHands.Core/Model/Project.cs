@@ -319,6 +319,9 @@ public enum MarkerKind
 
     /// <summary>A beat of the music, from <c>audio.beats</c>: the timeline snaps to it and <c>edit.cut-to-beats</c> cuts on it.</summary>
     Beat,
+
+    /// <summary>A shot change in an edited video, from <c>marker.add-at-cuts</c>, which replaces its own each time.</summary>
+    SceneCut,
 }
 
 /// <summary>A point or range of interest on a sequence, a clip or a piece of media.</summary>
@@ -668,6 +671,8 @@ public sealed record TransitionDefaults(string Video, string Audio, Flicks Durat
 /// <param name="VfrConform">Whether to remap variable frame timing onto the project's grid.</param>
 /// <param name="Info">What the probe found, cached.</param>
 /// <param name="Sequence">The numbering, when this is an image sequence.</param>
+/// <param name="Subclip">When this item is a stretch of another's file: which, and where (Phase 37).</param>
+/// <param name="Markers">Markers on the file itself, at source times: the shot changes scene detection found, and anything marked in the source monitor.</param>
 public sealed record MediaItem(
     string Id,
     string RelativePath,
@@ -683,7 +688,9 @@ public sealed record MediaItem(
     AutoSetting Deinterlace = AutoSetting.Auto,
     AutoSetting VfrConform = AutoSetting.Auto,
     MediaInfo? Info = null,
-    ImageSequenceInfo? Sequence = null) : IEquatable<MediaItem>
+    ImageSequenceInfo? Sequence = null,
+    SubclipRange? Subclip = null,
+    EquatableArray<Marker> Markers = default) : IEquatable<MediaItem>
 {
     /// <summary>
     /// True when this item's frames should be remapped onto the project's grid.
@@ -710,6 +717,31 @@ public sealed record MediaItem(
 
     /// <summary>True when this item is a still or a run of numbered images.</summary>
     public bool IsImages => Kind is MediaKind.Still or MediaKind.ImageSequence;
+
+    /// <summary>Where a clip of this item starts in the file by default: a subclip's in, or the start.</summary>
+    public Flicks DefaultIn => Subclip?.In ?? Flicks.Zero;
+
+    /// <summary>Where a clip of this item ends in the file by default: a subclip's out, or the end.</summary>
+    public Flicks DefaultOut => Subclip is { } subclip ? Flicks.Min(subclip.Out, Duration) : Duration;
+}
+
+/// <summary>
+/// The stretch of a file a subclip stands for: a media item of its own, in its own folder, that
+/// plays the same file as <see cref="ParentId"/> from <see cref="In"/> to <see cref="Out"/>.
+/// </summary>
+/// <remarks>
+/// A subclip copies its file's path, hash and probe, so everything that reads a file reads it
+/// unchanged, and only says where a clip of it starts and ends when it is put on a timeline. The
+/// limits are soft, as Premiere's are by default: a clip of a subclip can be trimmed past them,
+/// into the rest of the file.
+/// </remarks>
+/// <param name="ParentId">The media item it was made from; kept even if that item is removed.</param>
+/// <param name="In">Where it starts in the file.</param>
+/// <param name="Out">Where it ends in the file, exclusive.</param>
+public sealed record SubclipRange(string ParentId, Flicks In, Flicks Out) : IEquatable<SubclipRange>
+{
+    /// <summary>How long it runs.</summary>
+    public Flicks Duration => Out - In;
 }
 
 /// <summary>

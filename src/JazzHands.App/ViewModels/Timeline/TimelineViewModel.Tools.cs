@@ -281,6 +281,7 @@ public sealed partial class TimelineViewModel
             TimelineMenuItem.Separator,
             new("Split at playhead", "Ctrl+K", () => RunAsync(Batch([.. underPlayhead.Select(id => (ICommand)new SplitClipCommand(id, playhead))], "Split")), underPlayhead.Length > 0),
             new("Freeze frame at playhead", null, () => RunAsync(new FreezeFrameCommand(clip.Id, playhead)), clip.Kind != TrackKind.Audio && clip.Start <= playhead && playhead < clip.End),
+            new("Split at scene cuts...", null, () => _dialogs?.ShowSceneCutsAsync(clip.Clip.MediaId!, clip.Id) ?? Task.CompletedTask, HasShots(clip)),
             new("Ripple delete", "Shift+Delete", () => RunAsync(new RippleDeleteClipsCommand([.. ids]))),
             new("Delete", "Delete", () => RunAsync(Batch([.. ids.Select(id => (ICommand)new RemoveClipCommand(id))], "Delete"))),
             TimelineMenuItem.Separator,
@@ -659,6 +660,14 @@ public sealed partial class TimelineViewModel
                 return;
         }
     }
+
+    /// <summary>True when a clip plays a video file, so it has shots to find (Phase 37).</summary>
+    private bool HasShots(ClipView clip) =>
+        _dialogs is not null
+        && clip.Kind != TrackKind.Audio
+        && clip.Clip.MediaId is { } mediaId
+        && _session.Project.MediaItem(mediaId) is { Kind: MediaKind.Movie } item
+        && item.Info?.VideoStreams.Any() != false;
 
     private void PreviewRazor(Point point)
     {

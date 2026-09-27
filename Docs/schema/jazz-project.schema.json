@@ -662,7 +662,8 @@
           "type": "string",
           "enum": [
             "standard",
-            "beat"
+            "beat",
+            "sceneCut"
           ]
         },
         "downbeat": {
@@ -946,6 +947,22 @@
               "type": "null"
             }
           ]
+        },
+        "subclip": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/subclipRange"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "markers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/marker"
+          }
         }
       },
       "required": [
@@ -1349,6 +1366,25 @@
         "primaries",
         "transfer",
         "matrix"
+      ]
+    },
+    "subclipRange": {
+      "type": "object",
+      "properties": {
+        "parentId": {
+          "type": "string"
+        },
+        "in": {
+          "$ref": "#/$defs/flicks"
+        },
+        "out": {
+          "$ref": "#/$defs/flicks"
+        }
+      },
+      "required": [
+        "parentId",
+        "in",
+        "out"
       ]
     },
     "subtitleStyle": {

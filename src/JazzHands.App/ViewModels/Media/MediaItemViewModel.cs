@@ -51,8 +51,16 @@ public sealed partial class MediaItemViewModel : ObservableObject
     /// <summary>The colour label's name, or empty.</summary>
     public string Color => Item.Color;
 
-    /// <summary>The duration column.</summary>
-    public string Duration => Timecode.Format(Item.Duration, Rate);
+    /// <summary>The duration column: a subclip's own length.</summary>
+    public string Duration => Timecode.Format(Item.DefaultOut - Item.DefaultIn, Rate);
+
+    /// <summary>True for a subclip, a stretch of another item's file.</summary>
+    public bool IsSubclip => Item.Subclip is not null;
+
+    /// <summary>Which stretch of its file a subclip is, for its tooltip; empty for anything else.</summary>
+    public string SubclipSummary => Item.Subclip is { } subclip
+        ? $"{Timecode.Format(subclip.In, Rate)} to {Timecode.Format(subclip.Out, Rate)} of {System.IO.Path.GetFileName(Item.RelativePath)}"
+        : string.Empty;
 
     /// <summary>The frame rate column, blank for something with no picture.</summary>
     public string FrameRate => Picture?.FrameRate is { } rate && !rate.IsZero

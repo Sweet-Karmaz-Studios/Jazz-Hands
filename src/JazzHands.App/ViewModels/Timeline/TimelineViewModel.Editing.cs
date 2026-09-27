@@ -1102,8 +1102,8 @@ public sealed partial class TimelineViewModel
                 return [];
             }
 
-            adds.Add(new AddClipCommand(trackId, at, MediaId: mediaId, Duration: item.Duration));
-            at += item.Duration;
+            adds.Add(new AddClipCommand(trackId, at, MediaId: mediaId, Duration: item.DefaultOut - item.DefaultIn));
+            at += item.DefaultOut - item.DefaultIn;
         }
 
         return adds.ToImmutable();

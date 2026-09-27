@@ -87,7 +87,7 @@ public sealed class AddClipHandler : ICommandHandler<AddClipCommand>
         var clip = new Clip(
             id,
             new TimeRange(command.At, duration),
-            command.SourceIn ?? Flicks.Zero,
+            command.SourceIn ?? media?.DefaultIn ?? Flicks.Zero,
             MediaId: command.MediaId,
             GeneratorId: command.GeneratorId,
             SequenceId: command.SequenceId,
@@ -218,7 +218,9 @@ public sealed class AddClipHandler : ICommandHandler<AddClipCommand>
     {
         if (command.MediaId is { } mediaId && project.MediaItem(mediaId) is { } media)
         {
-            Flicks remaining = media.Duration - (command.SourceIn ?? Flicks.Zero);
+            // A subclip runs to its out, unless the clip starts past it.
+            Flicks sourceIn = command.SourceIn ?? media.DefaultIn;
+            Flicks remaining = (sourceIn < media.DefaultOut ? media.DefaultOut : media.Duration) - sourceIn;
             return remaining > Flicks.Zero ? remaining : Flicks.Zero;
         }
 

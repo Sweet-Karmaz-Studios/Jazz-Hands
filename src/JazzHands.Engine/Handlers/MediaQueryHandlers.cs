@@ -129,7 +129,9 @@ public sealed class ListMediaHandler : IQueryHandler<ListMediaQuery, MediaItemIn
             info.SizeBytes,
             info.Streams,
             uses.GetValueOrDefault(item.Id),
-            item.ProxyPath);
+            item.ProxyPath,
+            item.Subclip,
+            item.Markers);
     }
 
     /// <summary>

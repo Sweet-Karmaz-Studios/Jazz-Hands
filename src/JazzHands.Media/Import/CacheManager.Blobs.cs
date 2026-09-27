@@ -23,8 +23,11 @@ public enum CacheParts
     /// <summary>Waveform peaks.</summary>
     Waveforms = 8,
 
+    /// <summary>What reading a whole file found: scene cuts (Phase 37), and the analyses after them.</summary>
+    Analyses = 16,
+
     /// <summary>Everything in the database and its blob folder. Proxies are the proxy service's.</summary>
-    All = Probes | Keyframes | Thumbnails | Waveforms,
+    All = Probes | Keyframes | Thumbnails | Waveforms | Analyses,
 }
 
 /// <summary>What the cache holds, for <c>cache.stats</c>.</summary>
@@ -268,6 +271,11 @@ public sealed partial class CacheManager
             if (parts.HasFlag(CacheParts.Keyframes))
             {
                 Execute("DELETE FROM keyframes");
+            }
+
+            if (parts.HasFlag(CacheParts.Analyses))
+            {
+                Execute("DELETE FROM analysis");
             }
 
             if (parts.HasFlag(CacheParts.Thumbnails) && parts.HasFlag(CacheParts.Waveforms))

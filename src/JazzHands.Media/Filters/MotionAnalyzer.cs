@@ -53,17 +53,17 @@ public static unsafe class MotionAnalyzer
 
         try
         {
-            AVFilterContext* movie = Filter(graph, "movie", ("filename", path), ("si", streamIndex.ToString(CultureInfo.InvariantCulture)));
-            AVFilterContext* format = Filter(graph, "format", ("pix_fmts", "yuv420p"));
-            AVFilterContext* scale = Filter(graph, "scale", ("w", $"min({MaxWidth},iw)"), ("h", "-2"));
-            AVFilterContext* detect = Filter(
+            AVFilterContext* movie = FilterGraphs.Filter(graph, "movie", ("filename", path), ("si", streamIndex.ToString(CultureInfo.InvariantCulture)));
+            AVFilterContext* format = FilterGraphs.Filter(graph, "format", ("pix_fmts", "yuv420p"));
+            AVFilterContext* scale = FilterGraphs.Filter(graph, "scale", ("w", $"min({MaxWidth},iw)"), ("h", "-2"));
+            AVFilterContext* detect = FilterGraphs.Filter(
                 graph,
                 "vidstabdetect",
                 ("result", transforms),
                 ("fileformat", "ascii"),
                 ("shakiness", Math.Clamp(shakiness, 1, 10).ToString(CultureInfo.InvariantCulture)),
                 ("accuracy", "15"));
-            AVFilterContext* sink = Filter(graph, "buffersink");
+            AVFilterContext* sink = FilterGraphs.Filter(graph, "buffersink");
 
             Av.Check(ffmpeg.avfilter_link(movie, 0, format, 0), "avfilter_link (movie)");
             Av.Check(ffmpeg.avfilter_link(format, 0, scale, 0), "avfilter_link (format)");
@@ -118,24 +118,5 @@ public static unsafe class MotionAnalyzer
                 Logger.Warning(exception, "Could not delete the transforms file {Path}", transforms);
             }
         }
-    }
-
-    /// <summary>Makes one filter in the graph with its options set.</summary>
-    private static AVFilterContext* Filter(AVFilterGraph* graph, string name, params (string Key, string Value)[] options)
-    {
-        AVFilter* type = ffmpeg.avfilter_get_by_name(name);
-        if (type is null)
-        {
-            throw new FfmpegException($"This FFmpeg build has no {name} filter.");
-        }
-
-        AVFilterContext* context = Av.CheckAlloc(ffmpeg.avfilter_graph_alloc_filter(graph, type, name), $"avfilter_graph_alloc_filter ({name})");
-        foreach ((string key, string value) in options)
-        {
-            Av.Check(ffmpeg.av_opt_set(context, key, value, ffmpeg.AV_OPT_SEARCH_CHILDREN), $"av_opt_set ({name} {key})", value);
-        }
-
-        Av.Check(ffmpeg.avfilter_init_str(context, null), $"avfilter_init_str ({name})");
-        return context;
     }
 }

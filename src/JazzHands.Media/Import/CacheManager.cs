@@ -25,6 +25,7 @@ public sealed partial class CacheManager : IDisposable
 {
     private readonly ILogger _log = Log.ForContext<CacheManager>();
     private SqliteConnection _connection = null!;
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Lock> Opening = new(StringComparer.OrdinalIgnoreCase);
     private readonly Lock _gate = new();
     private bool _disposed;
 
@@ -38,9 +39,21 @@ public sealed partial class CacheManager : IDisposable
 
         DatabasePath = Path.Combine(Folder, "cache.db");
 
+        // One opening at a time per file in this process: a new database is switched to WAL and
+        // given its tables while the others wait, rather than meeting its locks half way.
+        lock (Opening.GetOrAdd(Path.GetFullPath(DatabasePath), _ => new Lock()))
+        {
+            OpenOrRepair();
+        }
+
+        _blobBytes = SumBlobBytes();
+    }
+
+    private void OpenOrRepair()
+    {
         try
         {
-            Open();
+            OpenPatiently();
         }
         catch (SqliteException damaged) when (damaged.SqliteErrorCode is Corrupt or NotADatabase)
         {
@@ -57,10 +70,8 @@ public sealed partial class CacheManager : IDisposable
             }
 
             _log.Warning(damaged, "The cache at {Path} was damaged; it is set aside and started again", DatabasePath);
-            Open();
+            OpenPatiently();
         }
-
-        _blobBytes = SumBlobBytes();
     }
 
     /// <summary>The environment variable that moves the cache elsewhere, for tests and CI.</summary>
@@ -225,7 +236,7 @@ public sealed partial class CacheManager : IDisposable
 
         lock (_gate)
         {
-            foreach (string table in new[] { "probe", "thumbs", "waveform", "keyframes" })
+            foreach (string table in new[] { "probe", "thumbs", "waveform", "keyframes", "analysis" })
             {
                 // A probe is kept as hash#probeN; the suffix goes with it. Rows the new hash
                 // already has win, and the old ones left over are dropped.
@@ -269,6 +280,11 @@ public sealed partial class CacheManager : IDisposable
             if (parts.HasFlag(CacheParts.Keyframes))
             {
                 tables.Add("keyframes");
+            }
+
+            if (parts.HasFlag(CacheParts.Analyses))
+            {
+                tables.Add("analysis");
             }
 
             foreach (string table in tables)
@@ -319,6 +335,36 @@ public sealed partial class CacheManager : IDisposable
     private const int Corrupt = 11;
     private const int NotADatabase = 26;
 
+    /// <summary>
+    /// <see cref="Open"/>, tried again for a few seconds while another process has the new
+    /// database locked (switching it to WAL, making its tables).
+    /// </summary>
+    /// <remarks>
+    /// A statement prepared while the schema is locked fails with SQLITE_BUSY, and SQLitePCL then
+    /// throws <see cref="ArgumentOutOfRangeException"/> from its prepare rather than letting
+    /// Microsoft.Data.Sqlite wait on the busy timeout, so the wait is here. Within one process the
+    /// openings are one at a time already; this is for the editor and jazz starting together.
+    /// </remarks>
+    private void OpenPatiently()
+    {
+        for (int attempt = 1; ; attempt++)
+        {
+            try
+            {
+                Open();
+                return;
+            }
+            catch (Exception busy) when (attempt < 50 && busy is ArgumentOutOfRangeException or SqliteException { SqliteErrorCode: Busy or Locked })
+            {
+                _log.Debug(busy, "The cache at {Path} is busy; trying again", DatabasePath);
+                Thread.Sleep(100);
+            }
+        }
+    }
+
+    private const int Busy = 5;
+    private const int Locked = 6;
+
     /// <summary>Opens the database, brings it up to date and checks it; throws when it is damaged.</summary>
     private void Open()
     {
@@ -326,7 +372,11 @@ public sealed partial class CacheManager : IDisposable
         {
             DataSource = DatabasePath,
             Mode = SqliteOpenMode.ReadWriteCreate,
-            Cache = SqliteCacheMode.Shared,
+            // A private cache: in shared-cache mode two connections in one process that want the same
+            // lock fail at once with SQLITE_LOCKED rather than waiting on the busy timeout, so two
+            // sessions opening a new cache together crashed (2026-09-27). Private, they wait as two
+            // processes do.
+            Cache = SqliteCacheMode.Private,
         }.ToString());
 
         try
@@ -439,6 +489,14 @@ public sealed partial class CacheManager : IDisposable
                 ptsJson  TEXT NOT NULL,
                 lastUsed INTEGER NOT NULL,
                 PRIMARY KEY (hash, stream));
+
+            CREATE TABLE IF NOT EXISTS analysis (
+                hash     TEXT NOT NULL,
+                stream   INTEGER NOT NULL,
+                kind     TEXT NOT NULL,
+                data     BLOB NOT NULL,
+                lastUsed INTEGER NOT NULL,
+                PRIMARY KEY (hash, stream, kind));
 
             CREATE TABLE IF NOT EXISTS blobs (
                 id       TEXT PRIMARY KEY,

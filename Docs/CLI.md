@@ -719,6 +719,7 @@ Empty the cache, or parts of it.
 | `--waveforms` | Waveforms. |
 | `--probes` | Probes. |
 | `--keyframes` | Keyframe indexes. |
+| `--analyses` | Scene cuts and the other whole-file analyses. |
 | `--proxies` | Proxy files. |
 | `--all` | Everything, proxies included. |
 | `--no-save` | Do not write the project back. |
@@ -1441,6 +1442,22 @@ Cut a clip in two at a timeline time.
 |---|---|
 | `--at <time>` | Required. Where to cut, on the timeline. |
 | `--id <id>` | The identifier for the right half. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz clip split-at-cuts <project> <clip-id>`
+
+Split a clip at the shot changes in its video.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The clip id. |
+
+| Option | Meaning |
+|---|---|
+| `--threshold <number>` | How much has to change, 0 to 100; lower finds more. Default: 10. Default: 10. |
+| `--min-shot <time>` | The shortest shot there can be. Default: 0.5 s. |
+| `--linked` | Split its linked clips too. Default: on. Default: true. |
 | `--no-save` | Do not write the project back. |
 
 ### `jazz clip stabilize <project> <clip-id>`
@@ -2302,6 +2319,22 @@ Put a marker on a sequence or a clip.
 | `--id <id>` | The identifier to give it. |
 | `--no-save` | Do not write the project back. |
 
+### `jazz marker add-at-cuts <project> <target-id>`
+
+Mark the shot changes in a clip or a media item.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<target-id>` | A clip id or a media id. |
+
+| Option | Meaning |
+|---|---|
+| `--threshold <number>` | How much has to change, 0 to 100; lower finds more. Default: 10. Default: 10. |
+| `--min-shot <time>` | The shortest shot there can be. Default: 0.5 s. |
+| `--color <color>` | The markers' colour, as a hex string or a name. |
+| `--no-save` | Do not write the project back. |
+
 ### `jazz marker list <project>`
 
 List markers, in time order.
@@ -2440,6 +2473,24 @@ Import files, folders or globs into the project.
 | `--fps <rate>` | The rate an image sequence plays at. |
 | `--no-save` | Do not write the project back. |
 
+### `jazz media add-subclip <project> <media-id>`
+
+Make a media item for a stretch of another's file.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<media-id>` | The media id. |
+
+| Option | Meaning |
+|---|---|
+| `--in <time>` | Required. Where it starts in the file. |
+| `--out <time>` | Required. Where it ends in the file. |
+| `--name <name>` | Its name. |
+| `--folder <folder>` | The Media panel folder to put it in. |
+| `--id <id>` | The identifier to give it. |
+| `--no-save` | Do not write the project back. |
+
 ### `jazz media analyze-motion <project> <media-id>`
 
 Analyse a video's camera motion for stabilization.
@@ -2461,6 +2512,21 @@ Say which media files are there, missing, or changed.
 | Argument | Meaning |
 |---|---|
 | `<project>` | The .jazz file to work on. |
+
+### `jazz media detect-cuts <project> <media-id>`
+
+Find the shot changes in an edited video.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<media-id>` | The media id. |
+
+| Option | Meaning |
+|---|---|
+| `--threshold <number>` | How much has to change, 0 to 100; lower finds more. Default: 10. Default: 10. |
+| `--min-shot <time>` | The shortest shot there can be. Default: 0.5 s. |
+| `--stream <n>` | The video stream's index in the file. |
 
 ### `jazz media get <project> <media-id>`
 
@@ -2603,6 +2669,22 @@ Change a media item's name, folder, tags or conform settings.
 | `--conform <fit|fill|stretch|native>` | fit, fill, stretch or native. |
 | `--deinterlace <auto|on|off>` | auto, on or off. |
 | `--vfr-conform <auto|on|off>` | auto, on or off. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz media subclips-from-cuts <project> <media-id>`
+
+Make a subclip of every shot in an edited video.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<media-id>` | The media id. |
+
+| Option | Meaning |
+|---|---|
+| `--threshold <number>` | How much has to change, 0 to 100; lower finds more. Default: 10. Default: 10. |
+| `--min-shot <time>` | The shortest shot there can be. Default: 0.5 s. |
+| `--folder <folder>` | The folder to put them in. |
 | `--no-save` | Do not write the project back. |
 
 ### `jazz media unwatch <project> [folder]`

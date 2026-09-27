@@ -305,7 +305,7 @@ public sealed class RelinkMediaHandler : ICommandHandler<RelinkMediaCommand>
     private static Project Moved(Project project, MediaItem item, string full, HandlerContext context)
     {
         context.Changed(item.Id);
-        return project.WithMedia(item with { RelativePath = HandlerHelp.Store(context, full) });
+        return SameFile(project.WithMedia(item with { RelativePath = HandlerHelp.Store(context, full) }), item, context);
     }
 
     private static Project Relink(Project project, MediaItem item, string full, bool force, HandlerContext context)
@@ -343,13 +343,32 @@ public sealed class RelinkMediaHandler : ICommandHandler<RelinkMediaCommand>
 
         context.Changed(item.Id);
 
-        return project.WithMedia(item with
+        return SameFile(
+            project.WithMedia(item with
+            {
+                RelativePath = HandlerHelp.Store(context, full),
+                Hash = imported.Item.Hash,
+                Info = imported.Item.Info,
+                Duration = force ? imported.Item.Duration : item.Duration,
+            }),
+            item,
+            context);
+    }
+
+    /// <summary>
+    /// Takes the items that played the same file as <paramref name="before"/> (its subclips, Phase 37) to
+    /// where it went, so relinking a file relinks every stretch of it.
+    /// </summary>
+    private static Project SameFile(Project project, MediaItem before, HandlerContext context)
+    {
+        MediaItem after = project.MediaItem(before.Id)!;
+        foreach (MediaItem other in project.Media.Where(other => other.Id != before.Id && string.Equals(other.RelativePath, before.RelativePath, StringComparison.OrdinalIgnoreCase)).ToArray())
         {
-            RelativePath = HandlerHelp.Store(context, full),
-            Hash = imported.Item.Hash,
-            Info = imported.Item.Info,
-            Duration = force ? imported.Item.Duration : item.Duration,
-        });
+            context.Changed(other.Id);
+            project = project.WithMedia(other with { RelativePath = after.RelativePath, Hash = after.Hash, Info = after.Info, Duration = after.Duration });
+        }
+
+        return project;
     }
 }
 

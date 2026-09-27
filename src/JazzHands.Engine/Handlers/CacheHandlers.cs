@@ -35,6 +35,7 @@ internal static class CacheHelp
         cache?.Forget(hash);
         services?.GetService<ThumbnailService>()?.Forget(hash);
         services?.GetService<WaveformService>()?.Forget(hash);
+        services?.GetService<SceneCutService>()?.Forget(hash);
 
         try
         {
@@ -96,6 +97,7 @@ public sealed class ClearCacheHandler : ICommandHandler<ClearCacheCommand>
         CacheManager cache = CacheHelp.Cache(context.Services);
         ThumbnailService? thumbnails = context.Services?.GetService<ThumbnailService>();
         WaveformService? waveforms = context.Services?.GetService<WaveformService>();
+        SceneCutService? scenes = context.Services?.GetService<SceneCutService>();
         ProxyService? proxies = context.Services?.GetService<ProxyService>();
 
         CacheParts parts = PartsOf(command);
@@ -118,6 +120,11 @@ public sealed class ClearCacheHandler : ICommandHandler<ClearCacheCommand>
                     waveforms?.Forget(item.Hash);
                 }
 
+                if (parts.HasFlag(CacheParts.Analyses))
+                {
+                    scenes?.Forget(item.Hash);
+                }
+
                 if (dropProxies)
                 {
                     proxies?.Remove(item.Hash);
@@ -138,6 +145,11 @@ public sealed class ClearCacheHandler : ICommandHandler<ClearCacheCommand>
         if (parts.HasFlag(CacheParts.Waveforms))
         {
             waveforms?.Clear();
+        }
+
+        if (parts.HasFlag(CacheParts.Analyses))
+        {
+            scenes?.Clear();
         }
 
         if (dropProxies)
@@ -164,6 +176,7 @@ public sealed class ClearCacheHandler : ICommandHandler<ClearCacheCommand>
         parts |= command.Waveforms ? CacheParts.Waveforms : CacheParts.None;
         parts |= command.Probes ? CacheParts.Probes : CacheParts.None;
         parts |= command.Keyframes ? CacheParts.Keyframes : CacheParts.None;
+        parts |= command.Analyses ? CacheParts.Analyses : CacheParts.None;
 
         return parts == CacheParts.None && !command.Proxies ? CacheParts.All : parts;
     }

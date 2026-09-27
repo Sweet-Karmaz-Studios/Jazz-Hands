@@ -42,6 +42,9 @@ public interface IDialogService
 
     /// <summary>Shows the tour, or brings it forward when it is already open. Not modal.</summary>
     void ShowTour();
+
+    /// <summary>Shows the scene cuts dialog for a media item, or for a clip of it: find the shot changes, then split, mark or make subclips.</summary>
+    Task ShowSceneCutsAsync(string mediaId, string? clipId);
 }
 
 /// <summary>What to do with unsaved changes.</summary>
@@ -110,14 +113,34 @@ public interface IFileDialogService
 /// <param name="settingsFactory">Makes the Settings dialog's viewmodel, fresh each time so it reads the files again.</param>
 /// <param name="missingFactory">Makes the missing media dialog's viewmodel.</param>
 /// <param name="consolidateFactory">Makes the Consolidate and Archive dialog's viewmodel.</param>
+/// <param name="sceneCutsFactory">Makes the scene cuts dialog's viewmodel.</param>
 public sealed class DialogService(
     Func<ImportViewModel> importFactory,
     Func<ExportDialogViewModel>? exportFactory = null,
     Func<ViewModels.Settings.SettingsViewModel>? settingsFactory = null,
     Func<MissingMediaViewModel>? missingFactory = null,
-    Func<ConsolidateViewModel>? consolidateFactory = null) : IDialogService
+    Func<ConsolidateViewModel>? consolidateFactory = null,
+    Func<SceneCutsViewModel>? sceneCutsFactory = null) : IDialogService
 {
     private Views.Shell.TourWindow? _tour;
+
+    /// <inheritdoc />
+    public Task ShowSceneCutsAsync(string mediaId, string? clipId)
+    {
+        if (sceneCutsFactory is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        using SceneCutsViewModel viewModel = sceneCutsFactory();
+        var window = new SceneCutsWindow { DataContext = viewModel, Owner = Application.Current?.MainWindow };
+        viewModel.CloseRequested += (_, _) => window.Close();
+
+        // The reading starts as the window opens and goes on while it is up; closing it stops it.
+        window.Loaded += (_, _) => _ = viewModel.LoadAsync(mediaId, clipId);
+        window.ShowDialog();
+        return Task.CompletedTask;
+    }
 
     /// <inheritdoc />
     public async Task ShowMissingMediaAsync()
