@@ -57,6 +57,42 @@ public sealed record ConsoleEntry(
 }
 
 /// <summary>
+/// One event from the server as the feed shows it: a line that fits the pane, and the whole JSON
+/// when it is opened.
+/// </summary>
+/// <param name="Time">When it arrived, as the feed shows it.</param>
+/// <param name="Name">The event, <c>project.changed</c> say.</param>
+/// <param name="Payload">What it carried; read on the UI thread only.</param>
+public sealed record ConsoleEvent(string Time, string Name, JsonObject Payload)
+{
+    private const int LongestValue = 40;
+
+    private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true };
+
+    private string? _json;
+
+    /// <summary>The payload's top level in a line: plain values as they are, lists as a count.</summary>
+    public string Summary { get; } = Summarize(Payload);
+
+    /// <summary>The payload, indented, for the opened line.</summary>
+    public string Json => _json ??= Payload.ToJsonString(Indented);
+
+    /// <summary>The payload's top level in a line, <c>origin rpc:claude, changed [3], sequence {...}</c>.</summary>
+    public static string Summarize(JsonObject payload)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+        return string.Join(", ", payload.Select(pair => pair.Value switch
+        {
+            JsonArray list => $"{pair.Key} [{list.Count}]",
+            JsonObject => $"{pair.Key} {{...}}",
+            JsonValue value when value.TryGetValue(out string? text) => $"{pair.Key} {(text.Length > LongestValue ? text[..(LongestValue - 3)] + "..." : text)}",
+            JsonValue value => $"{pair.Key} {value.ToJsonString()}",
+            _ => $"{pair.Key} null",
+        }));
+    }
+}
+
+/// <summary>
 /// The Command Console: type any command or RPC method, see every command from every origin as it
 /// happens with its JSON and result, watch the event feed, replay a line, save lines as a script.
 /// </summary>
@@ -98,7 +134,7 @@ public sealed partial class CommandConsoleViewModel : ToolViewModel
     private readonly IUiDispatcher _ui;
     private readonly IFileDialogService? _files;
     private readonly ConcurrentQueue<ConsoleEntry> _incoming = new();
-    private readonly ConcurrentQueue<string> _incomingEvents = new();
+    private readonly ConcurrentQueue<ConsoleEvent> _incomingEvents = new();
     private readonly List<string> _history = [];
     private int _historyIndex;
     private int _flushQueued;
@@ -156,7 +192,7 @@ public sealed partial class CommandConsoleViewModel : ToolViewModel
     public ObservableCollection<string> Origins { get; } = [];
 
     /// <summary>The events the server sent, newest last.</summary>
-    public ObservableCollection<string> Events { get; } = [];
+    public ObservableCollection<ConsoleEvent> Events { get; } = [];
 
     /// <summary>What Tab would complete the input to, best first.</summary>
     public ObservableCollection<string> Suggestions { get; } = [];
@@ -402,7 +438,7 @@ public sealed partial class CommandConsoleViewModel : ToolViewModel
 
     private void OnEvent(object? sender, ControlEvent raised)
     {
-        _incomingEvents.Enqueue($"{DateTimeOffset.Now.ToLocalTime():HH:mm:ss.fff} {raised.Name} {raised.Payload.ToJsonString()}");
+        _incomingEvents.Enqueue(new ConsoleEvent(DateTimeOffset.Now.ToLocalTime().ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture), raised.Name, raised.Payload));
         ScheduleFlush();
     }
 
@@ -429,7 +465,7 @@ public sealed partial class CommandConsoleViewModel : ToolViewModel
             Add(entry);
         }
 
-        while (_incomingEvents.TryDequeue(out string? line))
+        while (_incomingEvents.TryDequeue(out ConsoleEvent? line))
         {
             Events.Add(line);
         }

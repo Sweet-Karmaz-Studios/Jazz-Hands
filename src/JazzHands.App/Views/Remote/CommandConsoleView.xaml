@@ -152,16 +152,40 @@
                      Background="{DynamicResource Brush.Background.Base}"
                      BorderThickness="0"
                      VirtualizingPanel.IsVirtualizing="True"
+                     HorizontalContentAlignment="Stretch"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                      AutomationProperties.Name="Event feed">
+                <!-- One line an event; the selected one opens to its whole JSON. -->
                 <ListBox.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding Mode=OneWay}"
-                                   ToolTip="{Binding Mode=OneWay}"
-                                   TextTrimming="CharacterEllipsis"
-                                   FontFamily="{DynamicResource Font.Mono}"
-                                   FontSize="{DynamicResource Text.Caption}"
-                                   Foreground="{DynamicResource Brush.Text.Secondary}" />
+                    <DataTemplate DataType="{x:Type vm:ConsoleEvent}">
+                        <StackPanel Margin="0,1">
+                            <TextBlock TextTrimming="CharacterEllipsis"
+                                       FontFamily="{DynamicResource Font.Mono}"
+                                       FontSize="{DynamicResource Text.Caption}"
+                                       Foreground="{DynamicResource Brush.Text.Secondary}"
+                                       ToolTip="Select to see the whole event">
+                                <Run Text="{Binding Time, Mode=OneWay}" Foreground="{DynamicResource Brush.Text.Disabled}" />
+                                <Run Text="{Binding Name, Mode=OneWay}" Foreground="{DynamicResource Brush.Accent}" />
+                                <Run Text="{Binding Summary, Mode=OneWay}" />
+                            </TextBlock>
+                            <TextBlock Margin="12,2,0,4"
+                                       Text="{Binding Json, Mode=OneWay}"
+                                       TextWrapping="Wrap"
+                                       FontFamily="{DynamicResource Font.Mono}"
+                                       FontSize="{DynamicResource Text.Caption}"
+                                       Foreground="{DynamicResource Brush.Text.Primary}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}, Mode=OneWay}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
