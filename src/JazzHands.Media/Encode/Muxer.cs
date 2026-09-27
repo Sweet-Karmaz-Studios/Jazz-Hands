@@ -115,7 +115,16 @@ public sealed unsafe class Muxer : IDisposable
     public int AddStream(VideoEncoder encoder, IReadOnlyDictionary<string, string>? metadata = null)
     {
         ArgumentNullException.ThrowIfNull(encoder);
-        return AddEncodedStream(encoder.Handle, metadata);
+        int index = AddEncodedStream(encoder.Handle, metadata);
+
+        // HDR10: the container says so too, as MP4's mdcv and clli boxes and Matroska's colour
+        // elements, which players read before the first frame.
+        if (encoder.Settings.Hdr is { } hdr && encoder.Handle->colorspace == AVColorSpace.AVCOL_SPC_BT2020_NCL)
+        {
+            hdr.Attach(_context->streams[index]->codecpar);
+        }
+
+        return index;
     }
 
     /// <summary>Adds a stream for an audio encoder's packets.</summary>

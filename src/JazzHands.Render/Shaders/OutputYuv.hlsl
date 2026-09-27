@@ -1,5 +1,6 @@
 // The last pass for an encoder: the premultiplied linear stack, laid over the background, encoded
-// with BT.1886 exactly as Output.hlsl does, then turned into BT.709 limited range Y'CbCr and split
+// with BT.1886 exactly as Output.hlsl does, then turned into BT.709 limited range Y'CbCr (for an ACES project rendered for
+// HDR10, its PQ code values into BT.2020 non-constant luminance Y'CbCr instead) and split
 // into the planes an NV12 frame is made of. PsLuma writes Y' into an R8 target at the frame size;
 // PsChroma writes Cb and Cr into an R8G8 target at half the size each way, each sample the mean of
 // the two by two block of pixels it covers.
@@ -29,7 +30,8 @@ cbuffer YuvConstants : register(b0)
     uint2 LumaSize;         // the luma target: where a chroma sample's four pixels are
     uint Bits;              // 8 for R8 targets (NV12), 10 for R16 targets (P010)
     uint Aces;              // 1 for an ACES project's stack, through the output transform at b1
-    uint2 Pad;
+    uint YuvMatrix;         // 0 for BT.709, 1 for BT.2020 non-constant luminance (HDR10)
+    uint Pad;
 };
 
 Texture2D<float4> Stack : register(t0);
@@ -89,9 +91,15 @@ float3 EncodedAt(int2 pixel)
     return saturate(encoded);
 }
 
+// Kr, Kg and Kb of the matrix: BT.709, or BT.2020 for HDR10.
+float3 LumaWeights()
+{
+    return YuvMatrix == 1 ? float3(0.2627, 0.6780, 0.0593) : float3(0.2126, 0.7152, 0.0722);
+}
+
 float LumaOf(float3 rgb)
 {
-    return dot(rgb, float3(0.2126, 0.7152, 0.0722));
+    return dot(rgb, LumaWeights());
 }
 
 // A sixteen bit target stores n/65535, and P010 keeps the ten bit code in the top ten bits, so
@@ -123,8 +131,10 @@ float2 PsChroma(FullScreenVertex input) : SV_TARGET
     float3 rgb = sum * 0.25;
 
     float y = LumaOf(rgb);
-    float cb = (rgb.b - y) / 1.8556;
-    float cr = (rgb.r - y) / 1.5748;
+    // Cb and Cr are scaled by 2(1 - Kb) and 2(1 - Kr): 1.8556 and 1.5748 for BT.709, 1.8814 and
+    // 1.4746 for BT.2020.
+    float cb = (rgb.b - y) / (YuvMatrix == 1 ? 1.8814 : 1.8556);
+    float cr = (rgb.r - y) / (YuvMatrix == 1 ? 1.4746 : 1.5748);
 
     if (Bits == 10)
     {

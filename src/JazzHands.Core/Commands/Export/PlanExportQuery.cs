@@ -33,6 +33,7 @@ namespace JazzHands.Core.Commands;
 /// <param name="Start">Export from here, in sequence time.</param>
 /// <param name="End">Export to here, in sequence time.</param>
 /// <param name="Stems">Also write a 24-bit WAV per role or per sound track beside the file (Phase 40).</param>
+/// <param name="StemFormat">How the stems are written: wav, codec (the preset's sound codec) or in-file (more sound tracks in the file).</param>
 [Query("export.plan", Description = "Plan an export without running it")]
 public sealed record PlanExportQuery(
     [property: Arg(0, "Where the file would go")] string Output,
@@ -59,7 +60,8 @@ public sealed record PlanExportQuery(
     [property: Option("audio-only", "Write the sound alone, in a sound file for its encoder: .m4a, .opus, .flac, .wav or .mp3")] bool AudioOnly = false,
     [property: Option("start", "Export from here")] Flicks? Start = null,
     [property: Option("end", "Export to here")] Flicks? End = null,
-    [property: Option("stems", "none, roles or tracks: also a 24-bit WAV per role or per sound track beside the file")] StemMode Stems = StemMode.None) : IQuery<ExportPlan>
+    [property: Option("stems", "none, roles or tracks: also a stem per role or per sound track")] StemMode Stems = StemMode.None,
+    [property: Option("stem-format", "wav (24-bit, beside the file), codec (the preset's sound codec, beside it) or in-file (more sound tracks in the file)")] StemFormat StemFormat = StemFormat.Wav) : IQuery<ExportPlan>
 {
     /// <summary>The export this asks about.</summary>
     public ExportRequest ToRequest() => new(
@@ -75,5 +77,6 @@ public sealed record PlanExportQuery(
         Chapters,
         ExportOverrideText.Parse(Size, FrameRate, Quality, Bitrate, Encoders, AudioEncoder, AudioBitrate, Channels, Loudness, TargetSize, PixelFormat, AudioOnly),
         ExportOverrideText.Range(Start, End),
-        Stems);
+        Stems,
+        StemFormat);
 }

@@ -2191,7 +2191,7 @@ Export a sequence to a file in the foreground. 'jazz export enqueue' queues one 
 | `--channels <channels>` | 1, 2 or 6 channels. A 5.1 sequence exported in stereo is folded down (ITU), per source, before the master limiter. |
 | `--loudness <loudness>` | Measure the mix and bring it to this integrated loudness, peaks held under -1 dBFS: -14. |
 | `--target-size <target-size>` | Come in under this size: 8MB, in binary units as Discord counts. The picture steps down when it must; the file is checked and encoded again if it is over. |
-| `--pixel-format <pixel-format>` | The pixel format: yuv420p10le for ten bits, yuv422p10le for 4:2:2 ten bit. Always BT.709. |
+| `--pixel-format <pixel-format>` | The pixel format: yuv420p10le for ten bits, yuv422p10le for 4:2:2 ten bit. BT.709, or HDR10 for an ACES project rendered for it. |
 | `--audio-only` | Write the sound alone, in a sound file for the preset's encoder: AAC in .m4a, Opus in .opus, FLAC, WAV or MP3. |
 | `--start <start>` | Export from here, in sequence time. |
 | `--end <end>` | Export to here, in sequence time. |
@@ -2323,7 +2323,8 @@ Queue an export of a sequence to a file.
 | `--open-folder` | Show the file in Explorer when it is done. |
 | `--run <run>` | A script to run when it is done, given the file's path. |
 | `--id <id>` | The id for the new job. |
-| `--stems <none|roles|tracks>` | none, roles or tracks: also a 24-bit WAV per role or per sound track beside the file. Default: none. |
+| `--stems <none|roles|tracks>` | none, roles or tracks: also a stem per role or per sound track. Default: none. |
+| `--stem-format <wav|codec|in-file>` | wav (24-bit, beside the file), codec (the preset's sound codec, beside it) or in-file (more sound tracks in the file). Default: wav. |
 | `--no-save` | Do not write the project back. |
 
 ### `jazz export list <project>`
@@ -2390,7 +2391,8 @@ Plan an export without running it.
 | `--audio-only` | Write the sound alone, in a sound file for its encoder: .m4a, .opus, .flac, .wav or .mp3. |
 | `--start <time>` | Export from here. |
 | `--end <time>` | Export to here. |
-| `--stems <none|roles|tracks>` | none, roles or tracks: also a 24-bit WAV per role or per sound track beside the file. Default: none. |
+| `--stems <none|roles|tracks>` | none, roles or tracks: also a stem per role or per sound track. Default: none. |
+| `--stem-format <wav|codec|in-file>` | wav (24-bit, beside the file), codec (the preset's sound codec, beside it) or in-file (more sound tracks in the file). Default: wav. |
 
 ### `jazz export resume <project> [job-id]`
 
@@ -5342,7 +5344,7 @@ Cut stretches out of one recording and write them back to back: by default a sma
 | `--channels <channels>` | 1, 2 or 6 channels. A 5.1 sequence exported in stereo is folded down (ITU), per source, before the master limiter. |
 | `--loudness <loudness>` | Measure the mix and bring it to this integrated loudness, peaks held under -1 dBFS: -14. |
 | `--target-size <target-size>` | Come in under this size: 8MB, in binary units as Discord counts. The picture steps down when it must; the file is checked and encoded again if it is over. |
-| `--pixel-format <pixel-format>` | The pixel format: yuv420p10le for ten bits, yuv422p10le for 4:2:2 ten bit. Always BT.709. |
+| `--pixel-format <pixel-format>` | The pixel format: yuv420p10le for ten bits, yuv422p10le for 4:2:2 ten bit. BT.709, or HDR10 for an ACES project rendered for it. |
 | `--audio-only` | Write the sound alone, in a sound file for the preset's encoder: AAC in .m4a, Opus in .opus, FLAC, WAV or MP3. |
 | `--start <start>` | Export from here, in sequence time. |
 | `--end <end>` | Export to here, in sequence time. |

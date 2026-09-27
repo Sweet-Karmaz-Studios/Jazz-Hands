@@ -40,6 +40,7 @@ namespace JazzHands.Core.Commands;
 /// <param name="Run">A script to run when it is done, given the file's path.</param>
 /// <param name="JobId">The id for the new job. A fresh one when left out.</param>
 /// <param name="Stems">Also write a 24-bit WAV per role or per sound track beside the file (Phase 40).</param>
+/// <param name="StemFormat">How the stems are written: wav, codec (the preset's sound codec) or in-file (more sound tracks in the file).</param>
 [Command("export.enqueue",
     Description = "Queue an export of a sequence to a file",
     Undoable = false,
@@ -73,7 +74,8 @@ public sealed record EnqueueExportCommand(
     [property: Option("open-folder", "Show the file in Explorer when it is done")] bool OpenFolder = false,
     [property: Option("run", "A script to run when it is done, given the file's path")] string? Run = null,
     [property: Option("id", "The id for the new job")] string? JobId = null,
-    [property: Option("stems", "none, roles or tracks: also a 24-bit WAV per role or per sound track beside the file")] StemMode Stems = StemMode.None) : ICommand
+    [property: Option("stems", "none, roles or tracks: also a stem per role or per sound track")] StemMode Stems = StemMode.None,
+    [property: Option("stem-format", "wav (24-bit, beside the file), codec (the preset's sound codec, beside it) or in-file (more sound tracks in the file)")] StemFormat StemFormat = StemFormat.Wav) : ICommand
 {
     /// <summary>The export this asks for.</summary>
     public ExportRequest ToRequest() => new(
@@ -89,7 +91,8 @@ public sealed record EnqueueExportCommand(
         Chapters,
         ExportOverrideText.Parse(Size, FrameRate, Quality, Bitrate, Encoders, AudioEncoder, AudioBitrate, Channels, Loudness, TargetSize, PixelFormat, AudioOnly),
         ExportOverrideText.Range(Start, End),
-        Stems);
+        Stems,
+        StemFormat);
 
     /// <summary>How the queue treats the job.</summary>
     public ExportJobOptions ToOptions() => new(Priority, OpenFolder, string.IsNullOrWhiteSpace(Run) ? null : Run);

@@ -26,6 +26,7 @@ namespace JazzHands.Media.Encode;
 /// <param name="PixelFormat">The FFmpeg pixel format to encode, or null for the encoder's usual one.</param>
 /// <param name="Profile">The codec profile, spelled as the encoder spells it, or null.</param>
 /// <param name="Level">The codec level, or null. For FFV1 it is the version.</param>
+/// <param name="Hdr">HDR10 signalling for a picture rendered as BT.2020 PQ, or null for BT.709.</param>
 public sealed record VideoEncoderSettings(
     IReadOnlyList<string> Encoders,
     int Width,
@@ -39,7 +40,8 @@ public sealed record VideoEncoderSettings(
     bool Lossless = false,
     string? PixelFormat = null,
     string? Profile = null,
-    string? Level = null);
+    string? Level = null,
+    HdrSignal? Hdr = null);
 
 /// <summary>Speed against quality, spelled the same for every encoder.</summary>
 public enum EncoderSpeed
@@ -346,6 +348,7 @@ public sealed unsafe class VideoEncoder : IDisposable
 
         AVFrame* sent = frame.Handle;
         sent->pts = index;
+        SignalHdr(sent);
         Av.Check(ffmpeg.avcodec_send_frame(_context.Handle, sent), "avcodec_send_frame", Name);
         _sent++;
         Drain(muxer, stream);
@@ -385,9 +388,20 @@ public sealed unsafe class VideoEncoder : IDisposable
             sent = converted;
         }
 
+        SignalHdr(sent);
         Av.Check(ffmpeg.avcodec_send_frame(_context.Handle, sent), "avcodec_send_frame", Name);
         _sent++;
         Drain(muxer, stream);
+    }
+
+    /// <summary>For HDR10, tags a frame BT.2020 PQ and gives it the metadata, for an encoder that reads it per frame.</summary>
+    private void SignalHdr(AVFrame* frame)
+    {
+        if (Settings.Hdr is { } hdr && _palette is null && !IsRgb(EncodedFormat))
+        {
+            HdrSignal.Tag(frame);
+            hdr.Attach(frame);
+        }
     }
 
     /// <summary>Drains the encoder at the end, writing the frames it was holding back.</summary>
@@ -702,7 +716,7 @@ public sealed unsafe class VideoEncoder : IDisposable
         Set(options, "tune", "hq");
         Set(options, "spatial-aq", "1");
         Set(options, "temporal-aq", "1");
-        Set(options, "rc-lookahead", "32");
+        Set(options, "rc-lookahead", settings.Hdr is not null ? "0" : "32");
         Set(options, "b_ref_mode", "middle");
 
         if (settings.Bitrate > 0)
@@ -756,6 +770,14 @@ public sealed unsafe class VideoEncoder : IDisposable
         if (!rgb)
         {
             context->chroma_sample_location = AVChromaLocation.AVCHROMA_LOC_LEFT;
+        }
+
+        // HDR10: the picture is BT.2020 PQ, and the encoder writes the mastering display and light
+        // levels into its headers from what it is given before it opens.
+        if (settings.Hdr is { } hdr && !rgb)
+        {
+            HdrSignal.Tag(context);
+            hdr.Attach(context);
         }
 
         if (settings.Bitrate > 0 && !settings.Lossless)

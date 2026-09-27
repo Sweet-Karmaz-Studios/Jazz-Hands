@@ -120,7 +120,8 @@ public static class Exporter
             if (!plan.Stems.IsEmpty)
             {
                 WriteStems(plan, project, projectPath, cancellationToken);
-                result = result with { Notes = [.. result.Notes, $"Wrote {plan.Stems.Length} {(plan.Stems.Length == 1 ? "stem" : "stems")} beside it."] };
+                string where = plan.Stems[0].InFile ? "as sound tracks in it" : "beside it";
+                result = result with { Notes = [.. result.Notes, $"Wrote {plan.Stems.Length} {(plan.Stems.Length == 1 ? "stem" : "stems")} {where}."] };
             }
 
             Log.Information(
@@ -333,14 +334,14 @@ public static class Exporter
         int rate = plan.Audio?.SampleRate ?? settings.SampleRate;
         int channels = plan.Audio?.Channels ?? settings.ChannelCount;
 
-        foreach (ExportStem stem in plan.Stems)
+        foreach (ExportStem stem in plan.Stems.Where(stem => !stem.InFile))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            string temporary = Path.Combine(Path.GetDirectoryName(stem.OutputPath) ?? ".", $".{Path.GetFileNameWithoutExtension(stem.OutputPath)}.{Guid.NewGuid():N}.partial.wav");
+            string temporary = Path.Combine(Path.GetDirectoryName(stem.OutputPath) ?? ".", $".{Path.GetFileNameWithoutExtension(stem.OutputPath)}.{Guid.NewGuid():N}.partial{Path.GetExtension(stem.OutputPath)}");
             try
             {
-                using (Muxer muxer = Muxer.Create(temporary, "wav"))
-                using (AudioEncoder encoder = AudioEncoder.Open(new AudioEncoderSettings("pcm_s24le", rate, channels), muxer.NeedsGlobalHeader))
+                using (Muxer muxer = Muxer.Create(temporary, stem.Container))
+                using (AudioEncoder encoder = AudioEncoder.Open(new AudioEncoderSettings(stem.Encoder, rate, channels, stem.Bitrate), muxer.NeedsGlobalHeader))
                 using (var sound = new ExportSound(project, sequence, projectPath, [.. plan.Ranges], rate, channels, new HashSet<string>(stem.TrackIds, StringComparer.Ordinal)))
                 {
                     int stream = muxer.AddStream(encoder);
@@ -681,6 +682,7 @@ public static class Exporter
             VideoEncoder? encoder = null;
             AudioEncoder? sound = null;
             ExportSound? mix = null;
+            FileStems? stems = null;
             MuxExtras? extras = null;
 
             try
@@ -709,7 +711,9 @@ public static class Exporter
                 }
 
                 int videoStream = muxer.AddStream(encoder);
-                int soundStream = sound is null ? -1 : muxer.AddStream(sound);
+                bool stemsInFile = _plan.Stems.Any(stem => stem.InFile);
+                int soundStream = sound is null ? -1 : muxer.AddStream(sound, stemsInFile ? FileStems.MixName : null);
+                stems = _plan.Audio is { } mixed ? FileStems.Open(_plan, _project, _projectPath, mixed, muxer) : null;
                 extras = Extras(_plan, _project);
                 extras?.Open(muxer);
                 muxer.WriteHeader(fastStart: _plan.Container is "mp4" or "mov");
@@ -748,6 +752,7 @@ public static class Exporter
                     written = index + 1;
 
                     mix?.WriteUpTo(SamplesAt(written), sound!, muxer, soundStream);
+                    stems?.WriteUpTo(SamplesAt(written), muxer);
                     extras?.WriteUpTo(muxer, Flicks.FromFrames(written, video.FrameRate));
 
                     long now = clock.ElapsedMilliseconds;
@@ -772,6 +777,7 @@ public static class Exporter
                     sound!.Flush(muxer, soundStream);
                 }
 
+                stems?.Finish(muxer);
                 extras?.Close(muxer);
                 muxer.Finish();
                 _progress?.Report(new ExportProgress(
@@ -800,6 +806,7 @@ public static class Exporter
             finally
             {
                 extras?.Dispose();
+                stems?.Dispose();
                 mix?.Dispose();
                 sound?.Dispose();
                 lock (_encoderGate)
@@ -833,7 +840,8 @@ public static class Exporter
             video.Lossless,
             video.PixelFormat,
             video.Profile,
-            video.Level);
+            video.Level,
+            video.Hdr10 ? HdrSignal.P3D65(Render.Color.Aces.AcesOutputTransform.Hdr10.PeakLuminance) : null);
 
         internal static VideoEncoderSettings SettingsFor(ExportVideo video) => Settings(video);
     }

@@ -58,26 +58,24 @@ public static class ExportPlanner
                 ? "The project has no sequence to export."
                 : $"No sequence with id '{request.SequenceId}'.");
 
-        // An ACES project rendered for HDR10 would need a ten bit BT.2100 PQ encode with its HDR
-        // signalling, which the export pipeline does not write yet (Phase 44).
-        if (project.Settings.ColorManagement is { IsAces: true, Output: AcesOutput.Hdr10 })
-        {
-            throw new CommandException(
-                "hdr-export-unavailable",
-                "This ACES project is rendered for HDR10, and Jazz Hands cannot write HDR video yet. Set the output to Rec.709 to export: jazz project set-color-management --output rec709.");
-        }
-
         // Burning subtitles in draws them into every picture, so there is nothing to copy.
         ImmutableArray<TimeRange> ranges = Ranges(sequence, request.UseInOut, request.Range);
         bool burn = request.Subtitles == SubtitleDelivery.Burn && SubtitleTracks(sequence, ranges).Length > 0;
 
-        ExportPlan plan = PlanStreams(project, projectPath, request, keyframes, burn, cancellationToken);
+        // Stems in the file are encoded beside the mix, so the file is encoded rather than copied.
+        bool stemsInFile = request.Stems != StemMode.None && request.StemFormat == StemFormat.InFile;
+        if (stemsInFile && request.Mode is ExportMode.Copy or ExportMode.Smart)
+        {
+            throw new CommandException("stems-need-encoding", "Stems inside the file are encoded with the mix, and this export copies. Export with --mode encode, or write the stems beside it (--stem-format wav).");
+        }
+
+        ExportPlan plan = PlanStreams(project, projectPath, stemsInFile ? request with { Mode = ExportMode.Encode } : request, keyframes, burn, cancellationToken);
         ExportContainer? container = ExportPresets.Container(plan.Container);
         var reasons = new List<string>(plan.Reasons);
         ExportSubtitles? subtitles = Subtitles(request, sequence, plan, container, reasons);
         bool chapters = request.Chapters && container is { Chapters: true };
 
-        EquatableArray<ExportStem> stems = Stems(project, sequence, request.Stems, plan.OutputPath, reasons);
+        EquatableArray<ExportStem> stems = Stems(project, sequence, request.Stems, request.StemFormat, plan, reasons);
 
         // Slow motion by optical flow is drawn on the GPU by our own flow (Phase 42): say which clips.
         string[] flowing = [.. sequence.Tracks
@@ -128,14 +126,31 @@ public static class ExportPlanner
     }
 
     /// <summary>
-    /// The stems (Phase 40): a WAV per role or per sound track heard in the mix, named after the
-    /// file and the stem, in the file's folder. A role with no sound track heard has none.
+    /// The stems (Phase 40): a stem per role or per sound track heard in the mix. Beside the file,
+    /// each named after the file and the stem, as a 24-bit WAV or in the preset's sound codec; or in
+    /// the file, as more sound tracks after the mix. A role with no sound track heard has none.
     /// </summary>
-    internal static EquatableArray<ExportStem> Stems(Project project, Sequence sequence, StemMode mode, string outputPath, List<string> reasons)
+    internal static EquatableArray<ExportStem> Stems(Project project, Sequence sequence, StemMode mode, StemFormat format, ExportPlan plan, List<string> reasons)
     {
         if (mode == StemMode.None)
         {
             return default;
+        }
+
+        string outputPath = plan.OutputPath;
+        if (format != StemFormat.Wav && plan.Audio is null)
+        {
+            throw new CommandException("no-sound", $"{plan.Preset} writes no sound, so there is no codec for the stems. Write them as WAV (--stem-format wav).");
+        }
+
+        if (format == StemFormat.InFile && (plan.Video is null || plan.Container is not ("mp4" or "mov" or "matroska")))
+        {
+            throw new CommandException("stems-in-file-unavailable", $"Stems as sound tracks go in an MP4, MOV or Matroska file with a picture, and {plan.Preset} writes {plan.Container}. Write them beside it (--stem-format wav or codec).");
+        }
+
+        if (format == StemFormat.InFile && plan.External)
+        {
+            throw new CommandException("stems-in-file-unavailable", "The ffmpeg.exe path writes the mix only. Write the stems beside the file (--stem-format wav or codec).");
         }
 
         Track[] heard = [.. sequence.Tracks
@@ -160,12 +175,25 @@ public static class ExportPlanner
                 file = $"{stem} - {safe} {copy}";
             }
 
-            stems.Add(new ExportStem(name, Path.Combine(folder, file + ".wav"), [.. ids]));
+            (string Container, string Extension) sound = format == StemFormat.Wav ? ("wav", ".wav") : ExportOverrideText.SoundFile(plan.Audio!.Encoder);
+            stems.Add(format switch
+            {
+                StemFormat.InFile => new ExportStem(name, outputPath, [.. ids], plan.Audio!.Encoder, plan.Container, plan.Audio.Bitrate, InFile: true),
+                StemFormat.Codec => new ExportStem(name, Path.Combine(folder, file + sound.Extension), [.. ids], plan.Audio!.Encoder, sound.Container, plan.Audio.Bitrate),
+                _ => new ExportStem(name, Path.Combine(folder, file + ".wav"), [.. ids]),
+            });
         }
 
         if (stems.Count > 0)
         {
-            reasons.Add($"Writes {stems.Count} {(stems.Count == 1 ? "stem" : "stems")} beside it, 24-bit WAV: {string.Join(", ", stems.Select(item => item.Name))}.");
+            string names = string.Join(", ", stems.Select(item => item.Name));
+            string count = $"{stems.Count} {(stems.Count == 1 ? "stem" : "stems")}";
+            reasons.Add(format switch
+            {
+                StemFormat.InFile => $"Writes {count} as sound tracks in the file after the mix, in {plan.Audio!.Encoder}: {names}.",
+                StemFormat.Codec => $"Writes {count} beside it, in {plan.Audio!.Encoder}: {names}.",
+                _ => $"Writes {count} beside it, 24-bit WAV: {names}.",
+            });
         }
 
         return [.. stems];
@@ -589,6 +617,14 @@ public static class ExportPlanner
         List<string> reasons)
     {
         int before = reasons.Count;
+
+        // An ACES project's pictures all go through its output transform, which a copy would skip.
+        if (project.Settings.ColorManagement is { IsAces: true })
+        {
+            reasons.Add("The project is colour managed in ACES, so every picture goes through its output transform.");
+            return null;
+        }
+
         bool anySolo = sequence.Tracks.Any(track => track.Solo);
         bool Audible(Track track) => !track.Muted && (!anySolo || track.Solo || !track.IsAudio);
 
@@ -1209,6 +1245,13 @@ public static class ExportPlanner
         ExportAudio? audio = sound ? Audio(preset, preset.Audio!, settings, reasons) : null;
         ExportVideo? video = preset.Video is { } picture ? Video(request, picture, settings, reasons) : null;
 
+        // An ACES project rendered for HDR10 (Phase 44) is written as HDR10: nothing else holds the
+        // PQ picture its output transform renders.
+        if (video is not null && project.Settings.ColorManagement is { IsAces: true, Output: AcesOutput.Hdr10 })
+        {
+            video = Hdr10(preset, video, request, reasons);
+        }
+
         if (preset.TargetBytes > 0 && video is not null)
         {
             video = SizeTarget(preset, video, audio, settings, duration, reasons);
@@ -1267,6 +1310,33 @@ public static class ExportPlanner
             video.PixelFormat,
             video.Profile,
             video.Level);
+    }
+
+    /// <summary>
+    /// The picture of an ACES project rendered for HDR10: ten bits (HEVC's Main 10 profile), BT.2020
+    /// with the PQ curve, and the mastering display and light levels the output transform renders
+    /// for. HEVC and AV1 carry it; H.264 and the rest are refused rather than written wrong.
+    /// </summary>
+    private static ExportVideo Hdr10(ExportPreset preset, ExportVideo video, ExportRequest request, List<string> reasons)
+    {
+        if (video.Codec is not ("hevc" or "av1"))
+        {
+            throw new CommandException(
+                "hdr-needs-hevc-or-av1",
+                $"This ACES project is rendered for HDR10, which {preset.Name} ({video.Codec}) cannot carry. Export with an HEVC or AV1 preset (youtube-4k, youtube-1440p, youtube-4k-av1, shield-direct), or set the output to Rec.709: jazz project set-color-management --output rec709.");
+        }
+
+        if (request.External)
+        {
+            throw new CommandException(
+                "hdr-external-unavailable",
+                "The ffmpeg.exe path writes BT.709 only. Export HDR10 without --use-external-ffmpeg.");
+        }
+
+        string format = video.TenBit ? video.PixelFormat! : "yuv420p10le";
+        string? profile = video.Codec == "hevc" && video.Profile is null or "main" ? "main10" : video.Profile;
+        reasons.Add("HDR10: ten bit BT.2020 with the PQ curve, and a 1000 nit P3-D65 mastering display and a brightest pixel of 1000 nits written into the stream and the file.");
+        return video with { PixelFormat = format, Profile = profile, Hdr10 = true };
     }
 
     /// <summary>The sound a preset writes for a sequence: the encoder's rate and channel count, folded down where it must be.</summary>

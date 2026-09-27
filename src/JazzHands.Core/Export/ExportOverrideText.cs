@@ -150,18 +150,20 @@ public static class ExportOverrideText
         ExportPresetAudio audio = preset.Audio
             ?? throw new CommandException("no-sound", $"{preset.Name} writes no sound, so there is nothing to export on its own. Pick a preset with sound, or an audio preset: audio-only, audio-wav, audio-mp3.");
 
-        (string container, string extension) = audio.Encoder switch
-        {
-            "aac" => ("mp4", ".m4a"),
-            "libopus" => ("ogg", ".opus"),
-            "flac" => ("flac", ".flac"),
-            "pcm_s16le" or "pcm_s24le" => ("wav", ".wav"),
-            "libmp3lame" => ("mp3", ".mp3"),
-            _ => ("matroska", ".mka"),
-        };
-
+        (string container, string extension) = SoundFile(audio.Encoder);
         return preset with { Video = null, TargetBytes = 0, Container = container, Extension = extension, Category = "audio" };
     }
+
+    /// <summary>The FFmpeg format and extension a sound encoder's output is usually written in.</summary>
+    public static (string Container, string Extension) SoundFile(string encoder) => encoder switch
+    {
+        "aac" => ("mp4", ".m4a"),
+        "libopus" => ("ogg", ".opus"),
+        "flac" => ("flac", ".flac"),
+        "pcm_s16le" or "pcm_s24le" => ("wav", ".wav"),
+        "libmp3lame" => ("mp3", ".mp3"),
+        _ => ("matroska", ".mka"),
+    };
 
     private static long Bitrate(string? text, string name)
     {

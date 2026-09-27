@@ -219,7 +219,8 @@ public sealed class Compositor : IDisposable
     }
 
     /// <summary>
-    /// Encodes a stack as BT.709 limited range Y'CbCr for an encoder: luma into an R8 target at
+    /// Encodes a stack as BT.709 limited range Y'CbCr for an encoder (BT.2020 PQ for an ACES project
+    /// rendered for HDR10, whose output transform writes PQ code values): luma into an R8 target at
     /// <paramref name="width"/> by <paramref name="height"/>, chroma into an R8G8 target at half
     /// each way, which together are the two planes of an NV12 frame. With
     /// <paramref name="tenBit"/> the targets are R16 and R16G16 and hold ten bit codes in the top
@@ -260,6 +261,7 @@ public sealed class Compositor : IDisposable
             LumaHeight = (uint)height,
             Bits = tenBit ? 10u : 8u,
             Aces = display is null ? 0u : 1u,
+            YuvMatrix = display == AcesOutput.Hdr10 ? 1u : 0u,
         };
 
         _views[0] = stack.Resource;
@@ -1510,7 +1512,7 @@ public sealed class Compositor : IDisposable
         public uint LumaHeight;
         public uint Bits;
         public uint Aces;
-        public uint Pad1;
-        public uint Pad2;
+        public uint YuvMatrix;
+        public uint Pad;
     }
 }

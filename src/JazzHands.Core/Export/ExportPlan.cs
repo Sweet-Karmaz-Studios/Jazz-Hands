@@ -54,6 +54,7 @@ public enum SubtitleDelivery
 /// <param name="Overrides">Changes to the preset for this export, or null to take it as it is.</param>
 /// <param name="Range">Export only this stretch of the sequence, in sequence time; null for all of it.</param>
 /// <param name="Stems">Also write a 24-bit WAV per role or per sound track beside the file (Phase 40).</param>
+/// <param name="StemFormat">How the stems are written: 24-bit WAV, the preset's sound codec in its own file, or as more sound tracks in the file itself.</param>
 public sealed record ExportRequest(
     string OutputPath,
     string Preset = ExportPresets.Default,
@@ -67,7 +68,8 @@ public sealed record ExportRequest(
     bool Chapters = true,
     ExportOverrides? Overrides = null,
     TimeRange? Range = null,
-    StemMode Stems = StemMode.None);
+    StemMode Stems = StemMode.None,
+    StemFormat StemFormat = StemFormat.Wav);
 
 /// <summary>
 /// Changes to a preset for one export: what the export dialog's overrides and the command line's
@@ -163,7 +165,7 @@ public sealed record ExportChapter(Flicks Start, Flicks End, string Title) : IEq
 /// <param name="TargetBytes">The size the file must come in under, or 0. The exporter checks it and encodes again, smaller, when it does not.</param>
 /// <param name="Estimate">About how big the file is and how long it takes, for the dialog and the dry run.</param>
 /// <param name="Smart">What to copy and what to encode again, for a smart cut.</param>
-/// <param name="Stems">The stem files written beside it, each a 24-bit WAV of some of the sound tracks.</param>
+/// <param name="Stems">The stems: files beside it (24-bit WAV or the preset's sound codec), or sound tracks in it.</param>
 public sealed record ExportPlan(
     string SequenceId,
     string Preset,
@@ -198,16 +200,40 @@ public enum StemMode
     Tracks,
 }
 
+/// <summary>How stems are written (Phase 40, and after it).</summary>
+public enum StemFormat
+{
+    /// <summary>A 24-bit WAV each, beside the file.</summary>
+    Wav,
+
+    /// <summary>The preset's sound codec, each in the sound file it is usually written in (AAC in .m4a, Opus in .opus, FLAC), beside the file.</summary>
+    Codec,
+
+    /// <summary>More sound tracks in the file itself, after the mix, each named for its stem: MP4, MOV and Matroska.</summary>
+    InFile,
+}
+
 /// <summary>
 /// One stem: the sound of some tracks, played through the same mix as the file (every track plays,
 /// so a ducker keyed on another track still ducks) but with only these reaching the master, so the
-/// stems add up to the mix. A 24-bit WAV, sample-aligned with the file and the same length.
-/// Loudness normalisation is the mix's alone.
+/// stems add up to the mix. Sample-aligned with the file and the same length. Loudness
+/// normalisation is the mix's alone.
 /// </summary>
 /// <param name="Name">The role or the track.</param>
-/// <param name="OutputPath">Where it is written: the file's name, a dash and the stem's.</param>
+/// <param name="OutputPath">Where it is written: the file's name, a dash and the stem's; the file itself for a stem in it.</param>
 /// <param name="TrackIds">The tracks whose sound it holds.</param>
-public sealed record ExportStem(string Name, string OutputPath, EquatableArray<string> TrackIds) : IEquatable<ExportStem>;
+/// <param name="Encoder">Its sound encoder: pcm_s24le for a WAV.</param>
+/// <param name="Container">The FFmpeg format of its own file (wav, mp4, ogg, flac); the file's for a stem in it.</param>
+/// <param name="Bitrate">Bits per second for a lossy encoder, or 0.</param>
+/// <param name="InFile">True for a sound track in the exported file rather than a file of its own.</param>
+public sealed record ExportStem(
+    string Name,
+    string OutputPath,
+    EquatableArray<string> TrackIds,
+    string Encoder = "pcm_s24le",
+    string Container = "wav",
+    long Bitrate = 0,
+    bool InFile = false) : IEquatable<ExportStem>;
 
 /// <summary>The video side of an encode.</summary>
 /// <param name="Codec">h264, hevc, av1, vp9, prores, dnxhr, ffv1, gif or png.</param>
@@ -224,6 +250,7 @@ public sealed record ExportStem(string Name, string OutputPath, EquatableArray<s
 /// <param name="PixelFormat">The FFmpeg pixel format to encode, or null for the encoder's usual one.</param>
 /// <param name="Profile">The codec profile, or null.</param>
 /// <param name="Level">The codec level, or null.</param>
+/// <param name="Hdr10">True for an ACES project rendered for HDR10: ten bit BT.2020 PQ, with its mastering display and light levels written into the stream and the file.</param>
 public sealed record ExportVideo(
     string Codec,
     EquatableArray<string> Encoders,
@@ -238,7 +265,8 @@ public sealed record ExportVideo(
     bool Lossless,
     string? PixelFormat = null,
     string? Profile = null,
-    string? Level = null) : IEquatable<ExportVideo>
+    string? Level = null,
+    bool Hdr10 = false) : IEquatable<ExportVideo>
 {
     /// <summary>True when the encode keeps more than eight bits a sample, so the renderer hands over ten.</summary>
     public bool TenBit => PixelFormat is { } format && (format.Contains("10", StringComparison.Ordinal) || format.Contains("16", StringComparison.Ordinal));

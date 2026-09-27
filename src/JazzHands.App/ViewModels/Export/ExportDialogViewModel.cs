@@ -104,7 +104,7 @@ public sealed partial class ExportDialogViewModel : ObservableObject
     [ObservableProperty]
     private bool _soundOnly;
 
-    /// <summary>Stems beside the file (Phase 40): none, a WAV per role, or a WAV per sound track.</summary>
+    /// <summary>Stems (Phase 40): none, or per role or per sound track as WAVs, in the preset's sound codec, or as sound tracks in the file.</summary>
     [ObservableProperty]
     private StemChoice _stems = StemChoices[0];
 
@@ -183,12 +183,16 @@ public sealed partial class ExportDialogViewModel : ObservableObject
         new(6, "5.1"),
     ];
 
-    /// <summary>The stems an export can write beside the file.</summary>
+    /// <summary>The stems an export can write, beside the file or in it.</summary>
     public static IReadOnlyList<StemChoice> StemChoices { get; } =
     [
-        new(StemMode.None, "None"),
-        new(StemMode.Roles, "A WAV per role"),
-        new(StemMode.Tracks, "A WAV per track"),
+        new(StemMode.None, StemFormat.Wav, "None"),
+        new(StemMode.Roles, StemFormat.Wav, "A WAV per role"),
+        new(StemMode.Tracks, StemFormat.Wav, "A WAV per track"),
+        new(StemMode.Roles, StemFormat.Codec, "A file per role, in the preset's sound codec"),
+        new(StemMode.Tracks, StemFormat.Codec, "A file per track, in the preset's sound codec"),
+        new(StemMode.Roles, StemFormat.InFile, "A sound track per role, in the file"),
+        new(StemMode.Tracks, StemFormat.InFile, "A sound track per track, in the file"),
     ];
 
     /// <summary>Sizes offered in the size box; any other can be typed.</summary>
@@ -482,7 +486,8 @@ public sealed partial class ExportDialogViewModel : ObservableObject
             query.Start,
             query.End,
             priority,
-            Stems: query.Stems)).ConfigureAwait(true);
+            Stems: query.Stems,
+            StemFormat: query.StemFormat)).ConfigureAwait(true);
 
         if (result.Ok)
         {
@@ -536,7 +541,8 @@ public sealed partial class ExportDialogViewModel : ObservableObject
             AudioOnly: SoundOnly,
             Start: Read<Flicks?>(StartText, "start"),
             End: Read<Flicks?>(EndText, "end"),
-            Stems: Stems.Mode);
+            Stems: Stems.Mode,
+            StemFormat: Stems.Format);
     }
 
     private static string? Blank(string text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
@@ -585,7 +591,9 @@ public sealed partial class ExportDialogViewModel : ObservableObject
                 }
                 : string.Empty,
             plan.Chapters.IsEmpty ? string.Empty : $", {Words.Count(plan.Chapters.Length, "chapter")}",
-            plan.Stems.IsEmpty ? string.Empty : $", and {Words.Count(plan.Stems.Length, "stem")} beside it ({string.Join(", ", plan.Stems.Select(stem => Path.GetFileName(stem.OutputPath)))})");
+            plan.Stems.IsEmpty ? string.Empty
+                : plan.Stems[0].InFile ? $", and {Words.Count(plan.Stems.Length, "stem")} as sound tracks in it ({string.Join(", ", plan.Stems.Select(stem => stem.Name))})"
+                : $", and {Words.Count(plan.Stems.Length, "stem")} beside it ({string.Join(", ", plan.Stems.Select(stem => Path.GetFileName(stem.OutputPath)))})");
 
         Summary = $"{what}, {Timecode.FormatClock(plan.Duration)}{extras}, to {Path.GetFileName(plan.OutputPath)}";
         Estimate = plan.Estimate is { } estimate
@@ -625,8 +633,9 @@ public sealed record ChannelChoice(int Count, string Label);
 
 /// <summary>A stems choice in the Export dialog, with its label.</summary>
 /// <param name="Mode">None, per role or per track.</param>
+/// <param name="Format">WAV, the preset's sound codec, or sound tracks in the file.</param>
 /// <param name="Label">What the list says.</param>
-public sealed record StemChoice(StemMode Mode, string Label);
+public sealed record StemChoice(StemMode Mode, StemFormat Format, string Label);
 
 /// <summary>
 /// What each of the Export dialog's override boxes gets when it is left empty, from the plan: the

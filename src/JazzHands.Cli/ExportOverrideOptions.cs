@@ -23,7 +23,7 @@ internal sealed class ExportOverrideOptions
     private readonly Option<string?> _channels = new("--channels") { Description = "1, 2 or 6 channels. A 5.1 sequence exported in stereo is folded down (ITU), per source, before the master limiter." };
     private readonly Option<string?> _loudness = new("--loudness") { Description = "Measure the mix and bring it to this integrated loudness, peaks held under -1 dBFS: -14." };
     private readonly Option<string?> _targetSize = new("--target-size") { Description = "Come in under this size: 8MB, in binary units as Discord counts. The picture steps down when it must; the file is checked and encoded again if it is over." };
-    private readonly Option<string?> _pixelFormat = new("--pixel-format") { Description = "The pixel format: yuv420p10le for ten bits, yuv422p10le for 4:2:2 ten bit. Always BT.709." };
+    private readonly Option<string?> _pixelFormat = new("--pixel-format") { Description = "The pixel format: yuv420p10le for ten bits, yuv422p10le for 4:2:2 ten bit. BT.709, or HDR10 for an ACES project rendered for it." };
     private readonly Option<bool> _audioOnly = new("--audio-only") { Description = "Write the sound alone, in a sound file for the preset's encoder: AAC in .m4a, Opus in .opus, FLAC, WAV or MP3." };
     private readonly Option<string?> _start = new("--start") { Description = "Export from here, in sequence time." };
     private readonly Option<string?> _end = new("--end") { Description = "Export to here, in sequence time." };
