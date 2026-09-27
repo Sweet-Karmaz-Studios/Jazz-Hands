@@ -281,6 +281,7 @@ public sealed partial class TimelineViewModel
             TimelineMenuItem.Separator,
             new("Split at playhead", "Ctrl+K", () => RunAsync(Batch([.. underPlayhead.Select(id => (ICommand)new SplitClipCommand(id, playhead))], "Split")), underPlayhead.Length > 0),
             new("Freeze frame at playhead", null, () => RunAsync(new FreezeFrameCommand(clip.Id, playhead)), clip.Kind != TrackKind.Audio && clip.Start <= playhead && playhead < clip.End),
+            new(clip.Clip.IsRemapped ? "Remove the speed curve" : "Speed curve", null, () => RunAsync(new SetClipRemapCommand(clip.Id, Off: clip.Clip.IsRemapped)), clip.Clip.IsMedia && clip.Kind != TrackKind.Audio),
             new("Split at scene cuts...", null, () => _dialogs?.ShowSceneCutsAsync(clip.Clip.MediaId!, clip.Id) ?? Task.CompletedTask, HasShots(clip)),
             new("Ripple delete", "Shift+Delete", () => RunAsync(new RippleDeleteClipsCommand([.. ids]))),
             new("Delete", "Delete", () => RunAsync(Batch([.. ids.Select(id => (ICommand)new RemoveClipCommand(id))], "Delete"))),

@@ -1177,6 +1177,66 @@ Stretch a clip to a new duration by changing its speed.
 | `--dur <time>` | Required. How long it should become. |
 | `--no-save` | Do not write the project back. |
 
+### `jazz clip remap-add-point <project> <clip-id>`
+
+Add a point to a clip's speed curve.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The clip id. |
+
+| Option | Meaning |
+|---|---|
+| `--at <time>` | Required. Where, on the timeline. |
+| `--speed <number>` | The speed there; the curve's own when left out. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz clip remap-move-point <project> <clip-id>`
+
+Move a point of a clip's speed curve.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The clip id. |
+
+| Option | Meaning |
+|---|---|
+| `--point <n>` | Required. Which point, from 1 in time order. |
+| `--at <time>` | Where it goes, on the timeline. |
+| `--speed <number>` | Its new speed. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz clip remap-remove-point <project> <clip-id>`
+
+Remove a point from a clip's speed curve.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The clip id. |
+
+| Option | Meaning |
+|---|---|
+| `--point <n>` | Required. Which point, from 1 in time order. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz clip remap-set-ease <project> <clip-id>`
+
+Set how a clip's speed curve leaves a point.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The clip id. |
+
+| Option | Meaning |
+|---|---|
+| `--point <n>` | Required. Which point, from 1 in time order. |
+| `--ease <hold|linear|bezier|ease-in|ease-out|ease-in-out>` | Required. linear, easeIn, easeOut, easeInOut or hold. |
+| `--no-save` | Do not write the project back. |
+
 ### `jazz clip remove <project> <clip-id>`
 
 Remove a clip, leaving a gap or closing it.
@@ -1471,7 +1531,7 @@ Put a packaged speed ramp on a clip: slow into an impact and snap back, speed th
 |---|---|
 | `<project>` | The .jazz file to work on. |
 | `<clip-id>` | The clip id. |
-| `<preset>` | impact, traversal, rewind or replay. |
+| `<preset>` | impact, traversal, rewind, replay or beat. |
 
 | Option | Meaning |
 |---|---|

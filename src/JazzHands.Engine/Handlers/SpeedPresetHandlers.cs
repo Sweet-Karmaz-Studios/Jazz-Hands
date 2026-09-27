@@ -43,8 +43,34 @@ public sealed class SpeedPresetHandler : ICommandHandler<SpeedPresetCommand>
         {
             SpeedPreset.Impact => Ramp(project, found, command.At, [(-0.5, 1), (-0.15, 0.2), (0.35, 0.2), (0.47, 1)], context),
             SpeedPreset.Traversal => Ramp(project, found, command.At, [(0, 1), (0.3, 3), (0.3 + length.ToSeconds(), 3), (0.6 + length.ToSeconds(), 1)], context),
+            SpeedPreset.Beat => Ramp(project, found, command.At, ToTheBeat(found, command.At, length), context),
             _ => Repeat(project, found, command.Preset, command.At, length, context),
         };
+    }
+
+    /// <summary>Normal speed on each beat marker from a moment for a while, and three times between each pair (Phase 45).</summary>
+    private static (double After, double Speed)[] ToTheBeat(ClipLocation found, Flicks at, Flicks length)
+    {
+        Flicks[] beats = [.. found.Sequence.Markers
+            .Where(marker => marker.Kind == MarkerKind.Beat && marker.Time >= at && marker.Time <= at + length && marker.Time <= found.Clip.End)
+            .Select(marker => marker.Time)
+            .Order()];
+        if (beats.Length < 2)
+        {
+            throw new CommandException("no-beats", "There are not two beat markers there to ramp between. Find the beats first: audio.beats on the music.");
+        }
+
+        var points = new List<(double, double)>();
+        for (int index = 0; index < beats.Length; index++)
+        {
+            points.Add(((beats[index] - at).ToSeconds(), 1));
+            if (index + 1 < beats.Length)
+            {
+                points.Add((((beats[index] + beats[index + 1]) / 2 - at).ToSeconds(), 3));
+            }
+        }
+
+        return [.. points];
     }
 
     /// <summary>

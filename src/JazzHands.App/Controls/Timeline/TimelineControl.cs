@@ -848,6 +848,11 @@ public sealed class TimelineControl : FrameworkElement
                 DrawVolumeLine(dc, clip, lineBody, width);
             }
 
+            if (SpeedLine.Shown(clip, lineBody))
+            {
+                DrawSpeedLine(dc, clip, lineBody, width);
+            }
+
             if (clip.Clip.LinkGroupId is not null)
             {
                 dc.DrawRectangle(palette.LinkMark, null, new Rect(body.Left + 1, body.Bottom - 3, Math.Min(10.0, body.Width - 2), 2));
@@ -995,6 +1000,52 @@ public sealed class TimelineControl : FrameworkElement
             if (x >= from - 4.0 && x <= to + 4.0)
             {
                 dc.DrawEllipse(palette.VolumeHandle, palette.ClipEdge, new Point(x, Y(Math.Clamp(x, from, to))), 3.5, 3.5);
+            }
+        }
+    }
+
+    /// <summary>A remapped clip's speed curve across it (Phase 45), with its points, sampled every few pixels.</summary>
+    private void DrawSpeedLine(DrawingContext dc, ClipView clip, Rect body, double width)
+    {
+        TimelineGeometry geometry = _model!.Geometry;
+        Palette palette = _palette!;
+        double from = Math.Max(body.Left, 0.0);
+        double to = Math.Min(body.Right, width);
+        if (to - from < 2.0)
+        {
+            return;
+        }
+
+        double[] points = [.. SpeedLine.Points(clip).Select(geometry.XOf)];
+        var xs = new List<double> { from, to };
+        for (double x = from + 3.0; x < to; x += 3.0)
+        {
+            xs.Add(x);
+        }
+
+        xs.AddRange(points.Where(x => x > from && x < to));
+        xs.Sort();
+
+        double Y(double x) => SpeedLine.Y(body, SpeedLine.Level(clip, geometry.TimeAt(x, snapToFrame: false)));
+
+        var line = new StreamGeometry();
+        using (StreamGeometryContext context = line.Open())
+        {
+            context.BeginFigure(new Point(xs[0], Y(xs[0])), false, false);
+            for (int index = 1; index < xs.Count; index++)
+            {
+                context.LineTo(new Point(xs[index], Y(xs[index])), true, false);
+            }
+        }
+
+        line.Freeze();
+        dc.DrawGeometry(null, palette.SpeedPen, line);
+
+        foreach (double x in points)
+        {
+            if (x >= from - 4.0 && x <= to + 4.0)
+            {
+                dc.DrawRectangle(palette.SpeedPen.Brush, palette.ClipEdge, new Rect(x - 3.5, Y(Math.Clamp(x, from, to)) - 3.5, 7, 7));
             }
         }
     }
@@ -1336,6 +1387,7 @@ public sealed class TimelineControl : FrameworkElement
             TransitionLine = Frozen(new Pen(Faded(Find("Brush.Background.Base", Color.FromRgb(0x1B, 0x1B, 0x1B)), 0.45), 1.0));
             Warning = Find("Brush.Warning", Color.FromRgb(0xF2, 0xC1, 0x4E));
             VolumePen = Frozen(new Pen(Find("Brush.Label.Yellow", Color.FromRgb(0xE8, 0xC5, 0x47)), 1.25));
+            SpeedPen = Frozen(new Pen(Find("Brush.Accent", Color.FromRgb(0x4C, 0x8D, 0xFF)), 1.5));
             VolumeHandle = Find("Brush.Label.Yellow", Color.FromRgb(0xE8, 0xC5, 0x47));
             FadeShade = Frozen(new SolidColorBrush(Color.FromArgb(0x70, 0x00, 0x00, 0x00)));
             FadePen = Frozen(new Pen(Frozen(new SolidColorBrush(Color.FromArgb(0xC0, 0xFF, 0xFF, 0xFF))), 1.0));
@@ -1391,6 +1443,9 @@ public sealed class TimelineControl : FrameworkElement
         public Pen WaveformPlaceholder { get; }
 
         public Pen VolumePen { get; }
+
+        /// <summary>The speed lane's line (Phase 45).</summary>
+        public Pen SpeedPen { get; }
 
         public Brush VolumeHandle { get; }
 

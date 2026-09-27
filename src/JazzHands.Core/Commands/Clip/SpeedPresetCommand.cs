@@ -16,6 +16,9 @@ public enum SpeedPreset
 
     /// <summary>The last seconds again in slow motion with a REPLAY label, on a track above.</summary>
     Replay,
+
+    /// <summary>Ramped to the beat (Phase 45): normal speed on each beat marker, eased up to three times between them.</summary>
+    Beat,
 }
 
 /// <summary>Puts a packaged speed ramp on a clip of a file at a moment.</summary>
@@ -28,6 +31,10 @@ public enum SpeedPreset
 /// frames where the source is slowed.
 /// </para>
 /// <para>
+/// <c>beat</c> runs from <c>--at</c> for <c>--dur</c>: normal speed on every beat marker there and three times between
+/// them, eased, so the picture surges and lands on each beat.
+/// </para>
+/// <para>
 /// <c>rewind</c> and <c>replay</c> leave the clip as it is and add a clip on a new track above
 /// from <c>--at</c>, over what follows: the <c>--dur</c> seconds before the moment played
 /// backwards at four times with <c>video.vhs</c> and a little glitch, or played again at half
@@ -35,12 +42,12 @@ public enum SpeedPreset
 /// </para>
 /// </remarks>
 /// <param name="ClipId">The clip, a clip of a video file.</param>
-/// <param name="Preset">impact, traversal, rewind or replay.</param>
+/// <param name="Preset">impact, traversal, rewind, replay or beat.</param>
 /// <param name="At">The moment on the sequence: the hit, the start, or the end of what is repeated.</param>
 /// <param name="Duration">traversal: how long it runs fast; rewind and replay: how much is repeated. Two seconds when not given.</param>
 [Command("clip.speed-preset", Description = "Put a packaged speed ramp on a clip: slow into an impact and snap back, speed through a traversal, a VHS rewind, or a slow motion replay")]
 public sealed record SpeedPresetCommand(
     [property: Arg(0, "The clip id")] string ClipId,
-    [property: Arg(1, "impact, traversal, rewind or replay")] SpeedPreset Preset,
+    [property: Arg(1, "impact, traversal, rewind, replay or beat")] SpeedPreset Preset,
     [property: Option("at", "The moment: the hit, the start, or the end of what is repeated")] Flicks At,
     [property: Option("dur", "How long it runs fast, or how much is repeated. Default: 2s")] Flicks? Duration = null) : ICommand;
