@@ -304,6 +304,20 @@ public sealed partial class TimelineViewModel
             menu.Add(new TimelineMenuItem("Unnest", null, () => RunAsync(new UnnestClipCommand(clip.Id))));
         }
 
+        // A multicam clip (Phase 41): its angles, to cut to where it was clicked, and flattening.
+        if (clip.Clip.SequenceId is { } multicamId && _session.Project.Sequence(multicamId)?.Multicam is { } multicam)
+        {
+            menu.Add(TimelineMenuItem.Separator);
+            menu.Add(new TimelineMenuItem("Show the angles", null, () => RunAsync(new ViewMulticamCommand(clip.Id))));
+            for (int angle = 0; angle < Math.Min(9, multicam.Angles.Length); angle++)
+            {
+                int number = angle + 1;
+                menu.Add(new TimelineMenuItem($"Cut to angle {number} here: {multicam.Angles[angle].Name}", number.ToString(System.Globalization.CultureInfo.InvariantCulture), () => RunAsync(new SwitchAngleCommand(clip.Id, time, number))));
+            }
+
+            menu.Add(new TimelineMenuItem("Flatten multicam", null, () => RunAsync(new FlattenMulticamCommand(clip.Id))));
+        }
+
         if (DefaultTransitionAt(clip, hit.Edge) is { } transition)
         {
             menu.Add(transition);

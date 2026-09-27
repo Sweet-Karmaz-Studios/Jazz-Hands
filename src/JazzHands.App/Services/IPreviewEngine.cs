@@ -49,6 +49,9 @@ public interface IPreviewEngine
 
     /// <summary>Measure the scopes on each frame shown; the Scopes panel turns this on only while it is visible.</summary>
     bool Scopes { get; set; }
+
+    /// <summary>The multicam clip shown as its grid of angles (Phase 41), or null for the program.</summary>
+    string? MulticamGrid => null;
 }
 
 /// <summary>The playback engine, presented to the preview panel.</summary>
@@ -97,6 +100,9 @@ public sealed class EnginePreview(PlaybackEngine engine, RenderDevice device) : 
         get => engine.Scopes;
         set => engine.Scopes = value;
     }
+
+    /// <inheritdoc />
+    public string? MulticamGrid => engine.MulticamGrid;
 }
 
 /// <summary>Opens and closes the full screen preview.</summary>

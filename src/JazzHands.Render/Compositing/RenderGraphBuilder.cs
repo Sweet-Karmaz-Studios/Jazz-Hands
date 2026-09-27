@@ -88,6 +88,9 @@ public sealed record RenderOptions
     /// </summary>
     public EffectRegistry Effects { get; init; } = VideoEffects.Registry;
 
+    /// <summary>A multicam clip to draw as the grid of all its angles, for the multicam viewer (Phase 41); null for none.</summary>
+    public string? MulticamGrid { get; init; }
+
     /// <summary>How deep nested sequences may go before the builder stops, whatever the validator allowed.</summary>
     public int MaxNesting { get; init; } = 16;
 
@@ -449,8 +452,17 @@ public static class RenderGraphBuilder
                 nested = nested with { Tracks = [.. nested.Tracks.Where(track => !clip.HiddenTracks.Contains(track.Id))] };
             }
 
-            RenderGraph inner = Build(project, nested, clip.SourceTimeAt(time), frames, options, depth + 1);
+            // A multicam (Phase 41) draws the angle showing then, or all of them in the viewer's grid.
+            Flicks innerTime = clip.SourceTimeAt(time);
             ProjectSettings innerSettings = project.SettingsFor(nested);
+            if (nested.Multicam is { } multicam)
+            {
+                nested = string.Equals(options.MulticamGrid, clip.Id, StringComparison.Ordinal)
+                    ? MulticamGrid.Layout(nested, multicam, innerSettings.Width, innerSettings.Height)
+                    : nested with { Tracks = [.. nested.Tracks.Where(track => track.Kind != TrackKind.Video || multicam.Shows(track.Id, innerTime))] };
+            }
+
+            RenderGraph inner = Build(project, nested, innerTime, frames, options, depth + 1);
             return (new NestedLayerSource(inner), new Vector2(innerSettings.Width, innerSettings.Height), ConformPolicy.Fit);
         }
 

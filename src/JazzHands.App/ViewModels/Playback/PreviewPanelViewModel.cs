@@ -215,6 +215,11 @@ public sealed partial class PreviewPanelViewModel : ToolViewModel
             return true;
         }
 
+        if (MulticamKey(key, modifiers))
+        {
+            return true;
+        }
+
         ICommand? command = (key, none, shift) switch
         {
             (Key.Space, true, _) when !isRepeat => new TogglePlaybackCommand(),
@@ -293,6 +298,7 @@ public sealed partial class PreviewPanelViewModel : ToolViewModel
                     : string.Empty;
             }
 
+            RefreshMulticam(project, sequence);
             _shuttle.Sync(playing, state.Rate);
         }
         finally

@@ -46,6 +46,9 @@ public interface IPlaybackController
     /// <summary>How much of the frame the preview renders.</summary>
     PreviewQuality Quality { get; set; }
 
+    /// <summary>A multicam clip drawn as the grid of its angles (Phase 41), or null for the program.</summary>
+    string? MulticamGrid { get => null; set { } }
+
     /// <summary>What playback is doing, for <c>playback.state</c>.</summary>
     PlaybackStateInfo Describe();
 }

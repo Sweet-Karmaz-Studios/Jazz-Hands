@@ -117,6 +117,17 @@ public sealed class PreviewOverlay : FrameworkElement
         new FrameworkPropertyMetadata(Size.Empty, FrameworkPropertyMetadataOptions.AffectsRender));
 
     /// <summary>The colour of the marker being picked.</summary>
+    /// <summary>The live multicam angle's cell (Phase 41), as fractions of the picture; empty for none.</summary>
+    public static readonly DependencyProperty MulticamCellProperty = DependencyProperty.Register(
+        nameof(MulticamCell), typeof(Rect), typeof(PreviewOverlay), new FrameworkPropertyMetadata(Rect.Empty, FrameworkPropertyMetadataOptions.AffectsRender));
+
+    /// <summary>The live multicam angle's cell, as fractions of the picture.</summary>
+    public Rect MulticamCell
+    {
+        get => (Rect)GetValue(MulticamCellProperty);
+        set => SetValue(MulticamCellProperty, value);
+    }
+
     public static readonly DependencyProperty ActiveBrushProperty = DependencyProperty.Register(
         nameof(ActiveBrush),
         typeof(Brush),
@@ -211,6 +222,18 @@ public sealed class PreviewOverlay : FrameworkElement
                 drawingContext.DrawLine(pen, at with { Y = at.Y - 10 }, at with { Y = at.Y - 3 });
                 drawingContext.DrawLine(pen, at with { Y = at.Y + 3 }, at with { Y = at.Y + 10 });
             }
+        }
+
+        // The live angle of a multicam grid, outlined.
+        if (MulticamCell is { IsEmpty: false } cell)
+        {
+            var live = new Rect(
+                picture.X + (picture.Width * cell.X),
+                picture.Y + (picture.Height * cell.Y),
+                picture.Width * cell.Width,
+                picture.Height * cell.Height);
+            live.Inflate(-1.5, -1.5);
+            drawingContext.DrawRectangle(null, new Pen(ActiveBrush, 3.0), live);
         }
 
         drawingContext.Pop();

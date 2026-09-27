@@ -103,6 +103,7 @@ public static class GeneratedCommands
         "proxy" => "Proxies: half size copies of heavy media for smooth editing.",
         "recovery" => "Unsaved work after a crash: check what there is, bring it back by replaying every command since the last save, or set it aside.",
         "scopes" => "Waveform, vectorscope and histogram measurements of the picture.",
+        "multicam" => "Recordings of the same moment synced into one clip, and cut between by angle.",
         "role" => "What tracks are for: dialogue, music, effects, game. Mute or solo a role; export stems by it.",
         "selection" => "What is selected in a running editor.",
         "source" => "The source monitor: open a file, mark in and out, play it; edits from it are in clip.",

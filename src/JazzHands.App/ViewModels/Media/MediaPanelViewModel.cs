@@ -397,6 +397,23 @@ public sealed partial class MediaPanelViewModel : ToolViewModel
         await RunAsync(new GenerateProxyCommand(row.Id), $"Making a proxy of {row.Name} on the export queue.").ConfigureAwait(true);
     }
 
+    /// <summary>
+    /// Makes a multicam clip of the selected recordings (Phase 41), synced by their sound, at the
+    /// end of the active sequence's first picture track.
+    /// </summary>
+    [RelayCommand]
+    private Task MakeMulticamAsync(System.Collections.IList? selected)
+    {
+        string[] ids = [.. (selected?.OfType<MediaItemViewModel>() ?? []).Select(row => row.Id)];
+        if (ids.Length < 2)
+        {
+            Status = "Select two recordings or more of the same moment, then Make multicam.";
+            return Task.CompletedTask;
+        }
+
+        return RunAsync(new CreateMulticamCommand([.. ids]), $"Made a multicam of {ids.Length} recordings. Right-click it on the timeline to show the angles.");
+    }
+
     /// <summary>Opens the selected item in the source monitor, to mark and edit in from (Phase 38).</summary>
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private Task OpenInSourceAsync() => SelectedItem is { } row

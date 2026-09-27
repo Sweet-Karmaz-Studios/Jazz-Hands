@@ -12,7 +12,7 @@ namespace JazzHands.Engine.Handlers;
 /// <summary>Works out how far a clip moves to line its sound up with another clip's.</summary>
 internal static class ClipSync
 {
-    private const int Rate = 48_000;
+    internal const int Rate = 48_000;
 
     /// <summary>The least confidence <c>audio.sync</c> moves a clip on without <c>--force</c>.</summary>
     public const double Sure = 0.3;

@@ -219,6 +219,57 @@ public static class Validator
             CheckTrack(track, trackPath, mediaIds, sequenceIds, clipIds, issues);
             CheckTransitions(project, sequence, track, trackPath, issues);
         }
+
+        if (sequence.Multicam is { } multicam)
+        {
+            CheckMulticam(sequence, multicam, $"{sequencePath}/multicam", trackIds, issues);
+        }
+    }
+
+    /// <summary>
+    /// A multicam's angles name tracks of its sequence, and its switches name angles it has and
+    /// come in time order (Phase 41). Each is a warning: the picture plays the nearest angle and
+    /// a missing track is simply not shown.
+    /// </summary>
+    private static void CheckMulticam(Sequence sequence, Multicam multicam, string path, HashSet<string> trackIds, ImmutableArray<ValidationIssue>.Builder issues)
+    {
+        for (int angle = 0; angle < multicam.Angles.Length; angle++)
+        {
+            MulticamAngle each = multicam.Angles[angle];
+            foreach (string id in (each.PictureTrackId is { } picture ? [picture] : Array.Empty<string>()).Concat(each.SoundTrackIds))
+            {
+                if (!trackIds.Contains(id))
+                {
+                    issues.Add(new ValidationIssue(
+                        Severity.Warning,
+                        "missing-angle-track",
+                        $"{path}/angles/{angle}",
+                        $"Angle {angle + 1} of '{sequence.Name}' names track '{id}', which the sequence does not have."));
+                }
+            }
+        }
+
+        for (int index = 0; index < multicam.Switches.Length; index++)
+        {
+            AngleSwitch cut = multicam.Switches[index];
+            if (cut.Picture is < 0 || cut.Picture >= multicam.Angles.Length || cut.Sound is < 0 || cut.Sound >= multicam.Angles.Length)
+            {
+                issues.Add(new ValidationIssue(
+                    Severity.Warning,
+                    "angle-out-of-range",
+                    $"{path}/switches/{index}",
+                    $"A switch in '{sequence.Name}' names an angle it does not have; it plays the nearest."));
+            }
+
+            if (index > 0 && cut.At <= multicam.Switches[index - 1].At)
+            {
+                issues.Add(new ValidationIssue(
+                    Severity.Warning,
+                    "switches-out-of-order",
+                    $"{path}/switches/{index}",
+                    $"The switches in '{sequence.Name}' are not in time order; they are read in the order they are written."));
+            }
+        }
     }
 
     private static void CheckTrack(

@@ -785,6 +785,7 @@ public sealed record SourcePatch(EquatableArray<string> Targets) : IEquatable<So
 /// <param name="Master">The master bus: its volume and the limiter that ends the mix. Null is unity with the limiter on at -1 dBTP.</param>
 /// <param name="MotionBlur">Motion blur for every animated layer in it, unless a track or clip says otherwise; null for none.</param>
 /// <param name="SourcePatch">Which tracks an edit from the source monitor goes to (Phase 38); null for the defaults.</param>
+/// <param name="Multicam">For a multicam clip's source (Phase 41): its angles and the switches between them; null for an ordinary sequence.</param>
 public sealed record Sequence(
     string Id,
     string Name,
@@ -796,7 +797,8 @@ public sealed record Sequence(
     bool? Magnetic = null,
     MasterBus? Master = null,
     MotionBlur? MotionBlur = null,
-    SourcePatch? SourcePatch = null) : IEquatable<Sequence>
+    SourcePatch? SourcePatch = null,
+    Multicam? Multicam = null) : IEquatable<Sequence>
 {
     /// <summary>The first position after the last clip on any track.</summary>
     public Flicks Duration

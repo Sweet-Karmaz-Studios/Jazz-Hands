@@ -45,7 +45,8 @@
                                     GuideBrush="{DynamicResource Brush.Preview.Guide}"
                                     TitleBrush="{DynamicResource Brush.Preview.TitleSafe}"
                                     ActiveBrush="{DynamicResource Brush.Accent}"
-                                    Markers="{Binding Markers, Mode=OneWay}" />
+                                    Markers="{Binding Markers, Mode=OneWay}"
+                                    MulticamCell="{Binding MulticamCell, Mode=OneWay}" />
             <!-- The selected title's frame: drag inside to move it, a corner to scale, the knob to turn;
                  double-click to edit its text in place. -->
             <preview:TitleHandlesOverlay x:Name="TitleFrame"
@@ -207,6 +208,12 @@
                     <ToggleButton Style="{StaticResource Button.Text}" Content="Grid"
                                   IsChecked="{Binding ShowGrid, Mode=TwoWay}"
                                   ToolTip="Show a rule of thirds grid" AutomationProperties.Name="Grid" />
+                    <ToggleButton Style="{StaticResource Button.Text}" Content="Multicam"
+                                  IsChecked="{Binding IsMulticamView, Mode=OneWay}"
+                                  Command="{Binding ToggleMulticamCommand, Mode=OneWay}"
+                                  Visibility="{Binding CanShowMulticam, Mode=OneWay, Converter={StaticResource Visible}}"
+                                  ToolTip="Show the multicam clip's angles; click one, or press 1 to 9 while it plays, to cut to it"
+                                  AutomationProperties.Name="Multicam view" />
                     <Button Style="{StaticResource Button.Icon}" Content="{Binding FullScreenGlyph, Mode=OneWay}"
                             Command="{Binding ToggleFullScreenCommand, Mode=OneWay}"
                             ToolTip="Full screen on the other monitor (F11)" AutomationProperties.Name="Full screen" />

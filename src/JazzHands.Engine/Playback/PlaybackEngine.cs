@@ -72,6 +72,7 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
     private IPreviewTarget[] _targets = [];
     private volatile bool _disposing;
     private volatile bool _suspended;
+    private string? _multicamGrid;
     private bool _released;
     private Session? _session;
 
@@ -249,6 +250,17 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
         set
         {
             _loop = value;
+            _wake.Set();
+        }
+    }
+
+    /// <inheritdoc />
+    public string? MulticamGrid
+    {
+        get => Volatile.Read(ref _multicamGrid);
+        set
+        {
+            Volatile.Write(ref _multicamGrid, value);
             _wake.Set();
         }
     }
@@ -833,7 +845,7 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
         PreviewQuality effective = Resolve(now, playing, rate);
         Volatile.Write(ref _effectiveQuality, (int)effective);
 
-        var key = new RenderKey(snapshot.Version, frame, effective);
+        var key = new RenderKey(snapshot.Version, frame, effective, Volatile.Read(ref _multicamGrid));
         bool refresh = _refresh;
         _refresh = false;
 
@@ -1021,6 +1033,10 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
         // over a still region then redraws nothing, and playing never fills the cache with
         // frames that will not come round again.
         RenderOptions options = playing ? _playingOptions[divisor] : _parkedOptions[divisor];
+        if (Volatile.Read(ref _multicamGrid) is { } grid)
+        {
+            options = options with { MulticamGrid = grid };
+        }
 
         frames.Motion = new Motion(playing, rate);
         frames.Render(snapshot.Project, sequence, time, options, _programView!, width, height, OutputSettings.Preview, snapshot.Path);
@@ -1258,7 +1274,7 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
     private sealed record ProjectSnapshot(Project Project, string Path, long Version);
 
     /// <summary>What decides whether the frame on screen is still the right one.</summary>
-    private readonly record struct RenderKey(long Version, long Frame, PreviewQuality Quality);
+    private readonly record struct RenderKey(long Version, long Frame, PreviewQuality Quality, string? Grid);
 
     [System.Runtime.InteropServices.LibraryImport("avrt.dll", EntryPoint = "AvSetMmThreadCharacteristicsW", StringMarshalling = System.Runtime.InteropServices.StringMarshalling.Utf16)]
     private static partial IntPtr AvSetMmThreadCharacteristics(string taskName, ref uint taskIndex);

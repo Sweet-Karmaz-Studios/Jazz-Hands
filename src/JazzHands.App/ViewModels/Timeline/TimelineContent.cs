@@ -16,7 +16,8 @@ namespace JazzHands.App.ViewModels.Timeline;
 /// <param name="TrackId">The track it is on.</param>
 /// <param name="Kind">The track's kind.</param>
 /// <param name="MediaMissing">True when it plays a media item the project no longer has.</param>
-public sealed record ClipView(Clip Clip, string TrackId, TrackKind Kind, bool MediaMissing)
+/// <param name="Cuts">For a multicam clip (Phase 41), where on the timeline its picture cuts to another angle.</param>
+public sealed record ClipView(Clip Clip, string TrackId, TrackKind Kind, bool MediaMissing, EquatableArray<Flicks> Cuts = default)
 {
     /// <summary>The clip's id.</summary>
     public string Id => Clip.Id;
@@ -158,6 +159,19 @@ public sealed class TimelineContent
         return [.. found.Values];
     }
 
+    /// <summary>Where a multicam clip's picture cuts to another angle, on the timeline, inside the clip; empty for any other clip.</summary>
+    internal static EquatableArray<Flicks> MulticamCuts(Project project, Clip clip)
+    {
+        if (clip.SequenceId is not { } id || project.Sequence(id)?.Multicam is not { } multicam || clip.Reverse || clip.IsRemapped || clip.EffectiveSpeed != Rational.One)
+        {
+            return default;
+        }
+
+        return [.. multicam.Changes().Skip(1)
+            .Select(change => change.At - clip.SourceIn + clip.Start)
+            .Where(at => at > clip.Start && at < clip.End)];
+    }
+
     /// <summary>
     /// Builds the content for a sequence, reusing every clip view from <paramref name="previous"/>
     /// whose clip has not changed.
@@ -182,6 +196,7 @@ public sealed class TimelineContent
             foreach (Clip clip in track.Clips)
             {
                 bool missing = clip.MediaId is { } mediaId && project.MediaItem(mediaId) is null;
+                EquatableArray<Flicks> cuts = MulticamCuts(project, clip);
                 ClipView? kept = previous?.Clip(clip.Id);
 
                 ClipView view = kept is not null
@@ -189,8 +204,9 @@ public sealed class TimelineContent
                     && string.Equals(kept.TrackId, track.Id, StringComparison.Ordinal)
                     && kept.Kind == track.Kind
                     && kept.MediaMissing == missing
+                    && kept.Cuts == cuts
                         ? kept
-                        : new ClipView(clip, track.Id, track.Kind, missing);
+                        : new ClipView(clip, track.Id, track.Kind, missing, cuts);
 
                 clips.Add(view);
                 byId[clip.Id] = view;

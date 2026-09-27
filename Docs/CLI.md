@@ -2790,6 +2790,100 @@ List the folders being watched for new recordings.
 |---|---|
 | `<project>` | The .jazz file to work on. |
 
+## `jazz multicam`
+
+Recordings of the same moment synced into one clip, and cut between by angle.
+
+### `jazz multicam create <project> <media-ids>`
+
+Make a multicam clip from recordings of the same moment.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<media-ids>` | Comma-separated media ids. |
+
+| Option | Meaning |
+|---|---|
+| `--sync <audio|timecode|in|marker>` | audio, timecode, in or marker. Default: audio. Default: audio. |
+| `--name <name>` | The multicam's name. |
+| `--track <id>` | The picture track to put the clip on. |
+| `--at <time>` | Where the clip starts; the end of the track when left out. |
+| `--id <id>` | The identifier for the clip. |
+| `--sequence-id <id>` | The identifier for the multicam sequence. |
+| `--force` | Make it even when a match by sound is not sure. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz multicam flatten <project> <clip-id>`
+
+Turn a multicam clip into ordinary cuts.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The multicam clip id. |
+
+| Option | Meaning |
+|---|---|
+| `--no-save` | Do not write the project back. |
+
+### `jazz multicam set-sound <project> <clip-id>`
+
+Keep a multicam's sound on one angle, or let it follow.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The multicam clip id. |
+
+| Option | Meaning |
+|---|---|
+| `--angle <n>` | Required. The angle to hear throughout, from 1; 0 to follow the switches. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz multicam switch <project> <clip-id>`
+
+Cut a multicam clip to another angle.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The multicam clip id. |
+
+| Option | Meaning |
+|---|---|
+| `--at <time>` | Required. When, on the timeline. |
+| `--angle <n>` | Required. The angle, from 1. |
+| `--video-only` | Switch the picture and keep the sound. |
+| `--audio-only` | Switch the sound and keep the picture. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz multicam sync <project> <media-ids>`
+
+Line up recordings of the same moment.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<media-ids>` | Comma-separated media ids. |
+
+| Option | Meaning |
+|---|---|
+| `--sync <audio|timecode|in|marker>` | audio, timecode, in or marker. Default: audio. Default: audio. |
+
+### `jazz multicam view <project> [clip-id]`
+
+Show a multicam clip's angles in the program monitor.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The multicam clip id; the program when left out. Optional. |
+
+| Option | Meaning |
+|---|---|
+| `--no-save` | Do not write the project back. |
+
 ## `jazz param`
 
 Any parameter by its address, on a clip, a track, an effect or a mask.

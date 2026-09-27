@@ -73,6 +73,37 @@
     "settings"
   ],
   "$defs": {
+    "angleSwitch": {
+      "type": "object",
+      "properties": {
+        "at": {
+          "$ref": "#/$defs/flicks"
+        },
+        "picture": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sound": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "at"
+      ]
+    },
     "animatedValue": {
       "description": "A parameter value, an object with a keyframes array, or a driver expression over a base value.",
       "anyOf": [
@@ -1092,6 +1123,61 @@
         }
       }
     },
+    "multicam": {
+      "type": "object",
+      "properties": {
+        "angles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/multicamAngle"
+          }
+        },
+        "switches": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/angleSwitch"
+          }
+        },
+        "fixedSound": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "multicamAngle": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "pictureTrackId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "soundTrackIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "name",
+        "pictureTrackId"
+      ]
+    },
     "paramValue": {
       "description": "The value of an animatable parameter. A number is a float, a boolean is a bool, a string is text, an array of two or four numbers is a vector, and everything else carries a type tag.",
       "anyOf": [
@@ -1344,6 +1430,16 @@
           "anyOf": [
             {
               "$ref": "#/$defs/sourcePatch"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "multicam": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/multicam"
             },
             {
               "type": "null"

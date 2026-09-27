@@ -827,6 +827,16 @@ public sealed class TimelineControl : FrameworkElement
 
             DrawImagery(dc, clip, body, visibleStart, visibleEnd, geometry.PixelsPerSecond);
 
+            // A multicam clip's angle cuts, as the cuts they are.
+            foreach (Flicks cut in clip.Cuts)
+            {
+                double x = geometry.XOf(cut);
+                if (x > body.Left && x < body.Right)
+                {
+                    dc.DrawLine(palette.ClipEdge, new Point(x, body.Top), new Point(x, body.Bottom));
+                }
+            }
+
             Rect lineBody = VolumeLine.Body(geometry, row, clip);
             if (FadeHandles.Shown(clip, lineBody))
             {

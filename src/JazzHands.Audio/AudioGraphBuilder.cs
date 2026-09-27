@@ -86,6 +86,18 @@ public static class AudioGraphBuilder
             });
         }
 
+        // A multicam clip (Phase 41) plays the sound angle heard at each moment.
+        foreach (Track track in sequence.Tracks.Where(track => track.Kind == TrackKind.Video).OrderBy(track => track.Order))
+        {
+            foreach (Clip clip in track.Clips)
+            {
+                if (MulticamSound(project, track, clip, rate, effects, used) is { } sound)
+                {
+                    tracks.Add(sound);
+                }
+            }
+        }
+
         effects.Retain(used);
         return new MixSnapshot(rate, channels, Keyed(tracks, channels), Master(sequence.Master, rate));
     }
@@ -127,6 +139,89 @@ public static class AudioGraphBuilder
     internal static MasterMix Master(MasterBus? master, int rate) => master is null
         ? MasterMix.Default
         : new MasterMix(ScalarCurve.From(master.Volume, 0.0f, rate), master.LimiterEnabled, double.IsNaN(master.CeilingDb) ? (float)MasterBus.DefaultCeiling : (float)Math.Clamp(master.CeilingDb, -24.0, 0.0));
+
+    /// <summary>How long a multicam's sound fades across a switch, so a cut between angles does not click.</summary>
+    internal static readonly Flicks SwitchFade = Flicks.FromMilliseconds(4);
+
+    /// <summary>
+    /// The sound of a multicam clip on a picture track (Phase 41), as a track of its own: for each
+    /// stretch between sound switches, the clips of the angle heard, cut to it and placed where the
+    /// clip plays them, faded for a few milliseconds either side of a switch. Null for any other
+    /// clip, and for a multicam clip at a speed, reversed, remapped or held, whose sound is not
+    /// played (nested sound is not mixed).
+    /// </summary>
+    internal static TrackMix? MulticamSound(Project project, Track track, Clip clip, int rate, AudioEffectHost effects, ISet<string> used)
+    {
+        if (clip.SequenceId is not { } id || project.Sequence(id) is not { Multicam: { } multicam } nested
+            || !clip.Enabled || clip.IsHold || clip.Reverse || clip.IsRemapped || clip.EffectiveSpeed != Rational.One)
+        {
+            return null;
+        }
+
+        Flicks offset = clip.Start - clip.SourceIn;
+        Flicks windowStart = clip.SourceIn;
+        Flicks windowEnd = clip.SourceOut;
+
+        // Stretches of one sound angle, in the nested sequence's time, inside the clip.
+        var stretches = new List<(Flicks From, Flicks To, int Angle)>();
+        IReadOnlyList<(Flicks At, int Picture, int Sound)> changes = multicam.Changes();
+        for (int index = 0; index < changes.Count; index++)
+        {
+            Flicks from = Flicks.Max(index == 0 ? Flicks.MinValue : changes[index].At, windowStart);
+            Flicks to = Flicks.Min(index + 1 < changes.Count ? changes[index + 1].At : Flicks.MaxValue, windowEnd);
+            if (to <= from)
+            {
+                continue;
+            }
+
+            if (stretches.Count > 0 && stretches[^1].Angle == changes[index].Sound)
+            {
+                stretches[^1] = (stretches[^1].From, to, changes[index].Sound);
+            }
+            else
+            {
+                stretches.Add((from, to, changes[index].Sound));
+            }
+        }
+
+        var clips = new List<ClipMix>();
+        foreach ((Flicks from, Flicks to, int angle) in stretches)
+        {
+            foreach (string soundId in multicam.Angles[angle].SoundTrackIds)
+            {
+                if (nested.Track(soundId) is not { } sound)
+                {
+                    continue;
+                }
+
+                foreach (Clip inner in sound.Clips)
+                {
+                    Flicks start = Flicks.Max(inner.Start, from);
+                    Flicks end = Flicks.Min(inner.End, to);
+                    if (end <= start)
+                    {
+                        continue;
+                    }
+
+                    Clip piece = inner with
+                    {
+                        Range = TimeRange.FromBounds(start + offset, end + offset),
+                        SourceIn = inner.SourceTimeAt(start),
+                        FadeIn = start == from && from > windowStart ? new Fade(SwitchFade) : inner.FadeIn,
+                        FadeOut = end == to && to < windowEnd ? new Fade(SwitchFade) : inner.FadeOut,
+                    };
+                    if (BuildClip(project, piece, rate, effects, used) is { } built)
+                    {
+                        clips.Add(built);
+                    }
+                }
+            }
+        }
+
+        return clips.Count == 0
+            ? null
+            : new TrackMix($"multicam:{clip.Id}", clip.Name, track.Muted, track.Solo, ScalarCurve.From(null, 0.0f, rate), ScalarCurve.From(null, 0.0f, rate), clips);
+    }
 
     /// <summary>
     /// The mix form of one clip, or null when it has nothing to play.

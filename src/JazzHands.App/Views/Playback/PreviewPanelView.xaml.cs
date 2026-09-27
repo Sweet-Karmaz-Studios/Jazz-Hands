@@ -338,6 +338,18 @@ public partial class PreviewPanelView : UserControl
         // playback keys work.
         Stage.Focus();
 
+        // In a multicam grid, a click on an angle cuts to it (Phase 41).
+        if (e.ChangedButton == MouseButton.Left && _model is { IsMulticamView: true } multicam && !Overlay.Picture.IsEmpty)
+        {
+            Point at = e.GetPosition(Stage);
+            if (Overlay.Picture.Contains(at)
+                && multicam.ClickGrid((at.X - Overlay.Picture.X) / Overlay.Picture.Width, (at.Y - Overlay.Picture.Y) / Overlay.Picture.Height))
+            {
+                e.Handled = true;
+                return;
+            }
+        }
+
         // While the inspector is picking a point, a click on the picture is that point.
         if (_model is { IsPicking: true } picking)
         {
