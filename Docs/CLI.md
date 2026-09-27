@@ -1478,13 +1478,13 @@ Turn time remapping (a speed curve) on or off for a clip.
 
 ### `jazz clip set-retime <project> <clip-id> <mode>`
 
-Set how a clip shows moments between source frames: nearest frame or a blend.
+Set how a clip shows moments between source frames: nearest frame, a blend, or optical flow.
 
 | Argument | Meaning |
 |---|---|
 | `<project>` | The .jazz file to work on. |
 | `<clip-id>` | The clip id. |
-| `<mode>` | nearest, blend or optical-flow (which blends in this version). |
+| `<mode>` | nearest, blend or optical-flow. |
 
 | Option | Meaning |
 |---|---|

@@ -78,6 +78,20 @@ public static class ExportPlanner
         bool chapters = request.Chapters && container is { Chapters: true };
 
         EquatableArray<ExportStem> stems = Stems(project, sequence, request.Stems, plan.OutputPath, reasons);
+
+        // Slow motion by optical flow is drawn on the GPU by our own flow (Phase 42): say which clips.
+        string[] flowing = [.. sequence.Tracks
+            .Where(track => track.Kind == TrackKind.Video && !track.Muted)
+            .SelectMany(track => track.Clips)
+            .Where(clip => clip.Retime == RetimeMode.OpticalFlow && clip.IsMedia && (clip.IsRemapped || clip.EffectiveSpeed != Rational.One)
+                && ranges.Any(range => clip.Start < range.End && clip.End > range.Start))
+            .Select(clip => $"'{clip.Name}'")
+            .Distinct(StringComparer.Ordinal)];
+        if (flowing.Length > 0)
+        {
+            reasons.Add($"Slow motion by optical flow, on the GPU with Jazz Hands' own flow (no model needed): {string.Join(", ", flowing)}.");
+        }
+
         plan = plan with
         {
             Subtitles = subtitles,

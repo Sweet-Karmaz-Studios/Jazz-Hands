@@ -505,7 +505,8 @@ public static class RenderGraphBuilder
 
     /// <summary>
     /// A retimed clip's picture between two source frames: the frame showing and the one after,
-    /// crossfaded by how far between them the moment is (<see cref="RetimeMode.Blend"/>). Null when
+    /// crossfaded by how far between them the moment is (<see cref="RetimeMode.Blend"/>), or moved
+    /// along the motion between them (<see cref="RetimeMode.OpticalFlow"/>, <see cref="OpticalFlowRetime"/>). Null when
     /// the clip shows its nearest frame, the moment is on a frame, or there is no frame after.
     /// </summary>
     /// <remarks>
@@ -587,7 +588,9 @@ public static class RenderGraphBuilder
             FrameRate = frameRate,
         };
 
-        return new TransitionLayerSource(Side(shown), Side(next), new TransitionNode(effect, between));
+        // Optical flow moves both frames along the motion between them; blend crossfades them.
+        var mix = new TransitionNode(effect, between) { Custom = clip.Retime == RetimeMode.OpticalFlow ? OpticalFlowRetime.Instance : null };
+        return new TransitionLayerSource(Side(shown), Side(next), mix);
     }
 
     /// <summary>

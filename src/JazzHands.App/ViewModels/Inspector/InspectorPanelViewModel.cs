@@ -167,6 +167,12 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         "At a speed other than normal the sound keeps its pitch; off, it goes up and down with the speed, like tape.",
         Animatable: false);
 
+    /// <summary>How a picture clip shows the moments between its source frames (Phase 42), sent as <c>clip.set-retime</c>.</summary>
+    internal static ParamDescriptor RetimeParam { get; } = new(
+        "retime", ParamType.Enum, new ParamValue.Enum("nearest"), "Between frames",
+        "When slowed: nearest shows the frame before, which steps; blend crossfades the two either side; optical flow moves them along the motion, the smoothest.",
+        Animatable: false, Choices: new EquatableArray<string>(["nearest", "blend", "optical-flow"]));
+
     private Flicks Playhead => _preview?.Position ?? Flicks.Zero;
 
     private static ParamDescriptor FadeLength(string name, string label, string description) => new(
@@ -179,7 +185,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         Animatable: false, Choices: new EquatableArray<string>([.. FadeCurves.Select(pair => pair.Name)]));
 
     private static bool IsFadeRow(ParamRowViewModel row) =>
-        ReferenceEquals(row.Descriptor, KeepPitchParam) || ReferenceEquals(row.Descriptor, FadeInLength) || ReferenceEquals(row.Descriptor, FadeInShape)
+        ReferenceEquals(row.Descriptor, KeepPitchParam) || ReferenceEquals(row.Descriptor, RetimeParam) || ReferenceEquals(row.Descriptor, FadeInLength) || ReferenceEquals(row.Descriptor, FadeInShape)
         || ReferenceEquals(row.Descriptor, FadeOutLength) || ReferenceEquals(row.Descriptor, FadeOutShape);
 
     /// <summary>Adds an effect to the inspected clip, for a drop from the effects panel.</summary>
@@ -479,6 +485,13 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
 
             Sections.Add(fades);
         }
+        else if (found.Track.Kind == TrackKind.Video && clip.IsMedia && !clip.IsHold)
+        {
+            // How a slowed picture shows the moments between its frames (Phase 42): clip.set-retime.
+            var speed = Section("Speed");
+            speed.Rows.Add(new ParamRowViewModel(this, clip.Id, RetimeParam, speed.Title));
+            Sections.Add(speed);
+        }
 
         foreach (Effect effect in EffectChains.Visible(clip, clip.Effects))
         {
@@ -671,6 +684,11 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
             return new ParamValue.Bool(clip.KeepsPitch);
         }
 
+        if (ReferenceEquals(row, RetimeParam))
+        {
+            return new ParamValue.Enum(clip.Retime switch { RetimeMode.Blend => "blend", RetimeMode.OpticalFlow => "optical-flow", _ => "nearest" });
+        }
+
         Fade? fade = ReferenceEquals(row, FadeInLength) || ReferenceEquals(row, FadeInShape) ? clip.FadeIn : clip.FadeOut;
         return ReferenceEquals(row, FadeInLength) || ReferenceEquals(row, FadeOutLength)
             ? new ParamValue.Float((float)(fade?.Duration ?? Flicks.Zero).ToSeconds())
@@ -683,6 +701,11 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         if (ReferenceEquals(row.Descriptor, KeepPitchParam))
         {
             return new SetClipKeepPitchCommand(clipId, ((ParamValue.Bool)ParamValues.Parse(KeepPitchParam, text)).Value);
+        }
+
+        if (ReferenceEquals(row.Descriptor, RetimeParam))
+        {
+            return new SetClipRetimeCommand(clipId, text switch { "blend" => RetimeMode.Blend, "optical-flow" => RetimeMode.OpticalFlow, _ => RetimeMode.Nearest });
         }
 
         bool fadeIn = ReferenceEquals(row.Descriptor, FadeInLength) || ReferenceEquals(row.Descriptor, FadeInShape);

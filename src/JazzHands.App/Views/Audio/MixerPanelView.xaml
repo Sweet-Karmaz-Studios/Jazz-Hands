@@ -203,7 +203,7 @@
                     <ControlTemplate TargetType="{x:Type Button}">
                         <Border x:Name="Light" CornerRadius="1" Background="{DynamicResource Brush.Background.Input}" />
                         <ControlTemplate.Triggers>
-                            <DataTrigger Binding="{Binding IsClipped, Mode=OneWay}" Value="True">
+                            <DataTrigger Binding="{Binding Meter.IsClipped, Mode=OneWay}" Value="True">
                                 <Setter TargetName="Light" Property="Background" Value="{DynamicResource Brush.Error}" />
                             </DataTrigger>
                         </ControlTemplate.Triggers>
@@ -265,8 +265,8 @@
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
-                    <Button Grid.Row="0" Grid.Column="2" Grid.ColumnSpan="2" Style="{StaticResource ClipLight}" DataContext="{Binding Meter, Mode=OneWay}"
-                            Command="{Binding ClearClipCommand, Mode=OneWay}" Margin="0,0,0,3" />
+                    <Button Grid.Row="0" Grid.Column="2" Grid.ColumnSpan="2" Style="{StaticResource ClipLight}"
+                            Command="{Binding Meter.ClearClipCommand, Mode=OneWay}" Margin="0,0,0,3" />
                     <Slider Grid.Row="1" Grid.Column="0" Style="{StaticResource Fader}" Value="{Binding VolumeDb, Mode=TwoWay}"
                             AutomationProperties.Name="Master volume" />
                     <ContentControl Grid.Row="1" Grid.Column="2" Content="{Binding Meter, Mode=OneWay}" ContentTemplate="{StaticResource StripMeter}"
@@ -462,8 +462,8 @@
                                             <RowDefinition Height="Auto" />
                                             <RowDefinition Height="*" />
                                         </Grid.RowDefinitions>
-                                        <Button Grid.Row="0" Grid.Column="1" Style="{StaticResource ClipLight}" DataContext="{Binding Meter, Mode=OneWay}"
-                                                Command="{Binding ClearClipCommand, Mode=OneWay}" Margin="4,0,4,3" />
+                                        <Button Grid.Row="0" Grid.Column="1" Style="{StaticResource ClipLight}"
+                                                Command="{Binding Meter.ClearClipCommand, Mode=OneWay}" Margin="4,0,4,3" />
                                         <Slider Grid.Row="1" Grid.Column="0" Style="{StaticResource Fader}" Value="{Binding VolumeDb, Mode=TwoWay}"
                                                 AutomationProperties.Name="Volume" />
                                         <ContentControl Grid.Row="1" Grid.Column="1" Content="{Binding Meter, Mode=OneWay}" ContentTemplate="{StaticResource StripMeter}"

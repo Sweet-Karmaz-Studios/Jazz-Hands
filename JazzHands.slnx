@@ -14,6 +14,7 @@
     <Project Path="src/JazzHands.Media/JazzHands.Media.csproj" />
     <Project Path="src/JazzHands.Render/JazzHands.Render.csproj" />
     <Project Path="src/JazzHands.Speech/JazzHands.Speech.csproj" />
+    <Project Path="src/JazzHands.Inference/JazzHands.Inference.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/JazzHands.IconGen/JazzHands.IconGen.csproj">
@@ -46,6 +47,9 @@
       <Platform Project="x64" />
     </Project>
     <Project Path="tests/JazzHands.Mcp.Tests/JazzHands.Mcp.Tests.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="tests/JazzHands.Inference.Tests/JazzHands.Inference.Tests.csproj">
       <Platform Project="x64" />
     </Project>
     <Project Path="tests/JazzHands.Speech.Tests/JazzHands.Speech.Tests.csproj">

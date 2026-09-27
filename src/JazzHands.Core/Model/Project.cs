@@ -45,7 +45,7 @@ public enum RetimeMode
     /// <summary>The two frames either side, crossfaded by how far between them the moment is: smoother slow motion.</summary>
     Blend,
 
-    /// <summary>Motion interpolated frames. A placeholder in this version: it blends, as <see cref="Blend"/> does.</summary>
+    /// <summary>The two frames either side moved along the motion between them to the moment (optical flow, Phase 42): the smoothest slow motion.</summary>
     OpticalFlow,
 }
 

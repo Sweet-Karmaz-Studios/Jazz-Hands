@@ -68,8 +68,16 @@ Each is used as published on nuget.org, unmodified.
 | SQLite (e_sqlite3) | Public domain | <https://sqlite.org> |
 | Ulid | MIT | <https://github.com/Cysharp/Ulid> |
 | Humanizer | MIT | <https://github.com/Humanizr/Humanizer> |
+| ONNX Runtime (Microsoft.ML.OnnxRuntime.DirectML) | MIT | <https://github.com/microsoft/onnxruntime> |
+| DirectML redistributable (Microsoft.AI.DirectML), which ONNX Runtime's DirectML provider loads | Microsoft Software License Terms: redistributable in Windows applications built with machine learning frameworks; not open source (see the note below) | <https://www.nuget.org/packages/Microsoft.AI.DirectML> |
 | Whisper.net, Whisper.net.Runtime, Whisper.net.Runtime.Vulkan (whisper.cpp and ggml inside) | MIT | <https://github.com/sandrohanea/whisper.net>, <https://github.com/ggml-org/whisper.cpp> |
 | JsonSchema.Net, JsonPointer.Net, Json.More.Net | MIT source; the published binaries come with the json-everything EULA | <https://github.com/json-everything/json-everything> |
+
+DirectML.dll is Microsoft's own licence, not an open source one. It permits shipping it inside a
+Windows application built with machine learning frameworks. Whether a GPL build of Jazz Hands may
+ship it beside the GPL FFmpeg is a question to settle before a release that includes it (it is
+used from Phase 43; Docs/HANDOFF.md, Open items). The alternative is the copy Windows itself
+carries in System32, if ONNX Runtime accepts its version.
 
 ## Fonts and icons
 

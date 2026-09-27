@@ -48,6 +48,8 @@
     <PackageVersion Include="Whisper.net" Version="1.9.1" />
     <PackageVersion Include="Whisper.net.Runtime" Version="1.9.1" />
     <PackageVersion Include="Whisper.net.Runtime.Vulkan" Version="1.9.1" />
+    <!-- Neural networks on the GPU (Phase 42): ONNX Runtime, MIT, with DirectML (any DirectX 12 GPU, no CUDA install). -->
+    <PackageVersion Include="Microsoft.ML.OnnxRuntime.DirectML" Version="1.24.4" />
   </ItemGroup>
 
   <ItemGroup Label="Data">
