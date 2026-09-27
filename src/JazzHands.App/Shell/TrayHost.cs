@@ -53,7 +53,12 @@ public sealed partial class TrayHost : IDisposable
             }
         };
 
-        _icon.Show();
+        // A run in an isolated home (the UI suite, the audit) puts no icon in the notification area:
+        // Windows keeps a row in Settings, Taskbar for every program file that ever showed one.
+        if (!JazzHands.Core.JazzFolders.IsIsolated)
+        {
+            _icon.Show();
+        }
     }
 
     /// <summary>A notification from the icon, for when Windows notifications are off or not set up.</summary>
