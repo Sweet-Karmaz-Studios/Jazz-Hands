@@ -16,11 +16,11 @@ public enum CrossfadeCurve
 }
 
 /// <summary>An equal power crossfade: the default between two sounds.</summary>
-[AudioTransition("transition.audio.equal-power", Name = "Equal Power Crossfade", Category = "Crossfade", Description = "Fades one sound out and the next in with sine and cosine gains, so the level holds through the middle. The usual choice.")]
+[AudioTransition("transition.audio.equal-power", Name = "Equal power crossfade", Category = "Crossfade", Description = "Fades one sound out and the next in with sine and cosine gains, so the level holds through the middle. The usual choice.")]
 public sealed class EqualPowerCrossfade;
 
 /// <summary>A linear crossfade, for two takes of the same sound.</summary>
-[AudioTransition("transition.audio.linear", Name = "Linear Crossfade", Category = "Crossfade", Description = "Fades with straight lines whose gains add to one: right between two takes of the same sound, where equal power would swell in the middle.")]
+[AudioTransition("transition.audio.linear", Name = "Linear crossfade", Category = "Crossfade", Description = "Fades with straight lines whose gains add to one: right between two takes of the same sound, where equal power would swell in the middle.")]
 public sealed class LinearCrossfade;
 
 /// <summary>The crossfade types and their curves.</summary>

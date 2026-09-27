@@ -6,17 +6,19 @@ namespace JazzHands.App.Shell;
 /// <param name="Name">What the Window menu calls it.</param>
 /// <param name="Shown">The panels that show; the rest are hidden, one click away in the Window menu.</param>
 /// <param name="Front">The panels put in front of the panes they share.</param>
-public sealed record WorkspaceDefinition(string Name, IReadOnlyList<string> Shown, IReadOnlyList<string> Front)
+/// <param name="FormerName">What an earlier version called it, still found and still read from disk.</param>
+public sealed record WorkspaceDefinition(string Name, IReadOnlyList<string> Shown, IReadOnlyList<string> Front, string? FormerName = null)
 {
-    /// <summary>Edit, Color, Audio, Trim and Export, as Jazz Hands ships them.</summary>
+    /// <summary>Edit, Colour, Audio, Trim and Export, as Jazz Hands ships them.</summary>
     public static IReadOnlyList<WorkspaceDefinition> BuiltIn { get; } =
     [
         new("Edit",
             ["media", "effects", "subtitles", "meters", "exportQueue", "console", "history", "markers", "curves", "log", "inspector", "preview"],
             ["media", "inspector", "preview"]),
-        new("Color",
+        new("Colour",
             ["color", "scopes", "media", "inspector", "preview"],
-            ["color", "inspector", "preview"]),
+            ["color", "inspector", "preview"],
+            "Color"),
         new("Audio",
             ["mixer", "meters", "media", "inspector", "preview", "markers"],
             ["mixer", "inspector"]),
@@ -28,9 +30,11 @@ public sealed record WorkspaceDefinition(string Name, IReadOnlyList<string> Show
             ["exportQueue", "preview"]),
     ];
 
-    /// <summary>The built-in workspace of a name, or null.</summary>
+    /// <summary>The built-in workspace of a name, or of its former name, or null.</summary>
     public static WorkspaceDefinition? Find(string name) =>
-        BuiltIn.FirstOrDefault(workspace => string.Equals(workspace.Name, name, StringComparison.OrdinalIgnoreCase));
+        BuiltIn.FirstOrDefault(workspace =>
+            string.Equals(workspace.Name, name, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(workspace.FormerName, name, StringComparison.OrdinalIgnoreCase));
 }
 
 /// <summary>

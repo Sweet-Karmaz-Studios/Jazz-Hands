@@ -71,14 +71,14 @@
 
             <!-- The wheels. -->
             <StackPanel Margin="0,10,0,0" Visibility="{Binding HasClip, Mode=OneWay, Converter={StaticResource Visible}}">
-                <TextBlock Style="{StaticResource Heading}" Text="Color wheels" />
+                <TextBlock Style="{StaticResource Heading}" Text="Colour wheels" />
 
                 <Button Margin="0,6,0,0"
                         HorizontalAlignment="Left"
                         Style="{StaticResource Button.Text}"
-                        Content="Add Color Wheels to this clip"
+                        Content="Add Colour wheels to this clip"
                         Command="{Binding AddWheelsCommand, Mode=OneWay}"
-                        AutomationProperties.Name="Add Color Wheels to this clip">
+                        AutomationProperties.Name="Add Colour wheels to this clip">
                     <Button.Visibility>
                         <Binding Path="HasWheels" Mode="OneWay">
                             <Binding.Converter>

@@ -28,6 +28,45 @@
         </Style.Triggers>
     </Style>
 
+    <!--
+        A field that says what goes in it while it is empty: the hint is the box's Tag
+        (Tag="Search the keymap"). The frame is drawn here rather than by the Windows template, so
+        the focus border is the accent.
+    -->
+    <Style x:Key="TextBox.Hinted" TargetType="TextBox" BasedOn="{StaticResource TextBox.Field}">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            SnapsToDevicePixels="True">
+                        <Grid>
+                            <TextBlock x:Name="Hint"
+                                       Margin="{TemplateBinding Padding}"
+                                       Padding="2,0,0,0"
+                                       VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                       Text="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}, Mode=OneWay}"
+                                       Foreground="{DynamicResource Brush.Text.Disabled}"
+                                       TextTrimming="CharacterEllipsis"
+                                       IsHitTestVisible="False"
+                                       Visibility="Collapsed" />
+                            <ScrollViewer x:Name="PART_ContentHost"
+                                          Focusable="False"
+                                          HorizontalScrollBarVisibility="Hidden"
+                                          VerticalScrollBarVisibility="Hidden" />
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Text" Value="">
+                            <Setter TargetName="Hint" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- Numbers in the mono face, so a value that changes while dragged does not jitter sideways. -->
     <Style TargetType="controls:NumberBox" BasedOn="{StaticResource TextBox.Field}">
         <Setter Property="FontFamily" Value="{DynamicResource Font.Mono}" />

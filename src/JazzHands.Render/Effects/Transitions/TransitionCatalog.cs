@@ -15,7 +15,7 @@ public sealed class CrossfadeTransition() : SinglePassTransition("PsCrossfade")
 }
 
 /// <summary>Fades out to a colour and in from it.</summary>
-[Transition("transition.dip", Name = "Dip to Colour", Category = "Dissolve", Description = "Fades the outgoing picture out to a colour, black by default, and the incoming one in from it.")]
+[Transition("transition.dip", Name = "Dip to colour", Category = "Dissolve", Description = "Fades the outgoing picture out to a colour, black by default, and the incoming one in from it.")]
 [Param("colour", ParamType.Color, Default = "#000000", Animatable = false, Description = "The colour it dips to.")]
 [Param("hold", ParamType.Float, Default = "0", Min = 0, Max = 0.9, Animatable = false, Description = "The share of the transition spent on the colour alone, 0 to 0.9.")]
 public sealed class DipTransition() : SinglePassTransition("PsDip")
@@ -28,7 +28,7 @@ public sealed class DipTransition() : SinglePassTransition("PsDip")
 }
 
 /// <summary>A straight edge crosses the frame.</summary>
-[Transition("transition.wipe.linear", Name = "Linear Wipe", Category = "Wipe", Description = "A straight edge crosses the frame at any angle, uncovering the incoming picture behind it.")]
+[Transition("transition.wipe.linear", Name = "Linear wipe", Category = "Wipe", Description = "A straight edge crosses the frame at any angle, uncovering the incoming picture behind it.")]
 [Param("angle", ParamType.Float, Default = "0", Min = -360, Max = 360, Unit = "deg", Animatable = false, Description = "The way the edge travels: 0 left to right, 90 top to bottom.")]
 [Param("softness", ParamType.Float, Default = "0", Min = 0, Max = 1000, SliderMax = 200, Unit = "px", Animatable = false, Description = "How soft the edge is, in sequence pixels.")]
 [Param("border", ParamType.Float, Default = "0", Min = 0, Max = 200, SliderMax = 50, Unit = "px", Animatable = false, Description = "A band of colour along the edge, in sequence pixels wide.")]
@@ -44,7 +44,7 @@ public sealed class LinearWipeTransition() : SinglePassTransition("PsWipeLinear"
 }
 
 /// <summary>A hand sweeps round the centre of the frame.</summary>
-[Transition("transition.wipe.clock", Name = "Clock Wipe", Category = "Wipe", Description = "A hand sweeps round the centre of the frame like a clock's, uncovering the incoming picture.")]
+[Transition("transition.wipe.clock", Name = "Clock wipe", Category = "Wipe", Description = "A hand sweeps round the centre of the frame like a clock's, uncovering the incoming picture.")]
 [Param("start-angle", ParamType.Float, Default = "0", Min = -360, Max = 360, Unit = "deg", Animatable = false, Description = "Where the hand starts, clockwise from twelve o'clock.")]
 [Param("direction", ParamType.Enum, Default = "clockwise", Choices = "clockwise, counterclockwise", Animatable = false, Description = "Which way the hand turns.")]
 [Param("softness", ParamType.Float, Default = "0", Min = 0, Max = 1000, SliderMax = 200, Unit = "px", Animatable = false, Description = "How soft the moving edge is, in sequence pixels.")]
@@ -62,7 +62,7 @@ public sealed class ClockWipeTransition() : SinglePassTransition("PsWipeClock")
 }
 
 /// <summary>An edge swings a quarter turn about a corner.</summary>
-[Transition("transition.wipe.radial", Name = "Radial Wipe", Category = "Wipe", Description = "An edge pivots on a corner of the frame and swings a quarter turn across it.")]
+[Transition("transition.wipe.radial", Name = "Radial wipe", Category = "Wipe", Description = "An edge pivots on a corner of the frame and swings a quarter turn across it.")]
 [Param("corner", ParamType.Enum, Default = "top-left", Choices = "top-left, top-right, bottom-left, bottom-right", Animatable = false, Description = "The corner the edge pivots on.")]
 [Param("direction", ParamType.Enum, Default = "clockwise", Choices = "clockwise, counterclockwise", Animatable = false, Description = "Which way it swings: clockwise starts along the top or bottom edge, counterclockwise along the side.")]
 [Param("softness", ParamType.Float, Default = "0", Min = 0, Max = 1000, SliderMax = 200, Unit = "px", Animatable = false, Description = "How soft the edge is, in sequence pixels.")]
@@ -150,7 +150,7 @@ public sealed class ZoomTransition() : SinglePassTransition("PsZoom")
 }
 
 /// <summary>Both pictures blur as one dissolves into the other.</summary>
-[Transition("transition.blur-dissolve", Name = "Blur Dissolve", Category = "Dissolve", Description = "Both pictures blur as they cross, sharpest at the ends and softest in the middle.")]
+[Transition("transition.blur-dissolve", Name = "Blur dissolve", Category = "Dissolve", Description = "Both pictures blur as they cross, sharpest at the ends and softest in the middle.")]
 [Param("radius", ParamType.Float, Default = "40", Min = 0, Max = 400, SliderMax = 150, Unit = "px", Animatable = false, Description = "How far the blur spreads in the middle, in sequence pixels.")]
 public sealed class BlurDissolveTransition() : SinglePassTransition("PsBlurDissolve")
 {

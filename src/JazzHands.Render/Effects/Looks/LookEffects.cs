@@ -98,7 +98,7 @@ public sealed class VhsEffect() : SinglePassEffect("Looks.hlsl", "PsVhs")
 }
 
 /// <summary>A shine that sweeps across the picture, only where it is.</summary>
-[VideoEffect("video.light-sweep", Name = "Light Sweep", Category = "Looks", Description = "A band of light sweeping across a logo or a title, only where it has picture: the shine on a reveal. It crosses once from the trigger over the duration, and again every repeat.")]
+[VideoEffect("video.light-sweep", Name = "Light sweep", Category = "Looks", Description = "A band of light sweeping across a logo or a title, only where it has picture: the shine on a reveal. It crosses once from the trigger over the duration, and again every repeat.")]
 [Param("angle", ParamType.Float, Default = "20", Min = -36000, Max = 36000, SliderMax = 360, Unit = "deg", Description = "The direction it travels, clockwise from pointing right.")]
 [Param("width", ParamType.Float, Default = "160", Min = 1, Max = 4000, SliderMax = 600, Unit = "px", Description = "How wide the band is, in sequence pixels.")]
 [Param("softness", ParamType.Float, Default = "0.8", Min = 0, Max = 1, Description = "How soft its edges are.")]

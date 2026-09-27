@@ -122,7 +122,7 @@ public sealed class FlickerEffect() : SinglePassEffect("Stylize.hlsl", "PsFlicke
 }
 
 /// <summary>Outlines: a Sobel filter on brightness.</summary>
-[VideoEffect("video.find-edges", Name = "Find Edges", Category = "Stylize", Description = "Finds the outlines in the picture, as light lines on black, coloured lines, or dark lines on white like a drawing.")]
+[VideoEffect("video.find-edges", Name = "Find edges", Category = "Stylize", Description = "Finds the outlines in the picture, as light lines on black, coloured lines, or dark lines on white like a drawing.")]
 [Param("strength", ParamType.Float, Default = "2", Min = 0, Max = 20, SliderMax = 8, Description = "How bright the lines are.")]
 [Param("mix", ParamType.Float, Default = "1", Min = 0, Max = 1, Description = "1 shows only the lines, 0 the picture as it was.")]
 [Param("coloured", ParamType.Bool, Default = "false", Animatable = false, Description = "Lines in the picture's own colours.")]

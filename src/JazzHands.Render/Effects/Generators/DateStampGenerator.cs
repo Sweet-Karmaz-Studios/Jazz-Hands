@@ -8,7 +8,7 @@ using Vortice.DirectWrite;
 namespace JazzHands.Render.Effects.Generators;
 
 /// <summary>A camcorder's on-screen date and time, ticking with the clip.</summary>
-[Generator("gen.date-stamp", Name = "Date Stamp", Category = "Generators", Description = "A camcorder's date and time in the corner, ticking on from a start as the clip plays, with PLAY in the other corner: put it over video.vhs for home video.")]
+[Generator("gen.date-stamp", Name = "Date stamp", Category = "Generators", Description = "A camcorder's date and time in the corner, ticking on from a start as the clip plays, with PLAY in the other corner: put it over video.vhs for home video.")]
 [Param("start", ParamType.Text, Default = "1998-12-24 21:37:00", Animatable = false, Description = "The date and time at the clip's start, as year-month-day hours:minutes:seconds.")]
 [Param("size", ParamType.Float, Default = "44", Min = 4, Max = 1000, SliderMax = 200, Unit = "px", Description = "Text height, in sequence pixels.")]
 [Param("margin", ParamType.Float, Default = "70", Min = 0, Max = 2000, SliderMax = 300, Unit = "px", Description = "Distance from the frame's edges.")]

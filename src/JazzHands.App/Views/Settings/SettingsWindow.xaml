@@ -166,12 +166,13 @@
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
                 <DockPanel Grid.Row="0" Margin="0,0,0,8">
                     <Button DockPanel.Dock="Right" Style="{StaticResource Button.Text}" Margin="8,0,0,0" Content="Reset all" Command="{Binding ResetAllCommand, Mode=OneWay}" AutomationProperties.Name="Reset every key" />
                     <Button DockPanel.Dock="Right" Style="{StaticResource Button.Text}" Margin="8,0,0,0" Content="Export..." Command="{Binding ExportCommand, Mode=OneWay}" AutomationProperties.Name="Export the keymap" />
                     <Button DockPanel.Dock="Right" Style="{StaticResource Button.Text}" Margin="8,0,0,0" Content="Import..." Command="{Binding ImportCommand, Mode=OneWay}" AutomationProperties.Name="Import a keymap" />
-                    <TextBox Text="{Binding Search, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" ToolTip="Search keys, commands and what they do" AutomationProperties.Name="Search the keymap" />
+                    <TextBox Style="{StaticResource TextBox.Hinted}" Tag="Search keys, commands and what they do" Text="{Binding Search, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" ToolTip="Search keys, commands and what they do" AutomationProperties.Name="Search the keymap" />
                 </DockPanel>
                 <ListBox Grid.Row="1"
                          ItemsSource="{Binding Visible, Mode=OneWay}"
@@ -227,13 +228,14 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
-                <DockPanel Grid.Row="2" Margin="0,8,0,0">
+                <TextBlock Grid.Row="2" Margin="0,10,0,4" FontSize="{DynamicResource Text.Caption}" Foreground="{DynamicResource Brush.Text.Secondary}" Text="Add a binding: the keys, the command they run and its arguments" />
+                <DockPanel Grid.Row="3">
                     <Button DockPanel.Dock="Right" Style="{StaticResource Button.Text}" Margin="8,0,0,0" Content="Add" Command="{Binding AddCommand, Mode=OneWay}" AutomationProperties.Name="Add a binding" />
-                    <TextBox DockPanel.Dock="Left" Width="120" Text="{Binding NewKeys, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" ToolTip="Keys, such as Ctrl+Shift+K" AutomationProperties.Name="New binding keys" />
+                    <TextBox Style="{StaticResource TextBox.Hinted}" Tag="Keys, as Ctrl+K" DockPanel.Dock="Left" Width="120" Text="{Binding NewKeys, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" ToolTip="Keys, such as Ctrl+Shift+K" AutomationProperties.Name="New binding keys" />
                     <ComboBox Style="{StaticResource ComboBox.Compact}" DockPanel.Dock="Left" Width="220" Margin="8,0" ItemsSource="{Binding Commands, Mode=OneTime}" SelectedItem="{Binding NewCommand, Mode=TwoWay}" ToolTip="The command the keys run" AutomationProperties.Name="New binding command" />
-                    <TextBox Text="{Binding NewArgs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" ToolTip="Its arguments as JSON, such as {&quot;clipIds&quot;: &quot;$selection&quot;}" AutomationProperties.Name="New binding arguments" />
+                    <TextBox Style="{StaticResource TextBox.Hinted}" Tag="Arguments (JSON, optional)" Text="{Binding NewArgs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" ToolTip="Its arguments as JSON, such as {&quot;clipIds&quot;: &quot;$selection&quot;}" AutomationProperties.Name="New binding arguments" />
                 </DockPanel>
-                <TextBlock Grid.Row="3" Margin="0,8,0,0" Text="{Binding Status, Mode=OneWay}" TextWrapping="Wrap" Foreground="{DynamicResource Brush.Text.Secondary}" />
+                <TextBlock Grid.Row="4" Margin="0,8,0,0" Text="{Binding Status, Mode=OneWay}" TextWrapping="Wrap" Foreground="{DynamicResource Brush.Text.Secondary}" />
             </Grid>
         </Grid>
 

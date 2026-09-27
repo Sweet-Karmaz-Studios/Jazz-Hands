@@ -305,7 +305,7 @@ public sealed partial class MainViewModel
             MenuItemViewModel more = new("More _shortcuts");
             foreach (KeymapBinding binding in missing)
             {
-                more.Items.Add(new MenuItemViewModel(Input.Keymap.Describe(binding.Command), new RelayCommand(() => Keys!.Invoke(binding)), binding.Keys) { KeymapCommand = binding.Command, KeymapArgs = binding.Args });
+                more.Items.Add(new MenuItemViewModel(Input.Keymap.Describe(binding), new RelayCommand(() => Keys!.Invoke(binding)), binding.Keys) { KeymapCommand = binding.Command, KeymapArgs = binding.Args });
             }
 
             Menu[^1].Items.Add(MenuItemViewModel.Separator());

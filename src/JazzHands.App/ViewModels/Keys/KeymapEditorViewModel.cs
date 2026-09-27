@@ -15,6 +15,7 @@ namespace JazzHands.App.ViewModels.Keys;
 public sealed partial class KeymapRowViewModel : ObservableObject
 {
     private readonly KeymapEditorViewModel _owner;
+    private readonly string? _ownDescription;
 
     [ObservableProperty]
     private string _keys;
@@ -33,6 +34,8 @@ public sealed partial class KeymapRowViewModel : ObservableObject
         Args = (JsonObject)binding.Args.DeepClone();
         Repeat = binding.Repeat;
         Original = original;
+        _ownDescription = binding.Description ?? original?.Description;
+        Description = Input.Keymap.Describe(binding with { Description = _ownDescription });
     }
 
     /// <summary>The command it sends.</summary>
@@ -47,8 +50,8 @@ public sealed partial class KeymapRowViewModel : ObservableObject
     /// <summary>Whether holding the key repeats it.</summary>
     public bool Repeat { get; }
 
-    /// <summary>What the command does.</summary>
-    public string Description => Input.Keymap.Describe(Command);
+    /// <summary>What the binding does: its own words where the default has them, else the command's.</summary>
+    public string Description { get; }
 
     /// <summary>The default binding this row started as, or null for one a person added.</summary>
     public KeymapBinding? Original { get; }
@@ -61,7 +64,7 @@ public sealed partial class KeymapRowViewModel : ObservableObject
     {
         try
         {
-            return Input.Keymap.Bind(Keys, Command, Args, Repeat);
+            return Input.Keymap.Bind(Keys, Command, Args, Repeat) with { Description = _ownDescription };
         }
         catch (FormatException)
         {

@@ -7,7 +7,7 @@ using JazzHands.Render.Effects.Distort;
 namespace JazzHands.Render.Effects.Blur;
 
 /// <summary>A smear along one direction, like fast motion.</summary>
-[VideoEffect("video.blur.directional", Name = "Directional Blur", Category = "Blur", Description = "Smears the picture along one direction, like fast motion past the camera.")]
+[VideoEffect("video.blur.directional", Name = "Directional blur", Category = "Blur", Description = "Smears the picture along one direction, like fast motion past the camera.")]
 [Param("angle", ParamType.Float, Default = "0", Min = -36000, Max = 36000, SliderMax = 180, Unit = "deg", Description = "The direction of the smear, 0 across, 90 down.")]
 [Param("length", ParamType.Float, Default = "30", Min = 0, Max = 2000, SliderMax = 300, Unit = "px", Description = "How long the smear is, in sequence pixels.")]
 public sealed class DirectionalBlurEffect() : SinglePassEffect("BlurFamily.hlsl", "PsDirectional")
@@ -31,7 +31,7 @@ public sealed class DirectionalBlurEffect() : SinglePassEffect("BlurFamily.hlsl"
 }
 
 /// <summary>A blur out from a point (zoom) or round it (spin).</summary>
-[VideoEffect("video.blur.radial", Name = "Radial Blur", Category = "Blur", Description = "Blurs outwards from a point, like a fast zoom, or round it, like a spin.")]
+[VideoEffect("video.blur.radial", Name = "Radial blur", Category = "Blur", Description = "Blurs outwards from a point, like a fast zoom, or round it, like a spin.")]
 [Param("mode", ParamType.Enum, Default = "zoom", Choices = "zoom, spin", Animatable = false, Description = "Zoom streaks out from the centre; spin turns round it.")]
 [Param("amount", ParamType.Float, Default = "10", Min = 0, Max = 100, Unit = "%", Description = "How strong: for zoom, how far the streaks reach; for spin, up to 90 degrees each way.")]
 [Param("centre", ParamType.Point, Default = "0, 0", Unit = "px", Description = "The point it blurs from or round, in sequence pixels from the frame centre.")]
@@ -132,7 +132,7 @@ public sealed class GlowEffect : VideoEffect
 }
 
 /// <summary>A soft shadow of the picture's shape, offset behind it.</summary>
-[VideoEffect("video.drop-shadow", Name = "Drop Shadow", Category = "Stylize", Description = "Casts a soft shadow of the picture's shape behind it, for a picture-in-picture, a logo or a title.")]
+[VideoEffect("video.drop-shadow", Name = "Drop shadow", Category = "Stylize", Description = "Casts a soft shadow of the picture's shape behind it, for a picture-in-picture, a logo or a title.")]
 [Param("colour", ParamType.Color, Default = "#000000", Description = "The shadow's colour.")]
 [Param("opacity", ParamType.Float, Default = "0.6", Min = 0, Max = 1, Description = "How dark the shadow is.")]
 [Param("angle", ParamType.Float, Default = "135", Min = -36000, Max = 36000, SliderMax = 360, Unit = "deg", Description = "Where the shadow falls, clockwise from pointing right; 135 is down and left of a light at the top right.")]

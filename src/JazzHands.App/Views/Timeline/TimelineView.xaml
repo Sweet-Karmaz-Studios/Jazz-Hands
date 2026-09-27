@@ -351,7 +351,6 @@
                     <StackPanel Grid.Row="2" Margin="0,8,0,8">
                         <TextBlock Text="{Binding InOut, Mode=OneWay}"
                                    TextWrapping="Wrap"
-                                   FontFamily="{DynamicResource Font.Mono}"
                                    FontSize="{DynamicResource Text.Caption}"
                                    Foreground="{DynamicResource Brush.Text.Secondary}" />
                         <StackPanel Orientation="Horizontal" Margin="0,6,0,0">

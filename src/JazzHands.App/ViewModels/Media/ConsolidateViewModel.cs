@@ -60,6 +60,9 @@ public sealed partial class ConsolidateViewModel : ObservableObject
     /// <summary>What the destination is.</summary>
     public string DestinationLabel => IsArchive ? "Zip file" : "Folder";
 
+    /// <summary>The main button: what pressing it does.</summary>
+    public string RunLabel => IsArchive ? "Archive" : "Consolidate";
+
     /// <summary>Sets the dialog up for one or the other, with a destination beside the project.</summary>
     public void Load(bool archive)
     {
@@ -69,6 +72,7 @@ public sealed partial class ConsolidateViewModel : ObservableObject
         Destination = archive ? Path.Combine(near, name + ".zip") : Path.Combine(near, name + " (consolidated)");
         OnPropertyChanged(nameof(Title));
         OnPropertyChanged(nameof(DestinationLabel));
+        OnPropertyChanged(nameof(RunLabel));
     }
 
     partial void OnTrimChanged(bool value)

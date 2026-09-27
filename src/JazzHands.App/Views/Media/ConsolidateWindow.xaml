@@ -25,15 +25,25 @@
             <TextBox Text="{Binding Destination, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Where to gather it" />
         </DockPanel>
         <CheckBox Style="{StaticResource CheckBox.Dark}" Margin="90,4,0,4" Content="Keep only the parts clips use" IsChecked="{Binding Trim, Mode=TwoWay}" ToolTip="Each used stretch is smart cut out of its recording, with handles either side" />
-        <DockPanel Margin="90,0,0,8">
+        <!-- The handles apply only to a trimmed gather: the row fades with the check box off. -->
+        <DockPanel Margin="90,0,0,8" IsEnabled="{Binding Trim, Mode=OneWay}">
+            <DockPanel.Style>
+                <Style TargetType="DockPanel">
+                    <Style.Triggers>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.45" />
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </DockPanel.Style>
             <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" Text="Handles (seconds)  " />
-            <TextBox Width="60" HorizontalAlignment="Left" Text="{Binding HandleSeconds, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" IsEnabled="{Binding Trim, Mode=OneWay}" AutomationProperties.Name="Handles in seconds" />
+            <TextBox Width="60" HorizontalAlignment="Left" Text="{Binding HandleSeconds, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="Handles in seconds" />
         </DockPanel>
         <CheckBox Style="{StaticResource CheckBox.Dark}" Margin="90,0,0,8" Content="Move the files instead of copying them" IsChecked="{Binding Move, Mode=TwoWay}" ToolTip="The open project then finds them missing; open the gathered copy" />
         <TextBlock Margin="0,4,0,0" Text="{Binding Status, Mode=OneWay}" Foreground="{DynamicResource Brush.Text.Secondary}" TextWrapping="Wrap" />
         <StackPanel Margin="0,12,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button Style="{StaticResource Button.Text}" Content="Cancel" IsCancel="True" Command="{Binding CancelCommand, Mode=OneWay}" AutomationProperties.Name="Cancel" />
-            <Button Style="{StaticResource Button.Primary}" Margin="8,0,0,0" Content="Go" IsDefault="True" Command="{Binding RunCommand, Mode=OneWay}" AutomationProperties.Name="Gather the project" />
+            <Button Style="{StaticResource Button.Primary}" Margin="8,0,0,0" Content="{Binding RunLabel, Mode=OneWay}" IsDefault="True" Command="{Binding RunCommand, Mode=OneWay}" AutomationProperties.Name="Gather the project" />
         </StackPanel>
     </StackPanel>
 </Window>

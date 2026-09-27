@@ -35,7 +35,7 @@ public sealed class TileEffect() : SinglePassEffect("Distort.hlsl", "PsTile")
 }
 
 /// <summary>Barrel or pincushion distortion, as a wide or a long lens gives.</summary>
-[VideoEffect("video.lens-distortion", Name = "Lens Distortion", Category = "Distort", Description = "Bulges the picture like a wide angle lens (positive) or pinches it like a long one (negative); zoom hides the edges.")]
+[VideoEffect("video.lens-distortion", Name = "Lens distortion", Category = "Distort", Description = "Bulges the picture like a wide angle lens (positive) or pinches it like a long one (negative); zoom hides the edges.")]
 [Param("amount", ParamType.Float, Default = "0.2", Min = -1, Max = 1, Description = "Positive bulges out (barrel), negative pinches in (pincushion).")]
 [Param("zoom", ParamType.Float, Default = "1", Min = 0.25, Max = 4, SliderMax = 2, Description = "Scales the result, to fill the corners a bulge pulls in.")]
 [Param("centre", ParamType.Point, Default = "0, 0", Unit = "px", Description = "The centre of the lens, in sequence pixels from the frame centre.")]

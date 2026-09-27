@@ -92,7 +92,9 @@ public sealed class LayoutService : IWorkspaces
     public void Open(string name)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        Current = Names.FirstOrDefault(known => string.Equals(known, name, StringComparison.OrdinalIgnoreCase)) ?? WorkspaceDefinition.BuiltIn[0].Name;
+        Current = WorkspaceDefinition.Find(name)?.Name
+            ?? Names.FirstOrDefault(known => string.Equals(known, name, StringComparison.OrdinalIgnoreCase))
+            ?? WorkspaceDefinition.BuiltIn[0].Name;
         Load(Current);
         Changed?.Invoke(this, EventArgs.Empty);
     }
@@ -128,6 +130,8 @@ public sealed class LayoutService : IWorkspaces
             File.Delete(path);
         }
 
+        DeleteFormer(Current);
+
         ApplyDefault(Current);
         Changed?.Invoke(this, EventArgs.Empty);
     }
@@ -142,6 +146,7 @@ public sealed class LayoutService : IWorkspaces
             string temporary = path + ".tmp";
             File.WriteAllText(temporary, Header + Environment.NewLine + Serialize(), Encoding.UTF8);
             File.Move(temporary, path, overwrite: true);
+            DeleteFormer(Current);
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
@@ -171,6 +176,12 @@ public sealed class LayoutService : IWorkspaces
     private void Load(string name)
     {
         string path = PathOf(name);
+        if (!File.Exists(path) && WorkspaceDefinition.Find(name)?.FormerName is { } former && File.Exists(PathOf(former)))
+        {
+            // Saved under the name an earlier version gave it; the next save uses the new one.
+            path = PathOf(former);
+        }
+
         if (!File.Exists(path))
         {
             ApplyDefault(name);
@@ -247,4 +258,13 @@ public sealed class LayoutService : IWorkspaces
     }
 
     private string PathOf(string name) => Path.Combine(_folder, $"{name}.xml");
+
+    /// <summary>Removes a built-in workspace's layout saved under its former name, once it is saved under the new one or reset.</summary>
+    private void DeleteFormer(string name)
+    {
+        if (WorkspaceDefinition.Find(name)?.FormerName is { } former && File.Exists(PathOf(former)))
+        {
+            File.Delete(PathOf(former));
+        }
+    }
 }

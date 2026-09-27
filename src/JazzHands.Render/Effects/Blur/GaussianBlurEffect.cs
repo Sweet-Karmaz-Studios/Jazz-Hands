@@ -15,7 +15,7 @@ namespace JazzHands.Render.Effects.Blur;
 /// halved (a two by two box each time) until the kernel fits, blurred there and drawn back up,
 /// so a 500 pixel blur at 4K costs about what a 30 pixel one does.
 /// </remarks>
-[VideoEffect("video.blur.gaussian", Name = "Gaussian Blur", Category = "Blur", Description = "Softens the picture with a Gaussian blur, in both directions or one.")]
+[VideoEffect("video.blur.gaussian", Name = "Gaussian blur", Category = "Blur", Description = "Softens the picture with a Gaussian blur, in both directions or one.")]
 [Param("radius", ParamType.Float, Default = "8", Min = 0, Max = 1000, SliderMax = 100, Unit = "px", Description = "How far the blur reaches, in sequence pixels.")]
 [Param("direction", ParamType.Enum, Default = "both", Choices = "both, horizontal, vertical", Animatable = false, Description = "Blur both ways, or only across or only down.")]
 [Param("repeat-edges", ParamType.Bool, Default = "true", Animatable = false, Description = "Repeat the frame's edge pixels past it rather than blurring in transparency.")]

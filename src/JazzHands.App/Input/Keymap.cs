@@ -65,7 +65,8 @@ public readonly record struct KeyChord(Key Key, ModifierKeys Modifiers)
 /// <param name="Command">The command name, as the CLI and JSON-RPC spell it.</param>
 /// <param name="Args">Its arguments, by JSON name; string values starting with $ are filled in when the key is pressed.</param>
 /// <param name="Repeat">True when holding the key down repeats it.</param>
-public sealed record KeymapBinding(string Keys, KeyChord Gesture, string Command, JsonObject Args, bool Repeat);
+/// <param name="Description">What this binding does, where its command's own description would not tell it from another binding of the same command (a frame earlier, ten frames later); null to use the command's.</param>
+public sealed record KeymapBinding(string Keys, KeyChord Gesture, string Command, JsonObject Args, bool Repeat, string? Description = null);
 
 /// <summary>What a key press is resolved against: where the playhead is and what is selected.</summary>
 /// <param name="Project">The project as it is now.</param>
@@ -158,6 +159,13 @@ public sealed class Keymap
         return new Keymap(map);
     }
 
+    /// <summary>What a binding does: its own description when it has one, otherwise its command's.</summary>
+    public static string Describe(KeymapBinding binding)
+    {
+        ArgumentNullException.ThrowIfNull(binding);
+        return binding.Description ?? Describe(binding.Command);
+    }
+
     /// <summary>What a binding's command does, in a few words: the registry's description, or the editor action's name.</summary>
     public static string Describe(string command)
     {
@@ -244,6 +252,11 @@ public sealed class Keymap
         if (binding.Repeat)
         {
             entry["repeat"] = true;
+        }
+
+        if (binding.Description is { } description)
+        {
+            entry["description"] = description;
         }
 
         return entry;
@@ -403,7 +416,8 @@ public sealed class Keymap
                     gesture,
                     command,
                     entry?["args"] as JsonObject is { } args ? (JsonObject)args.DeepClone() : [],
-                    entry?["repeat"]?.GetValue<bool>() ?? false);
+                    entry?["repeat"]?.GetValue<bool>() ?? false,
+                    entry?["description"]?.GetValue<string>() is { Length: > 0 } description ? description : null);
             }
             catch (Exception exception) when (exception is FormatException or ArgumentException or InvalidOperationException)
             {

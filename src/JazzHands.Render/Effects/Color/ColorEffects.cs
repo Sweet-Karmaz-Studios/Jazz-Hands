@@ -102,7 +102,7 @@ public abstract class GradingEffect : VideoEffect
 }
 
 /// <summary>Exposure, contrast, white balance, saturation and vibrance: the first stop of a grade.</summary>
-[VideoEffect("color.basic", Name = "Basic Correction", Category = "Color", Description = "Exposure, contrast about mid grey, temperature and tint, saturation and vibrance: the first corrections of a grade, in linear light.")]
+[VideoEffect("color.basic", Name = "Basic correction", Category = "Color", Description = "Exposure, contrast about mid grey, temperature and tint, saturation and vibrance: the first corrections of a grade, in linear light.")]
 [Param("exposure", ParamType.Float, Default = "0", Min = -8, Max = 8, SliderMax = 4, Unit = "stops", Description = "Brighter or darker in stops, as a camera's exposure: each stop doubles or halves the light.")]
 [Param("contrast", ParamType.Float, Default = "1", Min = 0, Max = 4, SliderMax = 2, Description = "Spreads or squeezes the tones about 18% grey; 1 leaves them, above 1 is punchier.")]
 [Param("temperature", ParamType.Float, Default = "0", Min = -100, Max = 100, Description = "Warmer (positive) or cooler (negative), as a white balance would.")]
@@ -140,7 +140,7 @@ public sealed class BasicCorrectionEffect : GradingEffect
 }
 
 /// <summary>Lift, gamma, gain and offset wheels, with saturation, contrast and pivot.</summary>
-[VideoEffect("color.wheels", Name = "Color Wheels", Category = "Color", Description = "Lift, gamma and gain move the shadows, mid tones and highlights, each by colour and by brightness; offset moves everything. The colourist's primary grade.")]
+[VideoEffect("color.wheels", Name = "Colour wheels", Category = "Color", Description = "Lift, gamma and gain move the shadows, mid tones and highlights, each by colour and by brightness; offset moves everything. The colourist's primary grade.")]
 [Param("lift", ParamType.Float4, Default = "0, 0, 0, 0", Min = -1, Max = 1, Description = "Shadows: red, green, blue and master, raising or lowering the blacks with white held.")]
 [Param("gamma", ParamType.Float4, Default = "0, 0, 0, 0", Min = -0.99, Max = 4, SliderMax = 1, Description = "Mid tones: red, green, blue and master, brighter when positive, with black and white held.")]
 [Param("gain", ParamType.Float4, Default = "0, 0, 0, 0", Min = -1, Max = 4, SliderMax = 1, Description = "Highlights: red, green, blue and master, scaling everything from black.")]
@@ -174,7 +174,7 @@ public sealed class ColorWheelsEffect : GradingEffect
 }
 
 /// <summary>A secondary: a range of hue, saturation and brightness, changed on its own.</summary>
-[VideoEffect("color.hsl", Name = "HSL Qualifier", Category = "Color", Description = "Picks out a range of colours by hue, saturation and brightness and changes only those: a greener grass, a bluer sky, a skin tone; view the matte to see what is picked.")]
+[VideoEffect("color.hsl", Name = "HSL qualifier", Category = "Color", Description = "Picks out a range of colours by hue, saturation and brightness and changes only those: a greener grass, a bluer sky, a skin tone; view the matte to see what is picked.")]
 [Param("hue", ParamType.Float, Default = "120", Min = 0, Max = 360, Unit = "deg", Description = "The centre of the hues picked: 0 red, 60 yellow, 120 green, 180 cyan, 240 blue, 300 magenta.")]
 [Param("hue-width", ParamType.Float, Default = "30", Min = 0, Max = 180, Unit = "deg", Description = "How far either side of the centre is fully picked.")]
 [Param("hue-softness", ParamType.Float, Default = "20", Min = 0, Max = 180, Unit = "deg", Description = "How gradually it fades out past the width.")]
@@ -215,7 +215,7 @@ public sealed class HslQualifierEffect : GradingEffect
 }
 
 /// <summary>Makes a picked colour neutral: white balance from something that should be white or grey.</summary>
-[VideoEffect("color.white-balance", Name = "White Balance", Category = "Color", Description = "Makes a colour that should be neutral (a white wall, a grey card) neutral, and the rest of the picture with it; pick it from the preview.")]
+[VideoEffect("color.white-balance", Name = "White balance", Category = "Color", Description = "Makes a colour that should be neutral (a white wall, a grey card) neutral, and the rest of the picture with it; pick it from the preview.")]
 [Param("neutral", ParamType.Color, Default = "#FFFFFF", Description = "The colour that should be white or grey, picked from the picture; white changes nothing.")]
 [Param("amount", ParamType.Float, Default = "1", Min = 0, Max = 1, Description = "How much of the correction to apply.")]
 public sealed class WhiteBalanceEffect : GradingEffect

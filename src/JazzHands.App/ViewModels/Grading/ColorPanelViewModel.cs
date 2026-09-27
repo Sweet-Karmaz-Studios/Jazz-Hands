@@ -143,7 +143,7 @@ public sealed record CurveChoice(string Name, string Label, bool Periodic, strin
 
 /// <summary>
 /// The Color panel: lift, gamma, gain and offset wheels with saturation, contrast and pivot, and a
-/// curve editor, for the selected clip's first Color Wheels and first Curves effect.
+/// curve editor, for the selected clip's first Colour wheels and first Curves effect.
 /// </summary>
 /// <remarks>
 /// Everything it changes is a parameter of an effect on the clip, sent as <c>param.set</c> through
@@ -202,7 +202,7 @@ public sealed partial class ColorPanelViewModel : ToolViewModel
 
     /// <summary>Creates the panel.</summary>
     public ColorPanelViewModel(ISession session, SelectionService selection, IUiDispatcher ui, IPreviewEngine? playback = null)
-        : base(PanelId, "Color")
+        : base(PanelId, "Colour")
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(selection);
@@ -247,7 +247,7 @@ public sealed partial class ColorPanelViewModel : ToolViewModel
     /// <summary>The curves the editor can show.</summary>
     public IReadOnlyList<CurveChoice> Curves { get; }
 
-    /// <summary>True when the clip has a Color Wheels effect for the wheels to drive.</summary>
+    /// <summary>True when the clip has a Colour wheels effect for the wheels to drive.</summary>
     public bool HasWheels => WheelsId is not null;
 
     /// <summary>True when the clip has a Curves effect for the editor to drive.</summary>

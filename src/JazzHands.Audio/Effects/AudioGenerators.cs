@@ -48,7 +48,7 @@ public abstract class AudioGenerator
 }
 
 /// <summary>A steady sine for lining up levels: 1 kHz at -18 dBFS by default, in every channel or one.</summary>
-[AudioGenerator("audio.gen.tone", Name = "Test Tone", Category = "Calibration", Description = "A steady sine for lining up levels: 1 kHz at -18 dBFS in every channel, or in one to check where each speaker is.")]
+[AudioGenerator("audio.gen.tone", Name = "Test tone", Category = "Calibration", Description = "A steady sine for lining up levels: 1 kHz at -18 dBFS in every channel, or in one to check where each speaker is.")]
 [Param("frequency", ParamType.Float, Default = "1000", Min = 20, Max = 20000, SliderMax = 10000, Unit = "Hz", Animatable = false, Description = "The pitch.")]
 [Param("level", ParamType.Float, Default = "-18", Min = -60, Max = 0, Unit = "dBFS", Animatable = false, Description = "How loud its peaks are in each channel it sounds in.")]
 [Param("channel", ParamType.Enum, Default = "all", Choices = "all, left, right, centre, lfe, left-surround, right-surround", Animatable = false, Description = "Which channel it sounds in; on a stereo mix centre is both sides and the LFE silent.")]
@@ -96,7 +96,7 @@ public sealed class ToneGenerator : AudioGenerator
 /// Each row's value at each change is a hash of the row, the change's number and the channel, so
 /// the noise is a function of the position and every channel's is its own.
 /// </remarks>
-[AudioGenerator("audio.gen.pink-noise", Name = "Pink Noise", Category = "Calibration", Description = "Pink noise, equal power in every octave, for lining up levels and checking speakers: -20 dBFS RMS in every channel, each its own, or in one.")]
+[AudioGenerator("audio.gen.pink-noise", Name = "Pink noise", Category = "Calibration", Description = "Pink noise, equal power in every octave, for lining up levels and checking speakers: -20 dBFS RMS in every channel, each its own, or in one.")]
 [Param("level", ParamType.Float, Default = "-20", Min = -60, Max = 0, Unit = "dBFS", Animatable = false, Description = "Its RMS level in each channel it sounds in.")]
 [Param("channel", ParamType.Enum, Default = "all", Choices = "all, left, right, centre, lfe, left-surround, right-surround", Animatable = false, Description = "Which channel it sounds in; on a stereo mix centre is both sides and the LFE silent.")]
 public sealed class PinkNoiseGenerator : AudioGenerator

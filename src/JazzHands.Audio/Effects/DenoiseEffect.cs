@@ -21,7 +21,7 @@ namespace JazzHands.Audio.Effects;
 /// far ahead, so the clip stays in time. Turn it off and on in the Inspector to hear what it takes.
 /// </para>
 /// </remarks>
-[AudioEffect("audio.denoise", Name = "Noise Reduction", Category = "Restoration", Description = "Takes steady background noise out of a clip (a fan, hiss, hum, the room): learn the noise from a quiet stretch with audio.learn-noise, or let it follow the quietest level by itself.")]
+[AudioEffect("audio.denoise", Name = "Noise reduction", Category = "Restoration", Description = "Takes steady background noise out of a clip (a fan, hiss, hum, the room): learn the noise from a quiet stretch with audio.learn-noise, or let it follow the quietest level by itself.")]
 [Param("profile", ParamType.Text, Default = "", Animatable = false, Description = "The noise to take out, learned by audio.learn-noise from a stretch of only noise: a level in dB per sixth of an octave from 20 Hz. Empty follows each frequency's quietest level by itself.")]
 [Param("reduction", ParamType.Float, Default = "12", Min = 0, Max = 40, Unit = "dB", Description = "How far the noise is turned down, at most.")]
 [Param("sensitivity", ParamType.Float, Default = "2", Min = 0.5, Max = 4, Description = "How far over the noise a sound must be to be kept: higher takes more out, and risks quiet sound with it.")]

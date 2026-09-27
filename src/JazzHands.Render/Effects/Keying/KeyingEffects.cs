@@ -15,7 +15,7 @@ namespace JazzHands.Render.Effects.Keying;
 /// key's hue out of what is kept. Choke shrinks the matte (positive) or grows it (negative) before
 /// the feather softens it. The matte view shows kept as white and keyed as black.
 /// </remarks>
-[VideoEffect("video.key.chroma", Name = "Chroma Key", Category = "Keying", Description = "Removes a green or blue screen (any key colour), with spill suppression, choke and feather; view the matte to check it.")]
+[VideoEffect("video.key.chroma", Name = "Chroma key", Category = "Keying", Description = "Removes a green or blue screen (any key colour), with spill suppression, choke and feather; view the matte to check it.")]
 [Param("key-colour", ParamType.Color, Default = "#00FF00", Description = "The colour to remove: the screen's colour.")]
 [Param("tolerance", ParamType.Float, Default = "0.15", Min = 0, Max = 1, SliderMax = 0.6, Description = "How close to the key colour a colour must be to go completely.")]
 [Param("softness", ParamType.Float, Default = "0.1", Min = 0, Max = 1, SliderMax = 0.4, Description = "How far past the tolerance colours fade back in.")]
@@ -100,7 +100,7 @@ public sealed class ChromaKeyEffect : VideoEffect
 }
 
 /// <summary>Keys out the dark (or the bright) parts of the picture.</summary>
-[VideoEffect("video.key.luma", Name = "Luma Key", Category = "Keying", Description = "Removes the dark parts of the picture, or the bright ones, for fire, smoke or text shot on black or white.")]
+[VideoEffect("video.key.luma", Name = "Luma key", Category = "Keying", Description = "Removes the dark parts of the picture, or the bright ones, for fire, smoke or text shot on black or white.")]
 [Param("threshold", ParamType.Float, Default = "0.1", Min = 0, Max = 1, Description = "Brightness below which the picture goes.")]
 [Param("softness", ParamType.Float, Default = "0.1", Min = 0, Max = 1, Description = "How gradually it fades in above the threshold.")]
 [Param("key-out", ParamType.Enum, Default = "dark", Choices = "dark, bright", Animatable = false, Description = "Remove the dark parts or the bright ones.")]

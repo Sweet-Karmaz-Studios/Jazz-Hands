@@ -49,7 +49,7 @@ public sealed class ShakeEffect() : SinglePassEffect("Impact.hlsl", "PsMove")
 }
 
 /// <summary>A fast zoom in on a hit, then a settle back.</summary>
-[VideoEffect("video.zoom-punch", Name = "Zoom Punch", Category = "Impact", Description = "Punches in on the picture at the trigger, fast, then settles back: the zoom on a hit, a reveal or a beat.")]
+[VideoEffect("video.zoom-punch", Name = "Zoom punch", Category = "Impact", Description = "Punches in on the picture at the trigger, fast, then settles back: the zoom on a hit, a reveal or a beat.")]
 [Param("amount", ParamType.Float, Default = "1.12", Min = 0.1, Max = 10, SliderMax = 2, Description = "The scale at the peak; 1.12 is 12% bigger, under 1 punches out.")]
 [Param("attack", ParamType.Float, Default = "0.05", Min = 0.001, Max = 10, SliderMax = 1, Unit = "s", Description = "How long it takes to reach the peak.")]
 [Param("settle", ParamType.Float, Default = "0.35", Min = 0, Max = 30, SliderMax = 3, Unit = "s", Description = "How long it takes to come back.")]
@@ -122,7 +122,7 @@ public sealed class FlashEffect() : SinglePassEffect("Impact.hlsl", "PsFlash")
 }
 
 /// <summary>Red, green and blue pulled apart.</summary>
-[VideoEffect("video.chromatic-aberration", Name = "Chromatic Aberration", Category = "Impact", Description = "Splits red and blue away from green, outwards from a centre as a cheap lens does or along one direction: the fringe of a hit or a glitch. Keyframe the amount for a burst.")]
+[VideoEffect("video.chromatic-aberration", Name = "Chromatic aberration", Category = "Impact", Description = "Splits red and blue away from green, outwards from a centre as a cheap lens does or along one direction: the fringe of a hit or a glitch. Keyframe the amount for a burst.")]
 [Param("amount", ParamType.Float, Default = "6", Min = 0, Max = 500, SliderMax = 60, Unit = "px", Description = "How far red and blue are pulled apart: at the corners for radial, everywhere for directional.")]
 [Param("mode", ParamType.Enum, Default = "radial", Choices = "radial, directional", Animatable = false, Description = "Outwards from the centre, growing towards the edges, or the same everywhere along the angle.")]
 [Param("angle", ParamType.Float, Default = "0", Min = -36000, Max = 36000, SliderMax = 360, Unit = "deg", Description = "The direction for directional, clockwise from pointing right.")]
@@ -148,7 +148,7 @@ public sealed class ChromaticAberrationEffect() : SinglePassEffect("Impact.hlsl"
 }
 
 /// <summary>A few frames of stark, high contrast picture on a hit.</summary>
-[VideoEffect("video.impact-frame", Name = "Impact Frame", Category = "Impact", Description = "For a few frames from the trigger, turns the picture into stark black and white, its negative, or a few flat tones: the anime impact frame on a hit.")]
+[VideoEffect("video.impact-frame", Name = "Impact frame", Category = "Impact", Description = "For a few frames from the trigger, turns the picture into stark black and white, its negative, or a few flat tones: the anime impact frame on a hit.")]
 [Param("style", ParamType.Enum, Default = "inverted-threshold", Choices = "threshold, inverted-threshold, invert, posterize", Animatable = false, Description = "Black and white by a threshold, the same inverted, the negative, or flat tones.")]
 [Param("threshold", ParamType.Float, Default = "0.45", Min = 0, Max = 1, Description = "The brightness between black and white, for the threshold styles.")]
 [Param("levels", ParamType.Int, Default = "3", Min = 2, Max = 16, Description = "Tones, for posterize.")]
