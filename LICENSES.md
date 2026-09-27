@@ -23,6 +23,19 @@ or later as a whole (`ffmpeg\LICENSE.txt`).
   component's source.
 - FFmpeg is a trademark of Fabrice Bellard.
 
+## ACES
+
+The ACES 2.0 output transform, ACEScct and the input transforms in
+`src/JazzHands.Render/Color/Aces` and `src/JazzHands.Render/Shaders/Aces.hlsl` are a port of the
+Academy Color Encoding System's reference implementation, `aces-core` (Lib.Academy.OutputTransform,
+Tonescale, DisplayEncoding, ColorSpaces and Utilities, at commit `069b0bc`) and the output presets
+in `aces-output`, Copyright Contributors to the ACES Project, licensed under the **Apache License,
+version 2.0**: <https://github.com/aces-aswf/aces-core>, <https://github.com/aces-aswf/aces-output>.
+The camera gamut matrices are the ones the manufacturers' ACES input transforms publish. Nothing
+from ACES ships as a file; the port is checked against OpenColorIO (BSD-3-Clause), which is used
+only by the test tools (`tools/get-aces-reference.ps1`, `tools/aces-reference.py`) and not shipped.
+ACES is a trademark of the Academy of Motion Picture Arts and Sciences.
+
 ## .NET libraries
 
 Each is used as published on nuget.org, unmodified.

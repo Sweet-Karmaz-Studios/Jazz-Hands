@@ -4,6 +4,7 @@ obj/
 *.user
 .claude/
 third_party/ffmpeg/
+third_party/aces/
 samples/*
 !samples/README.md
 tests/corpus/*
