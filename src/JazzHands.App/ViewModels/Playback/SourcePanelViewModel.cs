@@ -160,6 +160,7 @@ public sealed partial class SourcePanelViewModel : ToolViewModel, IQuietWhileHid
         double length = Math.Max(1, item?.Duration.Value ?? 1);
         InFraction = _monitor.In is { } a ? a.Value / length : null;
         OutFraction = _monitor.Out is { } b ? b.Value / length : null;
+        LoadMarks(item, length);
         RefreshPosition();
     }
 
@@ -331,10 +332,44 @@ public sealed partial class SourcePanelViewModel : ToolViewModel, IQuietWhileHid
             (Key.OemComma, ModifierKeys.None) => InsertAsync(),
             (Key.OemPeriod, ModifierKeys.None) => OverwriteAsync(),
             (Key.F, ModifierKeys.Shift) => MatchInSequenceAsync(),
+            (Key.Up, ModifierKeys.Shift) => ToMarkAsync(forward: false),
+            (Key.Down, ModifierKeys.Shift) => ToMarkAsync(forward: true),
             _ => null,
         };
 
         return work is not null;
+    }
+
+    /// <summary>The item's own markers (scene cuts and the like) along the scrub bar, at their place in it.</summary>
+    public System.Collections.ObjectModel.ObservableCollection<SourceMark> Marks { get; } = [];
+
+    /// <summary>Goes to the item's next or previous marker from the source playhead (Shift+Down, Shift+Up).</summary>
+    public Task ToMarkAsync(bool forward)
+    {
+        if (Item is not { } item)
+        {
+            return Task.CompletedTask;
+        }
+
+        Flicks here = _monitor.Position.SnapToFrame(Rate);
+        Flicks[] times = [.. item.Markers.Select(marker => marker.Time.SnapToFrame(Rate)).Order()];
+        Flicks? to = forward ? times.Cast<Flicks?>().FirstOrDefault(time => time > here) : times.Cast<Flicks?>().LastOrDefault(time => time < here);
+        return to is { } time ? SendAsync(new SeekSourceCommand(time)) : Task.CompletedTask;
+    }
+
+    private void LoadMarks(MediaItem? item, double length)
+    {
+        SourceMark[] marks = item is null
+            ? []
+            : [.. item.Markers.Select(marker => new SourceMark(marker.Time.Value / length, marker.Color, marker.Name))];
+        if (!marks.SequenceEqual(Marks))
+        {
+            Marks.Clear();
+            foreach (SourceMark mark in marks)
+            {
+                Marks.Add(mark);
+            }
+        }
     }
 
     private async Task SendAsync(ICommand command)
@@ -355,3 +390,9 @@ public sealed partial class SourcePanelViewModel : ToolViewModel, IQuietWhileHid
         }
     }
 }
+
+/// <summary>One of a media item's markers on the source monitor's scrub bar.</summary>
+/// <param name="Fraction">Where it is, as a fraction of the file.</param>
+/// <param name="Color">Its colour.</param>
+/// <param name="Name">What it is called.</param>
+public sealed record SourceMark(double Fraction, string Color, string Name);
