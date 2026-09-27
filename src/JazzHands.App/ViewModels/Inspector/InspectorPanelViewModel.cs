@@ -161,6 +161,12 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
     /// <summary>The fade out's shape, sent as <c>audio.set-fade-out --curve</c>.</summary>
     internal static ParamDescriptor FadeOutShape { get; } = FadeShape("fade-out-shape", "Fade out shape");
 
+    /// <summary>Whether a sound clip keeps its pitch at a speed (Phase 36), sent as <c>clip.set-keep-pitch</c>.</summary>
+    internal static ParamDescriptor KeepPitchParam { get; } = new(
+        "keep-pitch", ParamType.Bool, new ParamValue.Bool(true), "Keep pitch",
+        "At a speed other than normal the sound keeps its pitch; off, it goes up and down with the speed, like tape.",
+        Animatable: false);
+
     private Flicks Playhead => _preview?.Position ?? Flicks.Zero;
 
     private static ParamDescriptor FadeLength(string name, string label, string description) => new(
@@ -173,7 +179,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         Animatable: false, Choices: new EquatableArray<string>([.. FadeCurves.Select(pair => pair.Name)]));
 
     private static bool IsFadeRow(ParamRowViewModel row) =>
-        ReferenceEquals(row.Descriptor, FadeInLength) || ReferenceEquals(row.Descriptor, FadeInShape)
+        ReferenceEquals(row.Descriptor, KeepPitchParam) || ReferenceEquals(row.Descriptor, FadeInLength) || ReferenceEquals(row.Descriptor, FadeInShape)
         || ReferenceEquals(row.Descriptor, FadeOutLength) || ReferenceEquals(row.Descriptor, FadeOutShape);
 
     /// <summary>Adds an effect to the inspected clip, for a drop from the effects panel.</summary>
@@ -459,6 +465,11 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
 
         if (found.Track.Kind == TrackKind.Audio)
         {
+            // Keeping the pitch at a speed (Phase 36) is the clip's own too: clip.set-keep-pitch.
+            var speed = Section("Speed");
+            speed.Rows.Add(new ParamRowViewModel(this, clip.Id, KeepPitchParam, speed.Title));
+            Sections.Add(speed);
+
             // The fades are the clip's own, not parameters: their rows send audio.set-fade-in and -out.
             var fades = Section("Fades");
             foreach (ParamDescriptor parameter in (ParamDescriptor[])[FadeInLength, FadeInShape, FadeOutLength, FadeOutShape])
@@ -655,6 +666,11 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
     /// <summary>A fade row's value on a clip: the fade's length in seconds, or its shape.</summary>
     private static ParamValue FadeValue(Clip clip, ParamDescriptor row)
     {
+        if (ReferenceEquals(row, KeepPitchParam))
+        {
+            return new ParamValue.Bool(clip.KeepsPitch);
+        }
+
         Fade? fade = ReferenceEquals(row, FadeInLength) || ReferenceEquals(row, FadeInShape) ? clip.FadeIn : clip.FadeOut;
         return ReferenceEquals(row, FadeInLength) || ReferenceEquals(row, FadeOutLength)
             ? new ParamValue.Float((float)(fade?.Duration ?? Flicks.Zero).ToSeconds())
@@ -664,6 +680,11 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
     /// <summary>What a fade row sends for one clip: that fade with the row's half changed and the other half kept.</summary>
     private ICommand FadeEdit(string clipId, ParamRowViewModel row, string text)
     {
+        if (ReferenceEquals(row.Descriptor, KeepPitchParam))
+        {
+            return new SetClipKeepPitchCommand(clipId, ((ParamValue.Bool)ParamValues.Parse(KeepPitchParam, text)).Value);
+        }
+
         bool fadeIn = ReferenceEquals(row.Descriptor, FadeInLength) || ReferenceEquals(row.Descriptor, FadeInShape);
         Fade? now = _session.Project.FindClip(clipId) is { } found ? (fadeIn ? found.Clip.FadeIn : found.Clip.FadeOut) : null;
         Flicks length = now?.Duration ?? Flicks.Zero;
@@ -720,7 +741,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
             Range = $"{Timecode.FormatClock(clip.Start)} to {Timecode.FormatClock(clip.End)}, {Timecode.FormatClock(clip.Duration)} long";
             Speed = clip.EffectiveSpeed == Rational.One && !clip.Reverse
                 ? string.Empty
-                : $"{clip.EffectiveSpeed.ToDouble() * 100:0.#}% speed{(clip.Reverse ? ", reversed" : string.Empty)}";
+                : $"{clip.EffectiveSpeed.ToDouble() * 100:0.#}% speed{(clip.Reverse ? ", reversed" : string.Empty)}{(found.Track.Kind == TrackKind.Audio && clip.EffectiveSpeed != Rational.One ? (clip.KeepsPitch ? ", pitch kept" : ", pitch follows the speed") : string.Empty)}";
             SelectionNote = _targets.Count > 1 ? $"{_targets.Count} clips selected: their own settings change together." : string.Empty;
             Blend = clip.BlendMode;
         }

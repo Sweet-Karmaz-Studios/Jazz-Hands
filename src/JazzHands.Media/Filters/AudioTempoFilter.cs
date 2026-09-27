@@ -44,15 +44,21 @@ public sealed unsafe class AudioTempoFilter : IDisposable
     /// <param name="channels">The channel count, one to eight.</param>
     /// <param name="tempo">How much faster: 1.5 plays a second of input in two thirds of a second.</param>
     /// <param name="preferRubberband">False to use atempo even where rubberband is available.</param>
-    public AudioTempoFilter(int sampleRate, int channels, double tempo, bool preferRubberband = true)
+    /// <param name="forClip">
+    /// True for a clip's sound at its speed (Phase 36), which may run from <see cref="MinClipTempo"/>
+    /// to <see cref="MaxClipTempo"/>; the shuttle keeps to <see cref="MinTempo"/> to <see cref="MaxTempo"/>.
+    /// </param>
+    public AudioTempoFilter(int sampleRate, int channels, double tempo, bool preferRubberband = true, bool forClip = false)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sampleRate);
         ArgumentOutOfRangeException.ThrowIfLessThan(channels, 1);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(channels, 8);
 
-        if (!(tempo >= MinTempo && tempo <= MaxTempo))
+        double min = forClip ? MinClipTempo : MinTempo;
+        double max = forClip ? MaxClipTempo : MaxTempo;
+        if (!(tempo >= min && tempo <= max))
         {
-            throw new ArgumentOutOfRangeException(nameof(tempo), tempo, $"A tempo runs from {MinTempo} to {MaxTempo}.");
+            throw new ArgumentOutOfRangeException(nameof(tempo), tempo, $"A tempo runs from {min} to {max}.");
         }
 
         FfmpegLoader.Initialize();
@@ -70,6 +76,12 @@ public sealed unsafe class AudioTempoFilter : IDisposable
 
     /// <summary>The fastest. Past this a shuttle is silent: nobody follows speech at three times.</summary>
     public const double MaxTempo = 2.0;
+
+    /// <summary>The slowest a clip's sound is stretched with its pitch kept.</summary>
+    public const double MinClipTempo = 0.05;
+
+    /// <summary>The fastest a clip's sound is stretched with its pitch kept.</summary>
+    public const double MaxClipTempo = 16.0;
 
     /// <summary>True when this FFmpeg build has the rubberband filter.</summary>
     public static bool HasRubberband => RubberbandPresent.Value;
@@ -121,6 +133,13 @@ public sealed unsafe class AudioTempoFilter : IDisposable
         {
             ffmpeg.av_frame_free(&frame);
         }
+    }
+
+    /// <summary>Says the input has ended, so the filter lets out what it still holds.</summary>
+    public void Finish()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        Av.Check(ffmpeg.av_buffersrc_add_frame_flags(_source, null, 0), "av_buffersrc_add_frame_flags (end)", Engine);
     }
 
     /// <summary>Takes out whatever the filter has ready, up to a limit.</summary>
@@ -206,6 +225,23 @@ public sealed unsafe class AudioTempoFilter : IDisposable
         }
     }
 
+    /// <summary>
+    /// atempo takes 0.5 to 100 in one filter; slower is a chain of halves and the rest, which
+    /// multiply to the tempo wanted.
+    /// </summary>
+    private static string AtempoChain(double tempo)
+    {
+        var parts = new List<string>();
+        while (tempo < 0.5)
+        {
+            parts.Add("atempo=0.5");
+            tempo /= 0.5;
+        }
+
+        parts.Add(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"atempo={tempo:0.######}"));
+        return string.Join(',', parts);
+    }
+
     private void Build()
     {
         AVFilterGraph* graph = Av.CheckAlloc(ffmpeg.avfilter_graph_alloc(), "avfilter_graph_alloc");
@@ -264,7 +300,7 @@ public sealed unsafe class AudioTempoFilter : IDisposable
             // accept whatever the tempo filter prefers, and rubberband prefers interleaved.
             string chain = string.Create(
                 System.Globalization.CultureInfo.InvariantCulture,
-                $"{(Engine == "rubberband" ? $"rubberband=tempo={Tempo:0.######}:pitch=1" : $"atempo={Tempo:0.######}")},aformat=sample_fmts=fltp:sample_rates={SampleRate}:channel_layouts={layoutName}");
+                $"{(Engine == "rubberband" ? $"rubberband=tempo={Tempo:0.######}:pitch=1" : AtempoChain(Tempo))},aformat=sample_fmts=fltp:sample_rates={SampleRate}:channel_layouts={layoutName}");
 
             Av.Check(ffmpeg.avfilter_graph_parse_ptr(graph, chain, &inputs, &outputs, null), "avfilter_graph_parse_ptr", chain);
             Av.Check(ffmpeg.avfilter_graph_config(graph, null), "avfilter_graph_config", chain);

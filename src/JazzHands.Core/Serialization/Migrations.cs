@@ -31,15 +31,13 @@ public interface IMigration
 /// The chain that brings any supported .jazz document up to the version this build writes.
 /// </summary>
 /// <remarks>
-/// There is nothing in the chain yet: version 1 is the first published format. The pipeline
-/// exists now, with its tests, because the moment a migration is needed is the worst moment to
-/// find out the mechanism was never built. <see cref="MigrationTests"/> in the Core tests proves
-/// it works by running a fake migration through it.
+/// Version 1 is the first published format; version 2 (Phase 36) keeps a clip's pitch at any speed.
+/// <see cref="MigrationTests"/> in the Core tests runs the chain against fixture pairs.
 /// </remarks>
 public static class Migrations
 {
     /// <summary>The migrations, in order.</summary>
-    public static ImmutableArray<IMigration> All { get; } = [];
+    public static ImmutableArray<IMigration> All { get; } = [new PitchFollowsSpeedMigration()];
 
     /// <summary>The oldest version this build can open.</summary>
     public static int OldestSupported => All.IsEmpty ? Project.CurrentSchemaVersion : All[0].From;
@@ -98,5 +96,55 @@ public static class Migrations
 
         applied = ran.ToImmutable();
         return version == Project.CurrentSchemaVersion;
+    }
+}
+
+/// <summary>
+/// Version 1 to 2 (Phase 36): a clip's sound keeps its pitch at any speed from now on. Every clip
+/// played its sound like tape before, so a clip already at a speed other than normal, or on a
+/// speed curve, is marked to keep doing so: a project opens sounding exactly as it did.
+/// </summary>
+public sealed class PitchFollowsSpeedMigration : IMigration
+{
+    /// <inheritdoc />
+    public int From => 1;
+
+    /// <inheritdoc />
+    public int To => 2;
+
+    /// <inheritdoc />
+    public string Description => "Clips at a speed keep sounding as they did (pitch follows speed); new ones keep their pitch.";
+
+    /// <inheritdoc />
+    public void Apply(JsonObject document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        foreach (JsonNode? sequence in document["sequences"] as JsonArray ?? [])
+        {
+            foreach (JsonNode? track in sequence?["tracks"] as JsonArray ?? [])
+            {
+                foreach (JsonNode? node in track?["clips"] as JsonArray ?? [])
+                {
+                    if (node is JsonObject clip && AtASpeed(clip))
+                    {
+                        clip["pitchFollowsSpeed"] = true;
+                    }
+                }
+            }
+        }
+    }
+
+    private static bool AtASpeed(JsonObject clip)
+    {
+        if (clip["remap"] is not null)
+        {
+            return true;
+        }
+
+        return clip["speed"] is JsonObject speed
+            && speed["num"] is JsonValue num && num.TryGetValue(out long n)
+            && speed["den"] is JsonValue den && den.TryGetValue(out long d)
+            && n != d;
     }
 }

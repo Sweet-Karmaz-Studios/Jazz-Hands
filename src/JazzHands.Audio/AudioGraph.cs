@@ -531,7 +531,8 @@ public sealed class AudioGraph
     /// <remarks>
     /// At normal speed forwards that is one read. Otherwise each output sample sits between two
     /// source samples and is interpolated linearly between them, which pitches the sound with the
-    /// speed the way tape does. Pitch preserving time stretch is the shuttle's job, later.
+    /// speed the way tape does, for a clip whose pitch follows its speed. One that keeps its pitch
+    /// (Phase 36) is read from its stretched render instead.
     /// </remarks>
     private bool FetchSource(ClipMix clip, long clipSample, int frames)
     {
@@ -539,6 +540,12 @@ public sealed class AudioGraph
         {
             generator.Fill(_clipSource, clip.Source.Channels, clip.SourceIn + clipSample, frames);
             return true;
+        }
+
+        if (clip.Source.Stretch is not null)
+        {
+            // Its pitch kept at its speed: the engine renders the stretched sound in clip samples.
+            return _source.Read(clip.Source, clipSample, _clipSource, 0, frames);
         }
 
         if (clip.IsStraight)

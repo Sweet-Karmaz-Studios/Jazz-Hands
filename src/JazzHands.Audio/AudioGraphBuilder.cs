@@ -170,16 +170,28 @@ public static class AudioGraphBuilder
             }
         }
 
+        long sourceIn = clip.SourceIn.ToSamples(rate, RoundingMode.Nearest);
+        long sourceOut = clip.SourceOut.ToSamples(rate, RoundingMode.Nearest);
+        var samples = new AudioSourceRef(mediaId, stream.Index, channels);
+
+        // Phase 36: at a speed, a clip that keeps its pitch is stretched rather than read like tape;
+        // past what the stretcher does well it plays like tape after all.
+        double tempo = (double)speedNum / speedDen;
+        if (clip.KeepsPitch && (remap is not null || (speedNum != speedDen && tempo >= StretchPlan.MinTempo && tempo <= StretchPlan.MaxTempo)))
+        {
+            samples = samples with { Stretch = new StretchPlan(sourceIn, sourceOut, speedNum, speedDen, clip.Reverse, remap) };
+        }
+
         Fade fadeIn = clip.FadeIn ?? Fade.None;
         Fade fadeOut = clip.FadeOut ?? Fade.None;
 
         return new ClipMix(
             clip.Id,
-            new AudioSourceRef(mediaId, stream.Index, channels),
+            samples,
             start,
             end,
-            clip.SourceIn.ToSamples(rate, RoundingMode.Nearest),
-            clip.SourceOut.ToSamples(rate, RoundingMode.Nearest),
+            sourceIn,
+            sourceOut,
             speedNum,
             speedDen,
             clip.Reverse,

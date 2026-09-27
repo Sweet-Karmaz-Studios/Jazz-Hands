@@ -392,6 +392,7 @@ public sealed record Marker(
 /// <param name="Matte">Another track used as this clip's matte, over its track's; null to follow the track.</param>
 /// <param name="PointTracks">Points of its picture followed through its frames (<c>tracking.point</c>).</param>
 /// <param name="HiddenTracks">For a nested sequence, tracks of it this clip leaves out: its graphics, lifted into a vertical version by <c>sequence.reframe</c>.</param>
+/// <param name="PitchFollowsSpeed">True for sound that changes pitch with the clip's speed, as tape does; null (the default) keeps the pitch. Only written when true.</param>
 public sealed record Clip(
     string Id,
     TimeRange Range,
@@ -426,10 +427,17 @@ public sealed record Clip(
     MotionBlur? MotionBlur = null,
     TrackMatte? Matte = null,
     EquatableArray<PointTrack> PointTracks = default,
-    EquatableArray<string> HiddenTracks = default) : IEquatable<Clip>
+    EquatableArray<string> HiddenTracks = default,
+    bool? PitchFollowsSpeed = null) : IEquatable<Clip>
 {
     /// <summary>Playback rate, defaulting to normal speed.</summary>
     public Rational EffectiveSpeed => Speed ?? Rational.One;
+
+    /// <summary>
+    /// True when the clip's sound keeps its pitch at any speed (the default from schema 2); false
+    /// when it follows the speed the way tape does, as every clip did before (Phase 36).
+    /// </summary>
+    public bool KeepsPitch => PitchFollowsSpeed != true;
 
     /// <summary>Where the clip starts on the timeline.</summary>
     public Flicks Start => Range.Start;
@@ -857,7 +865,7 @@ public sealed record Project(
     EquatableArray<EffectPreset> EffectPresets = default) : IEquatable<Project>
 {
     /// <summary>The schema version this build writes.</summary>
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
 
     /// <summary>Creates an empty project with one video and one audio track.</summary>
     public static Project CreateNew(string name, ProjectSettings? settings = null, TimeProvider? clock = null)

@@ -16,6 +16,7 @@
   <ItemGroup>
     <PackageReference Include="NAudio" />
     <PackageReference Include="Serilog" />
+    <PackageReference Include="System.IO.Hashing" />
   </ItemGroup>
 
 </Project>

@@ -48,6 +48,8 @@ public sealed class AudioSampleServer : IAudioSampleSource, IDisposable
     private readonly Dictionary<(string Hash, int Stream), ReaderSlot> _readers = [];
     private readonly ConcurrentDictionary<(string Hash, int Stream), long> _ends = new();
     private readonly ConcurrentDictionary<(string Hash, int Stream), bool> _failed = new();
+    private readonly StretchRenderer _stretcher = new();
+    private readonly ConcurrentDictionary<(string Media, string Plan), string> _stretchKeys = new();
     private FrozenDictionary<string, ResolvedMedia> _media = NoMedia;
     private int _ownerThread = -1;
     private long _readerClock;
@@ -129,6 +131,11 @@ public sealed class AudioSampleServer : IAudioSampleSource, IDisposable
             return true;
         }
 
+        if (source.Stretch is { } plan)
+        {
+            return ReadStretched(media, source, plan, startSample, destination, offset, frames);
+        }
+
         bool ready = true;
         long position = startSample;
         long end = startSample + frames;
@@ -179,6 +186,23 @@ public sealed class AudioSampleServer : IAudioSampleSource, IDisposable
 
         if (frames <= 0 || !Volatile.Read(ref _media).TryGetValue(source.MediaId, out ResolvedMedia media))
         {
+            return;
+        }
+
+        if (source.Stretch is { } stretch)
+        {
+            string stretchKey = StretchKey(media, stretch);
+            long rendered = long.MinValue;
+            for (long block = Dsp.FloorDiv(startSample, AudioBlockCache.BlockFrames); block <= Dsp.FloorDiv(startSample + frames - 1, AudioBlockCache.BlockFrames); block++)
+            {
+                long chunk = Dsp.FloorDiv(block, ChunkBlocks);
+                if (chunk != rendered && !_cache.Contains(new AudioBlockKey(stretchKey, source.StreamIndex, SampleRate, block)))
+                {
+                    RenderChunk(media, source, stretch, chunk);
+                    rendered = chunk;
+                }
+            }
+
             return;
         }
 
@@ -240,6 +264,126 @@ public sealed class AudioSampleServer : IAudioSampleSource, IDisposable
             {
                 into.Clear();
             }
+        }
+    }
+
+    /// <summary>Cache blocks in one rendered chunk of stretched sound.</summary>
+    private const int ChunkBlocks = StretchRenderer.ChunkFrames / AudioBlockCache.BlockFrames;
+
+    /// <summary>
+    /// A stretched sound's cache key: the file's content and the plan. Made once per pair and kept,
+    /// so the audio thread only looks it up; joining the strings there would allocate.
+    /// </summary>
+    private string StretchKey(ResolvedMedia media, StretchPlan plan) =>
+        _stretchKeys.GetOrAdd((media.Key, plan.Key), static pair => pair.Media + "|" + pair.Plan);
+
+    /// <summary>
+    /// A clip's stretched sound (Phase 36), in clip samples: from the cache, rendered on the spot
+    /// when blocking, silence and a miss when real time.
+    /// </summary>
+    private bool ReadStretched(ResolvedMedia media, AudioSourceRef source, StretchPlan plan, long startSample, AudioBuffer destination, int offset, int frames)
+    {
+        int channels = Math.Min(source.Channels, destination.Channels);
+        string stretchKey = StretchKey(media, plan);
+        bool ready = true;
+        long position = startSample;
+        long end = startSample + frames;
+
+        while (position < end)
+        {
+            long block = Dsp.FloorDiv(position, AudioBlockCache.BlockFrames);
+            int within = (int)(position - (block * AudioBlockCache.BlockFrames));
+            int count = (int)Math.Min(AudioBlockCache.BlockFrames - within, end - position);
+            int at = offset + (int)(position - startSample);
+            var key = new AudioBlockKey(stretchKey, source.StreamIndex, SampleRate, block);
+
+            if (!_cache.TryGet(key, out AudioBlock? found) && Mode == AudioReadMode.Blocking && !_disposed)
+            {
+                RenderChunk(media, source, plan, Dsp.FloorDiv(block, ChunkBlocks));
+                _cache.TryGet(key, out found);
+            }
+
+            if (found is not null)
+            {
+                Copy(found, destination, channels, within, at, count);
+            }
+            else
+            {
+                Silence(destination, channels, at, count);
+                ready = false;
+            }
+
+            position += count;
+        }
+
+        if (!ready)
+        {
+            Interlocked.Increment(ref _misses);
+        }
+
+        return ready;
+    }
+
+    /// <summary>Stretches one chunk of a clip's sound and puts its blocks in the cache. On the thread that decodes.</summary>
+    private void RenderChunk(ResolvedMedia media, AudioSourceRef source, StretchPlan plan, long chunk)
+    {
+        if (_failed.ContainsKey((media.Key, source.StreamIndex)))
+        {
+            return;
+        }
+
+        string stretchKey = StretchKey(media, plan);
+        float[][] samples = _stretcher.Render(
+            stretchKey,
+            plan,
+            source.Channels,
+            SampleRate,
+            chunk,
+            (start, count, into) => ReadPlain(media, source.StreamIndex, start, count, into));
+
+        for (int index = 0; index < ChunkBlocks; index++)
+        {
+            var planes = new float[samples.Length][];
+            for (int channel = 0; channel < samples.Length; channel++)
+            {
+                planes[channel] = samples[channel].AsSpan(index * AudioBlockCache.BlockFrames, AudioBlockCache.BlockFrames).ToArray();
+            }
+
+            _cache.Add(new AudioBlockKey(stretchKey, source.StreamIndex, SampleRate, (chunk * ChunkBlocks) + index), new AudioBlock(planes));
+        }
+    }
+
+    /// <summary>The file's own samples for the stretcher, decoded as needed; silence outside the file.</summary>
+    private void ReadPlain(ResolvedMedia media, int stream, long start, int frames, float[][] into)
+    {
+        long position = start;
+        long end = start + frames;
+
+        while (position < end)
+        {
+            long block = Dsp.FloorDiv(position, AudioBlockCache.BlockFrames);
+            int within = (int)(position - (block * AudioBlockCache.BlockFrames));
+            int count = (int)Math.Min(AudioBlockCache.BlockFrames - within, end - position);
+            int at = (int)(position - start);
+            var key = new AudioBlockKey(media.Key, stream, SampleRate, block);
+
+            if (block >= 0 && !IsPastEnd(media.Key, stream, block) && !_cache.Contains(key))
+            {
+                Decode(media, stream, block, (int)Math.Min(Dsp.FloorDiv(end - 1, AudioBlockCache.BlockFrames) - block + 1, Math.Max(1, ReadAheadBlocks)));
+            }
+
+            if (block >= 0 && _cache.TryGet(key, out AudioBlock? found))
+            {
+                for (int channel = 0; channel < into.Length; channel++)
+                {
+                    if (channel < found.Channels)
+                    {
+                        found.Plane(channel).Slice(within, count).CopyTo(into[channel].AsSpan(at, count));
+                    }
+                }
+            }
+
+            position += count;
         }
     }
 

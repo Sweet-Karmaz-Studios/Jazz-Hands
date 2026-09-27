@@ -1228,6 +1228,20 @@ Enable or disable a clip without removing it.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+### `jazz clip set-keep-pitch <project> <clip-id> <keep>`
+
+Keep a clip's pitch at its speed, or let it follow the speed like tape.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The clip id. |
+| `<keep>` | true to keep the pitch, false to let it follow the speed. |
+
+| Option | Meaning |
+|---|---|
+| `--no-save` | Do not write the project back. |
+
 ### `jazz clip set-matte <project> <clip-id>`
 
 Show a clip only through another track's picture (a track matte).

@@ -51,6 +51,28 @@ public sealed class SetClipReverseHandler : ICommandHandler<SetClipReverseComman
     }
 }
 
+/// <summary>Keeps a clip's pitch at its speed, or lets it follow the speed (Phase 36).</summary>
+public sealed class SetClipKeepPitchHandler : ICommandHandler<SetClipKeepPitchCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, SetClipKeepPitchCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        ClipLocation found = HandlerHelp.Clip(project, command.ClipId);
+        HandlerHelp.RequireUnlocked(found.Track);
+
+        if (found.Clip.KeepsPitch == command.Keep)
+        {
+            return project;
+        }
+
+        context.Changed(command.ClipId);
+        return project.ReplaceTrack(found.Track.ReplaceClip(found.Clip with { PitchFollowsSpeed = command.Keep ? null : true }));
+    }
+}
+
 /// <summary>Changes how fast a clip plays.</summary>
 public sealed class SetClipSpeedHandler : ICommandHandler<SetClipSpeedCommand>
 {

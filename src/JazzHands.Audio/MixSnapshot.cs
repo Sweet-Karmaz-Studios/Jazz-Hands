@@ -410,6 +410,12 @@ public sealed class ClipMix
     /// </summary>
     public (long First, long Count) SourceWindow(long clipSample, int frames)
     {
+        // A stretched clip is read in its own samples, which the engine renders.
+        if (Source.Stretch is not null)
+        {
+            return (clipSample, frames);
+        }
+
         if (IsStraight)
         {
             return (SourceIn + clipSample, frames);
