@@ -477,7 +477,7 @@ public sealed partial class CommandConsoleViewModel : ToolViewModel
         }
     }
 
-    private void Add(ConsoleEntry entry)
+    internal void Add(ConsoleEntry entry)
     {
         Entries.Add(entry);
         if (!Origins.Contains(entry.Origin))
