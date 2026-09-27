@@ -230,4 +230,16 @@ float3 ToLinear(float3 encoded, uint transfer, uint primaries, uint toneOperator
     return primaries == PRIMARIES_BT2020 ? GamutClip(Bt2020ToBt709(rgb)) : rgb;
 }
 
+
+// ACEScct (Phase 44): the log encoding an ACES project grades in, and back. Linear is ACEScg.
+float3 LinearToAcescct(float3 x)
+{
+    return x <= 0.0078125 ? 10.5402377416545 * x + 0.0729055341958355 : (log2(max(x, 1e-10)) + 9.72) / 17.52;
+}
+
+float3 AcescctToLinear(float3 x)
+{
+    return x <= 0.155251141552511 ? (x - 0.0729055341958355) / 10.5402377416545 : min(exp2(x * 17.52 - 9.72), 65504.0);
+}
+
 #endif

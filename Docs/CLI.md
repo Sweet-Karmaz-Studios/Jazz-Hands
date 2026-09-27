@@ -1339,6 +1339,20 @@ Enable or disable a clip without removing it.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+### `jazz clip set-input-transform <project> <clip-id> <transform>`
+
+Set how an ACES project brings a clip's picture into ACES.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The clip. |
+| `<transform>` | auto, srgb, rec709, linear-rec709, slog3, logc3, vlog, sdr-display or rec2100-pq. |
+
+| Option | Meaning |
+|---|---|
+| `--no-save` | Do not write the project back. |
+
 ### `jazz clip set-keep-pitch <project> <clip-id> <keep>`
 
 Keep a clip's pitch at its speed, or let it follow the speed like tape.
@@ -3638,6 +3652,20 @@ Summarise the project: settings, counts and duration.
 |---|---|
 | `<project>` | The .jazz file to work on. |
 
+### `jazz project set-color-management <project>`
+
+Set the project's colour management: display referred or ACES.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--pipeline <display-referred|aces>` | display-referred or aces. |
+| `--output <rec709|hdr10>` | What an ACES project is rendered for: rec709 or hdr10. |
+| `--no-save` | Do not write the project back. |
+
 ### `jazz project set-settings <project>`
 
 Change the project frame rate, size or audio format.
@@ -3894,6 +3922,7 @@ Measure a frame's histograms and clipping.
 |---|---|
 | `--at <time>` | Required. When, on the timeline. |
 | `--sequence <id>` | Which sequence. |
+| `--working` | Measure the working space (as the colour effects see it) rather than the output. |
 
 ## `jazz selection`
 

@@ -19,7 +19,7 @@ internal static class StillHelp
         ?? throw new CommandException("sequence-not-found", sequenceId is null ? "The project has no sequence to look at." : $"No sequence with id '{sequenceId}'.");
 
     /// <summary>A frame of a sequence, from the session's still renderer.</summary>
-    internal static StillFrame Render(Project project, Sequence sequence, Core.Time.Flicks at, QueryContext context)
+    internal static StillFrame Render(Project project, Sequence sequence, Core.Time.Flicks at, QueryContext context, bool workingScopes = false)
     {
         if (at < Core.Time.Flicks.Zero)
         {
@@ -29,7 +29,7 @@ internal static class StillHelp
         StillRenderer renderer = context.Services?.GetService<StillRenderer>()
             ?? throw new CommandException("no-renderer", "This session has no renderer to look at frames with.");
 
-        return renderer.Render(project, sequence, at, context.Session?.ProjectPath ?? string.Empty);
+        return renderer.Render(project, sequence, at, context.Session?.ProjectPath ?? string.Empty, workingScopes);
     }
 }
 
@@ -119,7 +119,7 @@ public sealed class MeasureScopesHandler : IQueryHandler<MeasureScopesQuery, Sco
         ArgumentNullException.ThrowIfNull(context);
 
         Sequence sequence = StillHelp.Sequence(project, query.SequenceId);
-        ScopeReading scopes = StillHelp.Render(project, sequence, query.At, context).Scopes;
+        ScopeReading scopes = StillHelp.Render(project, sequence, query.At, context, query.Working).Scopes;
 
         return new ScopeSummary(
             scopes.FrameWidth,

@@ -447,3 +447,21 @@ internal static class ToneMapHelp
             ? amount
             : throw new CommandException("value-out-of-range", $"Desaturation runs from 0 to 1; {amount} is outside that.");
 }
+
+/// <summary>Sets how an ACES project brings a clip's picture into ACES.</summary>
+public sealed class SetClipInputTransformHandler : ICommandHandler<SetClipInputTransformCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, SetClipInputTransformCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        ClipLocation found = PictureHelp.PictureClip(project, command.ClipId);
+        InputTransform? stored = command.Transform == InputTransform.Auto ? null : command.Transform;
+        return stored == found.Clip.InputTransform
+            ? project
+            : PictureHelp.Replace(project, found, found.Clip with { InputTransform = stored }, context);
+    }
+}

@@ -1,35 +1,6 @@
+using JazzHands.Core.Model;
+
 namespace JazzHands.Render.Color.Aces;
-
-/// <summary>What a clip's picture is, for ACES: which input transform brings it into ACES.</summary>
-public enum InputTransform
-{
-    /// <summary>Picked from the stream: HDR PQ as <see cref="Rec2100Pq"/>, anything else as <see cref="Srgb"/>.</summary>
-    Auto,
-
-    /// <summary>sRGB-encoded Rec.709: screen captures, stills, graphics, most game footage.</summary>
-    Srgb,
-
-    /// <summary>A Rec.709 camera: the BT.709 OETF undone.</summary>
-    Rec709,
-
-    /// <summary>Scene-linear Rec.709 (an EXR render, say).</summary>
-    LinearRec709,
-
-    /// <summary>Sony S-Log3, S-Gamut3.</summary>
-    SLog3,
-
-    /// <summary>ARRI LogC3 at EI 800, ARRI Wide Gamut 3.</summary>
-    LogC3,
-
-    /// <summary>Panasonic V-Log, V-Gamut.</summary>
-    VLog,
-
-    /// <summary>A picture already rendered for an SDR display: the SDR output transform undone, so it comes out as it went in.</summary>
-    SdrDisplay,
-
-    /// <summary>HDR10 (BT.2100 PQ) already rendered for a 1000 nit display: the HDR output transform undone.</summary>
-    Rec2100Pq,
-}
 
 /// <summary>
 /// The ACES encodings and input transforms (Phase 44): ACEScct, ACEScg's primaries, and each

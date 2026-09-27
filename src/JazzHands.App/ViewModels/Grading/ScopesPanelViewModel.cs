@@ -51,6 +51,13 @@ public sealed partial class ScopesPanelViewModel : ToolViewModel
     [ObservableProperty]
     private bool _showHistogram = true;
 
+    /// <summary>
+    /// True for scopes on the working space (Phase 44): the picture as the colour effects see it,
+    /// ACEScct in an ACES project, rather than what the display is sent.
+    /// </summary>
+    [ObservableProperty]
+    private bool _workingSpace;
+
     [ObservableProperty]
     private PointCollection _redHistogram = [];
 
@@ -116,6 +123,8 @@ public sealed partial class ScopesPanelViewModel : ToolViewModel
         _shown = shown;
         _preview.Scopes = shown;
     }
+
+    partial void OnWorkingSpaceChanged(bool value) => _preview.ScopesWorkingSpace = value;
 
     /// <summary>Puts a reading on screen. Called on the UI thread.</summary>
     internal void Show(ScopeReading reading)

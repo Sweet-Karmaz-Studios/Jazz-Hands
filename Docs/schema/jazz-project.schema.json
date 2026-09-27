@@ -433,6 +433,27 @@
               "type": "null"
             }
           ]
+        },
+        "inputTransform": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "auto",
+                "srgb",
+                "rec709",
+                "linearRec709",
+                "sLog3",
+                "logC3",
+                "vLog",
+                "sdrDisplay",
+                "rec2100Pq"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -440,6 +461,25 @@
         "range",
         "sourceIn"
       ]
+    },
+    "colorManagement": {
+      "type": "object",
+      "properties": {
+        "pipeline": {
+          "type": "string",
+          "enum": [
+            "displayReferred",
+            "aces"
+          ]
+        },
+        "output": {
+          "type": "string",
+          "enum": [
+            "rec709",
+            "hdr10"
+          ]
+        }
+      }
     },
     "crop": {
       "type": "object",
@@ -1347,6 +1387,16 @@
           "anyOf": [
             {
               "$ref": "#/$defs/transitionDefaults"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "colorManagement": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/colorManagement"
             },
             {
               "type": "null"

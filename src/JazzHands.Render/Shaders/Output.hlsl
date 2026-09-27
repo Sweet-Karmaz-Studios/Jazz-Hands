@@ -5,6 +5,12 @@
 #include "Common.hlsli"
 #include "Color.hlsli"
 
+// An ACES project (Phase 44): the stack is ACEScg, and the ACES 2.0 output transform, whose
+// constants and tables are bound at b1 and t1, encodes it in place of the usual curve.
+#define ACES_CONSTANTS_REGISTER b1
+#define ACES_TABLE_REGISTER t1
+#include "Aces.hlsli"
+
 #define ENCODE_BT1886 0
 #define ENCODE_SRGB 1
 #define ENCODE_LINEAR 2
@@ -15,7 +21,7 @@ cbuffer OutputConstants : register(b0)
     uint Encoding;
     uint DitherLevels;      // 255 for eight bit, 1023 for ten, 0 for none
     uint KeepAlpha;         // 1 to write the stack's alpha rather than an opaque frame
-    float Padding;
+    uint Aces;              // 1 for an ACES project's stack, through the output transform at b1
 };
 
 Texture2D<float4> Stack : register(t0);
@@ -44,6 +50,11 @@ float4 PsMain(FullScreenVertex input) : SV_TARGET
     float3 colour = KeepAlpha != 0 && over.a > 1e-6 ? over.rgb / over.a : over.rgb;
 
     float3 encoded;
+    if (Aces != 0)
+    {
+        encoded = AcesOutput(RowMul(colour, Ap1ToAp0));
+    }
+    else
     switch (Encoding)
     {
         case ENCODE_SRGB:
@@ -64,4 +75,14 @@ float4 PsMain(FullScreenVertex input) : SV_TARGET
     }
 
     return float4(encoded, alpha);
+}
+
+// The working space for the scopes (Phase 44): the stack over black, encoded as the colour
+// effects see it, sRGB in a display-referred project and ACEScct in an ACES one, so the scopes
+// can read what a grade is working on rather than what the display is sent.
+float4 PsWorking(FullScreenVertex input) : SV_TARGET
+{
+    float4 stack = Stack.Load(int3(int2(input.Position.xy), 0));
+    float3 colour = max(stack.rgb, 0.0);
+    return float4(saturate(Aces != 0 ? LinearToAcescct(colour) : LinearToSrgb(colour)), 1.0);
 }

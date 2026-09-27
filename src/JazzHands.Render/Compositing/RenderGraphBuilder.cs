@@ -283,6 +283,7 @@ public static class RenderGraphBuilder
             Bicubic = options.Bicubic,
             ProjectFolder = options.ProjectFolder,
             CacheLayers = options.CacheLayers,
+            Aces = project.Settings.ColorManagement is { IsAces: true } aces ? aces.Output : null,
         };
     }
 
@@ -490,6 +491,11 @@ public static class RenderGraphBuilder
         if (string.Equals(clip.GeneratorId, SolidGenerator, StringComparison.Ordinal))
         {
             Vector4 colour = GeneratorColour(clip, time - clip.Start, options);
+
+            if (project.Settings.ColorManagement is { IsAces: true })
+            {
+                colour = AcesSolid(colour);
+            }
 
             return (new SolidLayerSource(new Vector4(colour.X * colour.W, colour.Y * colour.W, colour.Z * colour.W, colour.W)), frameSize, ConformPolicy.Stretch);
         }
@@ -1006,6 +1012,20 @@ public static class RenderGraphBuilder
         }
 
         return steps.ToImmutable();
+    }
+
+    /// <summary>
+    /// A solid's straight linear BT.709 colour in an ACES project (Phase 44): what it shows on an
+    /// SDR display, brought in through the SDR output transform undone, as a generator's picture is.
+    /// </summary>
+    internal static Vector4 AcesSolid(Vector4 straight)
+    {
+        var display = new Color.Aces.D3(
+            Math.Pow(Math.Clamp(straight.X, 0, 1), 1 / 2.4),
+            Math.Pow(Math.Clamp(straight.Y, 0, 1), 1 / 2.4),
+            Math.Pow(Math.Clamp(straight.Z, 0, 1), 1 / 2.4));
+        Color.Aces.D3 ap1 = Color.Aces.AcesOutputTransform.Rec709.Inverse(display) * Color.Aces.AcesInput.Ap0ToAp1;
+        return new Vector4((float)ap1.X, (float)ap1.Y, (float)ap1.Z, straight.W);
     }
 
     /// <summary>

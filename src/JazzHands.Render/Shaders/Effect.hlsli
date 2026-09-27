@@ -16,7 +16,8 @@ cbuffer EffectCommon : register(b0)
     float2 Resolution;      // the target in texels
     float Time;             // seconds from the effect's owner's start
     float QualityScale;     // target texels per sequence pixel
-    float2 EffectCommonPadding;
+    uint WorkingSpace;      // 0 display referred (linear BT.709), 1 ACES (ACEScg), Phase 44
+    float EffectCommonPadding;
 };
 
 FullScreenVertex VsMain(uint vertexId : SV_VertexID)
@@ -24,19 +25,25 @@ FullScreenVertex VsMain(uint vertexId : SV_VertexID)
     return FullScreenTriangle(vertexId);
 }
 
-// Straight colour in a perceptual (sRGB) encoding, for effects whose parameters are about what a
-// person sees: posterize steps, grain, keys and levels read in that space as they do in every
-// other editor. Alpha comes back unchanged.
+// Straight colour in a perceptual encoding, for effects whose parameters are about what a person
+// sees: posterize steps, grain, keys and levels read in that space as they do in every other
+// editor. sRGB in a display-referred project; ACEScct in an ACES one (Phase 44), which is what a
+// colourist grades in there. Alpha comes back unchanged.
 float4 ToPerceptual(float4 premultiplied)
 {
     float4 straight = Unpremultiply(premultiplied);
-    return float4(LinearToSrgb(max(straight.rgb, 0.0)), straight.a);
+    float3 rgb = max(straight.rgb, 0.0);
+    return float4(WorkingSpace == 1 ? LinearToAcescct(rgb) : LinearToSrgb(rgb), straight.a);
 }
 
-// The way back: perceptual straight colour to premultiplied linear light.
+// The way back: perceptual straight colour to premultiplied linear light. ACEScct runs past 1
+// for scene light brighter than diffuse white, so it is held at its own top, not at 1.
 float4 FromPerceptual(float4 perceptual)
 {
-    return Premultiply(float4(SrgbToLinear(saturate(perceptual.rgb)), saturate(perceptual.a)));
+    float3 rgb = WorkingSpace == 1
+        ? AcescctToLinear(clamp(perceptual.rgb, 0.0, 1.4679964))
+        : SrgbToLinear(saturate(perceptual.rgb));
+    return Premultiply(float4(rgb, saturate(perceptual.a)));
 }
 
 // Sequence pixels from the frame centre to a texture coordinate, and back.

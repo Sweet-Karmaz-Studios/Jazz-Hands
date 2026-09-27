@@ -60,6 +60,8 @@
             <ToggleButton Style="{StaticResource Toggle}" Content="Parade" IsChecked="{Binding ShowParade, Mode=TwoWay}" AutomationProperties.Name="Show the RGB parade" />
             <ToggleButton Style="{StaticResource Toggle}" Content="Vectorscope" IsChecked="{Binding ShowVectorscope, Mode=TwoWay}" AutomationProperties.Name="Show the vectorscope" />
             <ToggleButton Style="{StaticResource Toggle}" Content="Histogram" IsChecked="{Binding ShowHistogram, Mode=TwoWay}" AutomationProperties.Name="Show the histogram" />
+            <ToggleButton Style="{StaticResource Toggle}" Content="Working space" IsChecked="{Binding WorkingSpace, Mode=TwoWay}" AutomationProperties.Name="Read the working space"
+                          ToolTip="Read the picture as the colour effects see it (ACEScct in an ACES project) rather than what the display is sent" />
         </StackPanel>
 
         <UniformGrid Grid.Row="1">

@@ -100,6 +100,9 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
     private (TransportState State, double Rate) _lastReported = (TransportState.Stopped, 1.0);
     private ID3D11Texture2D? _program;
     private ID3D11RenderTargetView? _programView;
+    private ID3D11Texture2D? _working;
+    private ID3D11RenderTargetView? _workingView;
+    private volatile bool _scopesWorking;
     private int _programWidth;
     private int _programHeight;
     private PreviewFrame? _lastFrame;
@@ -198,6 +201,22 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
                 _scopesStale = true;
                 _wake.Set();
             }
+        }
+    }
+
+    /// <summary>
+    /// True for scopes that read the working space (Phase 44): the picture as the colour effects
+    /// see it, sRGB encoded in a display-referred project and ACEScct in an ACES one, rather than
+    /// what the display is sent. The next frame drawn is measured that way.
+    /// </summary>
+    public bool ScopesWorkingSpace
+    {
+        get => _scopesWorking;
+        set
+        {
+            _scopesWorking = value;
+            _scopesStale = true;
+            _wake.Set();
         }
     }
 
@@ -845,7 +864,7 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
         PreviewQuality effective = Resolve(now, playing, rate);
         Volatile.Write(ref _effectiveQuality, (int)effective);
 
-        var key = new RenderKey(snapshot.Version, frame, effective, Volatile.Read(ref _multicamGrid));
+        var key = new RenderKey(snapshot.Version, frame, effective, Volatile.Read(ref _multicamGrid), _scopesWanted && _scopesWorking);
         bool refresh = _refresh;
         _refresh = false;
 
@@ -1039,7 +1058,25 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
         }
 
         frames.Motion = new Motion(playing, rate);
-        frames.Render(snapshot.Project, sequence, time, options, _programView!, width, height, OutputSettings.Preview, snapshot.Path);
+        if (_scopesWanted && _scopesWorking)
+        {
+            // The scopes read the working space: the stack, encoded as the colour effects see it,
+            // beside the program as usual.
+            RenderTarget stack = frames.Render(snapshot.Project, sequence, time, options, snapshot.Path);
+            try
+            {
+                frames.Compositor.Output(stack, _programView!, width, height, OutputSettings.Preview);
+                frames.Compositor.OutputWorking(stack, _workingView!, width, height);
+            }
+            finally
+            {
+                frames.Compositor.Pool.Return(stack);
+            }
+        }
+        else
+        {
+            frames.Render(snapshot.Project, sequence, time, options, _programView!, width, height, OutputSettings.Preview, snapshot.Path);
+        }
 
         RecordStats(frames);
         Interlocked.Increment(ref _rendered);
@@ -1188,7 +1225,7 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
 
         _scopesAt = now;
         _scopes ??= new ScopeRenderer(_device);
-        _scopes.Submit(_program);
+        _scopes.Submit(_scopesWorking && _working is not null ? _working : _program);
 
         ScopeReading? latest = playing ? _scopes.Collect() : null;
         while (!playing && _scopes.Collect(wait: true) is { } reading)
@@ -1213,6 +1250,8 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
 
         _program = _device.CreateRenderTarget(width, height, Vortice.DXGI.Format.B8G8R8A8_UNorm);
         _programView = _device.Device.CreateRenderTargetView(_program);
+        _working = _device.CreateRenderTarget(width, height, Vortice.DXGI.Format.B8G8R8A8_UNorm);
+        _workingView = _device.Device.CreateRenderTargetView(_working);
         _programWidth = width;
         _programHeight = height;
     }
@@ -1266,6 +1305,10 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
         _programView = null;
         _program?.Dispose();
         _program = null;
+        _workingView?.Dispose();
+        _workingView = null;
+        _working?.Dispose();
+        _working = null;
         _programWidth = 0;
         _programHeight = 0;
     }
@@ -1274,7 +1317,7 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
     private sealed record ProjectSnapshot(Project Project, string Path, long Version);
 
     /// <summary>What decides whether the frame on screen is still the right one.</summary>
-    private readonly record struct RenderKey(long Version, long Frame, PreviewQuality Quality, string? Grid);
+    private readonly record struct RenderKey(long Version, long Frame, PreviewQuality Quality, string? Grid, bool WorkingScopes);
 
     [System.Runtime.InteropServices.LibraryImport("avrt.dll", EntryPoint = "AvSetMmThreadCharacteristicsW", StringMarshalling = System.Runtime.InteropServices.StringMarshalling.Utf16)]
     private static partial IntPtr AvSetMmThreadCharacteristics(string taskName, ref uint taskIndex);

@@ -365,19 +365,15 @@ public sealed class FrameServer : IFrameProvider, IDisposable
             (MediaItem decoded, int stream, bool proxy) = _sources.Decodable(item, clip.SourceStreamIndex);
             if (!proxy)
             {
-                return new SourceFrame(
-                    frame,
-                    ColorSpaceFor(item, clip.SourceStreamIndex, frame.Layout, ToneMapping.Resolve(clip.ToneMap, project.Settings.ToneMap)),
-                    Identity(item.Hash, stream, frame));
+                YuvColorSpace space = Managed(project, clip, ColorSpaceFor(item, clip.SourceStreamIndex, frame.Layout, ToneMapping.Resolve(clip.ToneMap, project.Settings.ToneMap)));
+                return new SourceFrame(frame, space, Identity(item.Hash, stream, frame, space));
             }
 
             // A proxy is placed as the picture it stands for, at the source's size, and was
             // written BT.709 limited range by the export that made it whatever the source was.
             MediaStream? original = item.Info?.Streams.FirstOrDefault(candidate => candidate.Index == clip.SourceStreamIndex);
-            return new SourceFrame(
-                frame,
-                YuvColorSpace.From("bt709", "bt709", isFullRange: false, frame.Layout.BitDepth),
-                Identity(decoded.Hash, stream, frame))
+            YuvColorSpace proxied = Managed(project, clip, YuvColorSpace.From("bt709", "bt709", isFullRange: false, frame.Layout.BitDepth));
+            return new SourceFrame(frame, proxied, Identity(decoded.Hash, stream, frame, proxied))
             {
                 Width = original?.Width ?? 0,
                 Height = original?.Height ?? 0,
@@ -460,8 +456,40 @@ public sealed class FrameServer : IFrameProvider, IDisposable
         _sources.Dispose();
     }
 
-    private static string Identity(string hash, int stream, FrameTexture frame) =>
-        string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{hash}:{stream}:{frame.Pts.Value}");
+    /// <summary>
+    /// What a frame is, for the layer cache: the file, the stream, the time and, in an ACES project,
+    /// the input transform, so a cached layer is not reused after the transform changes.
+    /// </summary>
+    private static string Identity(string hash, int stream, FrameTexture frame, YuvColorSpace space) =>
+        string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{hash}:{stream}:{frame.Pts.Value}{(space.Aces is { } aces ? ":aces:" + aces + (space.AcesFromDisplayLight ? ":light" : string.Empty) : string.Empty)}");
+
+    /// <summary>
+    /// A source's colour space in an ACES project (Phase 44): the source pass decodes nothing, so
+    /// the input transform sees the stream's own code values, and the transform is the clip's or,
+    /// on automatic, HDR10 for PQ, linear Rec.709 for a float EXR and sRGB for anything else. HLG on
+    /// automatic is decoded and tone mapped as it always is and comes in as display light. A
+    /// display-referred project is left as it was.
+    /// </summary>
+    internal static YuvColorSpace Managed(Project project, Clip clip, YuvColorSpace space)
+    {
+        if (project.Settings.ColorManagement is not { IsAces: true })
+        {
+            return space;
+        }
+
+        if (clip.InputTransform is { } chosen and not InputTransform.Auto)
+        {
+            return space with { Transfer = TransferFunction.Linear, Primaries = ColorPrimaries.Bt709, Aces = chosen };
+        }
+
+        return space.Transfer switch
+        {
+            TransferFunction.Hlg => space with { Aces = InputTransform.SdrDisplay, AcesFromDisplayLight = true },
+            TransferFunction.Pq => space with { Transfer = TransferFunction.Linear, Primaries = ColorPrimaries.Bt709, Aces = InputTransform.Rec2100Pq },
+            TransferFunction.Linear => space with { Aces = InputTransform.LinearRec709 },
+            _ => space with { Transfer = TransferFunction.Linear, Primaries = ColorPrimaries.Bt709, Aces = InputTransform.Srgb },
+        };
+    }
 
     /// <summary>Gets a clip's picture the way the current motion needs it.</summary>
     private FrameTexture? Fetch(Project project, Clip clip, MediaItem item, Flicks time, int lane)

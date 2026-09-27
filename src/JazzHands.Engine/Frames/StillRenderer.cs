@@ -49,7 +49,12 @@ public sealed class StillRenderer : IDisposable
     }
 
     /// <summary>Renders a sequence at a time and reads it back.</summary>
-    public StillFrame Render(Project project, Sequence sequence, Flicks time, string projectPath = "")
+    /// <param name="project">The project.</param>
+    /// <param name="sequence">The sequence.</param>
+    /// <param name="time">The sequence time.</param>
+    /// <param name="projectPath">Where the project lives, for its media.</param>
+    /// <param name="workingScopes">Measure the scopes on the working space (Phase 44) rather than the output.</param>
+    public StillFrame Render(Project project, Sequence sequence, Flicks time, string projectPath = "", bool workingScopes = false)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(sequence);
@@ -65,7 +70,25 @@ public sealed class StillRenderer : IDisposable
                 _frames.Compositor.Output(stack, display.View, stack.Width, stack.Height, new OutputSettings(DitherLevels: 0));
                 float[] linear = ReadFloats(stack);
                 byte[] bgra = ReadBytes(display);
-                ScopeReading scopes = _scopes.Measure(display.Texture);
+                ScopeReading scopes;
+                if (workingScopes)
+                {
+                    RenderTarget working = _frames.Compositor.Pool.Rent(stack.Width, stack.Height, Format.B8G8R8A8_UNorm);
+                    try
+                    {
+                        _frames.Compositor.OutputWorking(stack, working.View, stack.Width, stack.Height);
+                        scopes = _scopes.Measure(working.Texture);
+                    }
+                    finally
+                    {
+                        _frames.Compositor.Pool.Return(working);
+                    }
+                }
+                else
+                {
+                    scopes = _scopes.Measure(display.Texture);
+                }
+
                 return new StillFrame(stack.Width, stack.Height, linear, bgra, scopes);
             }
             finally

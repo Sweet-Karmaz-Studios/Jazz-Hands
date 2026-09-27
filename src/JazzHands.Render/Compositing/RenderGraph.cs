@@ -151,6 +151,12 @@ public sealed record RenderGraph(int Width, int Height, ImmutableArray<LayerNode
     /// </summary>
     public bool CacheLayers { get; init; }
 
+    /// <summary>
+    /// For an ACES project (Phase 44), the display it is rendered for: the layers are ACEScg and the
+    /// output pass applies that display's output transform. Null for a display-referred project.
+    /// </summary>
+    public AcesOutput? Aces { get; init; }
+
     /// <summary>An empty frame.</summary>
     public static RenderGraph Empty(int width, int height) => new(width, height, []);
 }

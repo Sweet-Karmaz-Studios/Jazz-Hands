@@ -50,6 +50,13 @@ public interface IPreviewEngine
     /// <summary>Measure the scopes on each frame shown; the Scopes panel turns this on only while it is visible.</summary>
     bool Scopes { get; set; }
 
+    /// <summary>The scopes read the working space (Phase 44) rather than what the display is sent.</summary>
+    bool ScopesWorkingSpace
+    {
+        get => false;
+        set { }
+    }
+
     /// <summary>The multicam clip shown as its grid of angles (Phase 41), or null for the program.</summary>
     string? MulticamGrid => null;
 }
@@ -99,6 +106,13 @@ public sealed class EnginePreview(PlaybackEngine engine, RenderDevice device) : 
     {
         get => engine.Scopes;
         set => engine.Scopes = value;
+    }
+
+    /// <inheritdoc />
+    public bool ScopesWorkingSpace
+    {
+        get => engine.ScopesWorkingSpace;
+        set => engine.ScopesWorkingSpace = value;
     }
 
     /// <inheritdoc />

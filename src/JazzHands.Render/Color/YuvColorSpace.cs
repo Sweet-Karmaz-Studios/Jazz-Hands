@@ -58,6 +58,15 @@ public sealed record YuvColorSpace(Matrix4x4 Matrix, bool IsFullRange, TransferF
     /// <summary>How PQ and HLG are tone mapped. Ignored for SDR transfers.</summary>
     public ToneMapParameters ToneMap { get; init; } = ToneMapParameters.Default;
 
+    /// <summary>
+    /// In an ACES project (Phase 44), the input transform that brings this picture into ACEScg,
+    /// after a source pass with no transfer function. Null in a display-referred project.
+    /// </summary>
+    public Core.Model.InputTransform? Aces { get; init; }
+
+    /// <summary>True when an ACES input arrives decoded to display light rather than as code values (HLG on automatic).</summary>
+    public bool AcesFromDisplayLight { get; init; }
+
     /// <summary>BT.709 limited range, 8-bit. The default for HD video.</summary>
     public static readonly YuvColorSpace Bt709Limited = new(BuildMatrix(0.2126, 0.0722), false, TransferFunction.Bt709, 8);
 

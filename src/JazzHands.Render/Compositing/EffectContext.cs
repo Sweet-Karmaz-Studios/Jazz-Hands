@@ -73,6 +73,12 @@ public sealed class EffectContext : IDisposable
     /// <summary>The part of the picture kept, left, top, right, bottom as fractions of it.</summary>
     public Vector4 PictureCrop { get; private set; } = LayerNode.NoCrop;
 
+    /// <summary>
+    /// True while drawing an ACES project's layers (Phase 44): the pictures are ACEScg and the
+    /// perceptual helpers work in ACEScct. Off while a generator draws, which works in display light.
+    /// </summary>
+    public bool IsAces { get; internal set; }
+
     /// <summary>The folder the project file is in, which relative paths in parameters are from; empty for none.</summary>
     public string ProjectFolder { get; internal set; } = string.Empty;
 
@@ -162,6 +168,7 @@ public sealed class EffectContext : IDisposable
             Resolution = new Vector2(output.Width, output.Height),
             Time = (float)Time.ToSeconds(),
             QualityScale = QualityScale,
+            WorkingSpace = IsAces ? 1u : 0u,
         };
 
         Write(context, _common, in common);
@@ -334,6 +341,7 @@ public sealed class EffectContext : IDisposable
         public Vector2 Resolution;
         public float Time;
         public float QualityScale;
-        public Vector2 Padding;
+        public uint WorkingSpace;
+        public float Padding;
     }
 }

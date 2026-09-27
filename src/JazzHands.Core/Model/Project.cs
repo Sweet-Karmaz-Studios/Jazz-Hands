@@ -398,6 +398,7 @@ public sealed record Marker(
 /// <param name="PointTracks">Points of its picture followed through its frames (<c>tracking.point</c>).</param>
 /// <param name="HiddenTracks">For a nested sequence, tracks of it this clip leaves out: its graphics, lifted into a vertical version by <c>sequence.reframe</c>.</param>
 /// <param name="PitchFollowsSpeed">True for sound that changes pitch with the clip's speed, as tape does; null (the default) keeps the pitch. Only written when true.</param>
+/// <param name="InputTransform">How an ACES project brings this clip's picture into ACES (Phase 44). Null for automatic: HDR PQ as HDR10, anything else as sRGB.</param>
 public sealed record Clip(
     string Id,
     TimeRange Range,
@@ -433,7 +434,8 @@ public sealed record Clip(
     TrackMatte? Matte = null,
     EquatableArray<PointTrack> PointTracks = default,
     EquatableArray<string> HiddenTracks = default,
-    bool? PitchFollowsSpeed = null) : IEquatable<Clip>
+    bool? PitchFollowsSpeed = null,
+    InputTransform? InputTransform = null) : IEquatable<Clip>
 {
     /// <summary>Playback rate, defaulting to normal speed.</summary>
     public Rational EffectiveSpeed => Speed ?? Rational.One;
@@ -612,6 +614,7 @@ public sealed record Track(
 /// <param name="ColorSpace">Working colour space name, for example bt709.</param>
 /// <param name="ToneMap">How HDR sources are tone mapped unless a clip says otherwise. Null for BT.2390 at half desaturation.</param>
 /// <param name="Transitions">What the default transition shortcuts add. Null for a one second crossfade and an equal power sound crossfade.</param>
+/// <param name="ColorManagement">Display referred or ACES (Phase 44). Null for display referred.</param>
 public sealed record ProjectSettings(
     Rational FrameRate,
     int Width,
@@ -620,7 +623,8 @@ public sealed record ProjectSettings(
     int ChannelCount = 2,
     string ColorSpace = "bt709",
     ToneMapping? ToneMap = null,
-    TransitionDefaults? Transitions = null) : IEquatable<ProjectSettings>
+    TransitionDefaults? Transitions = null,
+    ColorManagement? ColorManagement = null) : IEquatable<ProjectSettings>
 {
     /// <summary>The default transitions, with nothing set meaning the built-in ones.</summary>
     public TransitionDefaults EffectiveTransitions => Transitions ?? TransitionDefaults.Standard;

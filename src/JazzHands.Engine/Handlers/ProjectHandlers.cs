@@ -169,3 +169,28 @@ public sealed class SetProjectToneMapHandler : ICommandHandler<SetProjectToneMap
         return project with { Settings = project.Settings with { ToneMap = stored } };
     }
 }
+
+/// <summary>Sets the project's colour management.</summary>
+public sealed class SetColorManagementHandler : ICommandHandler<SetColorManagementCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, SetColorManagementCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        ColorManagement current = project.Settings.ColorManagement ?? new ColorManagement();
+        var wanted = new ColorManagement(command.Pipeline ?? current.Pipeline, command.Output ?? current.Output);
+
+        // Display referred at the default output stores nothing, so an untouched project reads as before.
+        ColorManagement? stored = wanted == new ColorManagement() ? null : wanted;
+        if (stored == project.Settings.ColorManagement)
+        {
+            return project;
+        }
+
+        context.Changed(project.Id);
+        return project with { Settings = project.Settings with { ColorManagement = stored } };
+    }
+}

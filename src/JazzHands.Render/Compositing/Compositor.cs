@@ -35,14 +35,16 @@ public enum OutputEncoding
 /// <param name="DitherLevels">255 for an eight bit target, 1023 for ten bit, 0 for no dither.</param>
 /// <param name="KeepAlpha">Write the stack's alpha instead of an opaque frame, for formats that carry it.</param>
 /// <param name="Background">What shows through where nothing covers, premultiplied linear. Opaque black by default.</param>
+/// <param name="AcesDisplay">For an ACES project, the display to output for instead of the project's: the preview always shows SDR. Ignored for a display-referred one.</param>
 public readonly record struct OutputSettings(
     OutputEncoding Encoding = OutputEncoding.Bt1886,
     int DitherLevels = 255,
     bool KeepAlpha = false,
-    Vector4? Background = null)
+    Vector4? Background = null,
+    AcesOutput? AcesDisplay = null)
 {
     /// <summary>What the preview uses: BT.1886, dithered for eight bits, over black.</summary>
-    public static OutputSettings Preview { get; } = new(OutputEncoding.Bt1886, 255);
+    public static OutputSettings Preview { get; } = new(OutputEncoding.Bt1886, 255, AcesDisplay: AcesOutput.Rec709);
 }
 
 /// <summary>
@@ -79,6 +81,9 @@ public sealed class Compositor : IDisposable
     private readonly ID3D11ShaderResourceView?[] _planeViews = new ID3D11ShaderResourceView?[4];
     private readonly Dictionary<Type, ID3D11Buffer> _constants = [];
     private readonly MaskRasterizer _masks;
+    private readonly AcesResources _acesResources;
+    private AcesOutput? _aces;
+    private ID3D11Buffer? _acesBuffer;
     private readonly EffectContext _effectContext;
     private readonly Dictionary<Type, VideoEffect?> _effects = [];
     private readonly Dictionary<Type, VideoGenerator?> _generators = [];
@@ -101,6 +106,7 @@ public sealed class Compositor : IDisposable
         Pool = pool ?? new RenderTargetPool(device);
         Cache = new LayerCache(Pool, cacheCapacity);
         _masks = new MaskRasterizer(device);
+        _acesResources = new AcesResources(device);
         _samplers =
         [
             Sampler(Filter.MinMagMipLinear, TextureAddressMode.Clamp),
@@ -136,6 +142,8 @@ public sealed class Compositor : IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         EnsureShaders();
         _effectContext.ProjectFolder = graph.ProjectFolder;
+        _effectContext.IsAces = graph.Aces is not null;
+        _aces = graph.Aces;
 
         // No stack until something needs one underneath it: the bottom layer of most frames is
         // opaque and untransformed, and then it simply is the stack.
@@ -165,16 +173,49 @@ public sealed class Compositor : IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         EnsureShaders();
 
+        AcesOutput? display = AcesDisplay(settings);
         var constants = new OutputConstants
         {
             Background = settings.Background ?? new Vector4(0.0f, 0.0f, 0.0f, 1.0f),
             Encoding = (uint)settings.Encoding,
             DitherLevels = (uint)Math.Max(0, settings.DitherLevels),
             KeepAlpha = settings.KeepAlpha ? 1u : 0u,
+            Aces = display is null ? 0u : 1u,
         };
 
         _views[0] = stack.Resource;
-        FullScreen(_shaders!.OutputPixel, target, width, height, in constants, 1);
+        FullScreen(_shaders!.OutputPixel, target, width, height, in constants, BindAces(display ?? AcesOutput.Rec709, 1), _acesBuffer);
+    }
+
+    /// <summary>
+    /// Encodes a stack as the colour effects see it, for the scopes to read the working space
+    /// (Phase 44): sRGB in a display-referred project, ACEScct in an ACES one, over black, opaque.
+    /// </summary>
+    public void OutputWorking(RenderTarget stack, ID3D11RenderTargetView target, int width, int height)
+    {
+        ArgumentNullException.ThrowIfNull(stack);
+        ArgumentNullException.ThrowIfNull(target);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        EnsureShaders();
+
+        var constants = new OutputConstants { Background = new Vector4(0, 0, 0, 1), Aces = _aces is null ? 0u : 1u };
+        _views[0] = stack.Resource;
+        FullScreen(_shaders!.OutputWorking, target, width, height, in constants, BindAces(AcesOutput.Rec709, 1), _acesBuffer);
+    }
+
+    /// <summary>
+    /// The display an ACES stack is output for: what the settings ask (the preview always shows
+    /// SDR), or else what the project is rendered for; null for a display-referred stack.
+    /// </summary>
+    private AcesOutput? AcesDisplay(OutputSettings settings) => _aces is null ? null : settings.AcesDisplay ?? _aces;
+
+    /// <summary>Binds a display's ACES table at a view slot and keeps its constants for the draw; returns the views in use.</summary>
+    private int BindAces(AcesOutput display, int slot)
+    {
+        (ID3D11Buffer constants, ID3D11ShaderResourceView table) = _acesResources.For(display);
+        _acesBuffer = constants;
+        _views[slot] = table;
+        return slot + 1;
     }
 
     /// <summary>
@@ -209,6 +250,7 @@ public sealed class Compositor : IDisposable
 
         EnsureShaders();
 
+        AcesOutput? display = AcesDisplay(settings);
         var constants = new YuvConstants
         {
             Background = settings.Background ?? new Vector4(0.0f, 0.0f, 0.0f, 1.0f),
@@ -217,12 +259,13 @@ public sealed class Compositor : IDisposable
             LumaWidth = (uint)width,
             LumaHeight = (uint)height,
             Bits = tenBit ? 10u : 8u,
+            Aces = display is null ? 0u : 1u,
         };
 
         _views[0] = stack.Resource;
-        FullScreen(_shaders!.YuvLuma, luma, width, height, in constants, 1);
+        FullScreen(_shaders!.YuvLuma, luma, width, height, in constants, BindAces(display ?? AcesOutput.Rec709, 1), _acesBuffer);
         _views[0] = stack.Resource;
-        FullScreen(_shaders.YuvChroma, chroma, width / 2, height / 2, in constants, 1);
+        FullScreen(_shaders.YuvChroma, chroma, width / 2, height / 2, in constants, BindAces(display ?? AcesOutput.Rec709, 1), _acesBuffer);
     }
 
     /// <inheritdoc />
@@ -237,6 +280,7 @@ public sealed class Compositor : IDisposable
         Cache.Dispose();
         _masks.Dispose();
         _shaders?.Dispose();
+        _acesResources.Dispose();
 
         foreach (VideoEffect? effect in _effects.Values)
         {
@@ -602,8 +646,26 @@ public sealed class Compositor : IDisposable
         }
 
         _effectContext.Begin(node, layer.Scale, target.Width, target.Height);
-        generator.Render(_effectContext, node.Parameters, target);
-        return target;
+        if (!_effectContext.IsAces)
+        {
+            generator.Render(_effectContext, node.Parameters, target);
+            return target;
+        }
+
+        // In an ACES project a generator still draws in display light (its colours are what a
+        // person picked on screen), and comes in through the SDR output transform undone, so a
+        // title's white is the white it was picked as.
+        _effectContext.IsAces = false;
+        try
+        {
+            generator.Render(_effectContext, node.Parameters, target);
+        }
+        finally
+        {
+            _effectContext.IsAces = true;
+        }
+
+        return IntoAces(target, DisplayLightKind, AcesOutput.Rec709, M33Identity);
     }
 
     /// <summary>The running instance of a generator class, when one has drawn; for tests of what it keeps.</summary>
@@ -733,7 +795,10 @@ public sealed class Compositor : IDisposable
         switch (layer.Source)
         {
             case FrameLayerSource frame:
-                return Convert(frame.Frame, frame.Color);
+                RenderTarget converted = Convert(frame.Frame, frame.Color);
+                return frame.Color.Aces is not { } input ? converted
+                    : frame.Color.AcesFromDisplayLight ? IntoAces(converted, DisplayLightKind, AcesOutput.Rec709, M33Identity)
+                    : IntoAces(converted, input);
 
             case SolidLayerSource solid:
                 RenderTarget texel = Pool.Rent(1, 1);
@@ -966,6 +1031,55 @@ public sealed class Compositor : IDisposable
         return linear;
     }
 
+    private const uint DisplayLightKind = 7;
+
+    private static readonly Color.Aces.M33 M33Identity = Color.Aces.M33.Identity;
+
+    /// <summary>
+    /// A converted layer into premultiplied ACEScg by its input transform (Phase 44): a curve and a
+    /// matrix, or a display's output transform undone. The input target is returned to the pool.
+    /// </summary>
+    private RenderTarget IntoAces(RenderTarget encoded, InputTransform input)
+    {
+        (uint kind, AcesOutput display) = input switch
+        {
+            InputTransform.Rec709 => (1u, AcesOutput.Rec709),
+            InputTransform.LinearRec709 => (2u, AcesOutput.Rec709),
+            InputTransform.SLog3 => (3u, AcesOutput.Rec709),
+            InputTransform.LogC3 => (4u, AcesOutput.Rec709),
+            InputTransform.VLog => (5u, AcesOutput.Rec709),
+            InputTransform.SdrDisplay => (6u, AcesOutput.Rec709),
+            InputTransform.Rec2100Pq => (6u, AcesOutput.Hdr10),
+            _ => (0u, AcesOutput.Rec709),
+        };
+
+        return IntoAces(encoded, kind, display, Color.Aces.AcesInput.ToAp0(input) * Color.Aces.AcesInput.Ap0ToAp1);
+    }
+
+    /// <summary>The input pass on its own, for tests of its maths on a float target; the target is taken from <see cref="Pool"/> and given back.</summary>
+    internal RenderTarget InputTransformOf(RenderTarget encoded, InputTransform input)
+    {
+        EnsureShaders();
+        return IntoAces(encoded, input);
+    }
+
+    private RenderTarget IntoAces(RenderTarget encoded, uint kind, AcesOutput display, Color.Aces.M33 toAp1)
+    {
+        RenderTarget aces = Pool.Rent(encoded.Width, encoded.Height, encoded.Format);
+        var constants = new InputConstants
+        {
+            ToAp1Row0 = new Vector4((float)toAp1.Row0.X, (float)toAp1.Row0.Y, (float)toAp1.Row0.Z, 0),
+            ToAp1Row1 = new Vector4((float)toAp1.Row1.X, (float)toAp1.Row1.Y, (float)toAp1.Row1.Z, 0),
+            ToAp1Row2 = new Vector4((float)toAp1.Row2.X, (float)toAp1.Row2.Y, (float)toAp1.Row2.Z, 0),
+            Kind = kind,
+        };
+
+        _views[0] = encoded.Resource;
+        FullScreen(_shaders!.AcesInput, aces.View, aces.Width, aces.Height, in constants, BindAces(display, 1), _acesBuffer);
+        Pool.Return(encoded);
+        return aces;
+    }
+
     /// <summary>
     /// Blends a placed layer onto the stack, into a new target. With <paramref name="replace"/>, for
     /// an adjustment layer, the layer is the stack after its effects and takes its place where the
@@ -1144,9 +1258,9 @@ public sealed class Compositor : IDisposable
         _shaderGeneration = generation;
     }
 
-    private void FullScreen<T>(ID3D11PixelShader pixel, ID3D11RenderTargetView target, int width, int height, in T constants, int views)
+    private void FullScreen<T>(ID3D11PixelShader pixel, ID3D11RenderTargetView target, int width, int height, in T constants, int views, ID3D11Buffer? second = null)
         where T : unmanaged =>
-        Draw(_shaders!.FullScreenVertex, pixel, target, width, height, in constants, views, PrimitiveTopology.TriangleList, 3);
+        Draw(_shaders!.FullScreenVertex, pixel, target, width, height, in constants, views, PrimitiveTopology.TriangleList, 3, second: second);
 
     private void Draw<T>(
         ID3D11VertexShader vertex,
@@ -1158,7 +1272,8 @@ public sealed class Compositor : IDisposable
         int views,
         PrimitiveTopology topology,
         int vertices,
-        ID3D11BlendState? blend = null)
+        ID3D11BlendState? blend = null,
+        ID3D11Buffer? second = null)
         where T : unmanaged
     {
         ID3D11DeviceContext context = _device.ImmediateContext;
@@ -1188,6 +1303,12 @@ public sealed class Compositor : IDisposable
         context.VSSetConstantBuffer(0, buffer);
         context.PSSetShader(pixel);
         context.PSSetConstantBuffer(0, buffer);
+        if (second is not null)
+        {
+            // A pass's second set of constants (the ACES output transform's), at b1.
+            context.PSSetConstantBuffer(1, second);
+        }
+
         context.PSSetShaderResources(0, _views!);
         context.PSSetSamplers(0, _samplers);
         context.OMSetRenderTargets(target);
@@ -1253,6 +1374,8 @@ public sealed class Compositor : IDisposable
             OutputPixel = ShaderLibrary.PixelShader(device, "Output.hlsl", "PsMain");
             YuvLuma = ShaderLibrary.PixelShader(device, "OutputYuv.hlsl", "PsLuma");
             YuvChroma = ShaderLibrary.PixelShader(device, "OutputYuv.hlsl", "PsChroma");
+            AcesInput = ShaderLibrary.PixelShader(device, "AcesInput.hlsl", "PsMain");
+            OutputWorking = ShaderLibrary.PixelShader(device, "Output.hlsl", "PsWorking");
         }
 
         public ID3D11VertexShader FullScreenVertex { get; }
@@ -1279,8 +1402,14 @@ public sealed class Compositor : IDisposable
 
         public ID3D11PixelShader YuvChroma { get; }
 
+        public ID3D11PixelShader AcesInput { get; }
+
+        public ID3D11PixelShader OutputWorking { get; }
+
         public void Dispose()
         {
+            AcesInput.Dispose();
+            OutputWorking.Dispose();
             YuvChroma.Dispose();
             YuvLuma.Dispose();
             OutputPixel.Dispose();
@@ -1350,13 +1479,25 @@ public sealed class Compositor : IDisposable
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    private struct InputConstants
+    {
+        public Vector4 ToAp1Row0;
+        public Vector4 ToAp1Row1;
+        public Vector4 ToAp1Row2;
+        public uint Kind;
+        public uint Pad0;
+        public uint Pad1;
+        public uint Pad2;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     private struct OutputConstants
     {
         public Vector4 Background;
         public uint Encoding;
         public uint DitherLevels;
         public uint KeepAlpha;
-        public float Padding;
+        public uint Aces;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -1368,7 +1509,7 @@ public sealed class Compositor : IDisposable
         public uint LumaWidth;
         public uint LumaHeight;
         public uint Bits;
-        public uint Pad0;
+        public uint Aces;
         public uint Pad1;
         public uint Pad2;
     }

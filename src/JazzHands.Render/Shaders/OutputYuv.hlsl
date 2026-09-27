@@ -11,6 +11,12 @@
 #include "Common.hlsli"
 #include "Color.hlsli"
 
+// An ACES project (Phase 44): the stack is ACEScg, and the ACES 2.0 output transform, whose
+// constants and tables are bound at b1 and t1, encodes it in place of the usual curve.
+#define ACES_CONSTANTS_REGISTER b1
+#define ACES_TABLE_REGISTER t1
+#include "Aces.hlsli"
+
 #define ENCODE_BT1886 0
 #define ENCODE_SRGB 1
 #define ENCODE_LINEAR 2
@@ -22,7 +28,8 @@ cbuffer YuvConstants : register(b0)
     uint DitherLevels;      // 255 for eight bit, 1023 for ten, 0 for none
     uint2 LumaSize;         // the luma target: where a chroma sample's four pixels are
     uint Bits;              // 8 for R8 targets (NV12), 10 for R16 targets (P010)
-    uint3 Pad;
+    uint Aces;              // 1 for an ACES project's stack, through the output transform at b1
+    uint2 Pad;
 };
 
 Texture2D<float4> Stack : register(t0);
@@ -56,6 +63,11 @@ float3 EncodedAt(int2 pixel)
     float3 colour = stack.rgb + Background.rgb * (1.0 - stack.a);
 
     float3 encoded;
+    if (Aces != 0)
+    {
+        encoded = AcesOutput(RowMul(colour, Ap1ToAp0));
+    }
+    else
     switch (Encoding)
     {
         case ENCODE_SRGB:
