@@ -96,7 +96,7 @@ public sealed class KeyframeGraph : FrameworkElement
         grid.Freeze();
         double dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
 
-        // Five value lines with their numbers, and a tick each second (or each frame when close).
+        // Five value lines with their numbers, and time ticks as close as their labels allow.
         for (int line = 0; line <= 4; line++)
         {
             double value = min + ((max - min) * line / 4);
@@ -106,9 +106,11 @@ public sealed class KeyframeGraph : FrameworkElement
         }
 
         double seconds = model.Length.ToSeconds();
-        double step = seconds <= 2 ? 0.25 : seconds <= 10 ? 1 : seconds <= 60 ? 5 : 30;
-        for (double at = 0; at <= seconds + 1e-9; at += step)
+        double widest = Label(Timecode.FormatClock(model.Length), text, dpi).Width;
+        double step = TickStep(seconds, plot.Width, widest);
+        for (int tick = 0; tick * step <= seconds + 1e-9; tick++)
         {
+            double at = tick * step;
             double x = X(Flicks.FromSeconds(at), plot, model.Length);
             drawingContext.DrawLine(grid, new Point(x, plot.Top), new Point(x, plot.Bottom));
             drawingContext.DrawText(Label(Timecode.FormatClock(Flicks.FromSeconds(at)), text, dpi), new Point(x + 2, plot.Bottom + 3));
@@ -318,6 +320,30 @@ public sealed class KeyframeGraph : FrameworkElement
         normalized ? value.ToString("0.00", CultureInfo.InvariantCulture)
         : Math.Abs(value) >= 100 ? value.ToString("0", CultureInfo.InvariantCulture)
         : value.ToString("0.##", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// The time between ticks: the finest of the usual steps whose labels, each <paramref name="labelWidth"/>
+    /// wide, keep a gap between them across <paramref name="width"/> pixels.
+    /// </summary>
+    internal static double TickStep(double seconds, double width, double labelWidth)
+    {
+        double[] steps = [0.1, 0.25, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1800, 3600];
+        if (seconds <= 0 || width <= 0)
+        {
+            return steps[^1];
+        }
+
+        double pixelsPerSecond = width / seconds;
+        foreach (double step in steps)
+        {
+            if (step * pixelsPerSecond >= labelWidth + 12)
+            {
+                return step;
+            }
+        }
+
+        return steps[^1];
+    }
 
     private Brush Brush(string key, Brush fallback) => TryFindResource(key) as Brush ?? fallback;
 
