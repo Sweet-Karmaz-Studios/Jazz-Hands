@@ -18,8 +18,8 @@ public sealed unsafe class PixelConverter : IDisposable
     private readonly FramePool _pool = new(4);
     private bool _disposed;
 
-    /// <summary>Creates a converter for one fixed conversion.</summary>
-    public PixelConverter(int width, int height, AVPixelFormat from, AVPixelFormat to)
+    /// <summary>Creates a converter for one fixed conversion, to another size when one is given (area averaged).</summary>
+    public PixelConverter(int width, int height, AVPixelFormat from, AVPixelFormat to, int outWidth = 0, int outHeight = 0)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
@@ -27,17 +27,20 @@ public sealed unsafe class PixelConverter : IDisposable
         FfmpegLoader.Initialize();
 
         Width = width;
+        OutWidth = outWidth > 0 ? outWidth : width;
+        OutHeight = outHeight > 0 ? outHeight : height;
         Height = height;
         From = from;
         To = to;
 
         // Same size in and out, so no resampling happens and the filter choice does not matter;
         // point is the one that says so. Accurate rounding because the whole reason this class
-        // exists is to not lose what a 16-bit or float image contains.
-        const int flags = (int)(SwsFlags.SWS_POINT | SwsFlags.SWS_ACCURATE_RND);
+        // exists is to not lose what a 16-bit or float image contains. Another size (analysis at a
+        // network's size) averages areas, which is what shrinking wants.
+        int flags = (int)((OutWidth == width && OutHeight == height ? SwsFlags.SWS_POINT : SwsFlags.SWS_AREA) | SwsFlags.SWS_ACCURATE_RND);
 
         _context = Av.CheckAlloc(
-            ffmpeg.sws_getContext(width, height, from, width, height, to, flags, null, null, null),
+            ffmpeg.sws_getContext(width, height, from, OutWidth, OutHeight, to, flags, null, null, null),
             $"sws_getContext ({from} to {to})");
     }
 
@@ -46,6 +49,12 @@ public sealed unsafe class PixelConverter : IDisposable
 
     /// <summary>The frame height this converter was built for.</summary>
     public int Height { get; }
+
+    /// <summary>The width frames go out at.</summary>
+    public int OutWidth { get; }
+
+    /// <summary>The height frames go out at.</summary>
+    public int OutHeight { get; }
 
     /// <summary>The format frames come in as.</summary>
     public AVPixelFormat From { get; }
@@ -87,8 +96,8 @@ public sealed unsafe class PixelConverter : IDisposable
         try
         {
             AVFrame* output = destination.Handle;
-            output->width = Width;
-            output->height = Height;
+            output->width = OutWidth;
+            output->height = OutHeight;
             output->format = (int)To;
             Av.Check(ffmpeg.av_frame_get_buffer(output, 0), "av_frame_get_buffer");
 

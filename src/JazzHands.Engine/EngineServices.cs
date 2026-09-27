@@ -47,6 +47,8 @@ public static class EngineServices
         services.TryAddSingleton(provider => new Caching.WaveformService(provider.GetRequiredService<Media.Import.CacheManager>()));
         services.TryAddSingleton(provider => new Caching.SceneCutService(provider.GetService<Media.Import.CacheManager>()));
         services.TryAddSingleton(provider => new Caching.TranscriptionService(provider.GetService<Media.Import.CacheManager>()));
+        services.TryAddSingleton(provider => Caching.MatteService.For(provider.GetService<Media.Import.CacheManager>()));
+        services.TryAddSingleton(provider => Caching.SpeechEnhanceService.For(provider.GetService<Media.Import.CacheManager>()));
 
         // What the editor is pointing at. One per host, like the session it belongs to; the
         // selection commands find it here, which is what lets a script select and then act.

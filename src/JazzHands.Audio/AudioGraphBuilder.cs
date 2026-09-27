@@ -278,6 +278,13 @@ public static class AudioGraphBuilder
         long sourceOut = clip.SourceOut.ToSamples(rate, RoundingMode.Nearest);
         var samples = new AudioSourceRef(mediaId, stream.Index, channels);
 
+        // Phase 43: enhanced speech, made ahead, is read in place of the original and mixed with it by
+        // the effect's amount (EnhanceSpeechEffect), which leaves the chain untouched.
+        if (clip.Effects.FirstOrDefault(effect => effect.Enabled && string.Equals(effect.TypeId, Effects.EnhanceSpeechEffect.TypeId, StringComparison.Ordinal)) is { } enhance)
+        {
+            samples = samples with { Enhance = Effects.EnhanceSpeechEffect.Amount(enhance) };
+        }
+
         // Phase 36: at a speed, a clip that keeps its pitch is stretched rather than read like tape;
         // past what the stretcher does well it plays like tape after all.
         double tempo = (double)speedNum / speedDen;

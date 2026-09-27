@@ -24,3 +24,5 @@ Finishing the sound:
 - A test tone (`audio.gen.tone`) or pink noise (`audio.gen.pink-noise`) is a generator clip on a sound track: `clip_add` with `generator`.
 
 `audio_beats` finds a music clip's beats and tempo and marks them on the sequence as beat markers, downbeats flagged; `audio_beat_analysis` answers without marking. Cut to them with `edit_cut_to_beats` (jazz://docs/edit).
+
+AI (on this computer): `audio_enhance_speech` takes noise, room and hum out of speech (DeepFilterNet 3, made once per file); `amount` mixes the original back in. A missing model is refused with `model-missing`; ask the person before `model_download`.

@@ -11,6 +11,7 @@ using JazzHands.Core.Titles;
 using JazzHands.Render.Color;
 using JazzHands.Render.Effects;
 using JazzHands.Render.Effects.Looks;
+using JazzHands.Render.Effects.Keying;
 using JazzHands.Render.Effects.Stabilize;
 using JazzHands.Render.Frames;
 
@@ -59,6 +60,12 @@ public interface IFrameProvider
     /// stabilization; null when it has not.
     /// </summary>
     CameraMotion? Motion(Project project, Clip clip) => null;
+
+    /// <summary>
+    /// The person matte made for a media clip's file (Phase 43) at the source frame it shows at a
+    /// timeline time; null when none has been made.
+    /// </summary>
+    MatteFrame? Matte(Project project, Clip clip, Flicks timelineTime) => null;
 
     /// <summary>
     /// A track's sound at a moment, from 0 to its loudest, for a driver's <c>audio()</c>: the band,
@@ -258,7 +265,7 @@ public static class RenderGraphBuilder
 
             Flicks local = time - clip.Start;
 
-            ImmutableArray<EffectNode> effects = Effects(clip, track, local, time, sequence, options);
+            ImmutableArray<EffectNode> effects = PersonMattes(project, clip, time, Effects(clip, track, local, time, sequence, options), frames);
 
             if (track.Kind == TrackKind.Adjustment)
             {
@@ -330,7 +337,7 @@ public static class RenderGraphBuilder
                 return null;
             }
 
-            return Layer(clip, local, source, frameSize, options, Steady(project, clip, shown, source.Size, frames, options)) with { Effects = Effects(clip, track, local, time, sequence, options) };
+            return Layer(clip, local, source, frameSize, options, Steady(project, clip, shown, source.Size, frames, options)) with { Effects = PersonMattes(project, clip, shown, Effects(clip, track, local, time, sequence, options), frames) };
         }
 
         Transition transition = span.Transition;
@@ -951,6 +958,28 @@ public static class RenderGraphBuilder
         DriverScope.Origin = clip.Start;
 
         return nodes.ToImmutable();
+    }
+
+    /// <summary>
+    /// A clip's person matte effects (Phase 43) with the matte made for its file at this frame:
+    /// each one's runner holds the frame's matte, and without a matte the effect passes the picture
+    /// through. Only a media clip has one.
+    /// </summary>
+    private static ImmutableArray<EffectNode> PersonMattes(Project project, Clip clip, Flicks time, ImmutableArray<EffectNode> effects, IFrameProvider frames)
+    {
+        if (!clip.IsMedia || !effects.Any(node => string.Equals(node.Descriptor.TypeId, PersonMatteEffect.TypeId, StringComparison.Ordinal)))
+        {
+            return effects;
+        }
+
+        if (frames.Matte(project, clip, time) is not { } matte)
+        {
+            return effects;
+        }
+
+        return [.. effects.Select(node => string.Equals(node.Descriptor.TypeId, PersonMatteEffect.TypeId, StringComparison.Ordinal)
+            ? node with { Custom = new PersonMatteRunner(matte, node.Parameters) }
+            : node)];
     }
 
     private static EffectNode? Node(Effect effect, Flicks time, Flicks ownerLength, Flicks sequenceTime, RenderOptions options)

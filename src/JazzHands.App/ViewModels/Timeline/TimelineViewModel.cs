@@ -302,7 +302,7 @@ public sealed partial class TimelineViewModel : DocumentViewModel
     {
         try
         {
-            CommandResult result = await _session.ExecuteAsync(command).ConfigureAwait(true);
+            CommandResult result = await ModelGate.RunAsync(_session, _dialogs, command).ConfigureAwait(true);
             _ui.Post(() => Status = result.Ok ? string.Empty : result.Error ?? result.Code ?? "That did not work.");
             return result.Ok;
         }

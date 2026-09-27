@@ -123,3 +123,24 @@ float4 PsLuma(FullScreenVertex input) : SV_TARGET
     c.a *= matte;
     return FromPerceptual(c);
 }
+
+// A person matte (Phase 43), made ahead in the clip's own pixels (t1, one channel), mapped onto the
+// frame: Values and More.xy the inverse of the layer's placement (target texels to picture pixels),
+// More.zw one over the picture's size; Flags.x 1 to keep the background instead. Out, as PsKey:
+// straight perceptual colour and the matte times the input's alpha.
+float4 PsPersonMatte(FullScreenVertex input) : SV_TARGET
+{
+    float2 texel = input.Position.xy;
+    float2 picture = float2(
+        texel.x * Values.x + texel.y * Values.z + More.x,
+        texel.x * Values.y + texel.y * Values.w + More.y);
+    float2 uv = picture * More.zw;
+    float matte = all(uv >= 0.0) && all(uv <= 1.0) ? Original.SampleLevel(LinearClamp, uv, 0).r : 0.0;
+    if (Flags.x == 1)
+    {
+        matte = 1.0 - matte;
+    }
+
+    float4 c = ToPerceptual(Input.Load(int3(input.Position.xy, 0)));
+    return float4(c.rgb, matte * c.a);
+}

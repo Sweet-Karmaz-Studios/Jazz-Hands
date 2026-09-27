@@ -28,10 +28,13 @@ public sealed class ChromaKeyEffect : VideoEffect
     private static readonly PassDescriptor Key = new("Keying.hlsl", "PsKey");
     private static readonly PassDescriptor Morph = new("Keying.hlsl", "PsMorph");
     private static readonly PassDescriptor Feather = new("Keying.hlsl", "PsFeather");
-    private static readonly PassDescriptor Finish = new("Keying.hlsl", "PsFinish");
+    private static readonly PassDescriptor FinishPass = new("Keying.hlsl", "PsFinish");
+
+    /// <summary>The passes that choke, feather and finish a matte, which the person matte shares.</summary>
+    internal static ImmutableArray<PassDescriptor> MattePasses { get; } = [Morph, Feather, FinishPass];
 
     /// <inheritdoc />
-    public override ImmutableArray<PassDescriptor> Passes { get; } = [Key, Morph, Feather, Finish];
+    public override ImmutableArray<PassDescriptor> Passes { get; } = [Key, Morph, Feather, FinishPass];
 
     /// <summary>A linear premultiplied colour as the key shader's perceptual CbCr.</summary>
     public static Vector2 KeyChroma(Vector4 linear)
@@ -60,8 +63,18 @@ public sealed class ChromaKeyEffect : VideoEffect
             More = new Vector4(parameters.Float("spill"), 0, 0, 0),
         };
         context.Draw(Key, matte, in key, input);
+        Finish(context, matte, output, parameters.Float("choke"), parameters.Float("feather"), parameters.Enum("view") == "matte");
+    }
 
-        float choke = parameters.Float("choke") * context.QualityScale;
+    /// <summary>
+    /// Chokes and feathers a keyed picture's matte (straight perceptual colour, the matte in alpha)
+    /// and writes the result, or the matte itself, as premultiplied linear light. Hands back
+    /// <paramref name="keyed"/>.
+    /// </summary>
+    internal static void Finish(EffectContext context, RenderTarget keyed, RenderTarget output, float chokePixels, float featherPixels, bool viewMatte)
+    {
+        RenderTarget matte = keyed;
+        float choke = chokePixels * context.QualityScale;
         int taps = (int)MathF.Round(MathF.Abs(choke));
         if (taps > 0)
         {
@@ -69,14 +82,14 @@ public sealed class ChromaKeyEffect : VideoEffect
             matte = Separable(context, matte, Morph, (uint)taps, grow, 0.0f);
         }
 
-        float sigma = parameters.Float("feather") * context.QualityScale / 2.0f;
+        float sigma = featherPixels * context.QualityScale / 2.0f;
         if (sigma > 0.25f)
         {
             matte = Separable(context, matte, Feather, (uint)Math.Min(64, (int)MathF.Ceiling(sigma * 3.0f)), 0, sigma);
         }
 
-        var finish = new EffectValues { FlagX = parameters.Enum("view") == "matte" ? 1u : 0u };
-        context.Draw(Finish, output, in finish, matte);
+        var finish = new EffectValues { FlagX = viewMatte ? 1u : 0u };
+        context.Draw(FinishPass, output, in finish, matte);
         context.Return(matte);
     }
 

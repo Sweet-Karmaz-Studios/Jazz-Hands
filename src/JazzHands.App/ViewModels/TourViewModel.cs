@@ -41,7 +41,8 @@ public sealed partial class TourViewModel : ObservableObject
             + "B ripples, N rolls the cut, Y slips and U slides. The toolbar has every tool, its key in the tooltip.", "timeline"),
         new("Make it look right",
             "Select a clip and the Inspector shows everything about it: transform, opacity, crop and its effects. "
-            + "Drag an effect from the Effects panel onto a clip. The stopwatch beside a value animates it.", "inspector"),
+            + "Drag an effect from the Effects panel onto a clip. The stopwatch beside a value animates it. "
+            + "The AI effects remove a background without a green screen and clean up speech, on this computer.", "inspector"),
         new("Sound",
             "The line across a sound clip is its volume: drag it. The small squares at its top corners are its fades. "
             + "The Mixer has a strip for each track, and the master measures loudness as YouTube does.", "timeline"),

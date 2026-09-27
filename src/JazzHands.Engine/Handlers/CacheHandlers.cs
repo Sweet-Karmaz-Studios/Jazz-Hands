@@ -126,6 +126,8 @@ public sealed class ClearCacheHandler : ICommandHandler<ClearCacheCommand>
                 {
                     scenes?.Forget(item.Hash);
                     transcripts?.Forget(item.Hash);
+                    MatteService.For(cache).Delete(item.Hash);
+                    SpeechEnhanceService.For(cache).Delete(item.Hash);
                 }
 
                 if (dropProxies)
@@ -154,6 +156,8 @@ public sealed class ClearCacheHandler : ICommandHandler<ClearCacheCommand>
         {
             scenes?.Clear();
             transcripts?.Clear();
+            MatteService.For(cache).Delete();
+            SpeechEnhanceService.For(cache).Delete();
         }
 
         if (dropProxies)

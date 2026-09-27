@@ -460,6 +460,21 @@ Duck the music under a voice: one track drops by a depth while another has sound
 | `--off` | Take the ducking off the music track. |
 | `--no-save` | Do not write the project back. |
 
+### `jazz audio enhance-speech <project> <clip-id>`
+
+Take noise, room and hum out of speech.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The clip id. |
+
+| Option | Meaning |
+|---|---|
+| `--amount <number>` | How much of the enhanced speech is heard, 0 to 100. Default: 100. Default: 100. |
+| `--off` | Take the effect off instead. |
+| `--no-save` | Do not write the project back. |
+
 ### `jazz audio learn-noise <project> <clip-id>`
 
 Learn a clip's background noise (a fan, hiss, the room) from a stretch with only noise in it, and take it out with noise reduction.
@@ -1265,6 +1280,20 @@ Remove a clip, leaving a gap or closing it.
 | Option | Meaning |
 |---|---|
 | `--ripple` | Close the gap behind it. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz clip remove-background <project> <clip-id>`
+
+Cut a person out of a clip without a green screen.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The clip id. |
+
+| Option | Meaning |
+|---|---|
+| `--off` | Take the effect off instead. |
 | `--no-save` | Do not write the project back. |
 
 ### `jazz clip remove-fillers <project> <clip-id>`

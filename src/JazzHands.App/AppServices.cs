@@ -251,7 +251,8 @@ public static class AppServices
             provider.GetRequiredService<IUiDispatcher>(),
             provider.GetRequiredService<IEffectFavorites>(),
             provider.GetRequiredService<IEffectPreviewImages>(),
-            provider.GetRequiredService<IPreviewEngine>()));
+            provider.GetRequiredService<IPreviewEngine>(),
+            dialogs: provider.GetRequiredService<IDialogService>()));
 
         services.AddSingleton(provider => new ViewModels.Grading.ColorPanelViewModel(
             provider.GetRequiredService<ISession>(),

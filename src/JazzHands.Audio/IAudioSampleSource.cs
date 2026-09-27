@@ -10,7 +10,11 @@ namespace JazzHands.Audio;
 /// For a clip that keeps its pitch at a speed (Phase 36), how its sound is stretched: then positions
 /// are the clip's own samples, read straight, and the engine renders them; null for the file's samples.
 /// </param>
-public readonly record struct AudioSourceRef(string MediaId, int StreamIndex, int Channels, StretchPlan? Stretch = null);
+/// <param name="Enhance">
+/// How much of the stream's enhanced speech (Phase 43, made ahead) is heard in place of the original,
+/// 0 for none to 1 for all of it.
+/// </param>
+public readonly record struct AudioSourceRef(string MediaId, int StreamIndex, int Channels, StretchPlan? Stretch = null, float Enhance = 0);
 
 /// <summary>
 /// A stretch of source samples the graph is about to need, for decoding ahead.

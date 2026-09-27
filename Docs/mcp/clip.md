@@ -22,3 +22,5 @@ Linked clips move together; grouped clips select together. `clip_nest` turns cli
 Speed: `clip_speed_preset` puts a packaged ramp on a clip at a moment: `impact` (slow into it, snap back), `traversal` (speed through `dur`), `rewind` (the seconds before, backwards and fast with a VHS look, on a track above) or `replay` (them again in slow motion with a label). `clip_set_motion_blur` blurs what a clip's animation moves; `clip_set_matte` shows it only through another track.
 
 By what is said: `clip_remove_words` and `clip_remove_fillers` cut words, fillers and long pauses out of a clip (see jazz://docs/speech).
+
+AI (on this computer): `clip_remove_background` cuts a person out of a clip without a green screen (Robust Video Matting, made once per file; choke, feather, invert and matte view on its `video.matte.person` effect). A missing model is refused with `model-missing`; ask the person before `model_download`.

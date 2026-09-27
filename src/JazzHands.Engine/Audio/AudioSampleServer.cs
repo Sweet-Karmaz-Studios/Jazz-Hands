@@ -51,6 +51,8 @@ public sealed class AudioSampleServer : IAudioSampleSource, IDisposable
     private readonly StretchRenderer _stretcher = new();
     private readonly ConcurrentDictionary<(string Media, string Plan), string> _stretchKeys = new();
     private FrozenDictionary<string, ResolvedMedia> _media = NoMedia;
+    private FrozenDictionary<(string Media, int Stream), string> _enhanced = FrozenDictionary<(string Media, int Stream), string>.Empty;
+    private AudioBuffer _scratch = new(2, 1);
     private int _ownerThread = -1;
     private long _readerClock;
     private long _misses;
@@ -113,6 +115,33 @@ public sealed class AudioSampleServer : IAudioSampleSource, IDisposable
             media[item.Id] = new ResolvedMedia(key, path);
         }
 
+        // Enhanced speech made ahead (Phase 43): a WAV of its own for each stream, read as stream 0 of a
+        // source named for the media and stream, which the lookup below maps to without allocating.
+        var enhanced = new Dictionary<(string Media, int Stream), string>();
+        Caching.SpeechEnhanceService speech = Caching.SpeechEnhanceService.For(null);
+        int widest = 2;
+        foreach (MediaItem item in project.Media.Where(item => item.Hash.Length > 0))
+        {
+            foreach (MediaStream stream in item.Info?.Streams.Where(stream => stream.Kind == MediaStreamKind.Audio) ?? [])
+            {
+                string made = speech.PathFor(item.Hash, stream.Index);
+                if (File.Exists(made))
+                {
+                    string id = $"{item.Id}#enhanced{stream.Index}";
+                    media[id] = new ResolvedMedia($"{item.Hash}#dfn{stream.Index}", made);
+                    enhanced[(item.Id, stream.Index)] = id;
+                    widest = Math.Max(widest, stream.Channels);
+                }
+            }
+        }
+
+        if (enhanced.Count > 0 && (_scratch.Channels < widest || _scratch.Capacity < 8192))
+        {
+            _scratch = new AudioBuffer(widest, 8192);
+        }
+
+        Volatile.Write(ref _enhanced, enhanced.ToFrozenDictionary());
+
         Volatile.Write(ref _media, media.ToFrozenDictionary(StringComparer.Ordinal));
     }
 
@@ -134,6 +163,36 @@ public sealed class AudioSampleServer : IAudioSampleSource, IDisposable
         if (source.Stretch is { } plan)
         {
             return ReadStretched(media, source, plan, startSample, destination, offset, frames);
+        }
+
+        // Enhanced speech (Phase 43): the made-ahead sound in place of the original, or the two mixed.
+        if (source.Enhance > 0 && Volatile.Read(ref _enhanced).TryGetValue((source.MediaId, source.StreamIndex), out string? enhancedId))
+        {
+            var enhanced = new AudioSourceRef(enhancedId, 0, source.Channels);
+            if (source.Enhance >= 0.999f)
+            {
+                return Read(enhanced, startSample, destination, offset, frames);
+            }
+
+            bool dry = Read(source with { Enhance = 0 }, startSample, destination, offset, frames);
+            bool wet = true;
+            AudioBuffer scratch = _scratch;
+            for (int done = 0; done < frames; done += scratch.Capacity)
+            {
+                int count = Math.Min(scratch.Capacity, frames - done);
+                wet &= Read(enhanced, startSample + done, scratch, 0, count);
+                for (int channel = 0; channel < channels; channel++)
+                {
+                    Span<float> mixed = destination.Plane(channel, offset + done, count);
+                    ReadOnlySpan<float> made = scratch.Plane(channel, 0, count);
+                    for (int i = 0; i < count; i++)
+                    {
+                        mixed[i] += (made[i] - mixed[i]) * source.Enhance;
+                    }
+                }
+            }
+
+            return dry && wet;
         }
 
         bool ready = true;
@@ -187,6 +246,17 @@ public sealed class AudioSampleServer : IAudioSampleSource, IDisposable
         if (frames <= 0 || !Volatile.Read(ref _media).TryGetValue(source.MediaId, out ResolvedMedia media))
         {
             return;
+        }
+
+        if (source.Stretch is null && source.Enhance > 0 && Volatile.Read(ref _enhanced).TryGetValue((source.MediaId, source.StreamIndex), out string? enhancedId))
+        {
+            Prefetch(new AudioSourceRef(enhancedId, 0, source.Channels), startSample, frames);
+            if (source.Enhance >= 0.999f)
+            {
+                return;
+            }
+
+            source = source with { Enhance = 0 };
         }
 
         if (source.Stretch is { } stretch)

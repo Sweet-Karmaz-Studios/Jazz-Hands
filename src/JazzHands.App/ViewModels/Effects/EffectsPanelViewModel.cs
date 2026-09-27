@@ -161,6 +161,7 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
     private readonly IEffectFavorites _favorites;
     private readonly IEffectPreviewImages? _previews;
     private readonly IPreviewEngine? _playback;
+    private readonly IDialogService? _dialogs;
     private readonly EffectRegistry _registry;
 
     [ObservableProperty]
@@ -187,7 +188,8 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
         IEffectFavorites favorites,
         IEffectPreviewImages? previews = null,
         IPreviewEngine? playback = null,
-        EffectRegistry? registry = null)
+        EffectRegistry? registry = null,
+        IDialogService? dialogs = null)
         : base(PanelId, "Effects")
     {
         ArgumentNullException.ThrowIfNull(session);
@@ -202,6 +204,7 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
         _previews = previews;
         _playback = playback;
         _registry = registry ?? EffectCatalog.Registry;
+        _dialogs = dialogs;
 
         _previews?.Ready += OnPreviewReady;
 
@@ -514,7 +517,7 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
     {
         try
         {
-            CommandResult result = await _session.ExecuteAsync(command).ConfigureAwait(true);
+            CommandResult result = await ModelGate.RunAsync(_session, _dialogs, command).ConfigureAwait(true);
             _ui.Post(() => Status = result.Ok ? string.Empty : result.Error ?? result.Code ?? "That did not work.");
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)

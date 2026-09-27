@@ -290,7 +290,7 @@ public sealed class TranscribeHandler : ICommandHandler<TranscribeCommand>
             catch (FileNotFoundException) when (!ModelStore.IsPresent(ModelStore.Whisper))
             {
                 ModelFile model = ModelStore.Whisper;
-                throw new CommandException("model-missing", string.Create(CultureInfo.InvariantCulture, $"The speech model is not downloaded. `model.download {model.Name}` fetches it ({model.Bytes / 1e9:0.0} GB); ask first."));
+                throw new CommandException("model-missing", string.Create(CultureInfo.InvariantCulture, $"The speech model is not downloaded. `model.download {model.Name}` fetches it ({model.Bytes / 1e9:0.0} GB); ask first."), model.Name);
             }
             catch (Media.Interop.FfmpegException exception)
             {

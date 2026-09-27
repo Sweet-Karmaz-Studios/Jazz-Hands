@@ -331,6 +331,13 @@ public sealed class FrameServer : IFrameProvider, IDisposable
             : null;
 
     /// <inheritdoc />
+    MatteFrame? IFrameProvider.Matte(Project project, Clip clip, Flicks timelineTime) =>
+        clip.MediaId is { } mediaId && project.MediaItem(mediaId) is { Hash.Length: > 0 } item
+            && Caching.MatteService.For(_cacheManager).Cached(item.Hash, clip.SourceStreamIndex) is { } matte
+            ? matte.At(clip.SourceTimeAt(timelineTime))
+            : null;
+
+    /// <inheritdoc />
     double IFrameProvider.AudioLevel(Project project, Sequence sequence, string trackId, Core.Drivers.AudioBand band, double seconds, double attack, double release) =>
         Drivers.AudioLevels.At(project, sequence, trackId, band, seconds, attack, release, _projectPath);
 

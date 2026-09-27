@@ -43,6 +43,12 @@ public interface IDialogService
     /// <summary>Shows the tour, or brings it forward when it is already open. Not modal.</summary>
     void ShowTour();
 
+    /// <summary>
+    /// Asks whether to download a machine learning model a tool needs, saying what it is for, its
+    /// size and its licence: nothing is fetched without the person saying so (Phase 43).
+    /// </summary>
+    Task<bool> AskToDownloadModelAsync(Core.Commands.ModelInfo model);
+
     /// <summary>Shows the scene cuts dialog for a media item, or for a clip of it: find the shot changes, then split, mark or make subclips.</summary>
     Task ShowSceneCutsAsync(string mediaId, string? clipId);
 }
@@ -232,6 +238,23 @@ public sealed class DialogService(
             MessageBoxResult.No => SaveChoice.Discard,
             _ => SaveChoice.Cancel,
         });
+    }
+
+    /// <inheritdoc />
+    public Task<bool> AskToDownloadModelAsync(Core.Commands.ModelInfo model)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        string size = model.Bytes >= 1_000_000_000
+            ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{model.Bytes / 1e9:0.0} GB")
+            : string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{model.Bytes / 1e6:0} MB");
+        MessageBoxResult answer = MessageBox.Show(
+            Application.Current?.MainWindow!,
+            $"This needs the {model.Purpose} model, {model.Name}: {size}, licensed {model.License}.\n\n"
+            + "Download it now? It comes from its project's own release, is checked against a pinned hash, and stays on this computer. Nothing is sent anywhere.",
+            "Download a model",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+        return Task.FromResult(answer == MessageBoxResult.Yes);
     }
 
     /// <inheritdoc />

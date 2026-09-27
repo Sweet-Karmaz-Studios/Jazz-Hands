@@ -205,6 +205,18 @@ public sealed class AddEffectHandler : ICommandHandler<AddEffectCommand>
         EquatableArray<Effect> chain = EffectHelp.Chain(owner);
         EffectHelp.RequireIndex(command.Index, EffectChains.Visible(owner.Clip, chain).Count, insert: true);
 
+        // Removing a background needs the clip's file matted first (Phase 43), whichever surface asks.
+        if (string.Equals(descriptor.TypeId, Render.Effects.Keying.PersonMatteEffect.TypeId, StringComparison.Ordinal) && owner.Clip is { IsMedia: true } clip)
+        {
+            MatteHelp.Ensure(project, clip, context);
+        }
+
+        // So does enhancing speech: the file's sound goes through the network first.
+        if (string.Equals(descriptor.TypeId, JazzHands.Audio.Effects.EnhanceSpeechEffect.TypeId, StringComparison.Ordinal) && owner.Clip is { IsMedia: true } && project.FindClip(owner.Clip.Id) is { } location)
+        {
+            EnhanceHelp.Ensure(project, location, context);
+        }
+
         var effect = new Effect(id, descriptor.TypeId, Enabled: true, EquatableArray<EffectParameter>.Empty);
         context.Changed(id);
         context.Changed(owner.Id);
