@@ -37,6 +37,10 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
     public const string PanelId = "inspector";
 
     private readonly ILogger _log = Log.ForContext<InspectorPanelViewModel>();
+
+    /// <summary>Sections a person folded, by heading: true while folded.</summary>
+    private readonly Dictionary<string, bool> _folded = new(StringComparer.Ordinal);
+
     private readonly ISession _session;
     private readonly SelectionService _selection;
     private readonly IUiDispatcher _ui;
@@ -135,7 +139,42 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         "Centred on the cut, ending at it, or starting at it.",
         Animatable: false, Choices: new EquatableArray<string>(["centered", "end-of-left", "start-of-right"]));
 
+    /// <summary>The fade shapes as the commands spell them, and as the rows offer them.</summary>
+    private static readonly (string Name, Interp Curve)[] FadeCurves =
+    [
+        ("linear", Interp.Linear),
+        ("ease-in-out", Interp.EaseInOut),
+        ("ease-in", Interp.EaseIn),
+        ("ease-out", Interp.EaseOut),
+        ("bezier", Interp.Bezier),
+    ];
+
+    /// <summary>A sound clip's fade in, in seconds, sent as <c>audio.set-fade-in --dur</c>.</summary>
+    internal static ParamDescriptor FadeInLength { get; } = FadeLength("fade-in", "Fade in", "How long the sound takes to rise from silence, in seconds; 0 for none.");
+
+    /// <summary>The fade in's shape, sent as <c>audio.set-fade-in --curve</c>.</summary>
+    internal static ParamDescriptor FadeInShape { get; } = FadeShape("fade-in-shape", "Fade in shape");
+
+    /// <summary>A sound clip's fade out, in seconds, sent as <c>audio.set-fade-out --dur</c>.</summary>
+    internal static ParamDescriptor FadeOutLength { get; } = FadeLength("fade-out", "Fade out", "How long the sound takes to fall to silence at the end, in seconds; 0 for none.");
+
+    /// <summary>The fade out's shape, sent as <c>audio.set-fade-out --curve</c>.</summary>
+    internal static ParamDescriptor FadeOutShape { get; } = FadeShape("fade-out-shape", "Fade out shape");
+
     private Flicks Playhead => _preview?.Position ?? Flicks.Zero;
+
+    private static ParamDescriptor FadeLength(string name, string label, string description) => new(
+        name, ParamType.Float, new ParamValue.Float(0), label, description,
+        Min: 0, Max: 600, SliderMax: 5, Unit: "s", Animatable: false);
+
+    private static ParamDescriptor FadeShape(string name, string label) => new(
+        name, ParamType.Enum, new ParamValue.Enum("linear"), label,
+        "Linear; ease-in-out for a smooth start and end; ease-in to start slowly; ease-out to start quickly; bezier for a steeper S.",
+        Animatable: false, Choices: new EquatableArray<string>([.. FadeCurves.Select(pair => pair.Name)]));
+
+    private static bool IsFadeRow(ParamRowViewModel row) =>
+        ReferenceEquals(row.Descriptor, FadeInLength) || ReferenceEquals(row.Descriptor, FadeInShape)
+        || ReferenceEquals(row.Descriptor, FadeOutLength) || ReferenceEquals(row.Descriptor, FadeOutShape);
 
     /// <summary>Adds an effect to the inspected clip, for a drop from the effects panel.</summary>
     public Task AddEffectAsync(string typeId, int? index = null) =>
@@ -213,7 +252,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
     {
         ArgumentNullException.ThrowIfNull(row);
 
-        if (string.Equals(row.OwnerId, _transitionId, StringComparison.Ordinal))
+        if (string.Equals(row.OwnerId, _transitionId, StringComparison.Ordinal) || IsFadeRow(row))
         {
             Send(row, ParamValues.Format(row.Descriptor.Default));
             return;
@@ -409,13 +448,25 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
                 continue;
             }
 
-            var view = new InspectorSectionViewModel(section.Name);
+            var view = Section(section.Name);
             foreach (ParamDescriptor parameter in section.Params)
             {
                 view.Rows.Add(new ParamRowViewModel(this, clip.Id, parameter, section.Name));
             }
 
             Sections.Add(view);
+        }
+
+        if (found.Track.Kind == TrackKind.Audio)
+        {
+            // The fades are the clip's own, not parameters: their rows send audio.set-fade-in and -out.
+            var fades = Section("Fades");
+            foreach (ParamDescriptor parameter in (ParamDescriptor[])[FadeInLength, FadeInShape, FadeOutLength, FadeOutShape])
+            {
+                fades.Rows.Add(new ParamRowViewModel(this, clip.Id, parameter, fades.Title));
+            }
+
+            Sections.Add(fades);
         }
 
         foreach (Effect effect in EffectChains.Visible(clip, clip.Effects))
@@ -437,6 +488,23 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
     }
 
     /// <summary>
+    /// A section, open or folded as it was the last time one of its name was shown: fold Crop on
+    /// one clip and it stays folded on the next, for as long as the editor runs.
+    /// </summary>
+    private InspectorSectionViewModel Section(string title, bool open = true)
+    {
+        var section = new InspectorSectionViewModel(title) { IsExpanded = _folded.TryGetValue(title, out bool folded) ? !folded : open };
+        section.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(InspectorSectionViewModel.IsExpanded))
+            {
+                _folded[title] = !section.IsExpanded;
+            }
+        };
+        return section;
+    }
+
+    /// <summary>
     /// A title's parameters that are rows rather than the text section's own controls, grouped the
     /// way a person looks for them; the animation channels start folded, as the animation pickers
     /// drive them.
@@ -445,7 +513,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
     {
         foreach ((string heading, string[] names, bool open) in TitleGroups)
         {
-            var view = new InspectorSectionViewModel(heading) { IsExpanded = open };
+            var view = Section(heading, open);
             foreach (string name in names)
             {
                 if (title.Param(name) is { } parameter)
@@ -479,14 +547,14 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         _transitionId = transition.Id;
         _shape = $"transition|{transition.Id}|{transition.TypeId}";
 
-        var timing = new InspectorSectionViewModel("Timing");
+        var timing = Section("Timing");
         timing.Rows.Add(new ParamRowViewModel(this, transition.Id, TransitionDuration, timing.Title));
         timing.Rows.Add(new ParamRowViewModel(this, transition.Id, TransitionAlignmentParam, timing.Title));
         Sections.Add(timing);
 
         foreach (EffectDescriptor section in ParamTargets.Sections(owner, EffectCatalog.Registry))
         {
-            var view = new InspectorSectionViewModel(section.Name);
+            var view = Section(section.Name);
             foreach (ParamDescriptor parameter in section.Params)
             {
                 view.Rows.Add(new ParamRowViewModel(this, transition.Id, parameter, section.Name));
@@ -584,6 +652,36 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         return new SetParamCommand(row.OwnerId, row.Name, text);
     }
 
+    /// <summary>A fade row's value on a clip: the fade's length in seconds, or its shape.</summary>
+    private static ParamValue FadeValue(Clip clip, ParamDescriptor row)
+    {
+        Fade? fade = ReferenceEquals(row, FadeInLength) || ReferenceEquals(row, FadeInShape) ? clip.FadeIn : clip.FadeOut;
+        return ReferenceEquals(row, FadeInLength) || ReferenceEquals(row, FadeOutLength)
+            ? new ParamValue.Float((float)(fade?.Duration ?? Flicks.Zero).ToSeconds())
+            : new ParamValue.Enum(FadeCurves.FirstOrDefault(pair => pair.Curve == (fade?.Curve ?? Interp.Linear)).Name ?? "linear");
+    }
+
+    /// <summary>What a fade row sends for one clip: that fade with the row's half changed and the other half kept.</summary>
+    private ICommand FadeEdit(string clipId, ParamRowViewModel row, string text)
+    {
+        bool fadeIn = ReferenceEquals(row.Descriptor, FadeInLength) || ReferenceEquals(row.Descriptor, FadeInShape);
+        Fade? now = _session.Project.FindClip(clipId) is { } found ? (fadeIn ? found.Clip.FadeIn : found.Clip.FadeOut) : null;
+        Flicks length = now?.Duration ?? Flicks.Zero;
+        Interp curve = now?.Curve ?? Interp.Linear;
+
+        if (row.Descriptor.Type == ParamType.Float)
+        {
+            float seconds = ((ParamValue.Float)ParamValues.Parse(row.Descriptor, text)).Value;
+            length = Flicks.FromSeconds(Math.Round(seconds, 3));
+        }
+        else
+        {
+            curve = FadeCurves.FirstOrDefault(pair => string.Equals(pair.Name, text, StringComparison.Ordinal)) is { Name: not null } chosen ? chosen.Curve : Interp.Linear;
+        }
+
+        return fadeIn ? new SetAudioFadeInCommand(clipId, length, curve) : new SetAudioFadeOutCommand(clipId, length, curve);
+    }
+
     /// <summary>Loads every value from the snapshot, at the playhead, without sending anything.</summary>
     private void RefreshValues()
     {
@@ -643,6 +741,14 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
 
         foreach (ParamRowViewModel row in Sections.SelectMany(section => section.Rows))
         {
+            if (IsFadeRow(row))
+            {
+                ParamValue fade = FadeValue(clip, row.Descriptor);
+                row.Load(fade, AnimatedValue.Constant(fade), clip.Start, clip.Duration, playhead, tolerance);
+                row.IsMixed = _targets.Count > 1 && _targets.Skip(1).Any(target => project.FindClip(target) is { } other && !Equals(FadeValue(other.Clip, row.Descriptor), fade));
+                continue;
+            }
+
             AnimatedValue? stored = ParamTargets.Get(owner, row.Name);
             row.Load(ParamEval.Eval(stored, row.Descriptor, local), stored, clip.Start, clip.Duration, playhead, tolerance);
             row.IsMixed = _targets.Count > 1 && _targets.Skip(1).Any(target => Differs(project, target, row, playhead));
@@ -690,6 +796,13 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
                 if (string.Equals(row.OwnerId, _transitionId, StringComparison.Ordinal))
                 {
                     await RunAsync(TransitionEdit(row, text)).ConfigureAwait(true);
+                    continue;
+                }
+
+                if (IsFadeRow(row))
+                {
+                    ICommand[] fades = [.. TargetsFor(row).Select(target => FadeEdit(target, row, text))];
+                    await RunAsync(fades.Length == 1 ? fades[0] : new BatchCommand([.. fades], $"Set {row.Label}")).ConfigureAwait(true);
                     continue;
                 }
 

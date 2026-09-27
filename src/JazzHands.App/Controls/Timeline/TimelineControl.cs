@@ -486,7 +486,7 @@ public sealed class TimelineControl : FrameworkElement
         {
             Cursor = _model.Cursor switch
             {
-                TimelineCursor.TrimStart or TimelineCursor.TrimEnd => Cursors.SizeWE,
+                TimelineCursor.TrimStart or TimelineCursor.TrimEnd or TimelineCursor.Fade => Cursors.SizeWE,
                 TimelineCursor.Scrub => Cursors.IBeam,
                 TimelineCursor.Move => Cursors.SizeAll,
                 TimelineCursor.Razor => Cursors.Cross,
@@ -825,6 +825,11 @@ public sealed class TimelineControl : FrameworkElement
             DrawImagery(dc, clip, body, visibleStart, visibleEnd, geometry.PixelsPerSecond);
 
             Rect lineBody = VolumeLine.Body(geometry, row, clip);
+            if (FadeHandles.Shown(clip, lineBody))
+            {
+                DrawFades(dc, clip, lineBody);
+            }
+
             if (VolumeLine.Shown(clip, lineBody))
             {
                 DrawVolumeLine(dc, clip, lineBody, width);
@@ -890,6 +895,42 @@ public sealed class TimelineControl : FrameworkElement
             && Width == width
             && ImageryVersion == imageryVersion
             && ReferenceEquals(Palette, palette);
+    }
+
+    /// <summary>
+    /// A sound clip's fades: the part of the body a fade takes is shaded above a ramp from
+    /// silence at the clip's edge to full at the fade's end, and each fade has a handle at the
+    /// top, drawn where <see cref="FadeHandles"/> says so the view model grabs the same spot.
+    /// </summary>
+    private void DrawFades(DrawingContext dc, ClipView clip, Rect body)
+    {
+        TimelineGeometry geometry = _model!.Geometry;
+        Palette palette = _palette!;
+
+        foreach (bool fadeIn in (bool[])[true, false])
+        {
+            Flicks length = fadeIn ? FadeHandles.In(clip) : FadeHandles.Out(clip);
+            if (length > Flicks.Zero)
+            {
+                double edge = fadeIn ? body.Left : body.Right;
+                double end = geometry.XOf(fadeIn ? clip.Start + length : clip.End - length);
+                var shade = new StreamGeometry();
+                using (StreamGeometryContext context = shade.Open())
+                {
+                    context.BeginFigure(new Point(edge, body.Bottom), true, true);
+                    context.LineTo(new Point(edge, body.Top), false, false);
+                    context.LineTo(new Point(end, body.Top), false, false);
+                }
+
+                shade.Freeze();
+                dc.DrawGeometry(palette.FadeShade, null, shade);
+                dc.DrawLine(palette.FadePen, new Point(edge, body.Bottom), new Point(end, body.Top));
+            }
+
+            Point handle = FadeHandles.Handle(geometry, clip, body, fadeIn);
+            double half = FadeHandles.Size / 2;
+            dc.DrawRectangle(palette.FadeHandle, palette.ClipEdge, new Rect(handle.X - half, handle.Y - half, FadeHandles.Size, FadeHandles.Size));
+        }
     }
 
     /// <summary>
@@ -1283,6 +1324,9 @@ public sealed class TimelineControl : FrameworkElement
             Warning = Find("Brush.Warning", Color.FromRgb(0xF2, 0xC1, 0x4E));
             VolumePen = Frozen(new Pen(Find("Brush.Label.Yellow", Color.FromRgb(0xE8, 0xC5, 0x47)), 1.25));
             VolumeHandle = Find("Brush.Label.Yellow", Color.FromRgb(0xE8, 0xC5, 0x47));
+            FadeShade = Frozen(new SolidColorBrush(Color.FromArgb(0x70, 0x00, 0x00, 0x00)));
+            FadePen = Frozen(new Pen(Frozen(new SolidColorBrush(Color.FromArgb(0xC0, 0xFF, 0xFF, 0xFF))), 1.0));
+            FadeHandle = Find("Brush.Text.Primary", Color.FromRgb(0xE8, 0xE9, 0xEC));
         }
 
         public Brush Background { get; }
@@ -1336,6 +1380,15 @@ public sealed class TimelineControl : FrameworkElement
         public Pen VolumePen { get; }
 
         public Brush VolumeHandle { get; }
+
+        /// <summary>Over the part of a sound clip a fade takes.</summary>
+        public Brush FadeShade { get; }
+
+        /// <summary>A fade's ramp.</summary>
+        public Pen FadePen { get; }
+
+        /// <summary>A fade's handle.</summary>
+        public Brush FadeHandle { get; }
 
         public Pen ClipEdge { get; }
 

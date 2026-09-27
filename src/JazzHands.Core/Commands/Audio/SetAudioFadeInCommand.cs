@@ -14,4 +14,9 @@ namespace JazzHands.Core.Commands;
 public sealed record SetAudioFadeInCommand(
     [property: Arg(0, "The clip id")] string ClipId,
     [property: Option("dur", "How long the fade lasts; 0 removes it")] Flicks Duration,
-    [property: Option("curve", "linear, ease-in-out (smooth), ease-in (slow start), ease-out (fast start) or bezier (S curve)")] Interp Curve = Interp.Linear) : ICommand;
+    [property: Option("curve", "linear, ease-in-out (smooth), ease-in (slow start), ease-out (fast start) or bezier (S curve)")] Interp Curve = Interp.Linear) : IMergeableCommand
+{
+    /// <inheritdoc />
+    public bool Continues(ICommand previous) =>
+        previous is SetAudioFadeInCommand before && before.ClipId == ClipId;
+}
