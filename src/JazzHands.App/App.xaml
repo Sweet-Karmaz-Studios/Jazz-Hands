@@ -11,6 +11,7 @@
                 <ResourceDictionary Source="Themes/Controls/Inputs.xaml" />
                 <ResourceDictionary Source="Themes/Controls/Menus.xaml" />
                 <ResourceDictionary Source="Themes/Controls/ScrollBars.xaml" />
+                <ResourceDictionary Source="Themes/Controls/ToolIcons.xaml" />
                 <ResourceDictionary Source="Themes/Icon/Icons.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
