@@ -3646,6 +3646,70 @@ Play when paused, pause when playing.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+## `jazz plugin`
+
+CLAP audio plugins: scan for them, put one on a clip or track, read its parameters, keep its state.
+
+### `jazz plugin add <project> <owner-id> <plugin-id>`
+
+Put a CLAP plugin on a clip or track.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<owner-id>` | The clip or track id. |
+| `<plugin-id>` | The plugin's id, from plugin.list. |
+
+| Option | Meaning |
+|---|---|
+| `--index <n>` | Where in the chain. |
+| `--id <id>` | The identifier to give the effect. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz plugin list <project>`
+
+List the CLAP plugins found on this computer.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+### `jazz plugin params <project> <effect-id>`
+
+List a plugin effect's parameters and their values.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<effect-id>` | The plugin effect's id. |
+
+### `jazz plugin save-state <project> <effect-id>`
+
+Keep a plugin's own state in the project.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<effect-id>` | The plugin effect's id. |
+
+| Option | Meaning |
+|---|---|
+| `--no-save` | Do not write the project back. |
+
+### `jazz plugin scan <project>`
+
+Look for CLAP plugins on this computer.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--folder <folder>` | Another folder to look in. |
+| `--again` | Read every file again, including ones that crashed. |
+| `--no-save` | Do not write the project back. |
+
 ## `jazz presets`
 
 Export presets, built in and your own. Need no project.

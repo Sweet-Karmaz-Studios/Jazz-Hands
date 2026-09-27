@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Audio plugins (Phase 46): CLAP hosted from C# through function pointers, and the bridge to a plugin running in a process of its own.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\JazzHands.Core\JazzHands.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="JazzHands.Plugins.Tests" />
+    <InternalsVisibleTo Include="jazz-plugin-host" />
+    <InternalsVisibleTo Include="JazzHands.Engine" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Serilog" />
+  </ItemGroup>
+
+</Project>

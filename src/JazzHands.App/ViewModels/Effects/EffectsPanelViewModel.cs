@@ -230,6 +230,20 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(typeId);
 
+        // A plugin found on this computer (Phase 46) goes on with plugin.add.
+        if (typeId.StartsWith(PluginPrefix, StringComparison.Ordinal))
+        {
+            string[] owners = [.. _selection.Ids.Where(id => _session.Project.FindClip(id) is { Track.Kind: TrackKind.Audio })];
+            if (owners.Length == 0)
+            {
+                Status = "Select a sound clip for the plugin, or drag it onto one.";
+                return Task.CompletedTask;
+            }
+
+            ICommand[] plugins = [.. owners.Select(id => (ICommand)new AddPluginCommand(id, typeId[PluginPrefix.Length..]))];
+            return RunAsync(plugins.Length == 1 ? plugins[0] : new BatchCommand([.. plugins], "Add plugin"));
+        }
+
         if (_registry.Find(typeId) is not { } descriptor)
         {
             Status = $"There is no effect called '{typeId}'.";
@@ -411,10 +425,44 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
     [RelayCommand]
     private void ClearSearch() => Search = string.Empty;
 
+    /// <summary>A plugin's type id in the browser: this and its CLAP id.</summary>
+    public const string PluginPrefix = "plugin:";
+
+    /// <summary>Looks for CLAP plugins on this computer (<c>plugin.scan</c>), then lists what was found.</summary>
+    [RelayCommand]
+    private async Task ScanPluginsAsync()
+    {
+        Status = "Looking for plugins...";
+        await RunAsync(new ScanPluginsCommand()).ConfigureAwait(true);
+        int found = InstalledPlugins().Count();
+        Refilter();
+        Status = found == 0 ? "No CLAP plugins were found in the standard folders." : JazzHands.Core.Words.Count(found, "plugin") + " found.";
+    }
+
+    /// <summary>The plugins a scan found, as browser entries in a Plugins folder of the sound effects.</summary>
+    private IEnumerable<EffectDescriptor> InstalledPlugins()
+    {
+        PluginInfo[] plugins;
+        try
+        {
+            plugins = _session.Query(new ListPluginsQuery()).Plugins;
+        }
+        catch (Exception exception) when (exception is CommandException or InvalidOperationException)
+        {
+            return [];
+        }
+
+        return plugins
+            .Where(plugin => !plugin.Features.Contains("instrument") || plugin.Features.Contains("audio-effect"))
+            .Select(plugin => new EffectDescriptor(PluginPrefix + plugin.Id, EffectKind.Audio, plugin.Name, "Plugins", $"{plugin.Vendor} {plugin.Version}".Trim(), []));
+    }
+
     private void Refilter()
     {
         string search = Search.Trim();
         IEnumerable<EffectDescriptor> matching = _registry.All
+            .Where(descriptor => descriptor.TypeId != JazzHands.Audio.Effects.PluginEffect.TypeId)
+            .Concat(InstalledPlugins())
             .Where(descriptor => search.Length == 0
                 || descriptor.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
                 || descriptor.Category.Contains(search, StringComparison.OrdinalIgnoreCase)

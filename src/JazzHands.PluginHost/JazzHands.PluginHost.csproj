@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <ApplicationIcon>..\JazzHands.App\Assets\jazz.ico</ApplicationIcon>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>jazz-plugin-host</AssemblyName>
+    <RootNamespace>JazzHands.PluginHost</RootNamespace>
+    <Description>Runs one CLAP plugin in a process of its own for the editor, so a plugin that crashes takes only itself down.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\JazzHands.Plugins\JazzHands.Plugins.csproj" />
+  </ItemGroup>
+
+</Project>

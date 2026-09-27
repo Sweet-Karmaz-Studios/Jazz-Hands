@@ -109,6 +109,7 @@ public static class GeneratedCommands
         "source" => "The source monitor: open a file, mark in and out, play it; edits from it are in clip.",
         "speech" => "Speech to text on this machine: transcribe, and read the words with their times; cut by them in clip.",
         "model" => "The machine learning models: which are downloaded, and fetching one, checked by its SHA-256.",
+        "plugin" => "CLAP audio plugins: scan for them, put one on a clip or track, read its parameters, keep its state.",
         "sequence" => "Sequences: create, rename, set active, their own settings.",
         "subtitle" => "Subtitles: import and export SRT, VTT and ASS; cues, their text, times and place; styles.",
         "timeline" => "The timeline as a whole: describe it, magnetic mode. In and out points are in playback.",

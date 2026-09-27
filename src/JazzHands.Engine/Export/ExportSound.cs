@@ -1,5 +1,6 @@
 using System.Globalization;
 using JazzHands.Audio;
+using JazzHands.Audio.Effects;
 using JazzHands.Core.Model;
 using JazzHands.Core.Time;
 using JazzHands.Engine.Audio;
@@ -23,6 +24,9 @@ internal sealed class ExportSound : IDisposable
 
     private readonly AudioSampleServer _server;
     private readonly AudioGraph _graph;
+
+    // Plugins render offline for an export (Phase 46), and stop with it.
+    private readonly AudioEffectHost _effects = new() { Offline = true };
     private readonly AudioBuffer _buffer;
     private readonly float[][] _planes;
     private readonly (long Start, long Length)[] _stretches;
@@ -39,7 +43,7 @@ internal sealed class ExportSound : IDisposable
         // way into the mix, and the master limiter then sees what is actually written, so the
         // fold cannot push a peak past it.
         ProjectSettings settings = project.SettingsFor(sequence) with { SampleRate = sampleRate, ChannelCount = channels };
-        _graph.Publish(AudioGraphBuilder.Build(project, sequence with { Settings = settings }, toMaster: toMaster));
+        _graph.Publish(AudioGraphBuilder.Build(project, sequence with { Settings = settings }, _effects, toMaster));
         _buffer = new AudioBuffer(channels, Chunk);
         _planes = [.. Enumerable.Range(0, channels).Select(_ => new float[Chunk])];
 
@@ -161,7 +165,11 @@ internal sealed class ExportSound : IDisposable
         return count;
     }
 
-    public void Dispose() => _server.Dispose();
+    public void Dispose()
+    {
+        _effects.Retain(new HashSet<string>());
+        _server.Dispose();
+    }
 
     /// <summary>Where the next output sample is on the sequence, and how many follow it in the same stretch.</summary>
     private (long Start, int Count) Next(int wanted)

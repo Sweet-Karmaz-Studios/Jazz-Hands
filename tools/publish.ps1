@@ -6,8 +6,8 @@
 .DESCRIPTION
   Phase 34. Everything goes to artifacts\release\<version>:
 
-    files\                       JazzHands.exe, jazz.exe, jazz-mcp.exe, self-contained, ReadyToRun,
-                                 untrimmed (WPF and the command registry are not trim safe), with
+    files\                       JazzHands.exe, jazz.exe, jazz-mcp.exe, jazz-plugin-host.exe,
+                                 self-contained, ReadyToRun, untrimmed (WPF and the command registry are not trim safe), with
                                  ffmpeg\ (the FFmpeg DLLs and ffmpeg.exe for the fallback exporter),
                                  Assets\, LICENSE.txt, LICENSES.md, README.md
     JazzHands-<v>-win-x64.msi    the installer (WiX 5, per user; installer\JazzHands.wxs)
@@ -60,6 +60,7 @@ function Publish([string] $project) {
 Publish 'src\JazzHands.App\JazzHands.App.csproj'
 Publish 'src\JazzHands.Cli\JazzHands.Cli.csproj'
 Publish 'src\JazzHands.Mcp\JazzHands.Mcp.csproj'
+Publish 'src\JazzHands.PluginHost\JazzHands.PluginHost.csproj'
 
 # FFmpeg beside the executables, where FfmpegLoader looks first; ffmpeg.exe for the fallback exporter.
 $ffmpegOut = Join-Path $files 'ffmpeg'
@@ -73,7 +74,7 @@ Copy-Item (Join-Path $root 'LICENSES.md') $files
 Copy-Item (Join-Path $root 'README.md') $files
 Get-ChildItem $files -Filter *.pdb | Remove-Item
 
-foreach ($exe in 'JazzHands.exe', 'jazz.exe', 'jazz-mcp.exe') {
+foreach ($exe in 'JazzHands.exe', 'jazz.exe', 'jazz-mcp.exe', 'jazz-plugin-host.exe') {
     if (-not (Test-Path (Join-Path $files $exe))) { throw "$exe is missing from the published files." }
 }
 

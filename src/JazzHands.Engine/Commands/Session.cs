@@ -391,9 +391,27 @@ public sealed class Session : ISessionState, IAsyncDisposable
         _dispatcher.Load(replacement, path, issuer);
         Interlocked.Exchange(ref _savedVersion, _dispatcher.Version);
         AttachRecovery(path);
+        ReportMissingPlugins(replacement);
 
         _log.Information("Session now holds {Project}", path.Length > 0 ? path : replacement.Name);
         return CommandResult.Success(_dispatcher.Version, context.ChangedIds);
+    }
+
+    /// <summary>
+    /// Says which plugin effects in a project just opened name a plugin this computer does not
+    /// have. They are bypassed and kept, so the project plays and saves them as they were.
+    /// </summary>
+    private void ReportMissingPlugins(Project project)
+    {
+        foreach ((string effectId, string pluginId, string library) in Plugins.PluginCatalog.Missing(project))
+        {
+            Notices.Report(
+                effectId,
+                pluginId,
+                Core.Diagnostics.DiagnosticCodes.PluginMissing,
+                $"The plugin {pluginId} is not installed here (its file was {library}). Its effect is bypassed and kept; install it and scan for plugins to hear it.",
+                Core.Diagnostics.DiagnosticLevel.Warning);
+        }
     }
 
     /// <summary>

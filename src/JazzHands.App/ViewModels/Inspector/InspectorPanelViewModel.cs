@@ -44,6 +44,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
     private readonly ISession _session;
     private readonly SelectionService _selection;
     private readonly IUiDispatcher _ui;
+    private readonly Dictionary<string, ParamDescriptor[]> _pluginRows = new(StringComparer.Ordinal);
     private readonly IPreviewEngine? _preview;
     private readonly PointPicker? _picker;
     private readonly Dictionary<ParamRowViewModel, string> _pending = [];
@@ -496,8 +497,10 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         foreach (Effect effect in EffectChains.Visible(clip, clip.Effects))
         {
             EffectDescriptor? descriptor = EffectCatalog.Registry.Find(effect.TypeId);
-            var item = new EffectItemViewModel(this, effect.Id, effect.TypeId, descriptor?.Name ?? effect.TypeId, descriptor is not null);
-            foreach (ParamDescriptor parameter in descriptor?.Params ?? [])
+            bool plugin = effect.TypeId == JazzHands.Audio.Effects.PluginEffect.TypeId;
+            var item = new EffectItemViewModel(this, effect.Id, effect.TypeId, plugin ? PluginName(effect) : descriptor?.Name ?? effect.TypeId, descriptor is not null);
+            IEnumerable<ParamDescriptor> rows = plugin ? PluginRows(effect) : descriptor?.Params ?? [];
+            foreach (ParamDescriptor parameter in rows)
             {
                 item.Rows.Add(new ParamRowViewModel(this, effect.Id, parameter, item.Name));
             }
@@ -509,6 +512,64 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         IsPicture = picture;
         Status = string.Empty;
         RefreshValues();
+    }
+
+    /// <summary>A plugin effect's heading: the plugin's name as the scan found it, or its id.</summary>
+    private string PluginName(Effect effect)
+    {
+        string id = effect.Parameter("plugin") is StaticValue { Value: ParamValue.Text text } ? text.Value : "Plugin";
+        try
+        {
+            return _session.Query(new ListPluginsQuery()).Plugins.FirstOrDefault(plugin => plugin.Id == id)?.Name ?? id;
+        }
+        catch (CommandException)
+        {
+            return id;
+        }
+    }
+
+    /// <summary>
+    /// A plugin effect's own parameters as rows (Phase 46): <c>plugin.params</c> asks the plugin, in
+    /// a process of its own, which takes a moment, so the first time the rows come once it answers;
+    /// after that they are kept for the effect.
+    /// </summary>
+    private ParamDescriptor[] PluginRows(Effect effect)
+    {
+        string key = effect.Id + "|" + (effect.Parameter("plugin") is StaticValue { Value: ParamValue.Text text } ? text.Value : string.Empty);
+        if (_pluginRows.TryGetValue(key, out ParamDescriptor[]? known))
+        {
+            return known;
+        }
+
+        _pluginRows[key] = [];
+        string effectId = effect.Id;
+        _ = Task.Run(() =>
+        {
+            ParamDescriptor[] rows;
+            try
+            {
+                rows = [.. _session.Query(new PluginParamsQuery(effectId)).Select(parameter => new ParamDescriptor(
+                    parameter.Name,
+                    ParamType.Float,
+                    new ParamValue.Float((float)parameter.Default),
+                    parameter.Label,
+                    $"The plugin's {parameter.Label}, {parameter.Min:0.##} to {parameter.Max:0.##}.",
+                    Min: parameter.Min,
+                    Max: parameter.Max))];
+            }
+            catch (CommandException error)
+            {
+                rows = [];
+                _ui.Post(() => Status = error.Message);
+            }
+
+            _ui.Post(() =>
+            {
+                _pluginRows[key] = rows;
+                Rebuild();
+            });
+        });
+        return [];
     }
 
     /// <summary>

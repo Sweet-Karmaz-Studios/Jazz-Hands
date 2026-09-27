@@ -563,6 +563,8 @@ public sealed partial class TimelineViewModel
             ? new AddTitleCommand(Geometry.TimeAt(point.X), TrackId: ownerId)
             : generator
             ? new AddClipCommand(ownerId, Geometry.TimeAt(point.X), GeneratorId: typeId, Name: Engine.Effects.EffectCatalog.Registry.Find(typeId!)!.Name)
+            : typeId is not null && typeId.StartsWith(Effects.EffectsPanelViewModel.PluginPrefix, StringComparison.Ordinal)
+                ? new AddPluginCommand(ownerId, typeId[Effects.EffectsPanelViewModel.PluginPrefix.Length..])
             : typeId is not null
                 ? new AddEffectCommand(ownerId, typeId)
                 : new ApplyEffectPresetCommand(ownerId, presetId!);
@@ -625,6 +627,14 @@ public sealed partial class TimelineViewModel
         if (presetId is not null)
         {
             return (ownerId, $"Apply the preset to {what}.");
+        }
+
+        // A plugin found on this computer (Phase 46): sound only.
+        if (typeId is not null && typeId.StartsWith(Effects.EffectsPanelViewModel.PluginPrefix, StringComparison.Ordinal))
+        {
+            return row.Kind == TrackKind.Audio
+                ? (ownerId, $"Add the plugin to {what}.")
+                : (null, $"Plugins work on sound, and {what} carries a picture.");
         }
 
         if (typeId is null || Engine.Effects.EffectCatalog.Registry.Find(typeId) is not { } descriptor)

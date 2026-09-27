@@ -41,6 +41,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBlock Text="&#xE721;"
                        FontFamily="{DynamicResource Font.Icon}"
@@ -75,6 +76,12 @@
                     Command="{Binding ClearSearchCommand, Mode=OneWay}"
                     ToolTip="Clear the search"
                     AutomationProperties.Name="Clear search" />
+            <Button Grid.Column="3"
+                    Style="{StaticResource Button.Small}"
+                    Content="&#xE72C;"
+                    Command="{Binding ScanPluginsCommand, Mode=OneWay}"
+                    ToolTip="Look for CLAP plugins on this computer; they appear under Audio: Plugins"
+                    AutomationProperties.Name="Scan for plugins" />
         </Grid>
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">

@@ -47,6 +47,14 @@ internal static class ParamHelp
             return descriptor;
         }
 
+        // A plugin's own parameters (Phase 46) are p and their CLAP id, plain values the plugin clamps.
+        if (owner.Kind == ParamOwnerKind.Effect && owner.Effect!.TypeId == JazzHands.Audio.Effects.PluginEffect.TypeId
+            && name.StartsWith(JazzHands.Audio.Effects.PluginEffect.ParameterPrefix, StringComparison.Ordinal)
+            && uint.TryParse(name.AsSpan(1), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out _))
+        {
+            return new ParamDescriptor(name, ParamType.Float, new ParamValue.Float(0), name, "A parameter of the plugin, by its CLAP id; plugin.params names them.", Min: -1e9, Max: 1e9);
+        }
+
         if (owner.Kind == ParamOwnerKind.Effect && EffectCatalog.Registry.Find(owner.Effect!.TypeId) is null)
         {
             throw new CommandException(

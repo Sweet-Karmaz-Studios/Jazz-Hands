@@ -49,6 +49,12 @@ public static class EngineServices
         services.TryAddSingleton(provider => new Caching.TranscriptionService(provider.GetService<Media.Import.CacheManager>()));
         services.TryAddSingleton(provider => Caching.MatteService.For(provider.GetService<Media.Import.CacheManager>()));
         services.TryAddSingleton(provider => Caching.SpeechEnhanceService.For(provider.GetService<Media.Import.CacheManager>()));
+        services.TryAddSingleton(_ => new Plugins.PluginCatalog());
+
+        // Plugins (Phase 46) run in processes of their own, started for the mixer here; one that
+        // cannot start or stops working is bypassed and said in the log.
+        JazzHands.Audio.Effects.PluginEffect.Start ??= Plugins.PluginCatalog.Start;
+        JazzHands.Audio.Effects.PluginEffect.Notice ??= (effectId, message) => Serilog.Log.ForContext<Plugins.PluginCatalog>().Warning("Plugin effect {Effect}: {Message}", effectId, message);
 
         // What the editor is pointing at. One per host, like the session it belongs to; the
         // selection commands find it here, which is what lets a script select and then act.

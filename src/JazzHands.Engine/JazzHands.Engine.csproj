@@ -16,6 +16,9 @@
     <ProjectReference Include="..\JazzHands.Audio\JazzHands.Audio.csproj" />
     <ProjectReference Include="..\JazzHands.Speech\JazzHands.Speech.csproj" />
     <ProjectReference Include="..\JazzHands.Inference\JazzHands.Inference.csproj" />
+    <ProjectReference Include="..\JazzHands.Plugins\JazzHands.Plugins.csproj" />
+    <!-- jazz-plugin-host.exe, which runs each plugin in a process of its own, beside everything that mixes. -->
+    <ProjectReference Include="..\JazzHands.PluginHost\JazzHands.PluginHost.csproj" />
   </ItemGroup>
 
   <ItemGroup>

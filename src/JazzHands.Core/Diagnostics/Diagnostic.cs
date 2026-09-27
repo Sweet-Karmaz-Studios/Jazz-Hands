@@ -51,4 +51,7 @@ public static class DiagnosticCodes
 
     /// <summary>The frame cache is full of pinned frames and cannot honour its budget.</summary>
     public const string FrameCacheOverBudget = "frame-cache-over-budget";
+
+    /// <summary>A plugin effect in the project names a plugin this computer does not have; it is bypassed.</summary>
+    public const string PluginMissing = "plugin-missing";
 }

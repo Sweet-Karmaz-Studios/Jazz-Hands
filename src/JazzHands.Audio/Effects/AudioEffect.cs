@@ -17,9 +17,10 @@ namespace JazzHands.Audio.Effects;
 public readonly ref struct AudioEffectBlock
 {
     /// <summary>Creates a block.</summary>
-    public AudioEffectBlock(AudioBuffer buffer, int offset, int frames, int channels, int sampleRate, ReadOnlySpan<float> from, ReadOnlySpan<float> to, AudioBuffer? key = null)
+    public AudioEffectBlock(AudioBuffer buffer, int offset, int frames, int channels, int sampleRate, ReadOnlySpan<float> from, ReadOnlySpan<float> to, AudioBuffer? key = null, long time = 0)
     {
         Key = key;
+        Time = time;
         Buffer = buffer;
         Offset = offset;
         Frames = frames;
@@ -43,6 +44,9 @@ public readonly ref struct AudioEffectBlock
 
     /// <summary>The rate.</summary>
     public int SampleRate { get; }
+
+    /// <summary>The owner's sample at the block's start, for effects that evaluate their own automation (a plugin's parameters).</summary>
+    public long Time { get; }
 
     /// <summary>Each parameter at the block's first sample, in declared order.</summary>
     public ReadOnlySpan<float> From { get; }
@@ -213,7 +217,7 @@ public sealed class AudioEffectSlot
             _to[index] = curve.IsConstant ? curve.Evaluate(time) : curve.Evaluate(time + frames);
         }
 
-        Effect.Process(new AudioEffectBlock(buffer, offset, frames, channels, sampleRate, _from, _to, key));
+        Effect.Process(new AudioEffectBlock(buffer, offset, frames, channels, sampleRate, _from, _to, key, time));
         Effect.Next = time + frames;
 
         if (last is not null && last.Length == _params.Length)
@@ -242,6 +246,9 @@ public sealed class AudioEffectHost
 
     /// <summary>The effect types it can make.</summary>
     public EffectRegistry Registry { get; }
+
+    /// <summary>True for a graph that renders an export: plugins are told they render offline (Phase 46).</summary>
+    public bool Offline { get; init; }
 
     /// <summary>
     /// The chain for a list of effects: enabled sound effects this build has, in order. Keyframe
@@ -283,6 +290,13 @@ public sealed class AudioEffectHost
                     live.Effect.Text(text.Name, effect.Parameter(text.Name) is StaticValue { Value: ParamValue.Text value } ? value.Value : string.Empty);
                 }
 
+                if (live.Effect is PluginEffect plugin)
+                {
+                    plugin.EffectId = effect.Id;
+                    plugin.Offline = Offline;
+                    plugin.Automate(PluginCurves(effect, sampleRate));
+                }
+
                 live.Effect.Last ??= new float[descriptor.Params.Length];
                 keep.Add(effect.Id);
                 slots.Add(new AudioEffectSlot(effect.Id, live.Effect, Curves(descriptor, effect, sampleRate))
@@ -309,8 +323,41 @@ public sealed class AudioEffectHost
                 return;
             }
 
+            foreach ((string id, (string TypeId, AudioEffect Effect) live) in _live.Where(entry => !used.Contains(entry.Key)))
+            {
+                (live.Effect as PluginEffect)?.Stop();
+            }
+
             _live = _live.Where(entry => used.Contains(entry.Key)).ToDictionary(StringComparer.Ordinal);
         }
+    }
+
+    /// <summary>A plugin effect's own parameters (<c>p&lt;id&gt;</c>) as curves, by their CLAP ids.</summary>
+    private static List<(uint Id, ScalarCurve Curve)> PluginCurves(Effect effect, int sampleRate)
+    {
+        var curves = new List<(uint Id, ScalarCurve Curve)>();
+        foreach (EffectParameter parameter in effect.Parameters)
+        {
+            if (!parameter.Name.StartsWith(PluginEffect.ParameterPrefix, StringComparison.Ordinal)
+                || !uint.TryParse(parameter.Name.AsSpan(PluginEffect.ParameterPrefix.Length), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out uint id))
+            {
+                continue;
+            }
+
+            ScalarCurve? curve = parameter.Value switch
+            {
+                StaticValue { Value: ParamValue.Float value } => ScalarCurve.Constant(value.Value),
+                KeyframedValue { Keyframes.IsEmpty: false } keyed => ScalarCurve.From(keyed, 0f, sampleRate),
+                _ => null,
+            };
+
+            if (curve is not null)
+            {
+                curves.Add((id, curve));
+            }
+        }
+
+        return curves;
     }
 
     /// <summary>A parameter as the number the audio thread reads, at its declared type and inside its limits.</summary>

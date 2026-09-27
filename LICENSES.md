@@ -79,6 +79,14 @@ ship it beside the GPL FFmpeg is a question to settle before a release that incl
 used from Phase 43; Docs/HANDOFF.md, Open items). The alternative is the copy Windows itself
 carries in System32, if ONNX Runtime accepts its version.
 
+## Audio plugins
+
+Jazz Hands hosts CLAP plugins (Phase 46) through the CLAP 1.2.10 headers, MIT licensed
+(<https://github.com/free-audio/clap>). The headers are only read to write the C# declarations and
+to build the test plugins (`tools/get-clap.ps1`, into `third_party/clap`, which is not committed);
+nothing of CLAP is shipped. The test plugins (`tools/clap-test-plugins`) are ours. Plugins a person
+installs keep their own licences and run in a process of their own.
+
 ## Fonts and icons
 
 No fonts are shipped: titles use the fonts installed in Windows (Segoe UI by default) or a
