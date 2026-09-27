@@ -15,6 +15,7 @@
         xmlns:timeline="clr-namespace:JazzHands.App.Views.Timeline"
         xmlns:timelinevm="clr-namespace:JazzHands.App.ViewModels.Timeline"
         xmlns:shell="clr-namespace:JazzHands.App.Shell"
+        xmlns:jazzcontrols="clr-namespace:JazzHands.App.Controls"
         xmlns:export="clr-namespace:JazzHands.App.Views.Export"
         xmlns:exportvm="clr-namespace:JazzHands.App.ViewModels.Export"
         xmlns:remote="clr-namespace:JazzHands.App.Views.Remote"
@@ -121,14 +122,16 @@
         </Grid.RowDefinitions>
 
         <!-- The menu is the main viewmodel's, built from the keymap so each item shows the keys
-             bound to it now. Ticks are read as a menu opens (MenuOpened in code-behind). -->
-        <Menu Grid.Row="0"
+             bound to it now. Ticks are read as a menu opens (MenuOpened in code-behind). A queued
+             menu, so a screen reader's Invoke of an item that opens a file picker returns. -->
+        <jazzcontrols:QueuedMenu Grid.Row="0"
+              Style="{StaticResource {x:Type Menu}}"
               ItemsSource="{Binding Menu, Mode=OneWay}"
               MenuItem.SubmenuOpened="OnSubmenuOpened"
               ItemContainerStyle="{StaticResource MenuItem.FromViewModel}"
               Background="{DynamicResource Brush.Background.Raised}"
               Foreground="{DynamicResource Brush.Text.Primary}">
-        </Menu>
+        </jazzcontrols:QueuedMenu>
 
         <!--
             Phase 27 turns this into the full shell: every panel, the workspaces, and a layout
