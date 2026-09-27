@@ -27,7 +27,7 @@
                    Margin="0,0,0,12"
                    TextWrapping="Wrap"
                    Foreground="{DynamicResource Brush.Text.Secondary}"
-                   Text="These files are not where the project says. Jazz Hands looked in the project's folder and where they were; add the folder they went to if it is somewhere else." />
+                   Text="{Binding Intro, Mode=OneWay}" />
 
         <ListBox Grid.Row="1"
                  ItemsSource="{Binding Rows, Mode=OneWay}"

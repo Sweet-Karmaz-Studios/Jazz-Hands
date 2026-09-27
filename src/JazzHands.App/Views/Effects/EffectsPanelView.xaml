@@ -52,6 +52,23 @@
                      Text="{Binding Search, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                      ToolTip="Search effects by name, folder or id"
                      AutomationProperties.Name="Search effects" />
+            <TextBlock Grid.Column="1"
+                       Margin="7,0,0,0"
+                       VerticalAlignment="Center"
+                       IsHitTestVisible="False"
+                       Text="Search effects"
+                       Foreground="{DynamicResource Brush.Text.Disabled}">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Search, Mode=OneWay}" Value="">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
             <Button Grid.Column="2"
                     Style="{StaticResource Button.Small}"
                     Content="&#xE711;"

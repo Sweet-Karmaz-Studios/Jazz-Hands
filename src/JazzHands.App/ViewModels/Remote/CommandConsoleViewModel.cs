@@ -110,6 +110,10 @@ public sealed partial class CommandConsoleViewModel : ToolViewModel
     [ObservableProperty]
     private string _selectedOrigin = AllOrigins;
 
+    /// <summary>Shows the lines every client sends to connect and poll; off, so the commands stand out.</summary>
+    [ObservableProperty]
+    private bool _showHandshakes;
+
     [ObservableProperty]
     private ConsoleEntry? _selectedEntry;
 
@@ -462,7 +466,26 @@ public sealed partial class CommandConsoleViewModel : ToolViewModel
         UpdateStatus();
     }
 
-    private bool Passes(ConsoleEntry entry) => SelectedOrigin == AllOrigins || entry.Origin == SelectedOrigin;
+    /// <summary>The methods a client sends to connect and to poll, not to do anything.</summary>
+    public static IReadOnlySet<string> Handshakes { get; } = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "session.hello", "session.info", "session.subscribe", "session.unsubscribe", "session.project", "playback.state",
+    };
+
+    /// <summary>
+    /// Whether a line shows: from the origin picked (or any), and not another client's handshake
+    /// unless those are asked for. Lines typed here always show.
+    /// </summary>
+    public static bool Shows(ConsoleEntry entry, string origin, bool handshakes)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        return (origin == AllOrigins || entry.Origin == origin)
+            && (handshakes || entry.Origin == "console" || !Handshakes.Contains(entry.Method));
+    }
+
+    private bool Passes(ConsoleEntry entry) => Shows(entry, SelectedOrigin, ShowHandshakes);
+
+    partial void OnShowHandshakesChanged(bool value) => OnSelectedOriginChanged(SelectedOrigin);
 
     private void Recall(string line)
     {

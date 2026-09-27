@@ -89,7 +89,25 @@
                      Margin="6,0"
                      VerticalContentAlignment="Center"
                      Text="{Binding Search, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                     ToolTip="Search names, tags, folders, codecs and stream titles." />
+                     ToolTip="Search names, tags, folders, codecs and stream titles."
+                     AutomationProperties.Name="Search media" />
+            <TextBlock Grid.Column="1"
+                       Margin="10,0,0,0"
+                       VerticalAlignment="Center"
+                       IsHitTestVisible="False"
+                       Text="Search media"
+                       Foreground="{DynamicResource Brush.Text.Disabled}">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Search, Mode=OneWay}" Value="">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
 
             <StackPanel Grid.Column="2" Orientation="Horizontal">
                 <RadioButton Content="List"

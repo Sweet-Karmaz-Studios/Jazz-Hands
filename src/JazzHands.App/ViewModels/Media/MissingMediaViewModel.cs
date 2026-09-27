@@ -62,6 +62,13 @@ public sealed partial class MissingMediaViewModel : ObservableObject
     [ObservableProperty]
     private bool _isBusy;
 
+    /// <summary>What the dialog says at the top: what the list is, or that there is nothing to do.</summary>
+    [ObservableProperty]
+    private string _intro = MissingIntro;
+
+    /// <summary>The top line when files are missing.</summary>
+    public const string MissingIntro = "These files are not where the project says. Jazz Hands looked in the project's folder and where they were; add the folder they went to if it is somewhere else.";
+
     /// <summary>A dialog over a session.</summary>
     public MissingMediaViewModel(ISession session, IFileDialogService files, IUiDispatcher ui)
     {
@@ -110,6 +117,7 @@ public sealed partial class MissingMediaViewModel : ObservableObject
         Status = missing.Length == 0
             ? "Nothing is missing."
             : $"{missing.Length} missing; {found} found and can be relinked at once.";
+        Intro = missing.Length == 0 ? "Every file this project uses is where it says. There is nothing to relink." : MissingIntro;
         IsBusy = false;
         FindAllCommand.NotifyCanExecuteChanged();
     }

@@ -231,10 +231,10 @@ public sealed partial class MixerPanelViewModel : ToolViewModel, IDisposable, Sh
 
     public void Dispose() => _timer?.Dispose();
 
-    /// <summary>A fader's value as its label: signed, one decimal, or -inf at the bottom.</summary>
+    /// <summary>A fader's value as its label, with its unit: signed, one decimal, or -inf at the bottom.</summary>
     public static string FormatDb(double db) => db <= FaderFloorDb
-        ? "-inf"
-        : db.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture);
+        ? "-inf dB"
+        : db.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture) + " dB";
 
     /// <summary>A pan as its label: C, or L or R and how far, out of 100.</summary>
     public static string FormatPan(double pan) => Math.Abs(pan) < 0.005

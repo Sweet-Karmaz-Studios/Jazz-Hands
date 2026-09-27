@@ -29,12 +29,20 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <ComboBox Grid.Column="0"
-                      MinWidth="110"
-                      ItemsSource="{Binding Origins, Mode=OneWay}"
-                      SelectedItem="{Binding SelectedOrigin, Mode=TwoWay}"
-                      ToolTip="Show the lines from one origin"
-                      AutomationProperties.Name="Filter by origin" />
+            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                <ComboBox Style="{StaticResource ComboBox.Compact}"
+                          MinWidth="110"
+                          ItemsSource="{Binding Origins, Mode=OneWay}"
+                          SelectedItem="{Binding SelectedOrigin, Mode=TwoWay}"
+                          ToolTip="Show the lines from one origin"
+                          AutomationProperties.Name="Filter by origin" />
+                <ToggleButton Style="{StaticResource Button.Text}"
+                              Margin="4,0,0,0"
+                              Content="Handshakes"
+                              IsChecked="{Binding ShowHandshakes, Mode=TwoWay}"
+                              ToolTip="Show the connection and polling lines (session.hello, session.info, playback.state) every jazz --attach and MCP client sends"
+                              AutomationProperties.Name="Show handshakes" />
+            </StackPanel>
             <TextBlock Grid.Column="1"
                        Margin="8,0"
                        VerticalAlignment="Center"
