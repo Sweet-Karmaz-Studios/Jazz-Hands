@@ -25,9 +25,12 @@ public sealed record WheelsGrade(
     /// <summary>The grade that changes nothing.</summary>
     public static WheelsGrade Neutral { get; } = new(Vector4.Zero, Vector4.Zero, Vector4.Zero, 1);
 
+    /// <summary>The top of the domain the grade works in, where its result is held: 1 for sRGB, about 1.468 for ACEScct.</summary>
+    public float Top { get; init; } = 1;
+
     /// <summary>
-    /// A sRGB-encoded colour through the grade, as <c>PsWheels</c> in Grading.hlsl has it, down to
-    /// the order: offset, gain, lift, gamma, contrast, saturation, then held inside 0 to 1.
+    /// An encoded colour through the grade, as <c>PsWheels</c> in Grading.hlsl has it, down to the
+    /// order: offset, gain, lift, gamma, contrast, saturation, then held inside 0 to <see cref="Top"/>.
     /// </summary>
     public Vector3 Apply(Vector3 v)
     {
@@ -43,7 +46,7 @@ public sealed record WheelsGrade(
         v = ((v - new Vector3(Pivot)) * Contrast) + new Vector3(Pivot);
         float luma = Vector3.Dot(v, new Vector3(0.2126f, 0.7152f, 0.0722f));
         v = Vector3.Lerp(new Vector3(luma), v, Saturation);
-        return Vector3.Clamp(v, Vector3.Zero, Vector3.One);
+        return Vector3.Clamp(v, Vector3.Zero, new Vector3(Top));
     }
 
     private static Vector3 Xyz(Vector4 value) => new(value.X, value.Y, value.Z);
@@ -85,11 +88,12 @@ public static class ShotMatch
     /// both premultiplied linear BT.709, four floats a pixel. Offset, contrast and pivot are
     /// taken from <paramref name="held"/> and kept.
     /// </summary>
-    public static WheelsGrade Solve(ReadOnlySpan<float> frame, ReadOnlySpan<float> reference, WheelsGrade? held = null)
+    public static WheelsGrade Solve(ReadOnlySpan<float> frame, ReadOnlySpan<float> reference, WheelsGrade? held = null, GradingDomain? domain = null)
     {
-        WheelsGrade start = held ?? WheelsGrade.Neutral;
-        Vector3[] samples = Sample(frame);
-        Vector3[] wanted = Sample(reference);
+        domain ??= GradingDomain.Srgb;
+        WheelsGrade start = (held ?? WheelsGrade.Neutral) with { Top = domain.Top };
+        Vector3[] samples = Sample(frame, domain);
+        Vector3[] wanted = Sample(reference, domain);
         if (samples.Length == 0 || wanted.Length == 0)
         {
             return start;
@@ -99,7 +103,7 @@ public static class ShotMatch
         // one channel at a time, is what each channel's own fit starts from.
         WheelsGrade heldOnly = start with { Lift = Vector4.Zero, Gamma = Vector4.Zero, Gain = Vector4.Zero, Saturation = 1 };
         double[][] target = [.. Enumerable.Range(0, 3).Select(channel => QuantilesOf(wanted, channel))];
-        double[] targetChroma = ChromaQuantiles(wanted);
+        double[] targetChroma = ChromaQuantiles(wanted, domain);
         double[][] source = [.. Enumerable.Range(0, 3).Select(channel => QuantilesOf(samples, channel))];
 
         var fit = new double[10];
@@ -130,7 +134,7 @@ public static class ShotMatch
         }
 
         double[] joint = NelderMead.Minimize(
-            p => Mismatch(Grade(start, p), samples, target, targetChroma) + Penalty(p.AsSpan(0, 9)) + (Pull * (p[9] - 1) * (p[9] - 1)),
+            p => Mismatch(Grade(start, p), samples, target, targetChroma, domain) + Penalty(p.AsSpan(0, 9)) + (Pull * (p[9] - 1) * (p[9] - 1)),
             fit,
             0.03,
             900);
@@ -138,9 +142,10 @@ public static class ShotMatch
         return Tidy(Grade(start, joint));
     }
 
-    /// <summary>The frame's pixels, straight and sRGB-encoded, about <see cref="Samples"/> of them spread evenly.</summary>
-    public static Vector3[] Sample(ReadOnlySpan<float> premultiplied)
+    /// <summary>The frame's pixels, straight and encoded as the wheels see them, about <see cref="Samples"/> of them spread evenly.</summary>
+    public static Vector3[] Sample(ReadOnlySpan<float> premultiplied, GradingDomain? domain = null)
     {
+        domain ??= GradingDomain.Srgb;
         int pixels = premultiplied.Length / 4;
         if (pixels == 0)
         {
@@ -158,15 +163,15 @@ public static class ShotMatch
 
             Vector3 linear = ColorDifference.Straight(premultiplied, pixel);
             samples.Add(Vector3.Clamp(
-                new Vector3(ColorDifference.ToSrgb(linear.X), ColorDifference.ToSrgb(linear.Y), ColorDifference.ToSrgb(linear.Z)),
+                new Vector3(domain.Encode(linear.X), domain.Encode(linear.Y), domain.Encode(linear.Z)),
                 Vector3.Zero,
-                Vector3.One));
+                new Vector3(domain.Top)));
         }
 
         return [.. samples];
     }
 
-    private static double Mismatch(WheelsGrade grade, Vector3[] samples, double[][] target, double[] targetChroma)
+    private static double Mismatch(WheelsGrade grade, Vector3[] samples, double[][] target, double[] targetChroma, GradingDomain domain)
     {
         var graded = new Vector3[samples.Length];
         for (int index = 0; index < samples.Length; index++)
@@ -185,7 +190,7 @@ public static class ShotMatch
             }
         }
 
-        double[] chroma = ChromaQuantiles(graded);
+        double[] chroma = ChromaQuantiles(graded, domain);
         for (int k = 0; k < Quantiles; k++)
         {
             double difference = chroma[k] - targetChroma[k];
@@ -202,10 +207,10 @@ public static class ShotMatch
         return Quantile(sorted);
     }
 
-    private static double[] ChromaQuantiles(Vector3[] encoded)
+    private static double[] ChromaQuantiles(Vector3[] encoded, GradingDomain domain)
     {
-        float[] sorted = [.. encoded.Select(value => ColorDifference.Chroma(new Vector3(
-            ColorDifference.FromSrgb(value.X), ColorDifference.FromSrgb(value.Y), ColorDifference.FromSrgb(value.Z))))];
+        float[] sorted = [.. encoded.Select(value => ColorDifference.Chroma(domain.ToRec709(new Vector3(
+            domain.Decode(value.X), domain.Decode(value.Y), domain.Decode(value.Z)))))];
         Array.Sort(sorted);
         return Quantile(sorted);
     }
@@ -375,4 +380,32 @@ internal static class NelderMead
         Array.Sort(values, points);
         return points[0];
     }
+}
+
+/// <summary>
+/// What the Colour Wheels work on (Phase 44): sRGB-encoded linear BT.709 in a display-referred
+/// project, ACEScct of ACEScg in an ACES one; with the way back, where the grade is held, and the
+/// way to linear BT.709 for judging colourfulness.
+/// </summary>
+/// <param name="Encode">Linear light to what the wheels see.</param>
+/// <param name="Decode">What the wheels see back to linear light.</param>
+/// <param name="Top">Where the wheels' result is held.</param>
+/// <param name="ToRec709">The domain's linear light as linear BT.709.</param>
+public sealed record GradingDomain(Func<float, float> Encode, Func<float, float> Decode, float Top, Func<Vector3, Vector3> ToRec709)
+{
+    /// <summary>A display-referred project's: sRGB, up to 1.</summary>
+    public static GradingDomain Srgb { get; } = new(ColorDifference.ToSrgb, ColorDifference.FromSrgb, 1, linear => linear);
+
+    /// <summary>An ACES project's: ACEScct of ACEScg, up to its top.</summary>
+    public static GradingDomain Acescct { get; } = new(
+        linear => (float)Aces.AcesInput.ToAcescct(linear),
+        cct => (float)Aces.AcesInput.FromAcescct(cct),
+        1.4679964f,
+        ap1 =>
+        {
+            Aces.D3 rec709 = new Aces.D3(ap1.X, ap1.Y, ap1.Z) * Ap1ToRec709;
+            return new Vector3((float)rec709.X, (float)rec709.Y, (float)rec709.Z);
+        });
+
+    private static readonly Aces.M33 Ap1ToRec709 = Aces.Chromaticities.Ap1.To(Aces.Chromaticities.Rec709);
 }

@@ -69,6 +69,34 @@
                        FontSize="{DynamicResource Text.Caption}"
                        Foreground="{DynamicResource Brush.Warning}" />
 
+            <!-- Colour management: the project's pipeline, and in ACES how the clip comes in. -->
+            <Grid Margin="0,10,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Row="0" Style="{StaticResource Label}" Margin="0,0,8,0" Text="Project" />
+                <ComboBox Grid.Row="0" Grid.Column="1" HorizontalAlignment="Left" MinWidth="200"
+                          ItemsSource="{Binding PipelineChoices, Mode=OneWay}"
+                          SelectedItem="{Binding Pipeline, Mode=TwoWay}"
+                          DisplayMemberPath="Label"
+                          ToolTip="Display referred shows pictures as they are; ACES brings each clip in through its input transform, grades in ACEScct and shows through the ACES 2.0 output transform"
+                          AutomationProperties.Name="Colour management" />
+                <TextBlock Grid.Row="1" Style="{StaticResource Label}" Margin="0,4,8,0" Text="Input"
+                           Visibility="{Binding ShowInput, Mode=OneWay, Converter={StaticResource Visible}}" />
+                <ComboBox Grid.Row="1" Grid.Column="1" Margin="0,4,0,0" HorizontalAlignment="Left" MinWidth="200"
+                          ItemsSource="{Binding InputChoices, Mode=OneWay}"
+                          SelectedItem="{Binding Input, Mode=TwoWay}"
+                          DisplayMemberPath="Label"
+                          Visibility="{Binding ShowInput, Mode=OneWay, Converter={StaticResource Visible}}"
+                          ToolTip="What this clip is, so ACES brings it in right: a camera's log, sRGB for captures and graphics, or a picture already made for a display"
+                          AutomationProperties.Name="Input transform" />
+            </Grid>
+
             <!-- The node graph: the grade as nodes, serial and parallel. -->
             <StackPanel Margin="0,10,0,0" Visibility="{Binding HasClip, Mode=OneWay, Converter={StaticResource Visible}}">
                 <DockPanel LastChildFill="False">

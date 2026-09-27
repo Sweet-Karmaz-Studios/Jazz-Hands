@@ -58,6 +58,15 @@ public static class ExportPlanner
                 ? "The project has no sequence to export."
                 : $"No sequence with id '{request.SequenceId}'.");
 
+        // An ACES project rendered for HDR10 would need a ten bit BT.2100 PQ encode with its HDR
+        // signalling, which the export pipeline does not write yet (Phase 44).
+        if (project.Settings.ColorManagement is { IsAces: true, Output: AcesOutput.Hdr10 })
+        {
+            throw new CommandException(
+                "hdr-export-unavailable",
+                "This ACES project is rendered for HDR10, and Jazz Hands cannot write HDR video yet. Set the output to Rec.709 to export: jazz project set-color-management --output rec709.");
+        }
+
         // Burning subtitles in draws them into every picture, so there is nothing to copy.
         ImmutableArray<TimeRange> ranges = Ranges(sequence, request.UseInOut, request.Range);
         bool burn = request.Subtitles == SubtitleDelivery.Burn && SubtitleTracks(sequence, ranges).Length > 0;

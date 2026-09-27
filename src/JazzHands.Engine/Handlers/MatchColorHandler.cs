@@ -48,7 +48,9 @@ public sealed class MatchColorHandler : ICommandHandler<MatchColorCommand>
             throw new CommandException("blank-frame", "One of the frames is black all over, so there is no colour to match; pick another frame with --at or --reference-at.");
         }
 
-        WheelsGrade grade = ShotMatch.Solve(frame.Linear, wanted.Linear, held);
+        // An ACES project's wheels work on ACEScct of ACEScg, which is what its frames read back as.
+        GradingDomain domain = project.Settings.ColorManagement is { IsAces: true } ? GradingDomain.Acescct : GradingDomain.Srgb;
+        WheelsGrade grade = ShotMatch.Solve(frame.Linear, wanted.Linear, held, domain);
         Effect graded = wheels
             .WithParameter("lift", AnimatedValue.Constant(new ParamValue.Float4(grade.Lift)))
             .WithParameter("gamma", AnimatedValue.Constant(new ParamValue.Float4(grade.Gamma)))

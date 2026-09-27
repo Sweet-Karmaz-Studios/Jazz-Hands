@@ -421,6 +421,7 @@ public sealed partial class ColorPanelViewModel : ToolViewModel
                 ? node?.Effect is { TypeId: "color.curves" } nodeCurves ? nodeCurves : null
                 : found?.Clip.Effects.FirstOrDefault(effect => effect.TypeId == "color.curves");
             LoadMatchChoices(project, found);
+            LoadColorManagement(project, found?.Clip);
             WheelsId = wheels?.Id;
             CurvesId = curves?.Id;
 
