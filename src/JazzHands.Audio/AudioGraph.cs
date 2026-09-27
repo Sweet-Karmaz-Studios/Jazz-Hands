@@ -457,12 +457,14 @@ public sealed class AudioGraph
         float volumeTo = clip.Volume.IsConstant ? volumeFrom : Dsp.DbToGain(clip.Volume.Evaluate(clipSample + frames));
         bool fading = clipSample < clip.FadeInLength || clip.Length - (clipSample + frames) < clip.FadeOutLength;
         bool crossfading = clip.Crossfading(clipSample, frames);
+        bool muting = clip.SpeedGain is not null;
         Span<float> gains = _gains.AsSpan(0, frames);
 
         for (int index = 0; index < frames; index++)
         {
             float gain = volumeFrom + ((volumeTo - volumeFrom) * index / frames);
             gain = fading ? gain * clip.FadeGain(clipSample + index) : gain;
+            gain = muting ? gain * clip.SpeedGainAt(clipSample + index) : gain;
             gains[index] = crossfading ? gain * clip.CrossfadeGain(clipSample + index) : gain;
         }
 

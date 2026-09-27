@@ -231,7 +231,8 @@ public sealed class ClipMix
         long tail = 0,
         Crossfade? crossIn = null,
         Crossfade? crossOut = null,
-        long[]? remap = null)
+        long[]? remap = null,
+        float[]? speedGain = null)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(source.Channels);
@@ -267,6 +268,7 @@ public sealed class ClipMix
         CrossIn = crossIn;
         CrossOut = crossOut;
         Remap = remap;
+        SpeedGain = speedGain;
     }
 
     /// <summary>Clip samples between the entries of a <see cref="Remap"/> table.</summary>
@@ -279,6 +281,26 @@ public sealed class ClipMix
     /// the way tape would, its pitch with it.
     /// </summary>
     public long[]? Remap { get; }
+
+    /// <summary>
+    /// For a clip silenced where it plays fast (<c>clip.set-fast-mute</c>), its gain every
+    /// <see cref="RemapStep"/> clip samples from its start, 0 or 1, run in a straight line between
+    /// entries so it fades rather than clicks; null for a clip that is never silenced.
+    /// </summary>
+    public float[]? SpeedGain { get; }
+
+    /// <summary>The gain <see cref="SpeedGain"/> gives at a clip sample; 1 without one.</summary>
+    public float SpeedGainAt(long clipSample)
+    {
+        if (SpeedGain is not { Length: > 1 } table)
+        {
+            return SpeedGain is [float only] ? only : 1.0f;
+        }
+
+        long index = Math.Clamp(Dsp.FloorDiv(clipSample, RemapStep), 0, table.Length - 2);
+        float offset = Math.Clamp((clipSample - (index * RemapStep)) / (float)RemapStep, 0.0f, 1.0f);
+        return table[index] + ((table[index + 1] - table[index]) * offset);
+    }
 
     /// <summary>How many samples before <see cref="Start"/> it plays, into a transition from the clip before it.</summary>
     public long LeadIn { get; }

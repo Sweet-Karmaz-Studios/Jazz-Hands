@@ -168,6 +168,27 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         "At a speed other than normal the sound keeps its pitch; off, it goes up and down with the speed, like tape.",
         Animatable: false);
 
+    /// <summary>Whether a picture clip blurs with its speed (Phase 45), sent as <c>clip.set-speed-blur</c>.</summary>
+    internal static ParamDescriptor SpeedBlurParam { get; } = new(
+        "speed-blur", ParamType.Bool, new ParamValue.Bool(false), "Blur follows speed",
+        "Where the clip runs fast the picture streaks as a camera's shutter would at that speed; at normal speed it stays sharp.",
+        Animatable: false);
+
+    /// <summary>Above what speed a sound clip is silent (Phase 45), sent as <c>clip.set-fast-mute</c>.</summary>
+    internal static ParamDescriptor FastMuteParam { get; } = new(
+        "fast-mute", ParamType.Enum, new ParamValue.Enum("never"), "Silent when faster than",
+        "For speed ramps: the sound drops out where the clip plays faster than this, and comes back after.",
+        Animatable: false, Choices: new EquatableArray<string>([.. FastMuteChoices.Select(pair => pair.Name)]));
+
+    private static (string Name, Rational? Speed)[] FastMuteChoices =>
+    [
+        ("never", null),
+        ("1.5x", new Rational(3, 2)),
+        ("2x", new Rational(2, 1)),
+        ("3x", new Rational(3, 1)),
+        ("4x", new Rational(4, 1)),
+    ];
+
     /// <summary>How a picture clip shows the moments between its source frames (Phase 42), sent as <c>clip.set-retime</c>.</summary>
     internal static ParamDescriptor RetimeParam { get; } = new(
         "retime", ParamType.Enum, new ParamValue.Enum("nearest"), "Between frames",
@@ -186,7 +207,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         Animatable: false, Choices: new EquatableArray<string>([.. FadeCurves.Select(pair => pair.Name)]));
 
     private static bool IsFadeRow(ParamRowViewModel row) =>
-        ReferenceEquals(row.Descriptor, KeepPitchParam) || ReferenceEquals(row.Descriptor, RetimeParam) || ReferenceEquals(row.Descriptor, FadeInLength) || ReferenceEquals(row.Descriptor, FadeInShape)
+        ReferenceEquals(row.Descriptor, KeepPitchParam) || ReferenceEquals(row.Descriptor, RetimeParam) || ReferenceEquals(row.Descriptor, SpeedBlurParam) || ReferenceEquals(row.Descriptor, FastMuteParam) || ReferenceEquals(row.Descriptor, FadeInLength) || ReferenceEquals(row.Descriptor, FadeInShape)
         || ReferenceEquals(row.Descriptor, FadeOutLength) || ReferenceEquals(row.Descriptor, FadeOutShape);
 
     /// <summary>Adds an effect to the inspected clip, for a drop from the effects panel.</summary>
@@ -475,6 +496,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
             // Keeping the pitch at a speed (Phase 36) is the clip's own too: clip.set-keep-pitch.
             var speed = Section("Speed");
             speed.Rows.Add(new ParamRowViewModel(this, clip.Id, KeepPitchParam, speed.Title));
+            speed.Rows.Add(new ParamRowViewModel(this, clip.Id, FastMuteParam, speed.Title));
             Sections.Add(speed);
 
             // The fades are the clip's own, not parameters: their rows send audio.set-fade-in and -out.
@@ -491,6 +513,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
             // How a slowed picture shows the moments between its frames (Phase 42): clip.set-retime.
             var speed = Section("Speed");
             speed.Rows.Add(new ParamRowViewModel(this, clip.Id, RetimeParam, speed.Title));
+            speed.Rows.Add(new ParamRowViewModel(this, clip.Id, SpeedBlurParam, speed.Title));
             Sections.Add(speed);
         }
 
@@ -745,6 +768,18 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
             return new ParamValue.Bool(clip.KeepsPitch);
         }
 
+        if (ReferenceEquals(row, SpeedBlurParam))
+        {
+            return new ParamValue.Bool(clip.BlurFollowsSpeed == true);
+        }
+
+        if (ReferenceEquals(row, FastMuteParam))
+        {
+            // A limit set from jazz that is not one of the choices shows as the nearest one.
+            double limit = clip.MuteFasterThan is { } speed ? speed.ToDouble() : 0;
+            return new ParamValue.Enum(limit <= 0 ? "never" : FastMuteChoices.Where(pair => pair.Speed is not null).MinBy(pair => Math.Abs(pair.Speed!.Value.ToDouble() - limit)).Name);
+        }
+
         if (ReferenceEquals(row, RetimeParam))
         {
             return new ParamValue.Enum(clip.Retime switch { RetimeMode.Blend => "blend", RetimeMode.OpticalFlow => "optical-flow", _ => "nearest" });
@@ -762,6 +797,17 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         if (ReferenceEquals(row.Descriptor, KeepPitchParam))
         {
             return new SetClipKeepPitchCommand(clipId, ((ParamValue.Bool)ParamValues.Parse(KeepPitchParam, text)).Value);
+        }
+
+        if (ReferenceEquals(row.Descriptor, SpeedBlurParam))
+        {
+            return new SetClipSpeedBlurCommand(clipId, ((ParamValue.Bool)ParamValues.Parse(SpeedBlurParam, text)).Value);
+        }
+
+        if (ReferenceEquals(row.Descriptor, FastMuteParam))
+        {
+            Rational? limit = FastMuteChoices.FirstOrDefault(pair => string.Equals(pair.Name, text, StringComparison.Ordinal)).Speed;
+            return limit is null ? new SetClipFastMuteCommand(clipId, Off: true) : new SetClipFastMuteCommand(clipId, limit);
         }
 
         if (ReferenceEquals(row.Descriptor, RetimeParam))

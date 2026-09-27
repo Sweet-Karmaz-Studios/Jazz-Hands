@@ -73,6 +73,65 @@ public sealed class SetClipKeepPitchHandler : ICommandHandler<SetClipKeepPitchCo
     }
 }
 
+/// <summary>Blurs a clip's picture with its speed, or stops.</summary>
+public sealed class SetClipSpeedBlurHandler : ICommandHandler<SetClipSpeedBlurCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, SetClipSpeedBlurCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        ClipLocation found = HandlerHelp.Clip(project, command.ClipId);
+        HandlerHelp.RequireUnlocked(found.Track);
+        if (command.On && found.Track.Kind == TrackKind.Audio)
+        {
+            throw new CommandException("not-a-picture", "Speed blur is for a picture; this clip is on a sound track.");
+        }
+
+        bool? on = command.On ? true : null;
+        if (found.Clip.BlurFollowsSpeed == on)
+        {
+            return project;
+        }
+
+        context.Changed(command.ClipId);
+        return project.ReplaceTrack(found.Track.ReplaceClip(found.Clip with { BlurFollowsSpeed = on }));
+    }
+}
+
+/// <summary>Silences a clip's sound where it plays faster than a speed, or stops.</summary>
+public sealed class SetClipFastMuteHandler : ICommandHandler<SetClipFastMuteCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, SetClipFastMuteCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        ClipLocation found = HandlerHelp.Clip(project, command.ClipId);
+        HandlerHelp.RequireUnlocked(found.Track);
+        if (command.Off && command.Above is not null)
+        {
+            throw new CommandException("conflicting-options", "Give --above or --off, not both.", "above");
+        }
+
+        Rational? limit = command.Off ? null : command.Above ?? new Rational(2, 1);
+        if (limit is { } speed && (speed.Num <= 0 || speed.Den <= 0))
+        {
+            throw new CommandException("bad-speed", "The speed to silence above must be more than zero.", "above");
+        }
+
+        if (found.Clip.MuteFasterThan == limit)
+        {
+            return project;
+        }
+
+        context.Changed(command.ClipId);
+        return project.ReplaceTrack(found.Track.ReplaceClip(found.Clip with { MuteFasterThan = limit }));
+    }
+}
+
 /// <summary>Changes how fast a clip plays.</summary>
 public sealed class SetClipSpeedHandler : ICommandHandler<SetClipSpeedCommand>
 {
@@ -104,17 +163,19 @@ public sealed class SetClipSpeedHandler : ICommandHandler<SetClipSpeedCommand>
         }
 
         Clip clip = found.Clip;
+        bool? pitchFollows = command.KeepPitch is { } keep ? (keep ? null : true) : clip.PitchFollowsSpeed;
 
         if (command.KeepDuration)
         {
             // The clip keeps its place and shows more or less of the source instead.
-            if (clip.EffectiveSpeed == command.Speed)
+            Clip kept = clip with { Speed = command.Speed, PitchFollowsSpeed = pitchFollows };
+            if (clip.EffectiveSpeed == command.Speed && clip.PitchFollowsSpeed == pitchFollows)
             {
                 return project;
             }
 
             context.Changed(command.ClipId);
-            return project.ReplaceTrack(found.Track.ReplaceClip(clip with { Speed = command.Speed }));
+            return project.ReplaceTrack(found.Track.ReplaceClip(kept));
         }
 
         // The clip keeps what it shows, so its timeline duration changes to suit the new rate.
@@ -125,7 +186,7 @@ public sealed class SetClipSpeedHandler : ICommandHandler<SetClipSpeedCommand>
             throw new CommandException("empty-result", "That speed would leave the clip with no duration.");
         }
 
-        Clip updated = clip with { Speed = command.Speed, Range = new TimeRange(clip.Start, newDuration) };
+        Clip updated = clip with { Speed = command.Speed, Range = new TimeRange(clip.Start, newDuration), PitchFollowsSpeed = pitchFollows };
 
         if (updated == clip)
         {

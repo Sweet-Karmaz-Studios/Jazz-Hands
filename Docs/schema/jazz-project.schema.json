@@ -454,6 +454,26 @@
               "type": "null"
             }
           ]
+        },
+        "blurFollowsSpeed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "muteFasterThan": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/rational"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [

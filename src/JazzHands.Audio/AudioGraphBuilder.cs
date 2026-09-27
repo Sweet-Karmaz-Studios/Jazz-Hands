@@ -293,6 +293,27 @@ public static class AudioGraphBuilder
             samples = samples with { Stretch = new StretchPlan(sourceIn, sourceOut, speedNum, speedDen, clip.Reverse, remap) };
         }
 
+        // Phase 45: a clip silenced where it plays fast, its gain every RemapStep samples.
+        float[]? speedGain = null;
+        if (clip.MuteFasterThan is { Num: > 0, Den: > 0 } limit)
+        {
+            double above = (double)limit.Num / limit.Den;
+            if (clip.Remap is { } speedCurve)
+            {
+                int steps = (int)((end - start) / ClipMix.RemapStep) + 2;
+                speedGain = new float[steps];
+                for (int index = 0; index < steps; index++)
+                {
+                    var local = new Flicks((long)index * ClipMix.RemapStep * Flicks.PerSecond / rate);
+                    speedGain[index] = Core.Animation.TimeRemap.Speed(speedCurve, local) > above ? 0.0f : 1.0f;
+                }
+            }
+            else if ((double)clip.EffectiveSpeed.Num / clip.EffectiveSpeed.Den > above)
+            {
+                speedGain = [0.0f];
+            }
+        }
+
         Fade fadeIn = clip.FadeIn ?? Fade.None;
         Fade fadeOut = clip.FadeOut ?? Fade.None;
 
@@ -318,7 +339,8 @@ public static class AudioGraphBuilder
             joins.Tail,
             joins.CrossIn,
             joins.CrossOut,
-            remap);
+            remap,
+            speedGain);
     }
 
     /// <summary>

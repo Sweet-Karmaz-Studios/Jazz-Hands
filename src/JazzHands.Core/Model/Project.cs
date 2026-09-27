@@ -399,6 +399,8 @@ public sealed record Marker(
 /// <param name="HiddenTracks">For a nested sequence, tracks of it this clip leaves out: its graphics, lifted into a vertical version by <c>sequence.reframe</c>.</param>
 /// <param name="PitchFollowsSpeed">True for sound that changes pitch with the clip's speed, as tape does; null (the default) keeps the pitch. Only written when true.</param>
 /// <param name="InputTransform">How an ACES project brings this clip's picture into ACES (Phase 44). Null for automatic: HDR PQ as HDR10, anything else as sRGB.</param>
+/// <param name="BlurFollowsSpeed">True for a picture that blurs with its speed, as a camera's shutter would: the source is averaged across the shutter, so the fast part of a speed ramp streaks; less than a source frame of movement under the shutter leaves it sharp. Null (the default) for off. Only written when true.</param>
+/// <param name="MuteFasterThan">The speed above which the clip's sound is silent, as in the fast part of a speed ramp; null (the default) never.</param>
 public sealed record Clip(
     string Id,
     TimeRange Range,
@@ -435,7 +437,9 @@ public sealed record Clip(
     EquatableArray<PointTrack> PointTracks = default,
     EquatableArray<string> HiddenTracks = default,
     bool? PitchFollowsSpeed = null,
-    InputTransform? InputTransform = null) : IEquatable<Clip>
+    InputTransform? InputTransform = null,
+    bool? BlurFollowsSpeed = null,
+    Rational? MuteFasterThan = null) : IEquatable<Clip>
 {
     /// <summary>Playback rate, defaulting to normal speed.</summary>
     public Rational EffectiveSpeed => Speed ?? Rational.One;

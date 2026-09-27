@@ -690,18 +690,48 @@ public static class RenderGraphBuilder
         int depth,
         Rational frameRate)
     {
-        if (options.MaxBlurSamples <= 1 || MotionBlur.For(clip, track, sequence) is not { } blur || !Moves(clip))
+        MotionBlur? setting = MotionBlur.For(clip, track, sequence);
+        bool moves = setting is not null && Moves(clip);
+        Rational? sourceRate = clip.BlurFollowsSpeed == true && !clip.IsHold ? SourceRate(project, clip) : null;
+        if (options.MaxBlurSamples <= 1 || (!moves && sourceRate is null))
         {
             return null;
         }
 
         // A generator is drawn again at each moment only when its picture changes: its own
         // parameters animate, or it changes by itself (particles, a countdown). Otherwise every
-        // moment places the one picture, and the compositor draws it once.
-        bool redraw = source.Source is GeneratorLayerSource generator
-            && (typeof(ITimedGenerator).IsAssignableFrom(generator.Node.Descriptor.Implementation) || OwnParametersAnimate(clip));
+        // moment places the one picture, and the compositor draws it once. Blur that follows the
+        // speed draws the source again at each moment, which is what streaks.
+        MotionBlur blur = setting ?? new MotionBlur();
+        bool redraw = sourceRate is not null
+            || (source.Source is GeneratorLayerSource generator
+                && (typeof(ITimedGenerator).IsAssignableFrom(generator.Node.Descriptor.Implementation) || OwnParametersAnimate(clip)));
         IReadOnlyList<Flicks> moments = blur.Moments(time, frameRate, options.MaxBlurSamples);
-        if (!redraw && moments.Count > 2)
+        if (sourceRate is { } rate)
+        {
+            // The source moves under the open shutter by the speed times its exposure. Less than a
+            // source frame of it (normal speed, at the source's rate or slower) leaves the picture
+            // sharp; more is averaged, one moment for each source frame the shutter spans, within
+            // the clip: at four times, a 180 degree shutter over 60 fps spans two frames of a 60 fps
+            // recording and eight of a 240 fps one.
+            Flicks Inside(Flicks at) => Flicks.Max(clip.Start, Flicks.Min(at, clip.End - new Flicks(1)));
+            double travel = Math.Abs((double)(clip.SourceTimeAt(Inside(moments[^1])) - clip.SourceTimeAt(Inside(moments[0]))).Value) * rate.Num / ((double)rate.Den * Flicks.PerSecond);
+            long spanned = Math.Abs(SourceFrameAt(clip, Inside(moments[^1]), rate) - SourceFrameAt(clip, Inside(moments[0]), rate)) + 1;
+            if ((travel < 1 || spanned <= 1) && !moves)
+            {
+                return null;
+            }
+
+            int wanted = (int)Math.Min(spanned, options.MaxBlurSamples);
+            if (moves)
+            {
+                LayerNode At(Flicks at) => Layer(clip, at - clip.Start, source, frameSize, options, Steady(project, clip, at, source.Size, frames, options));
+                wanted = Math.Max(wanted, SamplesFor(At(moments[0]), At(moments[moments.Count / 2]), At(moments[^1])));
+            }
+
+            moments = [.. blur.Moments(time, frameRate, Math.Min(wanted, options.MaxBlurSamples)).Select(Inside)];
+        }
+        else if (!redraw && moments.Count > 2)
         {
             LayerNode At(Flicks at) => Layer(clip, at - clip.Start, source, frameSize, options, Steady(project, clip, at, source.Size, frames, options));
             int needed = SamplesFor(At(moments[0]), At(moments[moments.Count / 2]), At(moments[^1]));

@@ -1416,6 +1416,21 @@ Enable or disable a clip without removing it.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+### `jazz clip set-fast-mute <project> <clip-id>`
+
+Silence a clip's sound where it plays faster than a speed.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The clip id. |
+
+| Option | Meaning |
+|---|---|
+| `--above <rate>` | The speed above which it is silent, for example 2 or 3/2. Default: 2. |
+| `--off` | Never silence it. |
+| `--no-save` | Do not write the project back. |
+
 ### `jazz clip set-input-transform <project> <clip-id> <transform>`
 
 Set how an ACES project brings a clip's picture into ACES.
@@ -1546,6 +1561,21 @@ Change how fast a clip plays.
 |---|---|
 | `--speed <rate>` | Required. The rate, for example 2 or 1/2. |
 | `--keep-duration` | Keep the timeline duration. |
+| `--keep-pitch` | true to keep the sound's pitch, false to let it follow the speed. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz clip set-speed-blur <project> <clip-id> <on>`
+
+Blur a clip's picture with its speed, as a shutter would.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The clip id. |
+| `<on>` | true to blur with the speed, false for off. |
+
+| Option | Meaning |
+|---|---|
 | `--no-save` | Do not write the project back. |
 
 ### `jazz clip set-tone-map <project> <clip-id>`
