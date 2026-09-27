@@ -44,6 +44,10 @@
   <ItemGroup Label="Front ends">
     <PackageVersion Include="System.CommandLine" Version="2.0.12" />
     <PackageVersion Include="ModelContextProtocol" Version="2.2.0" />
+    <!-- Speech to text (Phase 39): whisper.cpp through Whisper.net, MIT, with its native runtimes. -->
+    <PackageVersion Include="Whisper.net" Version="1.9.1" />
+    <PackageVersion Include="Whisper.net.Runtime" Version="1.9.1" />
+    <PackageVersion Include="Whisper.net.Runtime.Vulkan" Version="1.9.1" />
   </ItemGroup>
 
   <ItemGroup Label="Data">
