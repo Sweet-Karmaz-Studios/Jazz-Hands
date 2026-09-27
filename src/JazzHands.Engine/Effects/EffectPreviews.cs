@@ -287,9 +287,24 @@ public sealed class EffectPreviews : IDisposable
         return new Clip(Id.New(), new TimeRange(Flicks.Zero, Length), Flicks.Zero, GeneratorId: typeId, Name: typeId, Effects: EquatableArray.Create(own));
     }
 
-    /// <summary>An effect at its defaults, or at its showcase settings when it has some.</summary>
-    private static Effect Configured(EffectDescriptor descriptor) =>
-        Set(Effect.Create(descriptor.TypeId) with { Id = PreviewEffectId }, descriptor, Showcase.TryGetValue(descriptor.TypeId, out (string, string)[]? settings) ? settings : []);
+    /// <summary>An effect at its defaults, or at its showcase settings when it has some; a node graph with a grade of two nodes side by side.</summary>
+    private static Effect Configured(EffectDescriptor descriptor)
+    {
+        Effect effect = Set(Effect.Create(descriptor.TypeId) with { Id = PreviewEffectId }, descriptor, Showcase.TryGetValue(descriptor.TypeId, out (string, string)[]? settings) ? settings : []);
+        return descriptor.TypeId == GradeGraph.TypeId ? effect with { Graph = DemoGraph() } : effect;
+    }
+
+    /// <summary>A warm node and a cool, flatter one beside it, mixed: what a node graph does at a glance.</summary>
+    private static GradeGraph DemoGraph()
+    {
+        static Effect Wheels(string id, params (string Name, string Value)[] values) =>
+            Set(Effect.Create("color.wheels") with { Id = id }, EffectCatalog.Registry.Require("color.wheels"), values);
+
+        var warm = new GradeNode(Wheels("01M3B0000000000000000PREV1", ("gain", "0.3, 0.08, -0.15, 0")));
+        var cool = new GradeNode(Wheels("01M3B0000000000000000PREV2", ("lift", "-0.02, 0.02, 0.1, 0"), ("saturation", "0.5")));
+        var mix = new GradeNode(Effect.Create(GradeGraph.MixType) with { Id = "01M3B0000000000000000PREV3" }, [warm.Id, cool.Id]);
+        return new GradeGraph([warm, cool, mix]);
+    }
 
     /// <summary>
     /// One id for every previewed effect and transition, so a seeded one (flicker, grain, glitch) is seeded the

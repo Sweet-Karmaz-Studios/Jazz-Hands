@@ -10,6 +10,9 @@ public partial class ColorPanelView : UserControl
     /// <summary>Creates the panel.</summary>
     public ColorPanelView() => InitializeComponent();
 
+    /// <summary>"Match to...", "+ Serial" and "+ Parallel" drop their lists down under them.</summary>
+    private void OnDropDownClick(object sender, RoutedEventArgs e) => OnMatchClick(sender, e);
+
     /// <summary>"Match to..." drops its list of clips down under it.</summary>
     private void OnMatchClick(object sender, RoutedEventArgs e)
     {

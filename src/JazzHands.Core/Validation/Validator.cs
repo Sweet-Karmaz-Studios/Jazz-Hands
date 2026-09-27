@@ -227,6 +227,72 @@ public static class Validator
     }
 
     /// <summary>
+    /// A colour graph (Phase 44) reads nodes it has, never goes round in a circle, mixes two to
+    /// four pictures, is keyed only by qualifiers, and holds only colour corrections. Each is a
+    /// warning: a graph the renderer cannot follow shows its picture unchanged, and a node of a
+    /// type it cannot draw passes its picture on.
+    /// </summary>
+    private static void CheckGraph(Effect effect, GradeGraph graph, string path, ImmutableArray<ValidationIssue>.Builder issues)
+    {
+        if (effect.TypeId != GradeGraph.TypeId)
+        {
+            issues.Add(new ValidationIssue(Severity.Warning, "graph-on-other-effect", path, $"Effect '{effect.Id}' is a '{effect.TypeId}', which does not use nodes; they are ignored."));
+            return;
+        }
+
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+        for (int index = 0; index < graph.Nodes.Length; index++)
+        {
+            GradeNode node = graph.Nodes[index];
+            string nodePath = $"{path}/nodes/{index}";
+            if (!ids.Add(node.Id))
+            {
+                issues.Add(new ValidationIssue(Severity.Error, "duplicate-id", $"{nodePath}/effect/id", $"Two nodes of colour graph '{effect.Id}' have the id '{node.Id}'."));
+            }
+
+            if (!node.IsMix && !GradeGraph.NodeTypes.Contains(node.Effect.TypeId))
+            {
+                issues.Add(new ValidationIssue(Severity.Warning, "unknown-node-type", $"{nodePath}/effect/typeId", $"Node '{node.Id}' is a '{node.Effect.TypeId}'; a node is a colour correction or a mix, so it passes its picture on."));
+            }
+
+            if (node.IsMix && node.Inputs.Length is < 1 or > GradeGraph.MostInputs)
+            {
+                issues.Add(new ValidationIssue(Severity.Warning, "mix-inputs", $"{nodePath}/inputs", $"Mix '{node.Id}' has {node.Inputs.Length} inputs; a mix takes one to {GradeGraph.MostInputs}."));
+            }
+            else if (!node.IsMix && node.Inputs.Length > 1)
+            {
+                issues.Add(new ValidationIssue(Severity.Warning, "node-inputs", $"{nodePath}/inputs", $"Node '{node.Id}' has {node.Inputs.Length} inputs; only a mix reads more than one, so it reads the first."));
+            }
+
+            foreach (string input in node.Inputs)
+            {
+                if (graph.Node(input) is null)
+                {
+                    issues.Add(new ValidationIssue(Severity.Warning, "missing-node", $"{nodePath}/inputs", $"Node '{node.Id}' reads '{input}', which the graph does not have."));
+                }
+            }
+
+            if (node.Key is { } key && graph.Node(key) is not { Effect.TypeId: "color.hsl" })
+            {
+                issues.Add(new ValidationIssue(Severity.Warning, "key-not-qualifier", $"{nodePath}/key", $"Node '{node.Id}' is keyed by '{key}', which is not an HSL qualifier node of the graph; it applies everywhere."));
+            }
+
+            if (node.Effect.Graph is not null)
+            {
+                issues.Add(new ValidationIssue(Severity.Warning, "nested-graph", $"{nodePath}/effect/graph", $"Node '{node.Id}' holds nodes of its own; a graph does not go inside a graph, so they are ignored."));
+            }
+        }
+
+        if (graph.Output is { } output && graph.Node(output) is null)
+        {
+            issues.Add(new ValidationIssue(Severity.Warning, "missing-node", $"{path}/output", $"Colour graph '{effect.Id}' shows node '{output}', which it does not have; it shows its picture unchanged."));
+        }
+        else if (graph.Order() is null)
+        {
+            issues.Add(new ValidationIssue(Severity.Warning, "graph-cycle", path, $"Colour graph '{effect.Id}' goes round in a circle or reads a node it does not have, so it shows its picture unchanged."));
+        }
+    }
+    /// <summary>
     /// A multicam's angles name tracks of its sequence, and its switches name angles it has and
     /// come in time order (Phase 41). Each is a warning: the picture plays the nearest angle and
     /// a missing track is simply not shown.
@@ -447,6 +513,11 @@ public static class Validator
                     "effect-without-type",
                     $"{effectPath}/typeId",
                     $"An effect on '{clip.Name}' has no type."));
+            }
+
+            if (effect.Graph is { } graph)
+            {
+                CheckGraph(effect, graph, $"{effectPath}/graph", issues);
             }
         }
 

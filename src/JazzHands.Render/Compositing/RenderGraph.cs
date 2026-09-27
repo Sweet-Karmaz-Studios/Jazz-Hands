@@ -198,6 +198,9 @@ public sealed record EffectNode(EffectDescriptor Descriptor, ParameterSet Parame
     /// <summary>The sequence's frame rate.</summary>
     public Rational FrameRate { get; init; } = Rational.Fps30;
 
+    /// <summary>A <c>color.graph</c> effect's nodes, in the order they are drawn; empty for every other effect.</summary>
+    public ImmutableArray<GradeStep> Grade { get; init; } = [];
+
     /// <summary>A runner in place of the descriptor's class, for effects that are not registered.</summary>
     public ILayerEffect? Custom { get; init; }
 
@@ -208,3 +211,14 @@ public sealed record EffectNode(EffectDescriptor Descriptor, ParameterSet Parame
         return new EffectNode(CustomDescriptor, ParameterSet.Defaults(CustomDescriptor)) { Custom = effect };
     }
 }
+
+/// <summary>
+/// One step of a colour graph as drawn (Phase 44): a node's correction on its input, a mix of
+/// several inputs, or the matte of a qualifier node that keys another.
+/// </summary>
+/// <param name="Node">The correction, evaluated at the frame; null for a mix, or for a node that is off or unknown (which passes its input on).</param>
+/// <param name="Inputs">Earlier steps it reads, by index; -1 is the picture coming into the graph.</param>
+/// <param name="Shares">A mix's share of each input, adding up to one; empty for anything else.</param>
+/// <param name="Key">The step whose matte limits this one, or -1 for none.</param>
+/// <param name="IsMatte">True for a qualifier drawn as its matte, for another step's key.</param>
+public sealed record GradeStep(EffectNode? Node, ImmutableArray<int> Inputs, ImmutableArray<float> Shares, int Key = -1, bool IsMatte = false);

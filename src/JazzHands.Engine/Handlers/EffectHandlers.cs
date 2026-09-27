@@ -29,6 +29,15 @@ internal static class EffectHelp
         return owner;
     }
 
+    /// <summary>An effect in a clip's or a track's chain, not a node of a colour graph, or a refusal.</summary>
+    internal static ParamOwner InChain(Project project, string effectId, string instead)
+    {
+        ParamOwner owner = ParamHelp.Effect(project, effectId);
+        return owner.Graph is { } graph
+            ? throw new CommandException("graph-node", $"'{effectId}' is a node of colour graph '{graph.Id}', not an effect in a chain; use 'jazz {instead}' for it.")
+            : owner;
+    }
+
     /// <summary>The effects of a clip or a track.</summary>
     internal static EquatableArray<Effect> Chain(ParamOwner owner) => owner.Clip?.Effects ?? owner.Track.Effects;
 
@@ -212,7 +221,7 @@ public sealed class RemoveEffectHandler : ICommandHandler<RemoveEffectCommand>
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(context);
 
-        ParamOwner owner = ParamHelp.Effect(project, command.EffectId);
+        ParamOwner owner = EffectHelp.InChain(project, command.EffectId, "color node-remove");
         HandlerHelp.RequireUnlocked(owner.Track);
 
         if (EffectChains.IsOwnParameters(owner.Clip, owner.Effect!))
@@ -237,7 +246,7 @@ public sealed class MoveEffectHandler : ICommandHandler<MoveEffectCommand>
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(context);
 
-        ParamOwner owner = ParamHelp.Effect(project, command.EffectId);
+        ParamOwner owner = EffectHelp.InChain(project, command.EffectId, "color node-connect");
         HandlerHelp.RequireUnlocked(owner.Track);
 
         EquatableArray<Effect> chain = EffectHelp.Chain(owner);

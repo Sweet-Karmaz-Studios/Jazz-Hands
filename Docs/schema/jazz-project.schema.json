@@ -532,6 +532,16 @@
           "items": {
             "$ref": "#/$defs/mask"
           }
+        },
+        "graph": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/gradeGraph"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -601,6 +611,60 @@
     "flicks": {
       "type": "integer",
       "description": "A time in flicks, 1/705600000 s. One frame at 30 fps is 23520000."
+    },
+    "gradeGraph": {
+      "type": "object",
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/gradeNode"
+          }
+        },
+        "output": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "gradeNode": {
+      "type": "object",
+      "properties": {
+        "effect": {
+          "$ref": "#/$defs/effect"
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "weights": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        }
+      },
+      "required": [
+        "effect"
+      ]
     },
     "imageSequenceInfo": {
       "type": "object",

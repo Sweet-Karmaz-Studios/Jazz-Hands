@@ -435,25 +435,17 @@ public sealed class Compositor : IDisposable
             {
                 custom.Apply(_effectContext, current, output);
             }
+            else if (!node.Grade.IsDefaultOrEmpty)
+            {
+                RunGrade(graph, layer, node, current, output);
+            }
             else
             {
                 effect!.Apply(_effectContext, node.Parameters, current, output);
             }
 
             // An effect with masks applies inside them: the rest is the picture as it came in.
-            if (!node.Masks.IsDefaultOrEmpty)
-            {
-                RenderTarget matte = Matte(graph, node.Masks, layer.Transform, layer.Scale);
-                RenderTarget mixed = Pool.Rent(graph.Width, graph.Height);
-                var constants = new MatteConstants();
-                _views[0] = current.Resource;
-                _views[1] = output.Resource;
-                _views[2] = matte.Resource;
-                FullScreen(_shaders!.MatteMix, mixed.View, mixed.Width, mixed.Height, in constants, 3);
-                Pool.Return(matte);
-                Pool.Return(output);
-                output = mixed;
-            }
+            output = Masked(graph, layer, node.Masks, current, output);
 
             if (!ReferenceEquals(current, input))
             {
@@ -464,6 +456,101 @@ public sealed class Compositor : IDisposable
         }
 
         return current;
+    }
+
+    /// <summary>
+    /// An effect's result inside its masks and the picture it was given outside them: a new
+    /// target in place of <paramref name="after"/>, which is returned, or <paramref name="after"/>
+    /// itself when there are no masks.
+    /// </summary>
+    private RenderTarget Masked(RenderGraph graph, LayerNode layer, ImmutableArray<MatteShape> masks, RenderTarget before, RenderTarget after)
+    {
+        if (masks.IsDefaultOrEmpty)
+        {
+            return after;
+        }
+
+        RenderTarget matte = Matte(graph, masks, layer.Transform, layer.Scale);
+        RenderTarget mixed = Pool.Rent(graph.Width, graph.Height);
+        var constants = new MatteConstants();
+        _views[0] = before.Resource;
+        _views[1] = after.Resource;
+        _views[2] = matte.Resource;
+        FullScreen(_shaders!.MatteMix, mixed.View, mixed.Width, mixed.Height, in constants, 3);
+        Pool.Return(matte);
+        Pool.Return(after);
+        return mixed;
+    }
+
+    /// <summary>
+    /// Draws a colour graph's steps (Phase 44) into <paramref name="output"/>: each node's colour
+    /// effect on the picture it reads, inside its own masks and its qualifier's key, parallel
+    /// nodes mixed by their shares. The last step is the graph's output.
+    /// </summary>
+    private void RunGrade(RenderGraph graph, LayerNode layer, EffectNode node, RenderTarget input, RenderTarget output)
+    {
+        ImmutableArray<GradeStep> steps = node.Grade;
+        var results = new RenderTarget[steps.Length];
+        var rented = new List<RenderTarget>();
+
+        RenderTarget From(int index) => index < 0 ? input : results[index];
+
+        RenderTarget Rent()
+        {
+            RenderTarget target = Pool.Rent(graph.Width, graph.Height);
+            rented.Add(target);
+            return target;
+        }
+
+        for (int index = 0; index < steps.Length; index++)
+        {
+            GradeStep step = steps[index];
+            RenderTarget source = From(step.Inputs[0]);
+
+            if (step.Node is not { } correction)
+            {
+                if (step.Shares.IsDefaultOrEmpty)
+                {
+                    // A node that is off, or of a type this build does not have, passes its picture on.
+                    results[index] = source;
+                    continue;
+                }
+
+                RenderTarget mixed = Rent();
+                RenderTarget[] inputs = [.. step.Inputs.Select(From)];
+                Effects.Color.ColorGraphEffect.Mix(_effectContext, inputs, step.Shares.AsSpan(), mixed);
+                results[index] = mixed;
+                continue;
+            }
+
+            if (EffectFor(correction.Descriptor) is not { } effect)
+            {
+                results[index] = source;
+                continue;
+            }
+
+            RenderTarget corrected = Pool.Rent(graph.Width, graph.Height);
+            _effectContext.Begin(correction, layer.Scale, graph.Width, graph.Height, layer);
+            effect.Apply(_effectContext, correction.Parameters, source, corrected);
+            corrected = Masked(graph, layer, correction.Masks, source, corrected);
+            rented.Add(corrected);
+
+            if (step.Key >= 0)
+            {
+                RenderTarget keyed = Rent();
+                Effects.Color.ColorGraphEffect.Key(_effectContext, source, corrected, results[step.Key], keyed);
+                corrected = keyed;
+            }
+
+            results[index] = corrected;
+        }
+
+        _effectContext.Begin(node, layer.Scale, graph.Width, graph.Height, layer);
+        _effectContext.Copy(results[^1], output);
+        foreach (RenderTarget target in rented)
+        {
+            Pool.Return(target);
+        }
     }
 
     /// <summary>

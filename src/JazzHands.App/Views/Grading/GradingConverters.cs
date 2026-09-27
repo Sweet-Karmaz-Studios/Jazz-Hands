@@ -74,3 +74,32 @@ public sealed class CurveStroke : IValueConverter
         return brush;
     }
 }
+
+/// <summary>A node view connection as a curve: out of the right edge, into the left, or up into a node's foot for a key.</summary>
+public sealed class NodeLinkGeometry : IValueConverter
+{
+    /// <summary>The one instance.</summary>
+    public static NodeLinkGeometry Instance { get; } = new();
+
+    /// <summary>A curve from one point to another, leaving rightwards and arriving rightwards, or upwards for a key.</summary>
+    public static Geometry Curve(Point start, Point end, bool key)
+    {
+        double reach = Math.Max(20, Math.Abs(end.X - start.X) / 2);
+        var figure = new PathFigure { StartPoint = start, IsFilled = false };
+        figure.Segments.Add(new BezierSegment(
+            new Point(start.X + reach, start.Y),
+            key ? new Point(end.X, end.Y + 24) : new Point(end.X - reach, end.Y),
+            end,
+            isStroked: true));
+        var geometry = new PathGeometry([figure]);
+        geometry.Freeze();
+        return geometry;
+    }
+
+    /// <inheritdoc />
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+        value is ViewModels.Grading.NodeLink link ? Curve(link.Start, link.End, link.IsKey) : Geometry.Empty;
+
+    /// <inheritdoc />
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => Binding.DoNothing;
+}

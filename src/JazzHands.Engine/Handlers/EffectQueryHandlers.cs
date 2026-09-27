@@ -56,8 +56,19 @@ public sealed class GetEffectHandler : IQueryHandler<GetEffectQuery, EffectInfo>
             descriptor is not null,
             effect.Enabled,
             owner.Clip?.Id ?? owner.Track.Id,
-            EffectChains.IndexOf(owner.Clip, owner.Clip?.Effects ?? owner.Track.Effects, effect.Id),
-            ParamHelp.Infos(owner));
+            owner.Graph is null ? EffectChains.IndexOf(owner.Clip, owner.Clip?.Effects ?? owner.Track.Effects, effect.Id) : -1,
+            ParamHelp.Infos(owner),
+            effect.Graph is { } graph
+                ? [.. graph.Nodes.Select(node => new GradeNodeInfo(
+                    node.Id,
+                    node.Effect.TypeId,
+                    node.Effect.Enabled,
+                    [.. node.Inputs],
+                    node.Key,
+                    node.IsMix ? [.. node.Inputs.Select((_, input) => node.Share(input))] : null,
+                    node.Id == graph.OutputNode?.Id))]
+                : null,
+            owner.Graph?.Id);
     }
 }
 

@@ -35,6 +35,7 @@ public enum ParamOwnerKind
 /// <param name="Effect">The effect, for an effect.</param>
 /// <param name="Mask">The mask, for a mask.</param>
 /// <param name="Transition">The transition, for a transition.</param>
+/// <param name="Graph">The <c>color.graph</c> effect holding it, for a node of a colour graph and a node's mask.</param>
 public sealed record ParamOwner(
     ParamOwnerKind Kind,
     string Id,
@@ -43,7 +44,8 @@ public sealed record ParamOwner(
     Clip? Clip = null,
     Effect? Effect = null,
     Mask? Mask = null,
-    Transition? Transition = null)
+    Transition? Transition = null,
+    Effect? Graph = null)
 {
     /// <summary>
     /// Where keyframe time zero is on the sequence: a clip's start for anything on a clip, the
@@ -144,6 +146,11 @@ public static class ParamTargets
                     {
                         return new ParamOwner(ParamOwnerKind.Mask, id, sequence, track, Effect: effect, Mask: mask);
                     }
+
+                    if (InGraph(effect, id, sequence, track, null) is { } node)
+                    {
+                        return node;
+                    }
                 }
 
                 foreach (Clip clip in track.Clips)
@@ -163,6 +170,11 @@ public static class ParamTargets
                         if (MaskOf(effect.Masks, id) is { } effectMask)
                         {
                             return new ParamOwner(ParamOwnerKind.Mask, id, sequence, track, clip, effect, effectMask);
+                        }
+
+                        if (InGraph(effect, id, sequence, track, clip) is { } node)
+                        {
+                            return node;
                         }
                     }
 
@@ -355,6 +367,13 @@ public static class ParamTargets
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(effect);
 
+        // A node of a colour graph goes back into its graph, and the graph into the chain.
+        if (owner.Graph is { Graph: { } graph } holder && !Is(holder.Id, effect.Id))
+        {
+            GradeNode node = graph.Node(effect.Id) ?? throw new InvalidOperationException($"Node '{effect.Id}' is not in graph '{holder.Id}'.");
+            return ReplaceEffect(project, owner with { Graph = null }, holder with { Graph = graph.Replace(node with { Effect = effect }) });
+        }
+
         if (owner.Clip is { } clip)
         {
             int index = clip.Effects.IndexOf(item => Is(item.Id, effect.Id));
@@ -464,6 +483,30 @@ public static class ParamTargets
             if (Is(mask.Id, id))
             {
                 return mask;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>A node of a colour graph, or a node's mask, with the graph it is in; or null.</summary>
+    private static ParamOwner? InGraph(Effect effect, string id, Sequence sequence, Track track, Clip? clip)
+    {
+        if (effect.Graph is not { } graph)
+        {
+            return null;
+        }
+
+        foreach (GradeNode node in graph.Nodes)
+        {
+            if (Is(node.Id, id))
+            {
+                return new ParamOwner(ParamOwnerKind.Effect, id, sequence, track, clip, node.Effect, Graph: effect);
+            }
+
+            if (MaskOf(node.Effect.Masks, id) is { } mask)
+            {
+                return new ParamOwner(ParamOwnerKind.Mask, id, sequence, track, clip, node.Effect, mask, Graph: effect);
             }
         }
 

@@ -1,0 +1,107 @@
+<UserControl x:Class="JazzHands.App.Views.Grading.NodeGraphView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:JazzHands.App.ViewModels.Grading"
+             xmlns:local="clr-namespace:JazzHands.App.Views.Grading"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:ColorPanelViewModel}">
+
+    <!-- The clip's colour graph, left to right. Click a node to grade with it; drag from its
+         right edge onto another node to connect them, with Alt to make it that node's key. -->
+    <Border Background="{DynamicResource Brush.Background.Input}" CornerRadius="3" HorizontalAlignment="Left" MaxWidth="480">
+        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+            <Grid x:Name="Surface"
+                  Width="{Binding NodesWidth, Mode=OneWay}"
+                  Height="{Binding NodesHeight, Mode=OneWay}"
+                  Background="Transparent"
+                  MouseMove="OnSurfaceMove"
+                  MouseLeftButtonUp="OnSurfaceUp"
+                  LostMouseCapture="OnSurfaceLostCapture">
+
+                <ItemsControl ItemsSource="{Binding Links, Mode=OneWay}" IsHitTestVisible="False" Focusable="False">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <Canvas />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:NodeLink}">
+                            <Path x:Name="Line" StrokeThickness="1.5" Stroke="{DynamicResource Brush.Text.Secondary}"
+                                  Data="{Binding Mode=OneWay, Converter={x:Static local:NodeLinkGeometry.Instance}}" />
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding IsKey, Mode=OneWay}" Value="True">
+                                    <Setter TargetName="Line" Property="Stroke" Value="{DynamicResource Brush.Warning}" />
+                                    <Setter TargetName="Line" Property="StrokeDashArray" Value="3 2" />
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <ItemsControl ItemsSource="{Binding Nodes, Mode=OneWay}" Focusable="False">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <Canvas />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemContainerStyle>
+                        <Style TargetType="ContentPresenter">
+                            <Setter Property="Canvas.Left" Value="{Binding X, Mode=OneWay}" />
+                            <Setter Property="Canvas.Top" Value="{Binding Y, Mode=OneWay}" />
+                        </Style>
+                    </ItemsControl.ItemContainerStyle>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:NodeViewModel}">
+                            <Grid Width="{x:Static vm:NodeViewModel.Width}" Height="{x:Static vm:NodeViewModel.Height}">
+                                <Border x:Name="Body" CornerRadius="3" BorderThickness="1"
+                                        Background="{DynamicResource Brush.Background.Raised}"
+                                        BorderBrush="{DynamicResource Brush.Border}"
+                                        Cursor="Hand"
+                                        MouseLeftButtonDown="OnNodeDown"
+                                        ToolTip="Click to grade with this node">
+                                    <TextBlock x:Name="Caption" Text="{Binding Label, Mode=OneWay}" Margin="6,0,10,0"
+                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                               FontSize="{DynamicResource Text.Caption}"
+                                               Foreground="{DynamicResource Brush.Text.Primary}" />
+                                </Border>
+                                <!-- The node the graph shows has an accent bar along its foot. -->
+                                <Border x:Name="Shown" Height="2" VerticalAlignment="Bottom" Margin="3,0,3,1"
+                                        Background="{DynamicResource Brush.Accent}" Visibility="Collapsed" IsHitTestVisible="False" />
+                                <!-- The port a connection is dragged from. -->
+                                <Ellipse x:Name="Port" Width="9" Height="9" HorizontalAlignment="Right" Margin="0,0,-4,0"
+                                         Fill="{DynamicResource Brush.Text.Secondary}" Cursor="Cross"
+                                         MouseLeftButtonDown="OnPortDown"
+                                         ToolTip="Drag onto a node to connect it; hold Alt to make it that node's key" />
+                            </Grid>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding IsSelected, Mode=OneWay}" Value="True">
+                                    <Setter TargetName="Body" Property="BorderBrush" Value="{DynamicResource Brush.Accent}" />
+                                    <Setter TargetName="Body" Property="Background" Value="{DynamicResource Brush.Background.Selected}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsOutput, Mode=OneWay}" Value="True">
+                                    <Setter TargetName="Shown" Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsEnabled, Mode=OneWay}" Value="False">
+                                    <Setter TargetName="Caption" Property="Foreground" Value="{DynamicResource Brush.Text.Disabled}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsKeyed, Mode=OneWay}" Value="True">
+                                    <Setter TargetName="Body" Property="BorderBrush" Value="{DynamicResource Brush.Warning}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsInput, Mode=OneWay}" Value="True">
+                                    <Setter TargetName="Body" Property="Background" Value="Transparent" />
+                                    <Setter TargetName="Body" Property="Cursor" Value="Arrow" />
+                                    <Setter TargetName="Body" Property="ToolTip" Value="The picture coming into the graph" />
+                                    <Setter TargetName="Caption" Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <Path x:Name="DragLine" Stroke="{DynamicResource Brush.Accent}" StrokeThickness="1.5" IsHitTestVisible="False" />
+            </Grid>
+        </ScrollViewer>
+    </Border>
+</UserControl>

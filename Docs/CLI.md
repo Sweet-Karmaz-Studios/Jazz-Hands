@@ -1690,6 +1690,71 @@ Match a clip's colour to another clip.
 | `--reference-at <time>` | The reference's frame to look at, on the timeline; its middle when not given. |
 | `--no-save` | Do not write the project back. |
 
+### `jazz color node-add <project> <target>`
+
+Add a node to a colour graph.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<target>` | A colour graph effect, or a clip whose first colour graph takes it (one is added when it has none). |
+
+| Option | Meaning |
+|---|---|
+| `--type <type>` | What the node does: wheels, curves, hsl, lut or white-balance. Default: wheels. |
+| `--after <after>` | The node to follow; the graph's output when not given. |
+| `--parallel-to <parallel-to>` | A node to sit beside, reading the same picture, the two mixed. |
+| `--id <id>` | The identifier for the new node. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz color node-connect <project> <node-id>`
+
+Connect one node of a colour graph to another.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<node-id>` | The node that reads. |
+
+| Option | Meaning |
+|---|---|
+| `--from <from>` | The node it reads; the picture coming into the graph when not given. |
+| `--input <n>` | Which of a mix's inputs, from 1; a new one at the end when not given. |
+| `--key` | Connect as its key: a qualifier node whose matte limits where it applies. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz color node-remove <project> <node-id>`
+
+Remove a node from a colour graph.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<node-id>` | The node. |
+
+| Option | Meaning |
+|---|---|
+| `--no-save` | Do not write the project back. |
+
+### `jazz color node-set <project> <node-id>`
+
+Change a node of a colour graph.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<node-id>` | The node. |
+
+| Option | Meaning |
+|---|---|
+| `--param <param>` | A parameter of its correction. |
+| `--value <value>` | The parameter's value. |
+| `--weights <weights>` | A mix's share of each input, in order, such as 1,1. |
+| `--no-key` | Take its key away. |
+| `--output` | Make it the node the graph shows. |
+| `--enabled` | true to switch it on, false to switch it off. |
+| `--no-save` | Do not write the project back. |
+
 ### `jazz color sample <project>`
 
 Read the picture's colour at a point.
@@ -1706,6 +1771,20 @@ Read the picture's colour at a point.
 | `--before <id>` | An effect to read the picture before. |
 | `--size <n>` | The side of the square averaged, in pixels. Default: 5. |
 | `--sequence <id>` | Which sequence. |
+
+### `jazz color to-graph <project> <effect-id>`
+
+Turn a colour effect into a node graph.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<effect-id>` | A Colour Wheels, Curves, HSL qualifier, LUT or White balance effect. |
+
+| Option | Meaning |
+|---|---|
+| `--id <id>` | The identifier for the graph. |
+| `--no-save` | Do not write the project back. |
 
 ## `jazz diagnostics`
 

@@ -101,8 +101,10 @@ public sealed record ParamInfo(
 /// <param name="Known">False for a type this build has no effect for; it is kept but does nothing.</param>
 /// <param name="Enabled">False when bypassed.</param>
 /// <param name="OwnerId">The clip or track it is on.</param>
-/// <param name="Index">Its place in the chain, from 0.</param>
+/// <param name="Index">Its place in the chain, from 0; -1 for a node of a colour graph.</param>
 /// <param name="Params">Its parameters.</param>
+/// <param name="Nodes">A colour graph's nodes, in the order they were added; null for any other effect.</param>
+/// <param name="GraphId">For a node of a colour graph, the graph; otherwise null.</param>
 public sealed record EffectInfo(
     string Id,
     string TypeId,
@@ -111,7 +113,19 @@ public sealed record EffectInfo(
     bool Enabled,
     string OwnerId,
     int Index,
-    ParamInfo[] Params);
+    ParamInfo[] Params,
+    GradeNodeInfo[]? Nodes = null,
+    string? GraphId = null);
+
+/// <summary>One node of a colour graph.</summary>
+/// <param name="Id">The node's id, which is its effect's: <c>effect.get</c> shows its parameters.</param>
+/// <param name="TypeId">Its correction, or color.mix for a mix.</param>
+/// <param name="Enabled">False when switched off.</param>
+/// <param name="Inputs">The nodes it reads; empty for the picture coming into the graph.</param>
+/// <param name="Key">The qualifier node keying it, or null.</param>
+/// <param name="Shares">A mix's share of each input, adding up to one; null for anything else.</param>
+/// <param name="Output">True for the node the graph shows.</param>
+public sealed record GradeNodeInfo(string Id, string TypeId, bool Enabled, string[] Inputs, string? Key, float[]? Shares, bool Output);
 
 /// <summary>One effect preset.</summary>
 /// <param name="Id">The preset identifier.</param>

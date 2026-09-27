@@ -960,7 +960,52 @@ public static class RenderGraphBuilder
             Masks = Mattes(effect.Masks, time),
             OwnerLength = ownerLength,
             SequenceTime = sequenceTime,
+            Grade = effect is { TypeId: GradeGraph.TypeId, Graph: { } graph } ? Grade(graph, time, ownerLength, sequenceTime, options) : [],
         };
+    }
+
+    /// <summary>
+    /// A colour graph as steps to draw: the nodes its output needs, each after what it reads, a
+    /// qualifier that keys a node drawn as its matte just before. A graph that goes round in a
+    /// circle draws nothing (the validator says so).
+    /// </summary>
+    private static ImmutableArray<GradeStep> Grade(GradeGraph graph, Flicks time, Flicks ownerLength, Flicks sequenceTime, RenderOptions options)
+    {
+        if (graph.Order() is not { Count: > 0 } order)
+        {
+            return [];
+        }
+
+        var steps = ImmutableArray.CreateBuilder<GradeStep>(order.Count);
+        var index = new Dictionary<string, int>(StringComparer.Ordinal);
+        var mattes = new Dictionary<string, int>(StringComparer.Ordinal);
+
+        ImmutableArray<int> Inputs(GradeNode node) =>
+            node.Inputs.IsEmpty ? [-1] : [.. node.Inputs.Select(id => index[id])];
+
+        foreach (GradeNode node in order)
+        {
+            int key = -1;
+            if (node.Key is { } keyId && graph.Node(keyId) is { } qualifier && !mattes.TryGetValue(keyId, out key))
+            {
+                EffectNode? matte = Node(qualifier.Effect, time, ownerLength, sequenceTime, options);
+                key = -1;
+                if (matte is not null && qualifier.Effect.TypeId == "color.hsl")
+                {
+                    key = steps.Count;
+                    steps.Add(new GradeStep(matte with { Parameters = matte.Parameters.With("view", new ParamValue.Enum("matte")), Masks = [] }, Inputs(qualifier), [], IsMatte: true));
+                }
+
+                mattes[keyId] = key;
+            }
+
+            index[node.Id] = steps.Count;
+            steps.Add(node.IsMix
+                ? new GradeStep(null, Inputs(node), [.. node.Inputs.Select((_, input) => node.Share(input))])
+                : new GradeStep(Node(node.Effect with { Graph = null }, time, ownerLength, sequenceTime, options), [Inputs(node)[0]], [], key));
+        }
+
+        return steps.ToImmutable();
     }
 
     /// <summary>

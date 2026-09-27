@@ -69,6 +69,64 @@
                        FontSize="{DynamicResource Text.Caption}"
                        Foreground="{DynamicResource Brush.Warning}" />
 
+            <!-- The node graph: the grade as nodes, serial and parallel. -->
+            <StackPanel Margin="0,10,0,0" Visibility="{Binding HasClip, Mode=OneWay, Converter={StaticResource Visible}}">
+                <DockPanel LastChildFill="False">
+                    <TextBlock DockPanel.Dock="Left" Style="{StaticResource Heading}" Text="Nodes" />
+                    <Button DockPanel.Dock="Right"
+                            Style="{StaticResource Button.Secondary}"
+                            Content="Use nodes"
+                            Command="{Binding UseNodesCommand, Mode=OneWay}"
+                            ToolTip="Grade this clip as a node graph: its Colour wheels become the first node"
+                            AutomationProperties.Name="Use nodes">
+                        <Button.Visibility>
+                            <Binding Path="HasGraph" Mode="OneWay">
+                                <Binding.Converter>
+                                    <local:InverseVisibility />
+                                </Binding.Converter>
+                            </Binding>
+                        </Button.Visibility>
+                    </Button>
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Visibility="{Binding HasGraph, Mode=OneWay, Converter={StaticResource Visible}}">
+                        <Button Style="{StaticResource Button.Text}" Content="+ Serial" Margin="0,0,4,0" Click="OnDropDownClick"
+                                ToolTip="Add a node after the selected one" AutomationProperties.Name="Add a serial node">
+                            <Button.ContextMenu>
+                                <ContextMenu ItemsSource="{Binding NodeChoices, Mode=OneWay}">
+                                    <ContextMenu.ItemContainerStyle>
+                                        <Style TargetType="{x:Type MenuItem}" BasedOn="{StaticResource {x:Type MenuItem}}">
+                                            <Setter Property="Header" Value="{Binding Label, Mode=OneWay}" />
+                                            <Setter Property="CommandParameter" Value="{Binding Mode=OneWay}" />
+                                            <Setter Property="Command" Value="{Binding PlacementTarget.DataContext.AddNodeCommand, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}, Mode=OneWay}" />
+                                        </Style>
+                                    </ContextMenu.ItemContainerStyle>
+                                </ContextMenu>
+                            </Button.ContextMenu>
+                        </Button>
+                        <Button Style="{StaticResource Button.Text}" Content="+ Parallel" Margin="0,0,4,0" Click="OnDropDownClick"
+                                ToolTip="Add a node beside the selected one, reading the same picture, the two mixed" AutomationProperties.Name="Add a parallel node">
+                            <Button.ContextMenu>
+                                <ContextMenu ItemsSource="{Binding NodeChoices, Mode=OneWay}">
+                                    <ContextMenu.ItemContainerStyle>
+                                        <Style TargetType="{x:Type MenuItem}" BasedOn="{StaticResource {x:Type MenuItem}}">
+                                            <Setter Property="Header" Value="{Binding Label, Mode=OneWay}" />
+                                            <Setter Property="CommandParameter" Value="{Binding Mode=OneWay}" />
+                                            <Setter Property="Command" Value="{Binding PlacementTarget.DataContext.AddParallelNodeCommand, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}, Mode=OneWay}" />
+                                        </Style>
+                                    </ContextMenu.ItemContainerStyle>
+                                </ContextMenu>
+                            </Button.ContextMenu>
+                        </Button>
+                        <Button Style="{StaticResource Button.Small}" Content="&#xE890;" Command="{Binding ShowNodeCommand, Mode=OneWay}"
+                                ToolTip="Show the grade up to the selected node" AutomationProperties.Name="Show this node" />
+                        <Button Style="{StaticResource Button.Small}" Content="&#xE7E8;" Command="{Binding ToggleNodeCommand, Mode=OneWay}"
+                                ToolTip="Switch the selected node off or on" AutomationProperties.Name="Switch the node off or on" />
+                        <Button Style="{StaticResource Button.Small}" Content="&#xE74D;" Command="{Binding RemoveNodeCommand, Mode=OneWay}"
+                                ToolTip="Remove the selected node" AutomationProperties.Name="Remove the node" />
+                    </StackPanel>
+                </DockPanel>
+                <local:NodeGraphView Margin="0,6,0,0" Visibility="{Binding HasGraph, Mode=OneWay, Converter={StaticResource Visible}}" />
+            </StackPanel>
+
             <!-- The wheels. -->
             <StackPanel Margin="0,10,0,0" Visibility="{Binding HasClip, Mode=OneWay, Converter={StaticResource Visible}}">
                 <DockPanel LastChildFill="False">

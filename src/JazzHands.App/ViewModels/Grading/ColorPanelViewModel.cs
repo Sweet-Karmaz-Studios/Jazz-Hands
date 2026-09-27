@@ -321,6 +321,13 @@ public sealed partial class ColorPanelViewModel : ToolViewModel
             return;
         }
 
+        if (GraphId is not null)
+        {
+            // In a node graph, a new correction is a node after the selected one.
+            await AddNodeAsync(typeId["color.".Length..], parallel: false).ConfigureAwait(true);
+            return;
+        }
+
         CommandResult result = await _session.ExecuteAsync(new AddEffectCommand(_clipId, typeId)).ConfigureAwait(true);
         _ui.Post(() => Status = result.Ok ? string.Empty : result.Error ?? result.Code ?? "That did not work.");
     }
@@ -404,8 +411,15 @@ public sealed partial class ColorPanelViewModel : ToolViewModel
             HasClip = found is not null;
             Heading = found is null ? "Select a clip to grade" : $"Grading {(found.Clip.Name.Length > 0 ? found.Clip.Name : "the clip")}";
 
-            Effect? wheels = found?.Clip.Effects.FirstOrDefault(effect => effect.TypeId == "color.wheels");
-            Effect? curves = found?.Clip.Effects.FirstOrDefault(effect => effect.TypeId == "color.curves");
+            // With a colour graph, the wheels and curves drive the node selected in the node view.
+            Effect? holder = found?.Clip.Effects.FirstOrDefault(effect => effect.TypeId == GradeGraph.TypeId);
+            GradeNode? node = LoadNodes(holder);
+            Effect? wheels = holder is not null
+                ? node?.Effect is { TypeId: "color.wheels" } nodeWheels ? nodeWheels : null
+                : found?.Clip.Effects.FirstOrDefault(effect => effect.TypeId == "color.wheels");
+            Effect? curves = holder is not null
+                ? node?.Effect is { TypeId: "color.curves" } nodeCurves ? nodeCurves : null
+                : found?.Clip.Effects.FirstOrDefault(effect => effect.TypeId == "color.curves");
             LoadMatchChoices(project, found);
             WheelsId = wheels?.Id;
             CurvesId = curves?.Id;
