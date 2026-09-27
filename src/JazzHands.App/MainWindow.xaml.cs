@@ -120,7 +120,51 @@ public partial class MainWindow : Window, Shell.IAppWindow, Shell.ITourHost
                 {
                     control.ItemContainerStyle = DockTabs.GetValue(own, style => Themed(style, tab));
                 }
+
+                if (sender is AvalonDock.Controls.LayoutDocumentPaneControl documents)
+                {
+                    ThemeDocumentMenu(documents);
+                }
             }));
+        }
+    }
+
+    /// <summary>
+    /// The document pane's list of open timelines (the arrow at its top right): AvalonDock draws the
+    /// arrow as a bitmap on a white box, and its menu and items are its own subclasses, which the
+    /// theme's menu styles do not reach, so it came up light with white text. The button becomes
+    /// one of ours with a chevron, the menu takes the theme's, and its items the theme's menu item
+    /// with AvalonDock's setters (header, icon, the command that brings the timeline forward) kept.
+    /// </summary>
+    private void ThemeDocumentMenu(AvalonDock.Controls.LayoutDocumentPaneControl pane)
+    {
+        if (pane.Template?.FindName("MenuDropDownButton", pane) is not AvalonDock.Controls.DropDownButton button || button.Tag is "themed")
+        {
+            return;
+        }
+
+        button.Tag = "themed";
+        button.Style = (Style)FindResource("Button.Icon");
+        button.Width = 22;
+        button.Height = 22;
+        button.FontSize = 12;
+        button.Content = "";
+        button.ToolTip = "Open timelines";
+        System.Windows.Automation.AutomationProperties.SetName(button, "Open timelines");
+
+        if (button.DropDownContextMenu is { } menu)
+        {
+            menu.Style = (Style)FindResource(typeof(ContextMenu));
+            if (menu.ItemContainerStyle is { } own)
+            {
+                var item = new Style(own.TargetType, (Style)FindResource(typeof(MenuItem)));
+                foreach (Setter setter in own.Setters.OfType<Setter>().Where(setter => setter.Property != TemplateProperty))
+                {
+                    item.Setters.Add(new Setter(setter.Property, setter.Value));
+                }
+
+                menu.ItemContainerStyle = item;
+            }
         }
     }
 

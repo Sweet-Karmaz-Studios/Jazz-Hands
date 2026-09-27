@@ -494,7 +494,7 @@ public sealed partial class TimelineViewModel
 
     /// <summary>Media is being dragged over the timeline: show where it would land.</summary>
     /// <returns>True when it can be dropped here.</returns>
-    public bool DragOver(IReadOnlyList<string> mediaIds, Point point)
+    public bool DragOver(IReadOnlyList<string> mediaIds, Point point, bool control = false)
     {
         ArgumentNullException.ThrowIfNull(mediaIds);
 
@@ -503,8 +503,21 @@ public sealed partial class TimelineViewModel
             [.. adds.Select(add => new GhostClip(add.TrackId, add.At, add.At + (add.Duration ?? Flicks.Zero)))],
             refused);
         Invalidate(TimelineLayers.Ghost);
+        if (refused is null && !adds.IsEmpty)
+        {
+            Status = Inserts(control)
+                ? $"Drop to insert, pushing what follows along; {(Magnetic ? "release Ctrl" : "without Ctrl")} to overwrite."
+                : $"Drop to overwrite what is there; {(Magnetic ? "without Ctrl" : "hold Ctrl")} to insert, pushing what follows along.";
+        }
+
         return refused is null && !adds.IsEmpty;
     }
+
+    /// <summary>
+    /// Whether a drop inserts (pushing what follows along) rather than overwriting: Ctrl turns it
+    /// round, and a magnetic timeline inserts by default, as its moves do.
+    /// </summary>
+    private bool Inserts(bool control) => control != Magnetic;
 
     /// <summary>The drag left without dropping.</summary>
     public void DragLeave() => ClearGesture();
@@ -665,9 +678,12 @@ public sealed partial class TimelineViewModel
 
     /// <summary>
     /// Media was dropped: each item goes on the track under the pointer, end to end from the
-    /// pointer's time, a movie bringing its sound onto audio tracks linked to the picture.
+    /// pointer's time, a movie bringing its sound onto audio tracks linked to the picture. It
+    /// overwrites what it lands on (over empty space that is simply adding it); with
+    /// <paramref name="control"/> held it inserts, pushing what follows along. A magnetic timeline
+    /// has these the other way round.
     /// </summary>
-    public async Task DropAsync(IReadOnlyList<string> mediaIds, Point point)
+    public async Task DropAsync(IReadOnlyList<string> mediaIds, Point point, bool control = false)
     {
         ArgumentNullException.ThrowIfNull(mediaIds);
 
@@ -682,7 +698,12 @@ public sealed partial class TimelineViewModel
 
         if (!adds.IsEmpty)
         {
-            await RunAsync(new BatchCommand([.. adds], adds.Length == 1 ? "Add clip" : $"Add {adds.Length} clips")).ConfigureAwait(true);
+            bool insert = Inserts(control);
+            ICommand[] edits = [.. adds.Select(add => insert
+                ? (ICommand)new InsertClipCommand(add.TrackId, add.At, add.MediaId, add.GeneratorId, add.SequenceId, add.SourceIn, add.Duration, add.Name, add.SourceStreamIndex, add.ClipId, add.WithAudio)
+                : new OverwriteClipCommand(add.TrackId, add.At, add.MediaId, add.GeneratorId, add.SequenceId, add.SourceIn, add.Duration, add.Name, add.SourceStreamIndex, add.ClipId, add.WithAudio))];
+            string verb = insert ? "Insert" : "Overwrite with";
+            await RunAsync(new BatchCommand([.. edits], adds.Length == 1 ? $"{verb} clip" : $"{verb} {adds.Length} clips")).ConfigureAwait(true);
         }
     }
 
