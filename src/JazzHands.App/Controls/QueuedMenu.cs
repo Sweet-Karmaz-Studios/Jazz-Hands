@@ -30,6 +30,18 @@ public class QueuedMenu : Menu
 /// <summary>A menu item whose automation Invoke is queued; its submenu's items are the same.</summary>
 public class QueuedMenuItem : MenuItem
 {
+    /// <summary>Creates an item.</summary>
+    /// <remarks>
+    /// Windows' own menu item style binds these two to the nearest ItemsControl, and a generated
+    /// item has none until it is placed: each such item logged two binding errors. Set here, the
+    /// bindings are never made; the theme's templates do not read them.
+    /// </remarks>
+    public QueuedMenuItem()
+    {
+        HorizontalContentAlignment = HorizontalAlignment.Left;
+        VerticalContentAlignment = VerticalAlignment.Center;
+    }
+
     /// <inheritdoc />
     protected override DependencyObject GetContainerForItemOverride() => new QueuedMenuItem();
 

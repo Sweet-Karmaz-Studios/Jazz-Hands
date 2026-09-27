@@ -46,14 +46,15 @@ public static class ProjectPaths
     /// <summary>
     /// Turns a stored media path into a full path on this machine.
     /// </summary>
-    /// <param name="projectPath">The .jazz file the path is relative to.</param>
+    /// <param name="projectPath">The .jazz file the path is relative to; empty for a project never saved, whose paths are full ones.</param>
     /// <param name="storedPath">The path as the file holds it.</param>
     public static string Resolve(string projectPath, string storedPath)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(projectPath);
         ArgumentNullException.ThrowIfNull(storedPath);
 
-        if (Path.IsPathRooted(storedPath))
+        // A project never saved has no folder to be relative to (dragging a clip out of an
+        // untitled project's Media panel crashed on this, 2026-09-27).
+        if (Path.IsPathRooted(storedPath) || string.IsNullOrWhiteSpace(projectPath))
         {
             return Path.GetFullPath(storedPath);
         }

@@ -24,7 +24,7 @@ namespace JazzHands.Media.Import;
 public sealed partial class CacheManager : IDisposable
 {
     private readonly ILogger _log = Log.ForContext<CacheManager>();
-    private readonly SqliteConnection _connection;
+    private SqliteConnection _connection = null!;
     private readonly Lock _gate = new();
     private bool _disposed;
 
@@ -38,16 +38,28 @@ public sealed partial class CacheManager : IDisposable
 
         DatabasePath = Path.Combine(Folder, "cache.db");
 
-        _connection = new SqliteConnection(new SqliteConnectionStringBuilder
+        try
         {
-            DataSource = DatabasePath,
-            Mode = SqliteOpenMode.ReadWriteCreate,
-            Cache = SqliteCacheMode.Shared,
-        }.ToString());
+            Open();
+        }
+        catch (SqliteException damaged) when (damaged.SqliteErrorCode is Corrupt or NotADatabase)
+        {
+            // A cache can always be built again: a damaged one is set aside and started afresh,
+            // rather than every import and thumbnail failing on it (2026-09-27, after a crash).
+            try
+            {
+                SetAside();
+            }
+            catch (IOException)
+            {
+                _log.Warning(damaged, "The cache at {Path} is damaged, and in use elsewhere, so it is left as it is", DatabasePath);
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(damaged).Throw();
+            }
 
-        _connection.Open();
-        Configure();
-        CreateTables();
+            _log.Warning(damaged, "The cache at {Path} was damaged; it is set aside and started again", DatabasePath);
+            Open();
+        }
+
         _blobBytes = SumBlobBytes();
     }
 
@@ -304,6 +316,57 @@ public sealed partial class CacheManager : IDisposable
         SqliteConnection.ClearAllPools();
     }
 
+    private const int Corrupt = 11;
+    private const int NotADatabase = 26;
+
+    /// <summary>Opens the database, brings it up to date and checks it; throws when it is damaged.</summary>
+    private void Open()
+    {
+        _connection = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = DatabasePath,
+            Mode = SqliteOpenMode.ReadWriteCreate,
+            Cache = SqliteCacheMode.Shared,
+        }.ToString());
+
+        try
+        {
+            _connection.Open();
+            Configure();
+            CreateTables();
+        }
+        catch
+        {
+            _connection.Dispose();
+            SqliteConnection.ClearAllPools();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Moves a damaged database and its journal aside, and empties the blobs it indexed. Another
+    /// process with the file open (the editor, jazz, jazz-mcp) keeps Windows from moving it; then
+    /// the damage stands and is reported, rather than the file going from under that process.
+    /// </summary>
+    private void SetAside()
+    {
+        SqliteConnection.ClearAllPools();
+        string stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+        foreach (string suffix in (string[])["", "-wal", "-shm"])
+        {
+            string file = DatabasePath + suffix;
+            if (File.Exists(file))
+            {
+                File.Move(file, $"{DatabasePath}.damaged-{stamp}{suffix}", overwrite: true);
+            }
+        }
+
+        foreach (string blob in Directory.EnumerateFiles(BlobFolder, "*", SearchOption.AllDirectories))
+        {
+            File.Delete(blob);
+        }
+    }
+
     private void Configure()
     {
         using SqliteCommand command = _connection.CreateCommand();
@@ -315,7 +378,35 @@ public sealed partial class CacheManager : IDisposable
         command.ExecuteNonQuery();
     }
 
+    /// <summary>
+    /// Creates the tables and brings an older database up to date, as one exclusive transaction:
+    /// the editor and jazz opening a new cache at the same moment otherwise raced, the second
+    /// taking the first's half made thumbs table for an old one and dropping it.
+    /// </summary>
     private void CreateTables()
+    {
+        Execute("BEGIN IMMEDIATE;");
+        try
+        {
+            CreateAndMigrate();
+            Execute("COMMIT;");
+        }
+        catch
+        {
+            try
+            {
+                Execute("ROLLBACK;");
+            }
+            catch (SqliteException)
+            {
+                // Already rolled back, or the database is too damaged to; the first error says why.
+            }
+
+            throw;
+        }
+    }
+
+    private void CreateAndMigrate()
     {
         using SqliteCommand command = _connection.CreateCommand();
 
