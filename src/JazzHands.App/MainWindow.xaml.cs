@@ -34,6 +34,10 @@ public partial class MainWindow : Window, Shell.IAppWindow
         DataContext = model;
         model.PanelsRequested += (_, ids) => BringForward(ids);
 
+        // What the panels ask of the window: the empty timeline's way into the sample and the tour.
+        CommandBindings.Add(new CommandBinding(Shell.ShellCommands.OpenSample, (_, _) => _ = model.OpenSampleCommand.ExecuteAsync(null)));
+        CommandBindings.Add(new CommandBinding(Shell.ShellCommands.Tour, (_, _) => model.ShowTourCommand.Execute(null)));
+
         // Where it was left, moved back on screen if its monitor has gone.
         SourceInitialized += (_, _) => Restore();
 

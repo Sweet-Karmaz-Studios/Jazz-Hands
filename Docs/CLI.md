@@ -70,7 +70,7 @@ report or a CI job should capture.
 
 ### `jazz new <project>`
 
-Create an empty project with one video and one audio track.
+Create an empty project with one video and one audio track, or with --sample the sample project.
 
 | Argument | Meaning |
 |---|---|
@@ -82,6 +82,7 @@ Create an empty project with one video and one audio track.
 | `--size <size>` | Frame size: 1920x1080, or one of 720p, 1080p, 2k, 4k, 8k. Default: 1920x1080. |
 | `--name <name>` | The project name. Defaults to the file name. |
 | `--force` | Overwrite an existing project file. |
+| `--sample` | Make the sample project instead: a 20 second trailer of gradients, particles, titles and sound, at 1920x1080 and 30 fps, to try every tool on. |
 
 Creates an empty project with one video track and one audio track, and saves it.
 
@@ -100,6 +101,11 @@ The `.jazz` extension is added if it is left off.
 what the person meant. `--fps 23.5` is refused with the ratio to type instead, because storing
 2997/100 would drift by a frame every thousand frames against real footage and nobody would find
 out until an export went out of sync.
+
+**The sample.** `jazz new demo.jazz --sample` writes the sample project instead: a 20 second
+trailer at 1920x1080 and 30 fps made of the editor's own gradients, particles, titles and sound,
+the same as the editor's Help, Open the sample project (`project.sample`). It needs no media, so
+it opens anywhere; `--fps`, `--size` and `--name` do not apply to it.
 
 ### `jazz validate <project>`
 
@@ -4688,8 +4694,9 @@ when it is there, and from the project's folder otherwise.
 history. Undo belongs to an open session, and each headless invocation is a new one. They become
 useful with `--attach` in Phase 25.
 
-`jazz project new`, `open` and `save` are hand-written rather than generated, because they are
-about which file is open rather than about editing one; see `jazz new`.
+`jazz project new`, `open`, `save` and `sample` are hand-written rather than generated, because
+they are about which file is open rather than about editing one; see `jazz new` (and
+`jazz new --sample`). Attached, they go to the editor as they are: `jazz --attach project sample`.
 
 ### Media
 

@@ -92,8 +92,9 @@ when it is there, and from the project's folder otherwise.
 history. Undo belongs to an open session, and each headless invocation is a new one. They become
 useful with `--attach` in Phase 25.
 
-`jazz project new`, `open` and `save` are hand-written rather than generated, because they are
-about which file is open rather than about editing one; see `jazz new`.
+`jazz project new`, `open`, `save` and `sample` are hand-written rather than generated, because
+they are about which file is open rather than about editing one; see `jazz new` (and
+`jazz new --sample`). Attached, they go to the editor as they are: `jazz --attach project sample`.
 
 ### Media
 

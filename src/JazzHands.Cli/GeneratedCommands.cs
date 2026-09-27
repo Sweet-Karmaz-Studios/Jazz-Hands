@@ -126,7 +126,7 @@ public static class GeneratedCommands
     /// </remarks>
     private static bool Skip(CommandMetadata metadata) =>
         metadata.Type == typeof(BatchCommand)
-        || (JazzCli.AttachTarget is null && metadata.Name is "project.new" or "project.open" or "project.save");
+        || (JazzCli.AttachTarget is null && metadata.Name is "project.new" or "project.open" or "project.save" or "project.sample");
 
     private static Command Build(CommandMetadata metadata)
     {

@@ -66,7 +66,7 @@ public sealed class CommandDispatcher : IAsyncDisposable
         AllowSynchronousContinuations = false,
     });
 
-    private readonly ConcurrentDictionary<Type, IHandlerAdapter> _adapters = new();
+    private static readonly ConcurrentDictionary<Type, IHandlerAdapter> Adapters = new();
     private readonly IServiceProvider _services;
     private readonly TimeProvider _clock;
     private readonly Task _pump;
@@ -340,15 +340,21 @@ public sealed class CommandDispatcher : IAsyncDisposable
         return Commit(batch, metadata, before, working, context.ChangedIds, ChangeOrigin.Command, issuer);
     }
 
-    private Project Apply(Project project, ICommand command, HandlerContext context)
+    private Project Apply(Project project, ICommand command, HandlerContext context) => Apply(_services, project, command, context);
+
+    /// <summary>
+    /// Runs a command's handler against a project and returns what it made, committing nothing:
+    /// the dispatcher's own step, and a handler's that builds a project from other commands.
+    /// </summary>
+    internal static Project Apply(IServiceProvider services, Project project, ICommand command, HandlerContext context)
     {
         Type handlerType = typeof(ICommandHandler<>).MakeGenericType(command.GetType());
-        object handler = _services.GetService(handlerType)
+        object handler = services.GetService(handlerType)
             ?? throw new CommandException(
                 "no-handler",
                 $"Nothing handles '{CommandRegistry.NameOf(command)}'. Add an {handlerType.Name} and register it.");
 
-        IHandlerAdapter adapter = _adapters.GetOrAdd(
+        IHandlerAdapter adapter = Adapters.GetOrAdd(
             command.GetType(),
             static type => (IHandlerAdapter)Activator.CreateInstance(
                 typeof(HandlerAdapter<>).MakeGenericType(type))!);

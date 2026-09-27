@@ -91,6 +91,23 @@ public sealed partial class MainViewModel
         Report(result, $"New project '{choice.Name}'. Save it to choose where it lives.");
     }
 
+    /// <summary>Help, Tour of the editor: eight short cards on the tools.</summary>
+    [RelayCommand]
+    private void ShowTour() => _dialogs?.ShowTour();
+
+    /// <summary>Help, Open the sample project: asks about unsaved changes, then builds the sample (<c>project.sample</c>).</summary>
+    [RelayCommand]
+    public async Task OpenSampleAsync()
+    {
+        if (_dialogs is null || !await ReadyToCloseAsync().ConfigureAwait(true))
+        {
+            return;
+        }
+
+        CommandResult result = await _session.ExecuteAsync(new SampleProjectCommand(Discard: true)).ConfigureAwait(true);
+        Report(result, "The sample project: play it, then try the tools on it. Save it to keep what you change.");
+    }
+
     /// <summary>File, Open: asks about unsaved changes, then for a file.</summary>
     [RelayCommand]
     public async Task OpenProjectAsync()
@@ -294,6 +311,8 @@ public sealed partial class MainViewModel
         Menu.Add(PlaybackMenu());
         Menu.Add(WindowMenu());
         Menu.Add(new MenuItemViewModel("_Help").With(
+            new MenuItemViewModel("_Tour of the editor", ShowTourCommand),
+            new MenuItemViewModel("Open the _sample project", OpenSampleCommand),
             new MenuItemViewModel("_Keyboard shortcuts...", ShowShortcutsCommand),
             new MenuItemViewModel("Open the _log folder", OpenLogFolderCommand)));
 

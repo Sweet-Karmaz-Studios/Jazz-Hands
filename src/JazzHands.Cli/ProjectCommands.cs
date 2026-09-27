@@ -4,10 +4,15 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using JazzHands.Core;
+using JazzHands.Core.Commands;
 using JazzHands.Core.Model;
 using JazzHands.Core.Serialization;
 using JazzHands.Core.Time;
 using JazzHands.Core.Validation;
+using JazzHands.Engine;
+using JazzHands.Engine.Commands;
+using JazzHands.Engine.Handlers;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace JazzHands.Cli;
 
@@ -55,13 +60,17 @@ public static class ProjectCommands
         {
             Description = "Overwrite an existing project file.",
         };
-
-        var command = new Command("new", "Create an empty project with one video and one audio track.")
+        var sample = new Option<bool>("--sample")
         {
-            file, fps, size, name, force,
+            Description = "Make the sample project instead: a 20 second trailer of gradients, particles, titles and sound, at 1920x1080 and 30 fps, to try every tool on.",
         };
 
-        command.SetAction(parse =>
+        var command = new Command("new", "Create an empty project with one video and one audio track, or with --sample the sample project.")
+        {
+            file, fps, size, name, force, sample,
+        };
+
+        command.SetAction(async (parse, cancellation) =>
         {
             string path = Path.GetFullPath(EnsureExtension(parse.GetValue(file)!));
 
@@ -69,6 +78,11 @@ public static class ProjectCommands
             {
                 Console.Error.WriteLine($"jazz: '{path}' already exists. Pass --force to overwrite it.");
                 return ExitCode.CommandError;
+            }
+
+            if (parse.GetValue(sample))
+            {
+                return await NewSampleAsync(path, parse.GetValue(JazzCli.JsonOption), cancellation).ConfigureAwait(false);
             }
 
             if (!TryParseFrameRate(parse.GetValue(fps)!, out Rational frameRate, out string? rateError))
@@ -103,6 +117,40 @@ public static class ProjectCommands
         });
 
         return command;
+    }
+
+    /// <summary>
+    /// jazz new --sample: builds the sample through a session, exactly as the editor's Help, Open
+    /// the sample project does, and writes it.
+    /// </summary>
+    private static async Task<int> NewSampleAsync(string path, bool json, CancellationToken cancellation)
+    {
+        await using ServiceProvider services = new ServiceCollection().AddJazzHandsEngine().BuildServiceProvider();
+        await using var session = new Session(Project.CreateNew(SampleProjectHandler.Name, ProjectSettings.Default), services) { DefaultIssuer = "cli" };
+
+        try
+        {
+            await session.ExecuteAsync(new SampleProjectCommand(Discard: true), cancellation).ConfigureAwait(false);
+        }
+        catch (CommandException error)
+        {
+            Console.Error.WriteLine($"jazz: {error.Code}: {error.Message}");
+            return ExitCode.CommandError;
+        }
+
+        Project project = session.Project;
+        ProjectFile.Save(path, project);
+        if (json)
+        {
+            Console.Out.WriteLine(JsonSerializer.Serialize(new { path, id = project.Id, name = project.Name, sample = true }, JsonText));
+        }
+        else
+        {
+            Console.Out.WriteLine($"Created {path}");
+            Console.Out.WriteLine("  The sample: a 20 second trailer of gradients, particles, titles and sound, 1920x1080 at 30 fps.");
+        }
+
+        return ExitCode.Ok;
     }
 
     private static Command BuildValidate()

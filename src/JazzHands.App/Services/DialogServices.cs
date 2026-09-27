@@ -39,6 +39,9 @@ public interface IDialogService
 
     /// <summary>Asks where and how to gather the project and its media: a folder, or a zip when archiving.</summary>
     Task ShowConsolidateAsync(bool archive);
+
+    /// <summary>Shows the tour, or brings it forward when it is already open. Not modal.</summary>
+    void ShowTour();
 }
 
 /// <summary>What to do with unsaved changes.</summary>
@@ -114,6 +117,8 @@ public sealed class DialogService(
     Func<MissingMediaViewModel>? missingFactory = null,
     Func<ConsolidateViewModel>? consolidateFactory = null) : IDialogService
 {
+    private Views.Shell.TourWindow? _tour;
+
     /// <inheritdoc />
     public async Task ShowMissingMediaAsync()
     {
@@ -247,6 +252,27 @@ public sealed class DialogService(
         viewModel.CloseRequested += (_, _) => window.Close();
         window.ShowDialog();
         return Task.FromResult(viewModel.Choice);
+    }
+
+    /// <inheritdoc />
+    public void ShowTour()
+    {
+        if (_tour is { IsLoaded: true })
+        {
+            _tour.Activate();
+            return;
+        }
+
+        var viewModel = new ViewModels.TourViewModel();
+        _tour = new Views.Shell.TourWindow
+        {
+            DataContext = viewModel,
+            Owner = Application.Current?.MainWindow,
+        };
+
+        viewModel.CloseRequested += (_, _) => _tour?.Close();
+        _tour.Closed += (_, _) => _tour = null;
+        _tour.Show();
     }
 
     /// <inheritdoc />

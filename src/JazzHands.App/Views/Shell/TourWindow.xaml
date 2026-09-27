@@ -1,0 +1,41 @@
+<!--
+    The tour: one card at a time, Back and Next under it. Not modal, so a person can try what a
+    card says in the window behind it and come back.
+-->
+<Window x:Class="JazzHands.App.Views.Shell.TourWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:JazzHands.App.ViewModels"
+        mc:Ignorable="d"
+        d:DataContext="{d:DesignInstance vm:TourViewModel}"
+        Title="Tour of the editor"
+        Width="440"
+        SizeToContent="Height"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Background="{DynamicResource Brush.Background.Panel}"
+        Foreground="{DynamicResource Brush.Text.Primary}">
+    <StackPanel x:Name="Root" Margin="20,16,20,16">
+        <TextBlock Text="{Binding Counter, Mode=OneWay}"
+                   FontSize="{DynamicResource Text.Caption}"
+                   Foreground="{DynamicResource Brush.Text.Secondary}" />
+        <TextBlock Margin="0,4,0,8"
+                   Text="{Binding Step.Title, Mode=OneWay}"
+                   FontSize="{DynamicResource Text.Heading}"
+                   FontWeight="SemiBold" />
+        <!-- The height of the longest card, so the buttons do not jump from card to card. -->
+        <TextBlock MinHeight="96"
+                   Text="{Binding Step.Text, Mode=OneWay}"
+                   TextWrapping="Wrap"
+                   LineHeight="19"
+                   AutomationProperties.Name="What this card says" />
+        <DockPanel Margin="0,16,0,0" LastChildFill="False">
+            <Button DockPanel.Dock="Left" Style="{StaticResource Button.Text}" Content="Close" IsCancel="True" Click="OnClose" AutomationProperties.Name="Close the tour" />
+            <Button DockPanel.Dock="Right" Style="{StaticResource Button.Primary}" Margin="8,0,0,0" Content="{Binding NextLabel, Mode=OneWay}" IsDefault="True" Command="{Binding NextCommand, Mode=OneWay}" AutomationProperties.Name="Next card" />
+            <Button DockPanel.Dock="Right" Style="{StaticResource Button.Secondary}" Content="Back" Command="{Binding BackCommand, Mode=OneWay}" AutomationProperties.Name="Previous card" />
+        </DockPanel>
+    </StackPanel>
+</Window>

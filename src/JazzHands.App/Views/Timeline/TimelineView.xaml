@@ -6,6 +6,7 @@
              xmlns:timeline="clr-namespace:JazzHands.App.Controls.Timeline"
              xmlns:vm="clr-namespace:JazzHands.App.ViewModels.Timeline"
              xmlns:local="clr-namespace:JazzHands.App.Views.Timeline"
+             xmlns:shell="clr-namespace:JazzHands.App.Shell"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance vm:TimelineViewModel}"
              d:DesignWidth="900"
@@ -250,21 +251,30 @@
 
             <timeline:TimelineControl Grid.Column="1" Grid.Row="0" x:Name="Timeline" AutomationProperties.Name="Timeline" />
 
-            <!-- An empty sequence says how to begin; it lets the mouse through to the timeline. -->
-            <TextBlock Grid.Column="1"
-                       Grid.Row="0"
-                       Margin="24,64,24,0"
-                       HorizontalAlignment="Center"
-                       VerticalAlignment="Top"
-                       TextAlignment="Center"
-                       TextWrapping="Wrap"
-                       IsHitTestVisible="False"
-                       Foreground="{DynamicResource Brush.Text.Secondary}"
-                       Visibility="{Binding IsEmpty, Mode=OneWay, Converter={StaticResource Visible}}">
-                <Run Text="Drag media from the Media panel onto a track to start." />
-                <LineBreak />
-                <Run Text="Space plays, J K L shuttle, I and O mark in and out, Ctrl+K splits at the playhead, C is the razor." />
-            </TextBlock>
+            <!--
+                An empty sequence says how to begin, with a way into the sample and the tour (routed
+                commands the main window answers). Only the buttons take the mouse; the rest lets
+                it through to the timeline, so a drop there still lands.
+            -->
+            <StackPanel Grid.Column="1"
+                        Grid.Row="0"
+                        Margin="24,64,24,0"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Top"
+                        Visibility="{Binding IsEmpty, Mode=OneWay, Converter={StaticResource Visible}}">
+                <TextBlock TextAlignment="Center"
+                           TextWrapping="Wrap"
+                           IsHitTestVisible="False"
+                           Foreground="{DynamicResource Brush.Text.Secondary}">
+                    <Run Text="Drag media from the Media panel onto a track to start." />
+                    <LineBreak />
+                    <Run Text="Space plays, J K L shuttle, I and O mark in and out, Ctrl+K splits at the playhead, C is the razor." />
+                </TextBlock>
+                <StackPanel Margin="0,12,0,0" Orientation="Horizontal" HorizontalAlignment="Center">
+                    <Button Style="{StaticResource Button.Secondary}" Content="Open the sample project" Command="{x:Static shell:ShellCommands.OpenSample}" ToolTip="A 20 second trailer to try every tool on (Help, Open the sample project)" AutomationProperties.Name="Open the sample project" />
+                    <Button Style="{StaticResource Button.Secondary}" Margin="8,0,0,0" Content="Tour of the editor" Command="{x:Static shell:ShellCommands.Tour}" ToolTip="Eight short cards on the tools, about a minute" AutomationProperties.Name="Tour of the editor" />
+                </StackPanel>
+            </StackPanel>
 
             <ScrollBar Grid.Column="2"
                        Grid.Row="0"

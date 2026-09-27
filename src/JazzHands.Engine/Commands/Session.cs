@@ -184,7 +184,7 @@ public sealed class Session : ISessionState, IAsyncDisposable
                 ids = IdScope.Recording();
                 result = command switch
                 {
-                    NewProjectCommand or OpenProjectCommand => await _dispatcher.RunExclusiveAsync(() => Replace(command, issuer), cancellationToken).ConfigureAwait(false),
+                    NewProjectCommand or OpenProjectCommand or SampleProjectCommand => await _dispatcher.RunExclusiveAsync(() => Replace(command, issuer), cancellationToken).ConfigureAwait(false),
                     SaveProjectCommand save => await _dispatcher.RunExclusiveAsync(() => Save(save), cancellationToken).ConfigureAwait(false),
                     AcceptRecoveryCommand accept => await _dispatcher.RunExclusiveAsync(() => Refusable(() => AcceptRecovery(accept, issuer)), cancellationToken).ConfigureAwait(false),
                     DiscardRecoveryCommand discard => await _dispatcher.RunExclusiveAsync(() => Refusable(() => DiscardRecovery(discard)), cancellationToken).ConfigureAwait(false),
@@ -202,7 +202,7 @@ public sealed class Session : ISessionState, IAsyncDisposable
             // What changes the project goes in the log, with the identifiers it made, and undo and
             // redo with it: the log is replayed over the saved project after a crash, so it has to
             // hold the edit exactly as it went. A press of play or an export is not an edit.
-            if (result.Ok && _history is not null && command is not (NewProjectCommand or OpenProjectCommand or SaveProjectCommand)
+            if (result.Ok && _history is not null && command is not (NewProjectCommand or OpenProjectCommand or SampleProjectCommand or SaveProjectCommand)
                 && (CommandRegistry.Describe(command).Undoable || command is UndoCommand or RedoCommand))
             {
                 _history.Append(CommandRegistry.NameOf(command), CommandRegistry.ArgsToJson(command), _clock, ids?.Issued);
@@ -360,6 +360,7 @@ public sealed class Session : ISessionState, IAsyncDisposable
         {
             NewProjectCommand create => create.Discard,
             OpenProjectCommand open => open.Discard,
+            SampleProjectCommand sample => sample.Discard,
             _ => false,
         };
 
@@ -370,11 +371,12 @@ public sealed class Session : ISessionState, IAsyncDisposable
                 "This project has unsaved changes. Save it, or pass --discard to throw them away.");
         }
 
-        var context = new HandlerContext(null, TimeProvider.System, ProjectPath);
+        var context = new HandlerContext(_services, TimeProvider.System, ProjectPath);
         Project replacement = command switch
         {
             NewProjectCommand create => new Handlers.NewProjectHandler().Handle(Project, create, context),
             OpenProjectCommand open => new Handlers.OpenProjectHandler().Handle(Project, open, context),
+            SampleProjectCommand sample => new Handlers.SampleProjectHandler().Handle(Project, sample, context),
             _ => throw new CommandException("not-a-replacement", "That command does not replace the project."),
         };
 
