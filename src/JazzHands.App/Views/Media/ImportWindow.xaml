@@ -108,7 +108,7 @@
                        Text="{Binding Status, Mode=OneWay}" />
 
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button Style="{StaticResource Button.Text}"
+                <Button Style="{StaticResource Button.Secondary}"
                         Content="Cancel"
                         MinWidth="72"
                         Margin="0,0,8,0"

@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using JazzHands.Control;
+using JazzHands.Core;
 using JazzHands.Core.Commands;
 using JazzHands.Core.Model;
 using JazzHands.Core.Serialization;
@@ -59,7 +60,7 @@ public static class RpcCommands
             else
             {
                 int changed = (result?["changedIds"] as JsonArray)?.Count ?? 0;
-                Console.Out.WriteLine($"{metadata.Name}: {changed} item(s) changed in the editor ({Where(client)}).");
+                Console.Out.WriteLine($"{metadata.Name}: {Words.Count(changed, "item")} changed in the editor ({Where(client)}).");
             }
 
             // The editor answers before it goes; the uninstaller needs it gone before it checks

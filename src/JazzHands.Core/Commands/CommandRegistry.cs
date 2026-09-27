@@ -319,7 +319,7 @@ public static class CommandRegistry
         {
             throw new CommandException(
                 "too-many-arguments",
-                $"'{name}' takes {positional} argument(s), not {arguments.Count}.");
+                $"'{name}' takes {Words.Count(positional, "argument")}, not {arguments.Count}.");
         }
 
         return Construct(metadata, values);

@@ -48,7 +48,7 @@
         <Button Grid.Row="0"
                 Grid.Column="2"
                 Margin="8,0,0,0"
-                Style="{StaticResource Button.Text}"
+                Style="{StaticResource Button.Secondary}"
                 Content="Browse..."
                 Command="{Binding BrowseCommand, Mode=OneWay}"
                 AutomationProperties.Name="Browse for the output file" />
@@ -185,44 +185,44 @@
                         <Setter Property="Margin" Value="0,0,8,0" />
                         <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
                     </Style>
-                    <Style TargetType="TextBox" BasedOn="{StaticResource TextBox.Field}">
+                    <Style TargetType="TextBox" BasedOn="{StaticResource TextBox.Hinted}">
                         <Setter Property="Margin" Value="0,2,12,2" />
                     </Style>
                 </Grid.Resources>
 
                 <TextBlock Grid.Row="0" Grid.Column="0" Text="Size" />
-                <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding SizeText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                <TextBox Grid.Row="0" Grid.Column="1" Tag="{Binding Hints.Size, Mode=OneWay}" Text="{Binding SizeText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                          ToolTip="Fit inside this size, never scaling up: 3840x2160, 1920x1080, 1280x720, 854x480"
                          AutomationProperties.Name="Size" />
                 <TextBlock Grid.Row="0" Grid.Column="2" Text="Frame rate" />
-                <TextBox Grid.Row="0" Grid.Column="3" Text="{Binding FrameRateText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                <TextBox Grid.Row="0" Grid.Column="3" Tag="{Binding Hints.FrameRate, Mode=OneWay}" Text="{Binding FrameRateText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                          ToolTip="60, 50, 30, 30000/1001, 25, 24, 15"
                          AutomationProperties.Name="Frame rate" />
 
                 <TextBlock Grid.Row="1" Grid.Column="0" Text="Quality" />
-                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding QualityText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                <TextBox Grid.Row="1" Grid.Column="1" Tag="{Binding Hints.Quality, Mode=OneWay}" Text="{Binding QualityText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                          ToolTip="Constant quality, CRF or CQ: lower is better, about 18 to 23 for delivery"
                          AutomationProperties.Name="Quality" />
                 <TextBlock Grid.Row="1" Grid.Column="2" Text="Bitrate" />
-                <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding BitrateText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                <TextBox Grid.Row="1" Grid.Column="3" Tag="{Binding Hints.Bitrate, Mode=OneWay}" Text="{Binding BitrateText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                          ToolTip="A picture bitrate instead of constant quality: 8M, 2500k"
                          AutomationProperties.Name="Bitrate" />
 
                 <TextBlock Grid.Row="2" Grid.Column="0" Text="Encoders" />
-                <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding EncodersText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                <TextBox Grid.Row="2" Grid.Column="1" Tag="{Binding Hints.Encoders, Mode=OneWay}" Text="{Binding EncodersText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                          ToolTip="The encoders to try in order: hevc_nvenc,libx265"
                          AutomationProperties.Name="Encoders" />
                 <TextBlock Grid.Row="2" Grid.Column="2" Text="Colour" />
-                <TextBox Grid.Row="2" Grid.Column="3" Text="{Binding PixelFormatText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                <TextBox Grid.Row="2" Grid.Column="3" Tag="{Binding Hints.PixelFormat, Mode=OneWay}" Text="{Binding PixelFormatText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                          ToolTip="The pixel format: yuv420p, yuv420p10le for ten bits, yuv422p10le. BT.709 SDR either way."
                          AutomationProperties.Name="Pixel format" />
 
                 <TextBlock Grid.Row="3" Grid.Column="0" Text="Sound" />
-                <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding AudioEncoderText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                <TextBox Grid.Row="3" Grid.Column="1" Tag="{Binding Hints.Sound, Mode=OneWay}" Text="{Binding AudioEncoderText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                          ToolTip="aac, libopus, flac, eac3, ac3, libmp3lame, pcm_s24le"
                          AutomationProperties.Name="Sound encoder" />
                 <TextBlock Grid.Row="3" Grid.Column="2" Text="Sound bitrate" />
-                <TextBox Grid.Row="3" Grid.Column="3" Text="{Binding AudioBitrateText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                <TextBox Grid.Row="3" Grid.Column="3" Tag="{Binding Hints.SoundBitrate, Mode=OneWay}" Text="{Binding AudioBitrateText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                          ToolTip="320k"
                          AutomationProperties.Name="Sound bitrate" />
 
@@ -239,7 +239,7 @@
                     </ComboBox.ItemTemplate>
                 </ComboBox>
                 <TextBlock Grid.Row="4" Grid.Column="2" Text="Under" />
-                <TextBox Grid.Row="4" Grid.Column="3" Text="{Binding TargetSizeText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                <TextBox Grid.Row="4" Grid.Column="3" Tag="{Binding Hints.Under, Mode=OneWay}" Text="{Binding TargetSizeText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                          ToolTip="Come in under this size, with a smaller picture when it must: 8MB, 25MB"
                          AutomationProperties.Name="Target size" />
 
@@ -256,11 +256,11 @@
                          AutomationProperties.Name="Loudness target" />
 
                 <TextBlock Grid.Row="6" Grid.Column="0" Text="From" />
-                <TextBox Grid.Row="6" Grid.Column="1" Text="{Binding StartText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                <TextBox Grid.Row="6" Grid.Column="1" Tag="{Binding Hints.From, Mode=OneWay}" Text="{Binding StartText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                          ToolTip="Export from here, in sequence time: 00:00:10.000"
                          AutomationProperties.Name="Export from" />
                 <TextBlock Grid.Row="6" Grid.Column="2" Text="To" />
-                <TextBox Grid.Row="6" Grid.Column="3" Text="{Binding EndText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                <TextBox Grid.Row="6" Grid.Column="3" Tag="{Binding Hints.To, Mode=OneWay}" Text="{Binding EndText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                          ToolTip="Export to here, in sequence time: 00:01:30.000"
                          AutomationProperties.Name="Export to" />
 
@@ -277,7 +277,7 @@
                               ToolTip="Write the mix alone: AAC in .m4a, Opus in .opus, FLAC, WAV or MP3, by the preset's sound"
                               Foreground="{DynamicResource Brush.Text.Primary}"
                               AutomationProperties.Name="Sound only" />
-                    <TextBlock Text="An empty box keeps the preset's own."
+                    <TextBlock Text="An empty box keeps the preset's value, shown in it."
                                FontSize="{DynamicResource Text.Caption}" />
                 </DockPanel>
             </Grid>
@@ -321,7 +321,7 @@
         </Border>
 
         <StackPanel Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,12,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button Style="{StaticResource Button.Text}"
+            <Button Style="{StaticResource Button.Secondary}"
                     Content="Cancel"
                     IsCancel="True"
                     Command="{Binding CancelCommand, Mode=OneWay}"
@@ -332,7 +332,7 @@
                     IsDefault="True"
                     Command="{Binding ExportCommand, Mode=OneWay}"
                     AutomationProperties.Name="Add to the export queue" />
-            <Button Style="{StaticResource Button.Text}"
+            <Button Style="{StaticResource Button.Secondary}"
                     Margin="8,0,0,0"
                     Content="Export now"
                     Command="{Binding ExportNowCommand, Mode=OneWay}"

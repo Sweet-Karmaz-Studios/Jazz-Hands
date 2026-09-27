@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using JazzHands.Core;
 using JazzHands.Core.Commands;
 using JazzHands.Core.Model;
 using JazzHands.Engine.Commands;
@@ -127,7 +128,7 @@ public sealed partial class MediaPanelViewModel
         ICommand[] reprobes = [.. _states.Where(pair => pair.Value == MediaFileState.Changed).Select(pair => (ICommand)new ReprobeMediaCommand(pair.Key))];
         if (reprobes.Length > 0)
         {
-            await RunAsync(new BatchCommand([.. reprobes], "Update changed media"), $"Updated {Services.Words.Count(reprobes.Length, "changed file")}.").ConfigureAwait(true);
+            await RunAsync(new BatchCommand([.. reprobes], "Update changed media"), $"Updated {Words.Count(reprobes.Length, "changed file")}.").ConfigureAwait(true);
         }
     }
 

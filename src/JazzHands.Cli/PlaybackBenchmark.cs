@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
 using JazzHands.Audio.Output;
+using JazzHands.Core;
 using JazzHands.Core.Commands;
 using JazzHands.Core.Model;
 using JazzHands.Core.Time;
@@ -226,7 +227,7 @@ public static class PlaybackBenchmark
         return string.Create(
             CultureInfo.InvariantCulture,
             $"""
-            {result.File}: {result.Size} at {result.FrameRate} fps, {result.Layers} layer(s), {result.Clips} clips, {(result.Effects.Length == 0 ? "no effects" : string.Join(" + ", result.Effects))}, on {result.Adapter}, clock from {result.Device}
+            {result.File}: {result.Size} at {result.FrameRate} fps, {Words.Count(result.Layers, "layer")}, {result.Clips} clips, {(result.Effects.Length == 0 ? "no effects" : string.Join(" + ", result.Effects))}, on {result.Adapter}, clock from {result.Device}
               {result.Seconds:F1} s, {result.FramesDue} frames due, {result.Presented} presented
               dropped         {result.Dropped} ({result.DroppedPercent:F3}%)
               late            p50 {result.LateP50Milliseconds:F1} ms, p99 {result.LateP99Milliseconds:F1} ms after the frame was due

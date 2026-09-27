@@ -154,7 +154,7 @@
                 <CheckBox Style="{StaticResource CheckBox.Dark}" Margin="0,0,0,8" Content="A notification when Claude Code or another client attaches" IsChecked="{Binding NotifyClientAttached, Mode=TwoWay}" />
                 <TextBlock Margin="0,16,0,4" Text="Uninstalling" Foreground="{DynamicResource Brush.Text.Secondary}" />
                 <TextBlock Style="{StaticResource Note}" Margin="0,0,0,8" Text="Jazz Hands tells Windows about .jazz files, its Explorer verbs and starting with Windows itself, so the uninstaller cannot take them back. Remove them here first, then uninstall." />
-                <Button Style="{StaticResource Button.Text}" HorizontalAlignment="Left" Content="Remove from Windows" Command="{Binding RemoveFromWindowsCommand, Mode=OneWay}" AutomationProperties.Name="Remove from Windows" />
+                <Button Style="{StaticResource Button.Secondary}" HorizontalAlignment="Left" Content="Remove from Windows" Command="{Binding RemoveFromWindowsCommand, Mode=OneWay}" AutomationProperties.Name="Remove from Windows" />
             </StackPanel>
 
             <!-- Keymap -->
@@ -241,8 +241,8 @@
 
         <DockPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,12,0,0">
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                <Button Style="{StaticResource Button.Text}" Content="Cancel" IsCancel="True" Command="{Binding CancelCommand, Mode=OneWay}" AutomationProperties.Name="Cancel" />
-                <Button Style="{StaticResource Button.Text}" Margin="8,0,0,0" Content="Apply" Command="{Binding ApplyCommand, Mode=OneWay}" AutomationProperties.Name="Apply" />
+                <Button Style="{StaticResource Button.Secondary}" Content="Cancel" IsCancel="True" Command="{Binding CancelCommand, Mode=OneWay}" AutomationProperties.Name="Cancel" />
+                <Button Style="{StaticResource Button.Secondary}" Margin="8,0,0,0" Content="Apply" Command="{Binding ApplyCommand, Mode=OneWay}" AutomationProperties.Name="Apply" />
                 <Button Style="{StaticResource Button.Primary}" Margin="8,0,0,0" Content="OK" IsDefault="True" Command="{Binding OkCommand, Mode=OneWay}" AutomationProperties.Name="OK" />
             </StackPanel>
             <TextBlock Text="{Binding Status, Mode=OneWay}" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" />

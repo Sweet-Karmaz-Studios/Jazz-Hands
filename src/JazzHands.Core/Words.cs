@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace JazzHands.App.Services;
+namespace JazzHands.Core;
 
 /// <summary>Counts as people write them: "1 chapter", "3 chapters", never "3 chapter(s)".</summary>
 public static class Words

@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using JazzHands.App.Services;
 using JazzHands.App.Shell;
+using JazzHands.Core;
 using JazzHands.Engine.Logging;
 using Serilog.Events;
 
@@ -113,7 +114,7 @@ public sealed partial class LogPanelViewModel : ToolViewModel
         }
 
         _copy?.Invoke(text.ToString());
-        Status = string.Create(CultureInfo.InvariantCulture, $"Copied {Services.Words.Count(Rows.Count, "line")}.");
+        Status = string.Create(CultureInfo.InvariantCulture, $"Copied {Words.Count(Rows.Count, "line")}.");
     }
 
     /// <summary>Empties the list and the ring.</summary>

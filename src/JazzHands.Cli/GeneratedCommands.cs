@@ -2,6 +2,7 @@ using System.CommandLine;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using JazzHands.Control;
+using JazzHands.Core;
 using JazzHands.Core.Commands;
 using JazzHands.Core.Model;
 using JazzHands.Core.Serialization;
@@ -394,7 +395,7 @@ public static class GeneratedCommands
         else
         {
             Console.Out.WriteLine(
-                $"{metadata.Name}: {result.ChangedIds.Length} item(s) changed{(save ? $", saved {path}" : string.Empty)}");
+                $"{metadata.Name}: {Words.Count(result.ChangedIds.Length, "item")} changed{(save ? $", saved {path}" : string.Empty)}");
         }
 
         return ExitCode.Ok;

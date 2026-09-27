@@ -75,7 +75,7 @@
 
                 <Button Margin="0,6,0,0"
                         HorizontalAlignment="Left"
-                        Style="{StaticResource Button.Text}"
+                        Style="{StaticResource Button.Secondary}"
                         Content="Add Colour wheels to this clip"
                         Command="{Binding AddWheelsCommand, Mode=OneWay}"
                         AutomationProperties.Name="Add Colour wheels to this clip">
@@ -175,7 +175,7 @@
 
                 <Button Margin="0,6,0,0"
                         HorizontalAlignment="Left"
-                        Style="{StaticResource Button.Text}"
+                        Style="{StaticResource Button.Secondary}"
                         Content="Add Curves to this clip"
                         Command="{Binding AddCurvesCommand, Mode=OneWay}"
                         AutomationProperties.Name="Add Curves to this clip">

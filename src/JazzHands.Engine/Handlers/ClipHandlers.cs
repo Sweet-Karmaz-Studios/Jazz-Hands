@@ -1,3 +1,4 @@
+using JazzHands.Core;
 using JazzHands.Core.Commands;
 using JazzHands.Core.Editing;
 using JazzHands.Core.Model;
@@ -655,7 +656,7 @@ public sealed class NudgeClipsHandler : ICommandHandler<NudgeClipsCommand>
             {
                 throw new CommandException(
                     "before-start",
-                    $"Nudging '{location.Clip.Name}' {command.Frames} frame(s) would put it before the start of the sequence.");
+                    $"Nudging '{location.Clip.Name}' {Words.Count(command.Frames, "frame")} would put it before the start of the sequence.");
             }
 
             sequence = HandlerContext.Require(EditOps.Move(sequence, location.Clip.Id, null, to));

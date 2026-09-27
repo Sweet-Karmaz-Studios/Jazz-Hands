@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Globalization;
+using JazzHands.Core;
 using JazzHands.Core.Commands;
 using JazzHands.Core.Editing;
 using JazzHands.Core.Export;
@@ -1024,7 +1025,7 @@ public static class ExportPlanner
         int encoded = pieces.Count(piece => piece.Encode);
         reasons.Insert(0, string.Create(
             CultureInfo.InvariantCulture,
-            $"Smart cut: {encoded} piece(s) around the cuts, {smart.EncodedFrames} frame(s), encoded again with {answer.Encoders[0]}; the other {smart.CopiedFrames} frame(s) are the source's own packets."));
+            $"Smart cut: {Words.Count(encoded, "piece")} around the cuts, {Words.Count(smart.EncodedFrames, "frame")}, encoded again with {answer.Encoders[0]}; {Words.Count(smart.CopiedFrames, "frame")} more copied as the source's own packets."));
 
         if (answer.Skipped is { } skipped)
         {
@@ -1078,7 +1079,7 @@ public static class ExportPlanner
         {
             reasons.Add(string.Create(
                 CultureInfo.InvariantCulture,
-                $"{snaps.Count} cut(s) moved to the nearest keyframe."));
+                $"{Words.Count(snaps.Count, "cut")} moved to the nearest keyframe."));
         }
 
         return new ExportPlan(

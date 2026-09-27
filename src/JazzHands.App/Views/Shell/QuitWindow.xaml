@@ -12,9 +12,9 @@
     <StackPanel Margin="16">
         <TextBlock x:Name="Message" Margin="0,0,0,16" TextWrapping="Wrap" />
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button Style="{StaticResource Button.Text}" Content="Cancel" IsCancel="True" Click="OnCancel" AutomationProperties.Name="Do not quit" />
-            <Button Style="{StaticResource Button.Text}" Margin="8,0,0,0" Content="Quit anyway" Click="OnQuitAnyway" ToolTip="Cancel the exports and quit now" AutomationProperties.Name="Cancel the exports and quit" />
-            <Button Style="{StaticResource Button.Text}" Margin="8,0,0,0" Content="Pause for next time" Click="OnPause" ToolTip="Pause the exports; they carry on when Jazz Hands next starts" AutomationProperties.Name="Pause the exports and quit" />
+            <Button Style="{StaticResource Button.Secondary}" Content="Cancel" IsCancel="True" Click="OnCancel" AutomationProperties.Name="Do not quit" />
+            <Button Style="{StaticResource Button.Secondary}" Margin="8,0,0,0" Content="Quit anyway" Click="OnQuitAnyway" ToolTip="Cancel the exports and quit now" AutomationProperties.Name="Cancel the exports and quit" />
+            <Button Style="{StaticResource Button.Secondary}" Margin="8,0,0,0" Content="Pause for next time" Click="OnPause" ToolTip="Pause the exports; they carry on when Jazz Hands next starts" AutomationProperties.Name="Pause the exports and quit" />
             <Button Style="{StaticResource Button.Primary}" Margin="8,0,0,0" Content="Wait, then quit" IsDefault="True" Click="OnWait" ToolTip="Hide the window, let the exports finish, then quit" AutomationProperties.Name="Quit when the exports finish" />
         </StackPanel>
     </StackPanel>

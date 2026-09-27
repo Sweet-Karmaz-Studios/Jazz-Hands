@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Globalization;
 using System.IO.Compression;
+using JazzHands.Core;
 using JazzHands.Core.Commands;
 using JazzHands.Core.Editing;
 using JazzHands.Core.Export;
@@ -83,7 +84,7 @@ public static class Consolidator
         {
             throw new CommandException(
                 "media-missing",
-                $"{missing.Length} media file(s) are missing: {string.Join(", ", missing.Select(item => item.Name))}. Relink them first (media.relink --auto).");
+                $"{Words.Count(missing.Length, "media file")} {(missing.Length == 1 ? "is" : "are")} missing: {string.Join(", ", missing.Select(item => item.Name))}. Relink them first (media.relink --auto).");
         }
 
         Flicks handles = command.Handles ?? Flicks.FromSeconds(1);

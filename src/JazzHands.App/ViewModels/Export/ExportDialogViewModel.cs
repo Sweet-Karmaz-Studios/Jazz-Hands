@@ -3,6 +3,7 @@ using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using JazzHands.App.Services;
+using JazzHands.Core;
 using JazzHands.Core.Commands;
 using JazzHands.Core.Export;
 using JazzHands.Core.Model;
@@ -129,8 +130,12 @@ public sealed partial class ExportDialogViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ExportCommand))]
+    [NotifyPropertyChangedFor(nameof(Hints))]
     [NotifyCanExecuteChangedFor(nameof(ExportNowCommand))]
     private ExportPlan? _plan;
+
+    /// <summary>What each empty override box stands for: the plan's own value, shown in the box.</summary>
+    public ExportHints Hints => ExportHints.Of(Plan);
 
     /// <summary>Creates the dialog's viewmodel.</summary>
     /// <param name="session">The session whose sequence is exported.</param>
@@ -599,3 +604,59 @@ public sealed record SubtitleChoice(SubtitleDelivery Value, string Label);
 /// <param name="Count">1, 2 or 6, or 0 for the preset's own.</param>
 /// <param name="Label">What the picker says.</param>
 public sealed record ChannelChoice(int Count, string Label);
+
+/// <summary>
+/// What each of the Export dialog's override boxes gets when it is left empty, from the plan: the
+/// preset's values for this sequence. The dialog shows them in the empty boxes.
+/// </summary>
+public sealed record ExportHints(
+    string Size,
+    string FrameRate,
+    string Quality,
+    string Bitrate,
+    string Encoders,
+    string PixelFormat,
+    string Sound,
+    string SoundBitrate,
+    string Under,
+    string From,
+    string To)
+{
+    /// <summary>No plan yet: nothing to say.</summary>
+    public static ExportHints None { get; } = new(
+        string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty,
+        string.Empty, string.Empty, string.Empty, string.Empty, string.Empty);
+
+    /// <summary>The hints for a plan, or none without one.</summary>
+    public static ExportHints Of(ExportPlan? plan)
+    {
+        if (plan is null)
+        {
+            return None;
+        }
+
+        // A copy or a smart cut takes picture and sound as the source has them; a sound-only
+        // encode has no picture.
+        bool passed = plan.Mode == ExportMode.Copy || plan.Smart is not null;
+        string source = plan.Mode == ExportMode.Copy ? "copied" : "as the source";
+        string picture = passed ? source : "no picture";
+        ExportVideo? video = plan.Video;
+        ExportAudio? audio = plan.Audio;
+        return new ExportHints(
+            Size: video is null ? picture : string.Create(CultureInfo.InvariantCulture, $"{video.Width}x{video.Height}"),
+            FrameRate: video is null ? picture : video.FrameRate.ToString(),
+            Quality: video is null ? picture : video.Bitrate > 0 ? "a bitrate instead" : video.Quality.ToString(CultureInfo.InvariantCulture),
+            Bitrate: video is null ? picture : video.Bitrate > 0 ? Bits(video.Bitrate) : "constant quality",
+            Encoders: video is null ? picture : string.Join(",", video.Encoders),
+            PixelFormat: video is null ? picture : video.PixelFormat ?? "the encoder's own",
+            Sound: audio?.Encoder ?? (passed ? source : "none"),
+            SoundBitrate: audio is null ? (passed ? source : string.Empty) : audio.Bitrate > 0 ? Bits(audio.Bitrate) : "the encoder's own",
+            Under: plan.TargetBytes > 0 ? ExportPresets.FormatBytes(plan.TargetBytes) : "no limit",
+            From: plan.Ranges.IsEmpty ? string.Empty : Timecode.FormatClock(plan.Ranges[0].Start),
+            To: plan.Ranges.IsEmpty ? string.Empty : Timecode.FormatClock(plan.Ranges[plan.Ranges.Length - 1].End));
+    }
+
+    private static string Bits(long perSecond) => perSecond % 1_000_000 == 0
+        ? string.Create(CultureInfo.InvariantCulture, $"{perSecond / 1_000_000}M")
+        : string.Create(CultureInfo.InvariantCulture, $"{perSecond / 1000}k");
+}

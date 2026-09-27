@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using JazzHands.Control;
+using JazzHands.Core;
 using JazzHands.Core.Commands;
 using JazzHands.Core.Model;
 using JazzHands.Core.Serialization;
@@ -160,7 +161,7 @@ public static class ApplyCommand
         else
         {
             string ending = save ? $", saved {path}" : dryRun ? ", dry run: nothing saved" : failed && !keepGoing ? ", nothing saved" : string.Empty;
-            Console.Out.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{ran} of {steps.Count} step(s) worked{ending}."));
+            Console.Out.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{ran} of {Words.Count(steps.Count, "step")} worked{ending}."));
         }
 
         return failed ? ExitCode.CommandError : ExitCode.Ok;
@@ -200,7 +201,7 @@ public static class ApplyCommand
         }
         else
         {
-            Console.Out.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{ran} of {steps.Count} step(s) worked in the editor."));
+            Console.Out.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{ran} of {Words.Count(steps.Count, "step")} worked in the editor."));
         }
 
         return failed ? ExitCode.CommandError : ExitCode.Ok;

@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using JazzHands.App.Services;
 using JazzHands.App.ViewModels.Timeline;
 using JazzHands.Control;
+using JazzHands.Core;
 using JazzHands.Core.Commands;
 using JazzHands.Core.Export;
 using JazzHands.Core.Model;
@@ -101,7 +102,7 @@ public sealed partial class StatusBarViewModel : ObservableObject
                 ? string.Empty
                 : running > 0
                     ? string.Create(CultureInfo.InvariantCulture, $"Exporting {running}{(waiting > 0 ? $", {waiting} waiting" : string.Empty)}, {jobs.Where(job => job.State == ExportJobState.Running).Average(job => job.Progress) * 100:0}%")
-                    : string.Create(CultureInfo.InvariantCulture, $"{Services.Words.Count(waiting, "export")} waiting");
+                    : string.Create(CultureInfo.InvariantCulture, $"{Words.Count(waiting, "export")} waiting");
         }
 
         if (_server is not null)

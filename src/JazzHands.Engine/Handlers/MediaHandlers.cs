@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using JazzHands.Core;
 using JazzHands.Core.Commands;
 using JazzHands.Core.Model;
 using JazzHands.Core.Serialization;
@@ -146,7 +147,7 @@ public sealed class RemoveMediaHandler : ICommandHandler<RemoveMediaCommand>
         {
             throw new CommandException(
                 "media-in-use",
-                $"'{item.Name}' is played by {users.Length} clip(s). Remove them first, or pass --with-clips.");
+                $"'{item.Name}' is played by {Words.Count(users.Length, "clip")}. Remove {(users.Length == 1 ? "it" : "them")} first, or pass --with-clips.");
         }
 
         Project updated = project;

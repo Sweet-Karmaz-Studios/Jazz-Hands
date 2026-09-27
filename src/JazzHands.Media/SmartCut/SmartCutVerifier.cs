@@ -1,4 +1,5 @@
 using FFmpeg.AutoGen;
+using JazzHands.Core;
 using JazzHands.Core.Time;
 using JazzHands.Media.Decode;
 using JazzHands.Media.Interop;
@@ -63,7 +64,7 @@ public static unsafe class SmartCutVerifier
 
             if (sound != audioStreams)
             {
-                problems.Add($"The file has {sound} sound stream(s) where {audioStreams} were due.");
+                problems.Add($"The file has {Words.Count(sound, "sound stream")} where {audioStreams} were due.");
             }
 
             demuxer.Keep(video);

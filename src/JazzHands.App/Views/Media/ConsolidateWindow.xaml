@@ -21,7 +21,7 @@
                    Text="The project and every file its clips use, gathered in one place that opens anywhere. Media no clip uses is left out; the open project is not changed." />
         <DockPanel Margin="0,0,0,8">
             <TextBlock DockPanel.Dock="Left" Width="90" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding DestinationLabel, Mode=OneWay}" />
-            <Button DockPanel.Dock="Right" Style="{StaticResource Button.Text}" Margin="8,0,0,0" Content="Browse..." Command="{Binding BrowseCommand, Mode=OneWay}" AutomationProperties.Name="Choose where" />
+            <Button DockPanel.Dock="Right" Style="{StaticResource Button.Secondary}" Margin="8,0,0,0" Content="Browse..." Command="{Binding BrowseCommand, Mode=OneWay}" AutomationProperties.Name="Choose where" />
             <TextBox Text="{Binding Destination, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Where to gather it" />
         </DockPanel>
         <CheckBox Style="{StaticResource CheckBox.Dark}" Margin="90,4,0,4" Content="Keep only the parts clips use" IsChecked="{Binding Trim, Mode=TwoWay}" ToolTip="Each used stretch is smart cut out of its recording, with handles either side" />
@@ -42,7 +42,7 @@
         <CheckBox Style="{StaticResource CheckBox.Dark}" Margin="90,0,0,8" Content="Move the files instead of copying them" IsChecked="{Binding Move, Mode=TwoWay}" ToolTip="The open project then finds them missing; open the gathered copy" />
         <TextBlock Margin="0,4,0,0" Text="{Binding Status, Mode=OneWay}" Foreground="{DynamicResource Brush.Text.Secondary}" TextWrapping="Wrap" />
         <StackPanel Margin="0,12,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button Style="{StaticResource Button.Text}" Content="Cancel" IsCancel="True" Command="{Binding CancelCommand, Mode=OneWay}" AutomationProperties.Name="Cancel" />
+            <Button Style="{StaticResource Button.Secondary}" Content="Cancel" IsCancel="True" Command="{Binding CancelCommand, Mode=OneWay}" AutomationProperties.Name="Cancel" />
             <Button Style="{StaticResource Button.Primary}" Margin="8,0,0,0" Content="{Binding RunLabel, Mode=OneWay}" IsDefault="True" Command="{Binding RunCommand, Mode=OneWay}" AutomationProperties.Name="Gather the project" />
         </StackPanel>
     </StackPanel>

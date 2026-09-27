@@ -3,6 +3,7 @@ using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using JazzHands.Core;
 using JazzHands.Core.Model;
 using JazzHands.Core.Serialization;
 using JazzHands.Core.Time;
@@ -212,7 +213,7 @@ public static class ProjectCommands
                 Console.Out.WriteLine(changed ? $"Rewrote {load.Path}." : $"{load.Path} was already canonical.");
                 if (!load.Unknown.IsEmpty)
                 {
-                    Console.Out.WriteLine($"  Kept {load.Unknown.Count} member(s) this build does not know.");
+                    Console.Out.WriteLine($"  Kept {Words.Count(load.Unknown.Count, "member")} this build does not know.");
                 }
             }
 
@@ -269,8 +270,8 @@ public static class ProjectCommands
                 }
 
                 Console.Out.WriteLine(dry
-                    ? $"{result.Actions.Length} change(s) would be made. Run without --dry-run to write them."
-                    : $"Wrote {load.Path} with {result.Actions.Length} change(s).");
+                    ? $"{Words.Count(result.Actions.Length, "change")} would be made. Run without --dry-run to write them."
+                    : $"Wrote {load.Path} with {Words.Count(result.Actions.Length, "change")}.");
 
                 foreach (ValidationIssue issue in result.Remaining.Where(issue => issue.Severity == Severity.Error))
                 {

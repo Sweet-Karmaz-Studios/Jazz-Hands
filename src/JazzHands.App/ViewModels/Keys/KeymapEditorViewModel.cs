@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using JazzHands.App.Input;
 using JazzHands.App.Services;
+using JazzHands.Core;
 using JazzHands.Core.Commands;
 
 namespace JazzHands.App.ViewModels.Keys;
@@ -288,7 +289,7 @@ public sealed partial class KeymapEditorViewModel : ObservableObject
         Input.Keymap imported = Input.Keymap.Load(path, out IReadOnlyList<string> problems);
         Load(imported.Bindings);
         Status = problems.Count > 0
-            ? $"Imported, with {Services.Words.Count(problems.Count, "line")} skipped: {problems[0]}"
+            ? $"Imported, with {Words.Count(problems.Count, "line")} skipped: {problems[0]}"
             : "Imported. Save to use it.";
     }
 

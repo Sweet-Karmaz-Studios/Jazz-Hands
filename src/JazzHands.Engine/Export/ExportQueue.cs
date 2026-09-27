@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using JazzHands.Core;
 using JazzHands.Core.Export;
 using JazzHands.Core.Model;
 using JazzHands.Core.Serialization;
@@ -849,7 +850,7 @@ public sealed class ExportQueue : IExportService, IDisposable
                 ? (Progress.TotalFrames - Progress.Frame) / Progress.Fps
                 : null;
 
-            string? snaps = Plan.Snaps.IsEmpty ? null : $"{Plan.Snaps.Length} cut(s) moved to keyframes.";
+            string? snaps = Plan.Snaps.IsEmpty ? null : $"{Words.Count(Plan.Snaps.Length, "cut")} moved to keyframes.";
 
             return new ExportJobInfo(
                 Id,

@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.ExceptionServices;
+using JazzHands.Core;
 using JazzHands.Core.Export;
 using JazzHands.Core.Model;
 using JazzHands.Core.Subtitles;
@@ -306,7 +307,7 @@ public static class Exporter
 
         var notes = new List<string>(result.Notes)
         {
-            string.Create(CultureInfo.InvariantCulture, $"{result.EncodedFrames} frame(s) encoded again with {result.Encoder ?? "nothing"}, {result.CopiedPackets} copied; every frame checked in place."),
+            string.Create(CultureInfo.InvariantCulture, $"{Words.Count(result.EncodedFrames, "frame")} encoded again with {result.Encoder ?? "nothing"}, {result.CopiedPackets} copied; every frame checked in place."),
         };
 
         return new ExportResult(temporary, result.Bytes, result.Duration, $"smart ({result.Encoder ?? "copy"})", result.EncodedFrames, result.Elapsed, notes);

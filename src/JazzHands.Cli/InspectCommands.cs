@@ -1,6 +1,7 @@
 using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
+using JazzHands.Core;
 using JazzHands.Core.Commands;
 using JazzHands.Core.Export;
 using JazzHands.Core.Model;
@@ -156,7 +157,7 @@ public static class InspectCommands
             }
             else
             {
-                Console.Out.WriteLine(string.Create(CultureInfo.InvariantCulture, $"Wrote {written.Count} frame(s) to {folder}, every {Timecode.FormatClock(step)} from {Timecode.FormatClock(span.Start)}."));
+                Console.Out.WriteLine(string.Create(CultureInfo.InvariantCulture, $"Wrote {Words.Count(written.Count, "frame")} to {folder}, every {Timecode.FormatClock(step)} from {Timecode.FormatClock(span.Start)}."));
             }
 
             return ExitCode.Ok;

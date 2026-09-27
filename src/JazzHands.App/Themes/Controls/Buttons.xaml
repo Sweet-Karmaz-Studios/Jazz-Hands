@@ -112,6 +112,53 @@
         </Setter>
     </Style>
 
+    <!--
+        A button that stands on its own in a form or beside a dialog's main action (Cancel, Apply,
+        Browse..., Remove from Windows): outlined, so it reads as a button without competing with
+        the filled one. Text buttons in toolbars and rows stay Button.Text.
+    -->
+    <Style x:Key="Button.Secondary" TargetType="ButtonBase">
+        <Setter Property="FontFamily" Value="{DynamicResource Font.Ui}" />
+        <Setter Property="FontSize" Value="{DynamicResource Text.Caption}" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
+        <Setter Property="Height" Value="28" />
+        <Setter Property="MinWidth" Value="72" />
+        <Setter Property="Padding" Value="12,0" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusVisual.Ring}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ButtonBase">
+                    <Border x:Name="Chrome"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="3"
+                            Padding="{TemplateBinding Padding}">
+                        <TextBlock HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Text="{Binding Content, RelativeSource={RelativeSource TemplatedParent}, Mode=OneWay}"
+                                   FontFamily="{TemplateBinding FontFamily}"
+                                   FontSize="{TemplateBinding FontSize}"
+                                   Foreground="{TemplateBinding Foreground}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Brush.Background.Hover}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Brush.Background.Raised}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Disabled}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- A compact dark combo box: the default one is white. -->
     <Style x:Key="ComboBox.Compact" TargetType="ComboBox">
         <Setter Property="FontFamily" Value="{DynamicResource Font.Ui}" />

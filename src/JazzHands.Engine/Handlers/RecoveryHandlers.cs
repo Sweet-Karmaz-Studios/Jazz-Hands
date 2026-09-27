@@ -1,3 +1,4 @@
+using JazzHands.Core;
 using JazzHands.Core.Commands;
 using JazzHands.Core.Model;
 using JazzHands.Engine.Commands;
@@ -21,7 +22,7 @@ public sealed class CheckRecoveryHandler : IQueryHandler<CheckRecoveryQuery, Rec
         {
             string nothing = untitled.Length == 0
                 ? "There is nothing to recover."
-                : $"There is nothing to recover for this project; {untitled.Length} project(s) that were never saved were rescued.";
+                : $"There is nothing to recover for this project; {Words.Count(untitled.Length, "project")} that {(untitled.Length == 1 ? "was" : "were")} never saved {(untitled.Length == 1 ? "was" : "were")} rescued.";
             return new RecoveryInfo(false, path, nothing, null, 0, false, untitled);
         }
 

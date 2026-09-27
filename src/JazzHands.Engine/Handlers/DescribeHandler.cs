@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using JazzHands.Core;
 using JazzHands.Core.Commands;
 using JazzHands.Core.Model;
 using JazzHands.Core.Time;
@@ -72,7 +73,7 @@ public sealed class DescribeHandler : IQueryHandler<DescribeQuery, ProjectDescri
             text.Append(CultureInfo.InvariantCulture, $" ({info.Id}{(info.Path.Length > 0 ? $", {info.Path}" : string.Empty)})");
         }
 
-        text.Append(CultureInfo.InvariantCulture, $": {info.Width}x{info.Height} at {info.Fps} fps, {media.Length} media, {sequences.Length} sequence(s)\n");
+        text.Append(CultureInfo.InvariantCulture, $": {info.Width}x{info.Height} at {info.Fps} fps, {media.Length} media, {Words.Count(sequences.Length, "sequence")}\n");
 
         if (media.Length > 0)
         {

@@ -43,7 +43,7 @@
                   AutomationProperties.Name="Frame rate and size" />
 
         <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,16,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button Style="{StaticResource Button.Text}" Content="Cancel" IsCancel="True" Command="{Binding CancelCommand, Mode=OneWay}" AutomationProperties.Name="Cancel" />
+            <Button Style="{StaticResource Button.Secondary}" Content="Cancel" IsCancel="True" Command="{Binding CancelCommand, Mode=OneWay}" AutomationProperties.Name="Cancel" />
             <Button Style="{StaticResource Button.Primary}" Margin="8,0,0,0" Content="Create" IsDefault="True" Command="{Binding CreateCommand, Mode=OneWay}" AutomationProperties.Name="Create the project" />
         </StackPanel>
     </Grid>

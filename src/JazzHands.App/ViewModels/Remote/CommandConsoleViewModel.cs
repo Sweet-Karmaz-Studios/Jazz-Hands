@@ -9,6 +9,7 @@ using CommunityToolkit.Mvvm.Input;
 using JazzHands.App.Services;
 using JazzHands.App.Shell;
 using JazzHands.Control;
+using JazzHands.Core;
 using JazzHands.Core.Commands;
 using JazzHands.Core.Model;
 using JazzHands.Core.Serialization;
@@ -331,7 +332,7 @@ public sealed partial class CommandConsoleViewModel : ToolViewModel
         }
 
         File.WriteAllText(path, script.ToJsonString(Pretty));
-        Status = string.Create(CultureInfo.InvariantCulture, $"Saved {Services.Words.Count(script.Count, "command")} to {path}.");
+        Status = string.Create(CultureInfo.InvariantCulture, $"Saved {Words.Count(script.Count, "command")} to {path}.");
     }
 
     /// <summary>The commands in view that worked, as <c>jazz apply</c> steps.</summary>
@@ -578,7 +579,7 @@ public sealed partial class CommandConsoleViewModel : ToolViewModel
             listening += $" and {tcp}";
         }
 
-        Status = string.Create(CultureInfo.InvariantCulture, $"{Services.Words.Count(Visible.Count, "line")}; {listening}");
+        Status = string.Create(CultureInfo.InvariantCulture, $"{Words.Count(Visible.Count, "line")}; {listening}");
     }
 
     private Rational FrameRate()
