@@ -62,7 +62,7 @@ public partial class App : Application
 
         bool spike = e.Args.Contains("--spike", StringComparer.Ordinal);
         LogSetup.ConfigureForApp(spike ? LogEventLevel.Debug : LogEventLevel.Information);
-        Log.ForContext<App>().Information("Jazz Hands starting");
+        Log.ForContext<App>().Information("Jazz Hands starting from {Path}, built {Built}", Environment.ProcessPath, File.GetLastWriteTime(typeof(App).Assembly.Location).ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture));
         if (Shell.SafeMode.IsOn)
         {
             Log.ForContext<App>().Warning("Safe mode: WARP, software decoding, the built-in layout, an empty cache and no custom transitions");
