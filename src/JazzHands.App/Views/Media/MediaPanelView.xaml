@@ -7,7 +7,11 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
-             Background="{DynamicResource Brush.Background.Panel}">
+             Background="{DynamicResource Brush.Background.Panel}"
+             AllowDrop="True"
+             DragEnter="OnFilesOver"
+             DragOver="OnFilesOver"
+             Drop="OnFilesDropped">
 
     <UserControl.Resources>
         <views:ColorLabelConverter x:Key="ColorLabel" />
@@ -314,7 +318,7 @@
                        TextWrapping="Wrap"
                        IsHitTestVisible="False"
                        Foreground="{DynamicResource Brush.Text.Secondary}"
-                       Text="No media yet. Import (Ctrl+I) brings in recordings, music and images; then drag them onto the timeline."
+                       Text="No media yet. Drop recordings, music and images here, or import them with Ctrl+I; then drag them onto the timeline."
                        Visibility="{Binding IsEmpty, Mode=OneWay, Converter={StaticResource BoolToVisible}}" />
         </Grid>
 

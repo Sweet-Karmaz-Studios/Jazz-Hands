@@ -369,7 +369,7 @@
                                                     <MenuItem Header="Normalise to -14 LUFS" Command="{Binding NormaliseCommand, Mode=OneWay}" />
                                                     <MenuItem Header="Duck under" ItemsSource="{Binding DuckChoices, Mode=OneWay}">
                                                         <MenuItem.ItemContainerStyle>
-                                                            <Style TargetType="{x:Type MenuItem}">
+                                                            <Style TargetType="{x:Type MenuItem}" BasedOn="{StaticResource {x:Type MenuItem}}">
                                                                 <Setter Property="Header" Value="{Binding Name, Mode=OneWay}" />
                                                                 <Setter Property="CommandParameter" Value="{Binding TrackId, Mode=OneWay}" />
                                                                 <Setter Property="Command" Value="{Binding PlacementTarget.DataContext.DuckUnderCommand, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}, Mode=OneWay}" />
@@ -415,7 +415,7 @@
                                             <Button.ContextMenu>
                                                 <ContextMenu ItemsSource="{Binding AvailableEffects, Mode=OneWay}">
                                                     <ContextMenu.ItemContainerStyle>
-                                                        <Style TargetType="{x:Type MenuItem}">
+                                                        <Style TargetType="{x:Type MenuItem}" BasedOn="{StaticResource {x:Type MenuItem}}">
                                                             <Setter Property="Header" Value="{Binding Name, Mode=OneWay}" />
                                                             <Setter Property="InputGestureText" Value="{Binding Category, Mode=OneWay}" />
                                                             <Setter Property="CommandParameter" Value="{Binding TypeId, Mode=OneWay}" />

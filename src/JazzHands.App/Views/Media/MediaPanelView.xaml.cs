@@ -25,6 +25,29 @@ public partial class MediaPanelView : UserControl
 
     private MediaPanelViewModel? Model => DataContext as MediaPanelViewModel;
 
+    /// <summary>
+    /// Files dragged in from Explorer: a copy is offered, and a drop imports them. A drag out of
+    /// this panel carries its files too, and is refused, so a clip is not imported twice.
+    /// </summary>
+    private static string[] DroppedFiles(DragEventArgs e) =>
+        e.Data.GetDataPresent(MediaDragData.Format) || e.Data.GetData(DataFormats.FileDrop) is not string[] paths ? [] : paths;
+
+    private void OnFilesOver(object sender, DragEventArgs e)
+    {
+        e.Effects = DroppedFiles(e).Length > 0 ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void OnFilesDropped(object sender, DragEventArgs e)
+    {
+        string[] files = DroppedFiles(e);
+        e.Handled = true;
+        if (files.Length > 0 && Model is { } model)
+        {
+            _ = model.ImportDroppedAsync(files);
+        }
+    }
+
     private void OnFolderSelected(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
         if (Model is { } model)

@@ -18,7 +18,7 @@ namespace JazzHands.App;
 /// move the selection as a list's keys should, and the rest still drive playback. The keymap
 /// (Settings, Keymap) decides what each key does; the transport keys stay the preview's.
 /// </remarks>
-public partial class MainWindow : Window, Shell.IAppWindow
+public partial class MainWindow : Window, Shell.IAppWindow, Shell.ITourHost
 {
     private readonly MainViewModel _model;
     private bool _closing;
@@ -147,6 +147,75 @@ public partial class MainWindow : Window, Shell.IAppWindow
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Style, Style> Ours = new();
 
     private void OnBellOpened(object sender, RoutedEventArgs e) => _model.StatusBar?.Notifications.MarkRead();
+
+    /// <inheritdoc />
+    public (Rect Target, Rect Window)? Highlight(string? target)
+    {
+        if (target is null || TourTarget(target) is not { } element)
+        {
+            TourOutline.Visibility = Visibility.Collapsed;
+            return null;
+        }
+
+        const double Pad = 3;
+        Rect bounds = element.TransformToVisual(TourLayer).TransformBounds(new Rect(element.RenderSize));
+        Canvas.SetLeft(TourOutline, bounds.Left - Pad);
+        Canvas.SetTop(TourOutline, bounds.Top - Pad);
+        TourOutline.Width = bounds.Width + (Pad * 2);
+        TourOutline.Height = bounds.Height + (Pad * 2);
+        TourOutline.Visibility = Visibility.Visible;
+        return (OnScreen(element), OnScreen(TourLayer));
+    }
+
+    /// <summary>What a tour card outlines: the menu, the timeline in front, or a panel brought forward.</summary>
+    private FrameworkElement? TourTarget(string target)
+    {
+        if (target == "menu")
+        {
+            return MainMenu;
+        }
+
+        object? model = target == "timeline"
+            ? _model.Timelines?.ActiveTimeline
+            : _model.Panels.FirstOrDefault(panel => panel.ContentId == target);
+        if (model is null)
+        {
+            return null;
+        }
+
+        if (target != "timeline")
+        {
+            BringForward([target]);
+        }
+
+        UpdateLayout();
+        return Views(this).FirstOrDefault(view => ReferenceEquals(view.DataContext, model) && view.IsVisible);
+    }
+
+    private static IEnumerable<UserControl> Views(DependencyObject root)
+    {
+        for (int index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
+        {
+            DependencyObject child = VisualTreeHelper.GetChild(root, index);
+            if (child is UserControl view)
+            {
+                yield return view;
+            }
+
+            foreach (UserControl deeper in Views(child))
+            {
+                yield return deeper;
+            }
+        }
+    }
+
+    /// <summary>An element's area on the screen, in DIPs, as window positions are given.</summary>
+    private static Rect OnScreen(FrameworkElement element)
+    {
+        Point corner = element.PointToScreen(new Point(0, 0));
+        Matrix toDips = PresentationSource.FromVisual(element)?.CompositionTarget?.TransformFromDevice ?? Matrix.Identity;
+        return new Rect(toDips.Transform(corner), new Size(element.ActualWidth, element.ActualHeight));
+    }
 
     /// <summary>The panel or timeline a layout's content id names, or null for one there is not now.</summary>
     private object? ContentFor(string id) =>

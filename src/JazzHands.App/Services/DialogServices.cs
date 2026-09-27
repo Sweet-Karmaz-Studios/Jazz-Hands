@@ -270,9 +270,50 @@ public sealed class DialogService(
             Owner = Application.Current?.MainWindow,
         };
 
+        var host = Application.Current?.MainWindow as Shell.ITourHost;
+        viewModel.Highlighted += (_, target) =>
+        {
+            if (host?.Highlight(target) is { } areas && _tour is { } tour)
+            {
+                StandClear(tour, areas.Target, areas.Window);
+            }
+        };
         viewModel.CloseRequested += (_, _) => _tour?.Close();
-        _tour.Closed += (_, _) => _tour = null;
+        _tour.Closed += (_, _) =>
+        {
+            viewModel.ClearTarget();
+            _tour = null;
+        };
         _tour.Show();
+        viewModel.ShowTarget();
+    }
+
+    /// <summary>
+    /// Moves the tour to the corner of the editor that covers least of what it is outlining, so the
+    /// card and the part it is about are both in sight.
+    /// </summary>
+    internal static void StandClear(Window tour, Rect target, Rect window)
+    {
+        const double Inset = 24;
+        double width = tour.ActualWidth > 0 ? tour.ActualWidth : tour.Width;
+        double height = tour.ActualHeight > 0 ? tour.ActualHeight : 240;
+        Point[] corners =
+        [
+            new(window.Right - width - Inset, window.Bottom - height - Inset),
+            new(window.Left + Inset, window.Bottom - height - Inset),
+            new(window.Right - width - Inset, window.Top + Inset + 40),
+            new(window.Left + Inset, window.Top + Inset + 40),
+        ];
+
+        Point best = corners.MinBy(corner =>
+        {
+            Rect covered = Rect.Intersect(new Rect(corner, new Size(width, height)), target);
+            return covered.IsEmpty ? 0 : covered.Width * covered.Height;
+        });
+
+        tour.WindowStartupLocation = WindowStartupLocation.Manual;
+        tour.Left = best.X;
+        tour.Top = best.Y;
     }
 
     /// <inheritdoc />

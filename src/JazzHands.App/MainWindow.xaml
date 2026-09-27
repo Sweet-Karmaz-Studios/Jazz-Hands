@@ -124,7 +124,8 @@
         <!-- The menu is the main viewmodel's, built from the keymap so each item shows the keys
              bound to it now. Ticks are read as a menu opens (MenuOpened in code-behind). A queued
              menu, so a screen reader's Invoke of an item that opens a file picker returns. -->
-        <jazzcontrols:QueuedMenu Grid.Row="0"
+        <jazzcontrols:QueuedMenu x:Name="MainMenu"
+              Grid.Row="0"
               Style="{StaticResource {x:Type Menu}}"
               ItemsSource="{Binding Menu, Mode=OneWay}"
               MenuItem.SubmenuOpened="OnSubmenuOpened"
@@ -310,5 +311,15 @@
                 <TextBlock DockPanel.Dock="Left" Margin="12,0,0,0" Text="{Binding StatusBar.Format, Mode=OneWay}" VerticalAlignment="Center" />
             </DockPanel>
         </Border>
+
+        <!-- The tour's outline round the part a card is about: over everything, never in the mouse's way. -->
+        <Canvas x:Name="TourLayer" Grid.RowSpan="4" IsHitTestVisible="False" Panel.ZIndex="100">
+            <Rectangle x:Name="TourOutline"
+                       Stroke="{DynamicResource Brush.Error}"
+                       StrokeThickness="3"
+                       RadiusX="4"
+                       RadiusY="4"
+                       Visibility="Collapsed" />
+        </Canvas>
     </Grid>
 </Window>

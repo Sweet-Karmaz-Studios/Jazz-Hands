@@ -273,6 +273,39 @@ public sealed partial class MediaPanelViewModel : ToolViewModel
         ReplaceSelectedCommand.NotifyCanExecuteChanged();
     }
 
+    /// <summary>
+    /// Files dropped on the panel from Explorer: the Import dialog for them, as Ctrl+I's picker
+    /// would open it. A folder brings the media files in it, one level deep.
+    /// </summary>
+    public Task ImportDroppedAsync(IReadOnlyList<string> dropped)
+    {
+        ArgumentNullException.ThrowIfNull(dropped);
+        string[] paths = [.. DroppedMedia(dropped)];
+        return paths.Length == 0 ? Task.CompletedTask : _dialogs.ShowImportAsync(paths);
+    }
+
+    /// <summary>The files a drop brings: files as they are, and the media files in a dropped folder.</summary>
+    internal static IEnumerable<string> DroppedMedia(IEnumerable<string> dropped)
+    {
+        foreach (string path in dropped)
+        {
+            if (System.IO.Directory.Exists(path))
+            {
+                foreach (string file in System.IO.Directory.EnumerateFiles(path).Order(StringComparer.OrdinalIgnoreCase))
+                {
+                    if (Engine.Library.MediaWatchService.Extensions.Contains(System.IO.Path.GetExtension(file)))
+                    {
+                        yield return file;
+                    }
+                }
+            }
+            else if (System.IO.File.Exists(path))
+            {
+                yield return path;
+            }
+        }
+    }
+
     [RelayCommand]
     private async Task ImportAsync()
     {
