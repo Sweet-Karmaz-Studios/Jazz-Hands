@@ -30,6 +30,9 @@
               Grid.Row="0"
               Background="{DynamicResource Brush.Preview.Background}"
               ClipToBounds="True"
+              AllowDrop="True"
+              DragOver="OnStageDragOver"
+              Drop="OnStageDrop"
               Focusable="True"
               FocusVisualStyle="{x:Null}">
             <Image x:Name="Picture"

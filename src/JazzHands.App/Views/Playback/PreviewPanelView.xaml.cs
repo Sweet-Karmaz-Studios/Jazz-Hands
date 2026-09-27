@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using JazzHands.App.Controls.Preview;
+using JazzHands.App.Services;
 using JazzHands.App.ViewModels.Playback;
 using JazzHands.Render.Passes;
 
@@ -141,6 +142,25 @@ public partial class PreviewPanelView : UserControl
     }
 
     private void OnSurfaceRecreated(object? sender, EventArgs e) => _model?.Engine.Refresh();
+
+    /// <summary>Media, or a stretch from the source monitor, dragged over the picture overwrites at the playhead when dropped.</summary>
+    private void OnStageDragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = MediaDragData.Ids(e.Data).Count == 1 ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void OnStageDrop(object sender, DragEventArgs e)
+    {
+        if (_model is null || MediaDragData.Ids(e.Data) is not [var mediaId])
+        {
+            return;
+        }
+
+        e.Handled = true;
+        var range = MediaDragData.Range(e.Data);
+        _ = _model.OverwriteAtPlayheadAsync(mediaId, range?.In, range?.Out);
+    }
 
     private void OnModelChanged(object? sender, PropertyChangedEventArgs e)
     {

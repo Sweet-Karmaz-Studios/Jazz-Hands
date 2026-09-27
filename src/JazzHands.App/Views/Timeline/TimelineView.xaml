@@ -184,13 +184,22 @@
                                                 </Button.Template>
                                             </Button>
 
-                                            <TextBlock Grid.Column="1"
-                                                       Text="{Binding Label, Mode=OneWay}"
-                                                       Margin="6,0,0,0"
-                                                       VerticalAlignment="Top"
-                                                       FontFamily="{DynamicResource Font.Mono}"
-                                                       FontSize="{DynamicResource Text.Caption}"
-                                                       Foreground="{DynamicResource Brush.Text.Secondary}" />
+                                            <!-- The track's label is its target switch: lit, edits from the source monitor go here. -->
+                                            <Button Grid.Column="1"
+                                                    Style="{StaticResource Header.Toggle}"
+                                                    Width="Auto"
+                                                    MinWidth="24"
+                                                    Padding="3,0"
+                                                    Margin="2,0,0,0"
+                                                    VerticalAlignment="Top"
+                                                    Tag="{Binding IsTarget, Mode=OneWay}"
+                                                    Content="{Binding Label, Mode=OneWay}"
+                                                    FontFamily="{DynamicResource Font.Mono}"
+                                                    FontSize="{DynamicResource Text.Caption}"
+                                                    IsEnabled="{Binding CanTarget, Mode=OneWay}"
+                                                    Command="{Binding ToggleTargetCommand, Mode=OneWay}"
+                                                    ToolTip="Target: an insert or overwrite from the source monitor goes to the lit tracks"
+                                                    AutomationProperties.Name="Target track" />
 
                                             <TextBox Grid.Column="2"
                                                      Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"

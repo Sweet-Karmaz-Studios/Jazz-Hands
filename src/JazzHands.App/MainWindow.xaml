@@ -78,6 +78,9 @@
         <DataTemplate DataType="{x:Type playbackvm:PreviewPanelViewModel}">
             <playback:PreviewPanelView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type playbackvm:SourcePanelViewModel}">
+            <playback:SourcePanelView />
+        </DataTemplate>
         <DataTemplate DataType="{x:Type timelinevm:TimelineViewModel}">
             <timeline:TimelineView />
         </DataTemplate>

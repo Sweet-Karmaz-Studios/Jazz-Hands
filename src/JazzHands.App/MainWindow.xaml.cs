@@ -334,6 +334,21 @@ public partial class MainWindow : Window, Shell.IAppWindow, Shell.ITourHost
         }
     }
 
+    /// <summary>True when an element is inside a view of a type.</summary>
+    private static bool Within<T>(DependencyObject? element)
+        where T : DependencyObject
+    {
+        for (DependencyObject? at = element; at is not null; at = at is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(at) : LogicalTreeHelper.GetParent(at))
+        {
+            if (at is T)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /// <inheritdoc />
     protected override void OnPreviewKeyDown(KeyEventArgs e)
     {
@@ -345,6 +360,15 @@ public partial class MainWindow : Window, Shell.IAppWindow, Shell.ITourHost
         // The timeline in front first, for a number being typed or an edit point being trimmed;
         // then the keymap (editing: Delete, Ctrl+Z, Ctrl+K and the rest); then the preview's
         // transport keys, which are not in the keymap because JKL needs key-up as well.
+        // The source monitor, while the focus is in it: its I and O mark the source, its comma and
+        // full stop edit from it (Phase 38).
+        if (_model.Source is { } source && !swallowed && Within<Views.Playback.SourcePanelView>(e.OriginalSource as DependencyObject)
+            && source.KeyDown(key, Keyboard.Modifiers))
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (_model.Timelines?.ActiveTimeline is { } timeline && !swallowed && timeline.KeyDown(key, Keyboard.Modifiers))
         {
             e.Handled = true;

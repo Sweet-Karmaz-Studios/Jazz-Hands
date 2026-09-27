@@ -28,6 +28,7 @@ public sealed class PanelPlacement : ILayoutUpdateStrategy
     public static IReadOnlyDictionary<string, string> Panes { get; } = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         ["preview"] = ProgramPane,
+        ["source"] = ProgramPane,
         ["inspector"] = InspectorPane,
         ["curves"] = InspectorPane,
         ["history"] = InspectorPane,

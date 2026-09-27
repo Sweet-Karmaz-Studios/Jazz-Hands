@@ -1,0 +1,136 @@
+<UserControl x:Class="JazzHands.App.Views.Playback.SourcePanelView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:JazzHands.App.ViewModels.Playback"
+             xmlns:media="clr-namespace:JazzHands.App.Views.Media"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:SourcePanelViewModel}"
+             d:DesignWidth="640"
+             d:DesignHeight="400"
+             Background="{DynamicResource Brush.Background.Panel}">
+
+    <UserControl.Resources>
+        <media:FractionOfWidthConverter x:Key="FractionOfWidth" />
+        <BooleanToVisibilityConverter x:Key="Visible" />
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- The picture, drawn by the source player on the GPU as the program preview's is.
+             Dragging it takes the marked stretch to the timeline or the program monitor. -->
+        <Grid x:Name="Stage"
+              Grid.Row="0"
+              Background="{DynamicResource Brush.Preview.Background}"
+              ClipToBounds="True"
+              Focusable="True"
+              FocusVisualStyle="{x:Null}"
+              AutomationProperties.Name="Source picture">
+            <Image x:Name="Picture"
+                   Stretch="Fill"
+                   RenderOptions.BitmapScalingMode="NearestNeighbor"
+                   SnapsToDevicePixels="True" />
+            <TextBlock HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       Margin="24"
+                       Foreground="{DynamicResource Brush.Text.Secondary}"
+                       Text="Double-click a media item to open it here, or press F on a clip in the timeline. Mark in (I) and out (O), then insert (comma, F9) or overwrite (full stop, F10) at the playhead."
+                       Visibility="{Binding ShowHint, Mode=OneWay, Converter={StaticResource Visible}}"
+                       x:Name="Empty" />
+            <TextBlock HorizontalAlignment="Left"
+                       VerticalAlignment="Top"
+                       Margin="8,6"
+                       FontSize="{DynamicResource Text.Caption}"
+                       Foreground="{DynamicResource Brush.Text.Secondary}"
+                       Text="{Binding Name, Mode=OneWay}" />
+        </Grid>
+
+        <!-- The scrub bar: the whole file, the marked stretch lit, the playhead a line. -->
+        <Grid x:Name="Scrub"
+              Grid.Row="1"
+              Height="18"
+              Margin="8,4,8,0"
+              Cursor="Hand"
+              Background="{DynamicResource Brush.Background.Raised}"
+              AutomationProperties.Name="Source scrub bar">
+            <Canvas IsHitTestVisible="False">
+                <Rectangle x:Name="Marked" Height="18" Fill="{DynamicResource Brush.Accent}" Opacity="0.35" />
+                <Rectangle Width="2" Height="18" Fill="{DynamicResource Brush.Text.Primary}">
+                    <Canvas.Left>
+                        <MultiBinding Converter="{StaticResource FractionOfWidth}">
+                            <Binding Path="Fraction" Mode="OneWay" />
+                            <Binding ElementName="Scrub" Path="ActualWidth" Mode="OneWay" />
+                        </MultiBinding>
+                    </Canvas.Left>
+                </Rectangle>
+            </Canvas>
+        </Grid>
+
+        <Border Grid.Row="2" Padding="8,4" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Brush.Border}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                    <TextBlock FontFamily="{DynamicResource Font.Mono}" Text="{Binding Timecode, Mode=OneWay}" ToolTip="Source playhead" />
+                    <TextBlock FontSize="{DynamicResource Text.Caption}" Foreground="{DynamicResource Brush.Text.Secondary}">
+                        <Run Text="In " /><Run FontFamily="{DynamicResource Font.Mono}" Text="{Binding InText, Mode=OneWay}" />
+                        <Run Text="  Out " /><Run FontFamily="{DynamicResource Font.Mono}" Text="{Binding OutText, Mode=OneWay}" />
+                        <Run Text="  " /><Run Text="{Binding MarkedText, Mode=OneWay}" />
+                    </TextBlock>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Margin="12,0" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Button Style="{StaticResource Button.Text}" Content="In"
+                            Command="{Binding MarkInCommand, Mode=OneWay}"
+                            ToolTip="Mark the source in (I); go to it (Shift+I)" AutomationProperties.Name="Mark source in" />
+                    <Button Style="{StaticResource Button.Icon}" Content="&#xE76B;"
+                            Command="{Binding StepBackCommand, Mode=OneWay}"
+                            ToolTip="Back one frame (Left)" AutomationProperties.Name="Source back one frame" />
+                    <Button Style="{StaticResource Button.Icon}" Content="{Binding PlayGlyph, Mode=OneWay}"
+                            Width="36" FontSize="18"
+                            Command="{Binding PlayPauseCommand, Mode=OneWay}"
+                            ToolTip="{Binding PlayLabel, Mode=OneWay}" AutomationProperties.Name="Play the source" />
+                    <Button Style="{StaticResource Button.Icon}" Content="&#xE76C;"
+                            Command="{Binding StepForwardCommand, Mode=OneWay}"
+                            ToolTip="Forward one frame (Right)" AutomationProperties.Name="Source forward one frame" />
+                    <Button Style="{StaticResource Button.Text}" Content="Out"
+                            Command="{Binding MarkOutCommand, Mode=OneWay}"
+                            ToolTip="Mark the source out (O); go to it (Shift+O)" AutomationProperties.Name="Mark source out" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Style="{StaticResource Button.Secondary}" Content="Insert"
+                            Command="{Binding InsertCommand, Mode=OneWay}"
+                            ToolTip="Insert the marked stretch at the playhead or the sequence in, pushing the rest along (comma, F9)"
+                            AutomationProperties.Name="Insert from source" />
+                    <Button Style="{StaticResource Button.Secondary}" Content="Overwrite" Margin="6,0,0,0"
+                            Command="{Binding OverwriteCommand, Mode=OneWay}"
+                            ToolTip="Overwrite the sequence with the marked stretch at the playhead or the sequence in (full stop, F10)"
+                            AutomationProperties.Name="Overwrite from source" />
+                </StackPanel>
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,2,0,0"
+                           FontSize="{DynamicResource Text.Caption}"
+                           Foreground="{DynamicResource Brush.Text.Secondary}"
+                           TextWrapping="Wrap"
+                           Text="{Binding Status, Mode=OneWay}" />
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

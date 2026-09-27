@@ -65,6 +65,17 @@ public partial class MediaPanelView : UserControl
         _pressedOnItem = e?.OriginalSource is DependencyObject source && FindRow(source) is not null;
     }
 
+    /// <summary>A double-click on an item opens it in the source monitor (Phase 38).</summary>
+    private void OnItemDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (e.OriginalSource is DependencyObject source && FindRow(source) is not null
+            && DataContext is MediaPanelViewModel model && model.OpenInSourceCommand.CanExecute(null))
+        {
+            model.OpenInSourceCommand.Execute(null);
+            e.Handled = true;
+        }
+    }
+
     private void OnListMouseMove(object sender, MouseEventArgs e)
     {
         if (!_pressedOnItem || e?.LeftButton != MouseButtonState.Pressed || Model is not { } model)

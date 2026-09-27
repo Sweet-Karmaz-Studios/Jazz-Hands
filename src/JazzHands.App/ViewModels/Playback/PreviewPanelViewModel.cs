@@ -398,6 +398,14 @@ public sealed partial class PreviewPanelViewModel : ToolViewModel
     }
 
     /// <summary>Sends a command and does not wait: the panel follows the engine's events, not the result.</summary>
+    /// <summary>
+    /// A drop on the program monitor: the stretch overwrites the sequence at the playhead, as a
+    /// drag from a source monitor does in every editor (Phase 38). A whole item from the Media
+    /// panel is its own range.
+    /// </summary>
+    public Task OverwriteAtPlayheadAsync(string mediaId, Flicks? sourceIn, Flicks? sourceOut) =>
+        SendAsync(new OverwriteFromSourceCommand(mediaId, sourceIn ?? _session.Project.MediaItem(mediaId)?.DefaultIn, sourceOut ?? _session.Project.MediaItem(mediaId)?.DefaultOut, _engine.Position));
+
     private void Send(ICommand command) => _ = SendAsync(command);
 
     private async Task SendAsync(ICommand command)

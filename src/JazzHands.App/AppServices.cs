@@ -167,6 +167,28 @@ public static class AppServices
                 provider.GetRequiredService<IUiDispatcher>())));
         services.AddSingleton<IDisplaySettings>(_ => new FileDisplaySettings());
 
+        // The source monitor (Phase 38): the session's SourceMonitor holds the item and marks,
+        // and its player is a second engine on the same device, made on the first file opened.
+        services.AddSingleton(provider =>
+        {
+            var player = new SourcePlayer(
+                provider.GetRequiredService<Session>(),
+                provider.GetRequiredService<RenderDevice>(),
+                () => provider.GetRequiredService<Engine.Settings.SettingsSection<EditorSettings>>().Current.AudioDevice,
+                Shell.SafeMode.IsOn ? new PlaybackOptions { HardwareDecode = false } : null,
+                provider.GetService<Media.Import.CacheManager>());
+            provider.GetRequiredService<SourceMonitor>().Player = player;
+            return player;
+        });
+        services.AddSingleton(provider => new SourcePanelViewModel(
+            provider.GetRequiredService<ISession>(),
+            provider.GetRequiredService<SourceMonitor>(),
+            provider.GetRequiredService<SourcePlayer>(),
+            provider.GetRequiredService<IUiDispatcher>(),
+            () => provider.GetRequiredService<IPreviewEngine>().Position,
+            provider.GetRequiredService<IDisplaySettings>()));
+        services.AddSingleton<Shell.IQuietWhileHidden>(provider => provider.GetRequiredService<SourcePanelViewModel>());
+
         // Thumbnails and waveforms: the engine's caches, turned into bitmaps and peaks for the
         // timeline and the media panel, with their ready events folded onto the UI thread.
         services.AddSingleton(provider => new CachedThumbnails(

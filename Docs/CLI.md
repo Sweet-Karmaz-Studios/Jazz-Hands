@@ -955,6 +955,23 @@ Put a clip in at a time, pushing the rest on.
 | `--audio` | Also put each audio stream on an audio track, linked to the picture. Default: true. |
 | `--no-save` | Do not write the project back. |
 
+### `jazz clip insert-from-source <project>`
+
+Insert the source's marked stretch at the playhead or the in point.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--media <id>` | The media item; the source monitor's when left out. |
+| `--source-in <time>` | The source in; the source monitor's mark when left out. |
+| `--source-out <time>` | The source out, exclusive; the source monitor's mark when left out. |
+| `--at <time>` | Where on the timeline when there is no in point; the playhead when left out. |
+| `--sequence <id>` | Which sequence. |
+| `--no-save` | Do not write the project back. |
+
 ### `jazz clip lift <project>`
 
 Remove a range, leaving a gap.
@@ -1078,6 +1095,23 @@ Put a clip over whatever is at a time.
 | `--audio` | Also put each audio stream on an audio track, linked to the picture. Default: true. |
 | `--no-save` | Do not write the project back. |
 
+### `jazz clip overwrite-from-source <project>`
+
+Overwrite with the source's marked stretch at the playhead or the in point.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--media <id>` | The media item; the source monitor's when left out. |
+| `--source-in <time>` | The source in; the source monitor's mark when left out. |
+| `--source-out <time>` | The source out, exclusive; the source monitor's mark when left out. |
+| `--at <time>` | Where on the timeline when there is no in point; the playhead when left out. |
+| `--sequence <id>` | Which sequence. |
+| `--no-save` | Do not write the project back. |
+
 ### `jazz clip paste <project>`
 
 Paste copied clips at a time, over what is there or pushing it on.
@@ -1094,6 +1128,22 @@ Paste copied clips at a time, over what is there or pushing it on.
 | `--insert` | Push what is there on instead of pasting over it. |
 | `--sequence <id>` | Which sequence. |
 | `--no-save` | Do not write the project back. |
+
+### `jazz clip plan-from-source <project>`
+
+What an edit from the source monitor would put where.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--media <id>` | The media item; the source monitor's when left out. |
+| `--source-in <time>` | The source in; the source monitor's mark when left out. |
+| `--source-out <time>` | The source out, exclusive; the source monitor's mark when left out. |
+| `--at <time>` | Where on the timeline when there is no in point; the playhead when left out. |
+| `--sequence <id>` | Which sequence. |
 
 ### `jazz clip ramp-speed <project> <clip-id>`
 
@@ -3568,6 +3618,20 @@ Add an empty sequence.
 | `--id <id>` | The identifier to give it. |
 | `--no-save` | Do not write the project back. |
 
+### `jazz sequence find-source-frame <project> <media-id>`
+
+Find where a frame of a file is in the sequence.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<media-id>` | The media id. |
+
+| Option | Meaning |
+|---|---|
+| `--at <time>` | Required. The source time. |
+| `--sequence <id>` | Which sequence. |
+
 ### `jazz sequence list <project>`
 
 List the sequences in the project.
@@ -3699,6 +3763,96 @@ Change one of the editor's settings.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+## `jazz source`
+
+The source monitor: open a file, mark in and out, play it; edits from it are in clip.
+
+### `jazz source clear-in-out <project>`
+
+Clear the source's marks.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--no-save` | Do not write the project back. |
+
+### `jazz source open <project> <media-id>`
+
+Open a media item in the source monitor.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<media-id>` | The media id. |
+
+| Option | Meaning |
+|---|---|
+| `--at <time>` | Where to put its playhead, in source time. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz source play <project>`
+
+Play or pause the source monitor.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--play` | True to play, false to pause; toggles when left out. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz source seek <project>`
+
+Move the source monitor's playhead.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--at <time>` | Required. Where, in source time. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz source set-in <project>`
+
+Mark the source's in point.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--at <time>` | Where, in source time; defaults to the source playhead. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz source set-out <project>`
+
+Mark the source's out point.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--at <time>` | Where, in source time; defaults to the source playhead. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz source state <project>`
+
+What the source monitor has open, and its marks.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
 
 ## `jazz subtitle`
 
@@ -4304,6 +4458,20 @@ Keep a track in sync with ripple edits on others.
 | `<project>` | The .jazz file to work on. |
 | `<track-id>` | The track id. |
 | `<sync-locked>` | true to keep it in sync. |
+
+| Option | Meaning |
+|---|---|
+| `--no-save` | Do not write the project back. |
+
+### `jazz track set-target <project> <track-id> <on>`
+
+Target a track for edits from the source monitor.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<track-id>` | The track id. |
+| `<on>` | true to target it. |
 
 | Option | Meaning |
 |---|---|

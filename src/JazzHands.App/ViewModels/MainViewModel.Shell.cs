@@ -68,6 +68,12 @@ public sealed partial class MainViewModel
             case "ui.settings":
                 _ = ShowSettingsAsync();
                 return true;
+            case "ui.insert-from-source" when Source is not null:
+                _ = Source.InsertAsync();
+                return true;
+            case "ui.overwrite-from-source" when Source is not null:
+                _ = Source.OverwriteAsync();
+                return true;
             default:
                 return false;
         }
@@ -402,6 +408,9 @@ public sealed partial class MainViewModel
 
     private MenuItemViewModel ClipMenu() =>
         new MenuItemViewModel("_Clip").With(
+            Bound("_Insert from source", "ui.insert-from-source", fallback: Source?.InsertCommand),
+            Bound("_Overwrite from source", "ui.overwrite-from-source", fallback: Source?.OverwriteCommand),
+            MenuItemViewModel.Separator(),
             Bound("_Split at the playhead", "clip.split"),
             Bound("Ripple trim start to the playhead", "clip.ripple-trim", Args(("edge", "start"))),
             Bound("Ripple trim end to the playhead", "clip.ripple-trim", Args(("edge", "end"))),

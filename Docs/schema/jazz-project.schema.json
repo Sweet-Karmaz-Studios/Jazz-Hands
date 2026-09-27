@@ -1312,12 +1312,33 @@
               "type": "null"
             }
           ]
+        },
+        "sourcePatch": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sourcePatch"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
         "id",
         "name"
       ]
+    },
+    "sourcePatch": {
+      "type": "object",
+      "properties": {
+        "targets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
     },
     "storedExportPreset": {
       "type": "object",

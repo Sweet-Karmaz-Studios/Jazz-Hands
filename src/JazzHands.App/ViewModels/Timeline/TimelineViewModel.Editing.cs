@@ -636,6 +636,9 @@ public sealed partial class TimelineViewModel
             : (null, $"{descriptor.Name} works on {(descriptor.Kind == Core.Effects.EffectKind.Audio ? "sound" : "pictures")}, and {what} carries {(picture ? "a picture" : "sound")}.");
     }
 
+    /// <summary>The stretch a drag from the source monitor carries, while it is over the timeline (Phase 38).</summary>
+    internal (string MediaId, Flicks In, Flicks Out)? DraggedRange { get; set; }
+
     /// <summary>
     /// Media was dropped: each item goes on the track under the pointer, end to end from the
     /// pointer's time, a movie bringing its sound onto audio tracks linked to the picture.
@@ -1102,8 +1105,12 @@ public sealed partial class TimelineViewModel
                 return [];
             }
 
-            adds.Add(new AddClipCommand(trackId, at, MediaId: mediaId, Duration: item.DefaultOut - item.DefaultIn));
-            at += item.DefaultOut - item.DefaultIn;
+            // A stretch marked in the source monitor, or the item's own range (a subclip's).
+            (Flicks from, Flicks length) = DraggedRange is { } range && range.MediaId == mediaId
+                ? (range.In, range.Out - range.In)
+                : (item.DefaultIn, item.DefaultOut - item.DefaultIn);
+            adds.Add(new AddClipCommand(trackId, at, MediaId: mediaId, SourceIn: from, Duration: length));
+            at += length;
         }
 
         return adds.ToImmutable();

@@ -104,6 +104,7 @@ public static class GeneratedCommands
         "recovery" => "Unsaved work after a crash: check what there is, bring it back by replaying every command since the last save, or set it aside.",
         "scopes" => "Waveform, vectorscope and histogram measurements of the picture.",
         "selection" => "What is selected in a running editor.",
+        "source" => "The source monitor: open a file, mark in and out, play it; edits from it are in clip.",
         "sequence" => "Sequences: create, rename, set active, their own settings.",
         "subtitle" => "Subtitles: import and export SRT, VTT and ASS; cues, their text, times and place; styles.",
         "timeline" => "The timeline as a whole: describe it, magnetic mode. In and out points are in playback.",

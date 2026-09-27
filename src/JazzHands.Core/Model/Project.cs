@@ -757,6 +757,15 @@ public sealed record SubclipRange(string ParentId, Flicks In, Flicks Out) : IEqu
 /// <param name="MediaId">The file being trimmed.</param>
 public sealed record QuickTrim(string MediaId) : IEquatable<QuickTrim>;
 
+/// <summary>Which tracks of a sequence take an edit from the source monitor (Phase 38).</summary>
+/// <remarks>
+/// The first targeted video track takes the picture, and the targeted audio tracks, lowest first,
+/// take the source's sound streams in order; a stream past the last of them is left out. See
+/// <c>ThreePointOps.Targets</c>.
+/// </remarks>
+/// <param name="Targets">The targeted tracks, by id.</param>
+public sealed record SourcePatch(EquatableArray<string> Targets) : IEquatable<SourcePatch>;
+
 /// <summary>
 /// A timeline: tracks of clips with a shared frame grid.
 /// </summary>
@@ -773,6 +782,7 @@ public sealed record QuickTrim(string MediaId) : IEquatable<QuickTrim>;
 /// </param>
 /// <param name="Master">The master bus: its volume and the limiter that ends the mix. Null is unity with the limiter on at -1 dBTP.</param>
 /// <param name="MotionBlur">Motion blur for every animated layer in it, unless a track or clip says otherwise; null for none.</param>
+/// <param name="SourcePatch">Which tracks an edit from the source monitor goes to (Phase 38); null for the defaults.</param>
 public sealed record Sequence(
     string Id,
     string Name,
@@ -783,7 +793,8 @@ public sealed record Sequence(
     QuickTrim? QuickTrim = null,
     bool? Magnetic = null,
     MasterBus? Master = null,
-    MotionBlur? MotionBlur = null) : IEquatable<Sequence>
+    MotionBlur? MotionBlur = null,
+    SourcePatch? SourcePatch = null) : IEquatable<Sequence>
 {
     /// <summary>The first position after the last clip on any track.</summary>
     public Flicks Duration

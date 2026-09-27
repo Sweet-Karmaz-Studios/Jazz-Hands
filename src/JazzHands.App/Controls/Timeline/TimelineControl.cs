@@ -378,6 +378,7 @@ public sealed class TimelineControl : FrameworkElement
         }
 
         IReadOnlyList<string> ids = MediaDragData.Ids(e.Data);
+        _model?.DraggedRange = MediaDragData.Range(e.Data);
         bool accepted = _model is not null && ids.Count > 0 && _model.DragOver(ids, e.GetPosition(this));
 
         e.Effects = accepted ? DragDropEffects.Copy : DragDropEffects.None;
@@ -420,7 +421,9 @@ public sealed class TimelineControl : FrameworkElement
         }
 
         e.Handled = true;
+        _model.DraggedRange = MediaDragData.Range(e.Data);
         await _model.DropAsync(ids, e.GetPosition(this)).ConfigureAwait(true);
+        _model.DraggedRange = null;
     }
 
     private static Pen Frozen(Pen pen)

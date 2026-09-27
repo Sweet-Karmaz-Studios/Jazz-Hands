@@ -383,6 +383,12 @@ public sealed partial class TimelineViewModel
             string name = match.MediaId is { } mediaId ? _session.Project.MediaItem(mediaId)?.Name ?? mediaId : "the source";
             Status = $"Match frame: {name} at {when}";
             SourceMatched?.Invoke(this, match);
+
+            // The file opens in the source monitor on that frame (Phase 38), which comes forward.
+            if (match.MediaId is { } file)
+            {
+                _ = _session.ExecuteAsync(new OpenSourceCommand(file, match.SourceTime));
+            }
         }
         catch (CommandException error)
         {

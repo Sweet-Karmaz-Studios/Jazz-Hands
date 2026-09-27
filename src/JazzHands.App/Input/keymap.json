@@ -33,6 +33,8 @@
     { "keys": "H", "command": "ui.tool.hand" },
     { "keys": "S", "command": "ui.snap" },
     { "keys": "F", "command": "ui.match-frame" },
+    { "keys": "F9", "command": "ui.insert-from-source" },
+    { "keys": "F10", "command": "ui.overwrite-from-source" },
     { "keys": "Ctrl+C", "command": "ui.copy" },
     { "keys": "Ctrl+X", "command": "ui.cut" },
     { "keys": "Ctrl+V", "command": "ui.paste" },

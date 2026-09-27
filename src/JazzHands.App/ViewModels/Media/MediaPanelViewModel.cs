@@ -270,6 +270,7 @@ public sealed partial class MediaPanelViewModel : ToolViewModel
         GenerateProxyCommand.NotifyCanExecuteChanged();
         QuickTrimCommand.NotifyCanExecuteChanged();
         FindSceneCutsCommand.NotifyCanExecuteChanged();
+        OpenInSourceCommand.NotifyCanExecuteChanged();
         RelinkSelectedCommand.NotifyCanExecuteChanged();
         ReplaceSelectedCommand.NotifyCanExecuteChanged();
     }
@@ -395,6 +396,12 @@ public sealed partial class MediaPanelViewModel : ToolViewModel
 
         await RunAsync(new GenerateProxyCommand(row.Id), $"Making a proxy of {row.Name} on the export queue.").ConfigureAwait(true);
     }
+
+    /// <summary>Opens the selected item in the source monitor, to mark and edit in from (Phase 38).</summary>
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private Task OpenInSourceAsync() => SelectedItem is { } row
+        ? RunAsync(new OpenSourceCommand(row.Id), string.Empty)
+        : Task.CompletedTask;
 
     /// <summary>The scene cuts dialog for the selected item: find its shots, then mark them or make subclips (Phase 37).</summary>
     [RelayCommand(CanExecute = nameof(HasSelection))]

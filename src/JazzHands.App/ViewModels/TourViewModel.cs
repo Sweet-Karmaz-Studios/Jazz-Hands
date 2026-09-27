@@ -32,6 +32,10 @@ public sealed partial class TourViewModel : ObservableObject
         new("Play and mark",
             "Space plays and stops; J, K and L shuttle backwards, stop and forwards. "
             + "I and O mark in and out. In Quick Trim, Enter keeps the marked stretch and Backspace cuts it.", "preview"),
+        new("Pick the good part",
+            "Double-click a clip in the Media panel to open it in the Source tab beside the preview. "
+            + "Mark in and out there, then press comma (F9) to insert that stretch at the playhead or full stop (F10) to overwrite. "
+            + "The lit V1 and A1 at the head of the tracks are where it goes: click one to change it.", "source"),
         new("Cut and trim",
             "Ctrl+K splits the clips under the playhead and C is the razor. Drag a clip's edge to trim it: "
             + "B ripples, N rolls the cut, Y slips and U slides. The toolbar has every tool, its key in the tooltip.", "timeline"),

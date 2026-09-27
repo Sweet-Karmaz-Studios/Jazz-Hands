@@ -49,6 +49,14 @@ public sealed partial class TrackHeaderViewModel : ObservableObject
     [ObservableProperty]
     private bool _isAudio;
 
+    /// <summary>True when edits from the source monitor go to this track (Phase 38).</summary>
+    [ObservableProperty]
+    private bool _isTarget;
+
+    /// <summary>True for a picture or sound track, which can be targeted.</summary>
+    [ObservableProperty]
+    private bool _canTarget;
+
     internal TrackHeaderViewModel(TimelineViewModel timeline, string trackId)
     {
         _timeline = timeline;
@@ -59,8 +67,10 @@ public sealed partial class TrackHeaderViewModel : ObservableObject
     public string TrackId { get; }
 
     /// <summary>Takes on what the project now says about the track.</summary>
-    internal void Update(Track track, string label, double height)
+    internal void Update(Track track, string label, double height, bool isTarget = false)
     {
+        IsTarget = isTarget;
+        CanTarget = track.Kind is TrackKind.Video or TrackKind.Audio;
         _committedName = track.Name;
         Name = track.Name;
         Label = label;
@@ -94,6 +104,10 @@ public sealed partial class TrackHeaderViewModel : ObservableObject
     /// <summary>Locks or unlocks the track.</summary>
     [RelayCommand]
     public Task ToggleLockAsync() => _timeline.RunAsync(new SetTrackLockCommand(TrackId, !Locked));
+
+    /// <summary>Targets the track for edits from the source monitor, or stops.</summary>
+    [RelayCommand]
+    public Task ToggleTargetAsync() => _timeline.RunAsync(new SetTrackTargetCommand(TrackId, !IsTarget));
 
     /// <summary>Mutes or unmutes the track.</summary>
     [RelayCommand]

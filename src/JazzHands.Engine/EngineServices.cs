@@ -51,6 +51,9 @@ public static class EngineServices
         // selection commands find it here, which is what lets a script select and then act.
         services.TryAddSingleton<Selection.SelectionService>();
 
+        // The source monitor's item and marks, per host like the selection (Phase 38).
+        services.TryAddSingleton<Playback.SourceMonitor>();
+
         // Folders watched for new recordings, per process; each import goes through its session.
         services.TryAddSingleton(_ => new Library.MediaWatchService());
 

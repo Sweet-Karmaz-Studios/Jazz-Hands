@@ -172,11 +172,13 @@
                       VirtualizingPanel.VirtualizationMode="Recycling"
                       PreviewMouseLeftButtonDown="OnListMouseDown"
                       MouseMove="OnListMouseMove"
+                      MouseDoubleClick="OnItemDoubleClick"
                       Visibility="{Binding IsListMode, Mode=OneWay, Converter={StaticResource BoolToVisible}}">
                 <ListView.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="Quick Trim" Command="{Binding QuickTrimCommand, Mode=OneWay}" ToolTip="Keep and cut stretches of this recording in a sequence of its own" />
                         <Separator />
+                        <MenuItem Header="Open in source monitor" Command="{Binding OpenInSourceCommand, Mode=OneWay}" InputGestureText="Double-click" ToolTip="Mark in and out on it, then insert or overwrite into the sequence" />
                         <MenuItem Header="Find scene cuts..." Command="{Binding FindSceneCutsCommand, Mode=OneWay}" ToolTip="Find where the shots change in an edited video, then mark them or make a subclip of each" />
                         <MenuItem Header="Reveal in Explorer" Command="{Binding RevealCommand, Mode=OneWay}" />
                         <MenuItem Header="Re-read from disk" Command="{Binding ReprobeCommand, Mode=OneWay}" />
@@ -282,6 +284,7 @@
                      VirtualizingPanel.VirtualizationMode="Recycling"
                      PreviewMouseLeftButtonDown="OnListMouseDown"
                      MouseMove="OnListMouseMove"
+                     MouseDoubleClick="OnItemDoubleClick"
                      Visibility="{Binding IsGridMode, Mode=OneWay, Converter={StaticResource BoolToVisible}}">
                 <ListBox.ItemsPanel>
                     <ItemsPanelTemplate>

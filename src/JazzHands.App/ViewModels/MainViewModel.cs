@@ -64,7 +64,8 @@ public sealed partial class MainViewModel : ObservableObject
         JazzHands.Engine.Settings.SettingsSection<EditorSettings>? editor = null,
         StatusBarViewModel? statusBar = null,
         JazzHands.App.Shell.DesktopStatus? desktop = null,
-        JazzHands.App.Shell.AppLifetime? lifetime = null)
+        JazzHands.App.Shell.AppLifetime? lifetime = null,
+        SourcePanelViewModel? source = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(media);
@@ -74,6 +75,7 @@ public sealed partial class MainViewModel : ObservableObject
         Media = media;
         Meters = meters;
         Preview = preview;
+        Source = source;
         Timelines = timelines;
         Keys = keys;
         Exports = exports;
@@ -115,6 +117,15 @@ public sealed partial class MainViewModel : ObservableObject
         if (preview is not null)
         {
             Panels.Add(preview);
+        }
+
+        if (source is not null)
+        {
+            Panels.Add(source);
+
+            // Something opened in the source monitor, from the Media panel, a match frame or a
+            // client, comes to the front so the person sees it.
+            source.Opened += (_, _) => ui.Post(() => ShowPanel(SourcePanelViewModel.PanelId));
         }
 
         if (effects is not null)
@@ -180,6 +191,9 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>The program monitor, when the window has a playback engine. The window sends it keys.</summary>
     public PreviewPanelViewModel? Preview { get; }
+
+    /// <summary>The source monitor, when the window has a playback engine (Phase 38).</summary>
+    public SourcePanelViewModel? Source { get; }
 
     /// <summary>The timeline tabs, one per sequence, when the window has them.</summary>
     public TimelineDocuments? Timelines { get; }

@@ -54,4 +54,30 @@ public static class MediaDragData
             ? joined.Split('\n', StringSplitOptions.RemoveEmptyEntries)
             : [];
     }
+
+    /// <summary>The format for a stretch dragged out of the source monitor: its id, in and out, in flicks.</summary>
+    public const string RangeFormat = "JazzHands.SourceRange.v1";
+
+    /// <summary>Builds the payload for a drag of a marked stretch: the media id as any drag, and the range.</summary>
+    public static DataObject Create(string mediaId, JazzHands.Core.Time.Flicks sourceIn, JazzHands.Core.Time.Flicks sourceOut, string? path = null)
+    {
+        DataObject data = Create([mediaId], path is null ? null : [path]);
+        data.SetData(RangeFormat, FormattableString.Invariant($"{mediaId}|{sourceIn.Value}|{sourceOut.Value}"));
+        return data;
+    }
+
+    /// <summary>The stretch a drop carries, or null when it carries a whole item or is not ours.</summary>
+    public static (string MediaId, JazzHands.Core.Time.Flicks In, JazzHands.Core.Time.Flicks Out)? Range(IDataObject? data)
+    {
+        if (data?.GetDataPresent(RangeFormat) != true || data.GetData(RangeFormat) is not string text
+            || text.Split('|') is not [var id, var from, var to]
+            || !long.TryParse(from, System.Globalization.CultureInfo.InvariantCulture, out long start)
+            || !long.TryParse(to, System.Globalization.CultureInfo.InvariantCulture, out long end)
+            || end <= start)
+        {
+            return null;
+        }
+
+        return (id, new JazzHands.Core.Time.Flicks(start), new JazzHands.Core.Time.Flicks(end));
+    }
 }

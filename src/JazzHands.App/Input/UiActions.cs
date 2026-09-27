@@ -26,6 +26,8 @@ public static class UiActions
         ["ui.import"] = "Import media",
         ["ui.export"] = "Export",
         ["ui.settings"] = "Settings",
+        ["ui.insert-from-source"] = "Insert the source monitor's marked stretch",
+        ["ui.overwrite-from-source"] = "Overwrite with the source monitor's marked stretch",
     };
 
     /// <summary>The timeline's actions, which the timeline in front handles.</summary>
