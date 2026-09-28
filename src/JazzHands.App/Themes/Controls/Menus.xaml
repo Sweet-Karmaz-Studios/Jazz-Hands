@@ -202,4 +202,36 @@
         </Style.Triggers>
     </Style>
 
+    <!--
+        Tooltips: without this every tooltip was Windows' light box with the dark theme's light text
+        in it (2026-09-28, on the preview's resolution list). Raised like a menu, wrapped at a
+        readable width, and never taller than a few lines of help.
+    -->
+    <Style TargetType="ToolTip">
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+        <Setter Property="FontFamily" Value="{DynamicResource Font.Ui}" />
+        <Setter Property="FontSize" Value="{DynamicResource Text.Body}" />
+        <Setter Property="OverridesDefaultStyle" Value="True" />
+        <Setter Property="HasDropShadow" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToolTip">
+                    <Border Background="{DynamicResource Brush.Background.Raised}"
+                            BorderBrush="{DynamicResource Brush.Border.Strong}"
+                            BorderThickness="1"
+                            Padding="8,5"
+                            MaxWidth="420">
+                        <ContentPresenter>
+                            <ContentPresenter.Resources>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="TextWrapping" Value="Wrap" />
+                                </Style>
+                            </ContentPresenter.Resources>
+                        </ContentPresenter>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
 </ResourceDictionary>

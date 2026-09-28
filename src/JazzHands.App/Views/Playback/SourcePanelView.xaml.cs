@@ -66,13 +66,59 @@ public partial class SourcePanelView : UserControl
             }
         };
         Scrub.MouseLeftButtonUp += (_, _) => Scrub.ReleaseMouseCapture();
+
+        // The source monitor's keys (I, O, comma, full stop, the arrows) reach it only while the
+        // focus is inside it, so it takes the focus whenever a person turns to it: a click anywhere
+        // in it, its tab brought forward, a file opened in it (a double-click in the Media panel, F
+        // on a clip). Without that, I and O marked the timeline and comma did nothing.
+        PreviewMouseDown += (_, e) =>
+        {
+            if (!Typing(e.OriginalSource as DependencyObject))
+            {
+                TakeFocus();
+            }
+        };
+        IsVisibleChanged += (_, _) =>
+        {
+            if (IsVisible && _model is { HasSource: true })
+            {
+                TakeFocus();
+            }
+        };
     }
+
+    /// <summary>Puts the keyboard focus on the picture once the input in hand is done.</summary>
+    private void TakeFocus() => Dispatcher.BeginInvoke(DispatcherPriority.Input, () =>
+    {
+        if (IsVisible && !Stage.IsKeyboardFocusWithin)
+        {
+            Keyboard.Focus(Stage);
+        }
+    });
+
+    /// <summary>True for a click in something that takes typing, which keeps its own focus.</summary>
+    private static bool Typing(DependencyObject? element)
+    {
+        for (DependencyObject? at = element; at is not null; at = at is Visual ? VisualTreeHelper.GetParent(at) : LogicalTreeHelper.GetParent(at))
+        {
+            if (at is System.Windows.Controls.Primitives.TextBoxBase or ComboBox)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void OnOpened(object? sender, EventArgs e) => TakeFocus();
 
     private void Bind(SourcePanelViewModel? model)
     {
         _model?.PropertyChanged -= OnModelChanged;
+        _model?.Opened -= OnOpened;
         _model = model;
         _model?.PropertyChanged += OnModelChanged;
+        _model?.Opened += OnOpened;
         PlaceMarks();
 
         if (IsLoaded)

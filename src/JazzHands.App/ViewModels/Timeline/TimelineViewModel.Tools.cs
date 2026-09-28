@@ -436,18 +436,32 @@ public sealed partial class TimelineViewModel
     /// </summary>
     private IEnumerable<string> InSelectedOrder() => _selection.Ids.Where(Selected.Contains);
 
+    /// <summary>
+    /// F: opens a clip's file in the source monitor on the frame it shows. The selected clip that
+    /// plays a file, at the playhead when the playhead is on it and at its first frame when not;
+    /// else the topmost picture from a file under the playhead, passing over titles and other
+    /// generated pictures laid on top of it.
+    /// </summary>
     private void MatchFrameAtPlayhead()
     {
         Flicks playhead = Playhead;
+        static bool FromSource(ClipView view) => view.Clip.MediaId is not null || view.Clip.SequenceId is not null;
+
+        if (SelectedClipIds().Select(id => Content.Clip(id)).FirstOrDefault(view => view is not null && FromSource(view)) is { } selected)
+        {
+            MatchFrame(selected.Id, selected.Start <= playhead && playhead < selected.End ? playhead : selected.Start);
+            return;
+        }
+
         ClipView? clip = Content.Tracks
             .Where(track => track.Track.Kind != TrackKind.Audio)
             .Reverse()
-            .Select(track => track.Clips.FirstOrDefault(view => view.Start <= playhead && playhead < view.End))
+            .Select(track => track.Clips.FirstOrDefault(view => view.Start <= playhead && playhead < view.End && FromSource(view)))
             .FirstOrDefault(view => view is not null);
 
         if (clip is null)
         {
-            Status = "There is no picture under the playhead to match.";
+            Status = "Nothing from a file is under the playhead. Select a clip, or move the playhead onto one, to match its frame.";
             return;
         }
 
