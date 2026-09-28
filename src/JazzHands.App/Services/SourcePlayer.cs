@@ -257,6 +257,9 @@ public interface ISourceScreen
     /// <summary>Stops showing frames somewhere.</summary>
     void RemoveTarget(IPreviewTarget target);
 
+    /// <summary>Frames the player could not show in time while playing.</summary>
+    long DroppedFrames { get; }
+
     /// <summary>Presents the current frame again.</summary>
     void Refresh();
 }

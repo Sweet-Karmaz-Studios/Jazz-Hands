@@ -116,7 +116,17 @@
                 </Grid.RowDefinitions>
 
                 <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                    <TextBlock FontFamily="{DynamicResource Font.Mono}" Text="{Binding Timecode, Mode=OneWay}" ToolTip="Source playhead" />
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock FontFamily="{DynamicResource Font.Mono}" Text="{Binding Timecode, Mode=OneWay}" ToolTip="Source playhead" />
+                        <TextBlock Margin="8,0,0,0"
+                                   VerticalAlignment="Center"
+                                   FontSize="{DynamicResource Text.Caption}"
+                                   Foreground="{DynamicResource Brush.Warning}"
+                                   Visibility="{Binding HasDroppedFrames, Mode=OneWay, Converter={StaticResource Visible}}"
+                                   ToolTip="Frames that were due at normal speed and never shown">
+                            <Run Text="{Binding DroppedFrames, Mode=OneWay}" /><Run Text=" dropped" />
+                        </TextBlock>
+                    </StackPanel>
                     <TextBlock FontSize="{DynamicResource Text.Caption}" Foreground="{DynamicResource Brush.Text.Secondary}">
                         <Run Text="In " /><Run FontFamily="{DynamicResource Font.Mono}" Text="{Binding InText, Mode=OneWay}" />
                         <Run Text="  Out " /><Run FontFamily="{DynamicResource Font.Mono}" Text="{Binding OutText, Mode=OneWay}" />

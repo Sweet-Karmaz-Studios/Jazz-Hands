@@ -70,6 +70,14 @@ public sealed partial class SourcePanelViewModel : ToolViewModel, IQuietWhileHid
     [NotifyPropertyChangedFor(nameof(PlayGlyph), nameof(PlayLabel))]
     private bool _isPlaying;
 
+    /// <summary>Frames the source player was due to show and did not, as the preview counts its own.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDroppedFrames))]
+    private long _droppedFrames;
+
+    /// <summary>True once any frame was dropped, which shows the count.</summary>
+    public bool HasDroppedFrames => DroppedFrames > 0;
+
     [ObservableProperty]
     private string _status = string.Empty;
 
@@ -173,6 +181,7 @@ public sealed partial class SourcePanelViewModel : ToolViewModel, IQuietWhileHid
         double length = Item?.Duration.Value ?? 0;
         Fraction = length > 0 ? position.Value / length : 0;
         IsPlaying = _monitor.IsPlaying;
+        DroppedFrames = _screen?.DroppedFrames ?? 0;
     }
 
     private void OnMonitorChanged(object? sender, EventArgs e) => _ui.Post(() =>
