@@ -448,7 +448,7 @@ public partial class MainWindow : Window, Shell.IAppWindow, Shell.ITourHost
     }
 
     /// <summary>True when the focused element should keep the key for itself.</summary>
-    private static bool Swallowed(DependencyObject? source, Key key)
+    internal static bool Swallowed(DependencyObject? source, Key key)
     {
         for (DependencyObject? node = source; node is not null; node = ParentOf(node))
         {
@@ -457,7 +457,10 @@ public partial class MainWindow : Window, Shell.IAppWindow, Shell.ITourHost
                 return true;
             }
 
-            if (node is Selector or TreeView && key is Key.Up or Key.Down or Key.Left or Key.Right or Key.Home or Key.End)
+            // A list or tree keeps its arrows, but not a tab control: every panel sits in one of
+            // AvalonDock's panes, which are tab controls, and taking them as lists swallowed the
+            // arrows everywhere (the source monitor could not step a frame, 2026-09-28).
+            if (node is (Selector and not TabControl) or TreeView && key is Key.Up or Key.Down or Key.Left or Key.Right or Key.Home or Key.End)
             {
                 return true;
             }

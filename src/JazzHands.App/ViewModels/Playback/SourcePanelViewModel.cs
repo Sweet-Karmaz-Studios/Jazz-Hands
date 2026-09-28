@@ -36,7 +36,7 @@ public sealed partial class SourcePanelViewModel : ToolViewModel, IQuietWhileHid
     private readonly IUiDispatcher _ui;
     private readonly Func<Flicks> _programPlayhead;
     private int _positionQueued;
-    private string? _shown;
+    private long _opens;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowHint))]
@@ -95,6 +95,7 @@ public sealed partial class SourcePanelViewModel : ToolViewModel, IQuietWhileHid
         ArgumentNullException.ThrowIfNull(programPlayhead);
         _session = session;
         _monitor = monitor;
+        _opens = monitor.Opens;
         _screen = screen;
         _ui = ui;
         _programPlayhead = programPlayhead;
@@ -177,12 +178,15 @@ public sealed partial class SourcePanelViewModel : ToolViewModel, IQuietWhileHid
     private void OnMonitorChanged(object? sender, EventArgs e) => _ui.Post(() =>
     {
         Refresh();
-        if (_monitor.MediaId is { } id && !string.Equals(id, _shown, StringComparison.Ordinal))
+        // Every open, the item already there too (F on a clip of the file it holds): an open asks
+        // to be seen, where a seek or a mark does not.
+        long opens = _monitor.Opens;
+        if (opens != _opens && _monitor.MediaId is not null)
         {
             Opened?.Invoke(this, EventArgs.Empty);
         }
 
-        _shown = _monitor.MediaId;
+        _opens = opens;
     });
 
     private void OnProjectChanged(object? sender, ProjectChangedEventArgs e) => _ui.Post(Refresh);

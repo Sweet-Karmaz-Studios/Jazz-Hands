@@ -47,6 +47,9 @@ public sealed class SourceMonitor
     /// <summary>The player, in an editor.</summary>
     public ISourcePlayer? Player { get; set; }
 
+    /// <summary>How many times something has been opened here, the same item again included: an open asks to be seen.</summary>
+    public long Opens { get; private set; }
+
     /// <summary>The item open, or null.</summary>
     public string? MediaId { get; private set; }
 
@@ -76,6 +79,7 @@ public sealed class SourceMonitor
 
             MediaId = item.Id;
             _position = at;
+            Opens++;
         }
 
         Player?.Open(item, at);
