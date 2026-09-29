@@ -41,6 +41,7 @@ public sealed partial class SceneCutsViewModel : ObservableObject, IDisposable
     private readonly SceneCutService _scenes;
     private readonly IMediaImagery? _imagery;
     private readonly CancellationTokenSource _stop = new();
+    private bool _disposed;
     private MediaItem? _item;
     private Clip? _clip;
     private MediaStream? _stream;
@@ -287,13 +288,25 @@ public sealed partial class SceneCutsViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void Cancel()
     {
-        _stop.Cancel();
+        if (!_disposed)
+        {
+            _stop.Cancel();
+        }
+
         CloseRequested?.Invoke(this, EventArgs.Empty);
     }
 
     /// <inheritdoc />
     public void Dispose()
     {
+        // Once only: the dialog disposes it when it closes, and the editor's services once did again
+        // at exit, when cancelling a disposed source crashed the quit (2026-09-29).
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
         _stop.Cancel();
         _stop.Dispose();
         _imagery?.Changed -= OnPicturesChanged;

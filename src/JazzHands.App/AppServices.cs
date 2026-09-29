@@ -58,9 +58,10 @@ public static class AppServices
                 provider.GetRequiredService<ViewModels.Settings.SettingsViewModel>,
                 provider.GetRequiredService<MissingMediaViewModel>,
                 provider.GetRequiredService<ConsolidateViewModel>,
-                provider.GetRequiredService<SceneCutsViewModel>));
+                // Made outside the container: it is disposable, and a container keeps every disposable it
+                // hands out until the editor quits, then disposes them again (a crash on quit, 2026-09-29).
+                () => ActivatorUtilities.CreateInstance<SceneCutsViewModel>(provider)));
         services.AddTransient<MissingMediaViewModel>();
-        services.AddTransient<SceneCutsViewModel>();
         services.AddTransient<ConsolidateViewModel>();
 
         services.AddTransient<ImportViewModel>();
