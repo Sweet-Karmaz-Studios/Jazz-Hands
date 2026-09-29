@@ -75,8 +75,28 @@ public static class ModelStore
     /// True when the model's file is here at its size. The hash was checked when it was fetched;
     /// reading 1.6 GB again on every use would cost seconds.
     /// </summary>
-    public static bool IsPresent(ModelFile model) =>
-        new FileInfo(PathOf(model)) is { Exists: true } file && file.Length == model.Bytes;
+    public static bool IsPresent(ModelFile model)
+    {
+        var file = new FileInfo(PathOf(model));
+        bool present = file.Exists && file.Length == model.Bytes;
+
+        // Once a run, what was found when a model counts as missing: on 2026-09-29 the Transcript
+        // panel asked to fetch a model that was on disk at its size, and nothing said why.
+        if (!present && Missing.TryAdd(model.Name, 0))
+        {
+            Log.Information(
+                "{Model} counts as missing: {Path} exists {Exists}, {Length} bytes of {Expected}",
+                model.Name,
+                file.FullName,
+                file.Exists,
+                file.Exists ? file.Length : 0,
+                model.Bytes);
+        }
+
+        return present;
+    }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> Missing = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Fetches a model into the folder, checking its SHA-256 before keeping it. A file of the wrong

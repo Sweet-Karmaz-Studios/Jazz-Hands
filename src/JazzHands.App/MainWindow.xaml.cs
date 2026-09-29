@@ -413,6 +413,17 @@ public partial class MainWindow : Window, Shell.IAppWindow, Shell.ITourHost
             return;
         }
 
+        // The Transcript panel, while the focus is in it: Delete (or Backspace) cuts the selected
+        // words, as its Delete selected button does. Without this the keymap's Delete took the key
+        // and deleted the selected timeline clips instead (found 2026-09-29).
+        if (_model.Transcript is { SelectedCount: > 0 } transcript && !swallowed && key is Key.Delete or Key.Back && Keyboard.Modifiers == ModifierKeys.None
+            && Within<Views.Transcript.TranscriptPanelView>(e.OriginalSource as DependencyObject))
+        {
+            transcript.DeleteSelectedCommand.Execute(null);
+            e.Handled = true;
+            return;
+        }
+
         if (_model.Timelines?.ActiveTimeline is { } timeline && !swallowed && timeline.KeyDown(key, Keyboard.Modifiers))
         {
             e.Handled = true;
