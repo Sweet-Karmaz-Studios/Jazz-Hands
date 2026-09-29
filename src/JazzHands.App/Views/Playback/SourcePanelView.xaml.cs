@@ -96,12 +96,17 @@ public partial class SourcePanelView : UserControl
         }
     });
 
-    /// <summary>True for a click in something that takes typing, which keeps its own focus.</summary>
+    /// <summary>
+    /// True for a click in something that keeps its own focus: something that takes typing, or a
+    /// button, which is inside the monitor already (so its keys still reach it) and whose click is
+    /// lost if the focus is taken from it while it is pressed (the play button did nothing to the
+    /// mouse, 2026-09-29).
+    /// </summary>
     private static bool Typing(DependencyObject? element)
     {
         for (DependencyObject? at = element; at is not null; at = at is Visual ? VisualTreeHelper.GetParent(at) : LogicalTreeHelper.GetParent(at))
         {
-            if (at is System.Windows.Controls.Primitives.TextBoxBase or ComboBox)
+            if (at is System.Windows.Controls.Primitives.TextBoxBase or ComboBox or System.Windows.Controls.Primitives.ButtonBase)
             {
                 return true;
             }

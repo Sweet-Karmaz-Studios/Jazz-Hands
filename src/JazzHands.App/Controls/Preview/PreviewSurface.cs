@@ -181,10 +181,20 @@ public sealed class PreviewSurface : IDisposable
         context.Flush();
 
         // Spin rather than sleep: at 60 Hz the wait is a few hundred microseconds at most, and a
-        // Sleep(1) here would cost a whole frame.
+        // Sleep(1) here would cost a whole frame. But not for ever: a GPU that was reset or removed
+        // never answers, and the spin held the presenter's lock while the UI thread waited on it,
+        // which hung the editor (2026-09-29). A second is far past any real frame; the frame is
+        // shown as it is and the device's own recovery takes it from there.
         var spin = new SpinWait();
+        long started = System.Diagnostics.Stopwatch.GetTimestamp();
         while (!context.GetData(_flushQuery, out int done) || done == 0)
         {
+            if (System.Diagnostics.Stopwatch.GetElapsedTime(started) > TimeSpan.FromSeconds(1))
+            {
+                _log.Warning("The GPU did not finish the preview frame within a second ({Reason}); showing it as it is", _device.Device.DeviceRemovedReason);
+                return;
+            }
+
             spin.SpinOnce();
         }
     }

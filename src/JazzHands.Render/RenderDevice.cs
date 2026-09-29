@@ -61,6 +61,20 @@ public sealed class RenderDevice : IDisposable
     /// <summary>The immediate context. Only the render thread may touch it.</summary>
     public ID3D11DeviceContext ImmediateContext { get; private set; }
 
+    /// <summary>
+    /// Held for the whole of a frame drawn on <see cref="ImmediateContext"/> by a thread of its own:
+    /// the compositor's passes, the copy into a preview and the wait for it.
+    /// </summary>
+    /// <remarks>
+    /// Multithread protection makes each call safe, not a frame: a frame is a run of calls that
+    /// set targets, shaders and resources and then draw, and two threads drawing at once on one
+    /// device interleave those runs, each drawing with the other's state. The program preview and
+    /// the source monitor (Phase 38) are two players on one device; played together, neither
+    /// showed a frame and the editor hung (2026-09-29). Decoding needs no gate: its calls go
+    /// through the video context and do not depend on what is bound.
+    /// </remarks>
+    public Lock FrameGate { get; } = new();
+
     /// <summary>Whether this is a hardware or WARP device.</summary>
     public RenderDeviceKind Kind { get; private set; }
 

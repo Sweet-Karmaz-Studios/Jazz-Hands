@@ -876,11 +876,17 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
             CountDrops(frame, playing, rate, generation);
             long fetchBefore = frames.FetchTicks;
             long started = Stopwatch.GetTimestamp();
-            Render(frames, snapshot, sequence, settings, frame, time, effective, playing, rate);
-            long renderedAt = Stopwatch.GetTimestamp();
-            _lastKey = key;
-            Present();
-            MeasureScopes(playing, force: false);
+            long renderedAt;
+
+            // One frame at a time on the device: another player may share it (RenderDevice.FrameGate).
+            lock (_device.FrameGate)
+            {
+                Render(frames, snapshot, sequence, settings, frame, time, effective, playing, rate);
+                renderedAt = Stopwatch.GetTimestamp();
+                _lastKey = key;
+                Present();
+                MeasureScopes(playing, force: false);
+            }
 
             if (playing)
             {
@@ -894,12 +900,18 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
         }
         else if (refresh)
         {
-            Present();
+            lock (_device.FrameGate)
+            {
+                Present();
+            }
         }
         else if (_scopesStale)
         {
             // The scopes were just turned on over a frame already shown.
-            MeasureScopes(playing, force: true);
+            lock (_device.FrameGate)
+            {
+                MeasureScopes(playing, force: true);
+            }
         }
 
         Report(time, frame, state, playing ? rate : _transport.Rate, now);
