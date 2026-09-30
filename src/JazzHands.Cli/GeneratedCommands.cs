@@ -236,7 +236,10 @@ public static class GeneratedCommands
     internal static string WithDefault(ParameterMetadata parameter)
     {
         string description = parameter.Description.TrimEnd('.');
-        string shown = parameter.IsRequired || parameter.DefaultValue is null or false or "" ? string.Empty : CommandValues.Format(parameter.DefaultValue, Rational.Fps30);
+        // A description that says its own default already ("Default: 2") is not told it twice.
+        string shown = parameter.IsRequired || parameter.DefaultValue is null or false or "" || description.Contains("Default:", StringComparison.Ordinal)
+            ? string.Empty
+            : CommandValues.Format(parameter.DefaultValue, Rational.Fps30);
         return shown.Length == 0 ? description + "." : $"{description}. Default: {shown}.";
     }
 

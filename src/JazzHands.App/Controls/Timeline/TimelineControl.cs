@@ -667,7 +667,8 @@ public sealed class TimelineControl : FrameworkElement
                 brush,
                 _pixelsPerDip)
             {
-                MaxLineCount = 1,
+                // A caption keeps its two lines (Phase 39); anything else is one line.
+                MaxLineCount = Math.Min(2, text.Count(character => character == '\n') + 1),
             };
 
             var drawing = new DrawingGroup();
@@ -860,7 +861,12 @@ public sealed class TimelineControl : FrameworkElement
 
             if (body.Width > 16 && clipHeight > ClipFontSize + 2)
             {
-                TextDrawing label = ClipLabel(clip.Label, palette.ClipText);
+                // A two line caption shows both lines where the clip is tall enough for them, and both
+                // on one line with a slash where it is not (only its first line showed, 2026-09-30).
+                string shown = clip.Label.Contains('\n', StringComparison.Ordinal) && clipHeight < (ClipFontSize * 2.8) + 4
+                    ? clip.Label.Replace("\n", " / ", StringComparison.Ordinal)
+                    : clip.Label;
+                TextDrawing label = ClipLabel(shown, palette.ClipText);
                 double textLeft = Math.Max(body.Left, 0) + LabelPadding;
                 double room = body.Right - LabelPadding - textLeft;
 

@@ -452,8 +452,8 @@ Duck the music under a voice: one track drops by a depth while another has sound
 |---|---|
 | `--music <id>` | Required. The track to turn down. |
 | `--voice <id>` | The track that turns it down. |
-| `--depth <number>` | How far down: -12dB. Default: -12. Default: -12. |
-| `--threshold <number>` | How loud the voice must be to duck, in dBFS. Default: -40. Default: -40. |
+| `--depth <number>` | How far down: -12dB. Default: -12. |
+| `--threshold <number>` | How loud the voice must be to duck, in dBFS. Default: -40. |
 | `--attack <time>` | How quickly it goes down: 15ms. Default: 15 ms. |
 | `--hold <time>` | How long it stays down after the voice stops. Default: 300 ms. |
 | `--release <time>` | How quickly it comes back. Default: 400 ms. |
@@ -471,7 +471,7 @@ Take noise, room and hum out of speech.
 
 | Option | Meaning |
 |---|---|
-| `--amount <number>` | How much of the enhanced speech is heard, 0 to 100. Default: 100. Default: 100. |
+| `--amount <number>` | How much of the enhanced speech is heard, 0 to 100. Default: 100. |
 | `--off` | Take the effect off instead. |
 | `--no-save` | Do not write the project back. |
 
@@ -547,7 +547,7 @@ Set a clip's, a track's or the mix's gain so it measures a peak, RMS or loudness
 | `--clip <id>` | A clip: its volume, or its linked sound's for a video clip. |
 | `--track <id>` | A track: its fader. |
 | `--mix` | The whole mix, by the master volume. |
-| `--mode <peak|rms|lufs>` | peak, rms or lufs. Default: lufs. Default: lufs. |
+| `--mode <peak|rms|lufs>` | peak, rms or lufs. Default: lufs. |
 | `--target <number>` | dBFS for peak and rms, LUFS for lufs. Default: -1, -20 and -14. |
 | `--sequence <id>` | For --mix, which sequence. |
 | `--no-save` | Do not write the project back. |
@@ -922,7 +922,7 @@ List the filler words and long pauses clip.remove-fillers would cut.
 | `--words <list>` | Comma-separated filler words. Default: um,uh,er,erm,ah,hmm,mm. |
 | `--pauses <time>` | Shorten pauses longer than this, such as 0.8s. |
 | `--keep <time>` | How much of a long pause to keep. Default: 0.25 s. |
-| `--fillers` | Take out filler words. Default: on. Default: true. |
+| `--fillers` | Take out filler words. Default: on. |
 
 ### `jazz clip freeze-frame <project> <clip-id>`
 
@@ -1310,7 +1310,7 @@ Cut filler words and long pauses out of a clip.
 | `--words <list>` | Comma-separated filler words. Default: um,uh,er,erm,ah,hmm,mm. |
 | `--pauses <time>` | Shorten pauses longer than this, such as 0.8s. |
 | `--keep <time>` | How much of a long pause to keep. Default: 0.25 s. |
-| `--fillers` | Take out filler words. Default: on. Default: true. |
+| `--fillers` | Take out filler words. Default: on. |
 | `--no-save` | Do not write the project back. |
 
 ### `jazz clip remove-words <project> <clip-id>`
@@ -1471,7 +1471,7 @@ Show a clip only through another track's picture (a track matte).
 | Option | Meaning |
 |---|---|
 | `--source <source>` | The track whose picture is the matte. |
-| `--mode <alpha|luma|alpha-inverted|luma-inverted>` | alpha, luma, alpha-inverted or luma-inverted. Default: alpha. Default: alpha. |
+| `--mode <alpha|luma|alpha-inverted|luma-inverted>` | alpha, luma, alpha-inverted or luma-inverted. Default: alpha. |
 | `--off` | Take the clip's matte away. |
 | `--no-save` | Do not write the project back. |
 
@@ -1686,9 +1686,9 @@ Split a clip at the shot changes in its video.
 
 | Option | Meaning |
 |---|---|
-| `--threshold <number>` | How much has to change, 0 to 100; lower finds more. Default: 10. Default: 10. |
+| `--threshold <number>` | How much has to change, 0 to 100; lower finds more. Default: 10. |
 | `--min-shot <time>` | The shortest shot there can be. Default: 0.5 s. |
-| `--linked` | Split its linked clips too. Default: on. Default: true. |
+| `--linked` | Split its linked clips too. Default: on. |
 | `--no-save` | Do not write the project back. |
 
 ### `jazz clip stabilize <project> <clip-id>`
@@ -1702,8 +1702,8 @@ Steady a shaky clip (analyses its motion the first time).
 
 | Option | Meaning |
 |---|---|
-| `--smoothing <n>` | Frames either side the camera path is smoothed over. Default: 15. Default: 15. |
-| `--zoom <number>` | Extra zoom in percent. Default: 0. Default: 0. |
+| `--smoothing <n>` | Frames either side the camera path is smoothed over. Default: 15. |
+| `--zoom <number>` | Extra zoom in percent. Default: 0. |
 | `--no-auto-zoom` | Do not zoom in to hide the moving edges. |
 | `--reanalyze` | Analyse the file again. |
 | `--off` | Remove the stabilization instead. |
@@ -1939,7 +1939,7 @@ Lay clips along the beat markers, one to each stretch between cuts.
 | Option | Meaning |
 |---|---|
 | `--track <id>` | Required. The video track to lay them on. |
-| `--every <n>` | Cut on every this many beats. Default: 1. Default: 1. |
+| `--every <n>` | Cut on every this many beats. Default: 1. |
 | `--downbeats` | Cut only on downbeats. |
 | `--from <time>` | The first cut is at or after this. |
 | `--to <time>` | The last cut is at or before this. |
@@ -2610,11 +2610,11 @@ Lay clips out on the frame: facecam corner, side by side, before and after, grid
 | Option | Meaning |
 |---|---|
 | `--clips <list>` | Required. The clips, in the order the layout fills. |
-| `--corner <corner>` | facecam: top-left, top-right, bottom-left or bottom-right. Default: bottom-right. Default: bottom-right. |
-| `--size <number>` | facecam: its width as a fraction of the frame. Default: 0.28. Default: 0.28. |
-| `--margin <number>` | facecam: distance from the edges, in pixels. Default: 40. Default: 40. |
-| `--split <number>` | before-after: where the second clip starts, 0 to 1. Default: 0.5. Default: 0.5. |
-| `--gap <number>` | Pixels between cells. Default: 0. Default: 0. |
+| `--corner <corner>` | facecam: top-left, top-right, bottom-left or bottom-right. Default: bottom-right. |
+| `--size <number>` | facecam: its width as a fraction of the frame. Default: 0.28. |
+| `--margin <number>` | facecam: distance from the edges, in pixels. Default: 40. |
+| `--split <number>` | before-after: where the second clip starts, 0 to 1. Default: 0.5. |
+| `--gap <number>` | Pixels between cells. Default: 0. |
 | `--no-save` | Do not write the project back. |
 
 ### `jazz layout list <project>`
@@ -2661,7 +2661,7 @@ Mark the shot changes in a clip or a media item.
 
 | Option | Meaning |
 |---|---|
-| `--threshold <number>` | How much has to change, 0 to 100; lower finds more. Default: 10. Default: 10. |
+| `--threshold <number>` | How much has to change, 0 to 100; lower finds more. Default: 10. |
 | `--min-shot <time>` | The shortest shot there can be. Default: 0.5 s. |
 | `--color <color>` | The markers' colour, as a hex string or a name. |
 | `--no-save` | Do not write the project back. |
@@ -2855,7 +2855,7 @@ Find the shot changes in an edited video.
 
 | Option | Meaning |
 |---|---|
-| `--threshold <number>` | How much has to change, 0 to 100; lower finds more. Default: 10. Default: 10. |
+| `--threshold <number>` | How much has to change, 0 to 100; lower finds more. Default: 10. |
 | `--min-shot <time>` | The shortest shot there can be. Default: 0.5 s. |
 | `--stream <n>` | The video stream's index in the file. |
 
@@ -3013,7 +3013,7 @@ Make a subclip of every shot in an edited video.
 
 | Option | Meaning |
 |---|---|
-| `--threshold <number>` | How much has to change, 0 to 100; lower finds more. Default: 10. Default: 10. |
+| `--threshold <number>` | How much has to change, 0 to 100; lower finds more. Default: 10. |
 | `--min-shot <time>` | The shortest shot there can be. Default: 0.5 s. |
 | `--folder <folder>` | The folder to put them in. |
 | `--no-save` | Do not write the project back. |
@@ -3109,7 +3109,7 @@ Make a multicam clip from recordings of the same moment.
 
 | Option | Meaning |
 |---|---|
-| `--sync <audio|timecode|in|marker>` | audio, timecode, in or marker. Default: audio. Default: audio. |
+| `--sync <audio|timecode|in|marker>` | audio, timecode, in or marker. Default: audio. |
 | `--name <name>` | The multicam's name. |
 | `--track <id>` | The picture track to put the clip on. |
 | `--at <time>` | Where the clip starts; the end of the track when left out. |
@@ -3173,7 +3173,7 @@ Line up recordings of the same moment.
 
 | Option | Meaning |
 |---|---|
-| `--sync <audio|timecode|in|marker>` | audio, timecode, in or marker. Default: audio. Default: audio. |
+| `--sync <audio|timecode|in|marker>` | audio, timecode, in or marker. Default: audio. |
 
 ### `jazz multicam view <project> [clip-id]`
 
@@ -4214,10 +4214,10 @@ Make a vertical version of a sequence (for Shorts, Reels, TikTok): a cropped or 
 |---|---|
 | `--size <size>` | The new frame. Default: 1080x1920. |
 | `--from <id>` | The sequence to reframe; the active one when not given. |
-| `--mode <crop|fit>` | crop or fit. Default: crop. Default: crop. |
-| `--window <number>` | crop: the window's width over its height. Default: 0.8. Default: 0.8. |
+| `--mode <crop|fit>` | crop or fit. Default: crop. |
+| `--window <number>` | crop: the window's width over its height. Default: 0.8. |
 | `--follow <follow>` | crop: a point track to keep in the middle. |
-| `--blur <number>` | The background's blur in pixels. Default: 40. Default: 40. |
+| `--blur <number>` | The background's blur in pixels. Default: 40. |
 | `--name <name>` | What to call the new sequence. |
 | `--no-save` | Do not write the project back. |
 
@@ -4432,7 +4432,7 @@ Transcribe speech into words with their times.
 | Option | Meaning |
 |---|---|
 | `--stream <n>` | The sound stream's index in the file. |
-| `--language <language>` | An ISO 639-1 code such as en, or auto. Default: en. Default: en. |
+| `--language <language>` | An ISO 639-1 code such as en, or auto. Default: en. |
 | `--again` | Transcribe again even when cached. |
 | `--no-save` | Do not write the project back. |
 
@@ -4478,7 +4478,7 @@ Check subtitle cues for line length, reading speed and gaps.
 
 | Option | Meaning |
 |---|---|
-| `--max-cps <number>` | The most characters a second. Default: 20. Default: 20. |
+| `--max-cps <number>` | The most characters a second. Default: 20. |
 
 ### `jazz subtitle export <project> <track-id>`
 
@@ -4508,7 +4508,7 @@ Make captions from the transcript.
 | `--clip <id>` | Only this clip's words. |
 | `--max-chars <n>` | The most characters a line. |
 | `--max-lines <n>` | The most lines a cue. |
-| `--min-gap <n>` | The fewest frames between cues. Default: 2. Default: 2. |
+| `--min-gap <n>` | The fewest frames between cues. Default: 2. |
 | `--no-save` | Do not write the project back. |
 
 ### `jazz subtitle import <project> [file]`
@@ -5006,7 +5006,7 @@ Show a track only through another track's picture (a track matte).
 | Option | Meaning |
 |---|---|
 | `--source <source>` | The track whose picture is the matte. |
-| `--mode <alpha|luma|alpha-inverted|luma-inverted>` | alpha, luma, alpha-inverted or luma-inverted. Default: alpha. Default: alpha. |
+| `--mode <alpha|luma|alpha-inverted|luma-inverted>` | alpha, luma, alpha-inverted or luma-inverted. Default: alpha. |
 | `--off` | Take the track's matte away. |
 | `--no-save` | Do not write the project back. |
 
@@ -5161,9 +5161,9 @@ Track a point of a clip's picture through its frames.
 | `--at <time>` | Required. The moment the point is picked, on the sequence. |
 | `--x <number>` | Required. The point across, in source pixels. |
 | `--y <number>` | Required. The point down, in source pixels. |
-| `--size <n>` | The square followed, in pixels. Default: 31. Default: 31. |
-| `--search <n>` | How far it may move in a frame, in pixels. Default: 48. Default: 48. |
-| `--direction <both|forward|backward>` | both, forward or backward. Default: both. Default: both. |
+| `--size <n>` | The square followed, in pixels. Default: 31. |
+| `--search <n>` | How far it may move in a frame, in pixels. Default: 48. |
+| `--direction <both|forward|backward>` | both, forward or backward. Default: both. |
 | `--id <id>` | A track to re-track from here, or the id for a new one. |
 | `--name <name>` | What to call a new track. |
 | `--no-save` | Do not write the project back. |
@@ -5473,7 +5473,7 @@ Find what stands still over a clip's moving picture (a game HUD, a watermark, de
 
 | Option | Meaning |
 |---|---|
-| `--samples <n>` | How many frames are compared. Default: 24. Default: 24. |
+| `--samples <n>` | How many frames are compared. Default: 24. |
 
 ### `jazz vfx hide-static <project> <clip-id>`
 
@@ -5486,7 +5486,7 @@ Hide a clip's HUD or watermark by blur, pixelate, fill from a clean frame, or cr
 
 | Option | Meaning |
 |---|---|
-| `--how <blur|pixelate|fill|crop>` | blur, pixelate, fill or crop. Default: blur. Default: blur. |
+| `--how <blur|pixelate|fill|crop>` | blur, pixelate, fill or crop. Default: blur. |
 | `--regions <regions>` | x,y,width,height in source pixels, several separated by ;. |
 | `--plate <time>` | fill: the moment the clean frame is taken from. |
 | `--no-save` | Do not write the project back. |
