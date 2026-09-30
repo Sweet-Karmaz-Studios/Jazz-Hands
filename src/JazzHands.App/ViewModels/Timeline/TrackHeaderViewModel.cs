@@ -67,6 +67,13 @@ public sealed partial class TrackHeaderViewModel : ObservableObject
 
     private string _nextRole = string.Empty;
 
+    /// <summary>
+    /// The roles the track's role menu offers, with their colours: the project's own roles, and of
+    /// the built-in ones those that suit the track (sound roles on a sound track, picture roles on
+    /// a picture track), so a Game track is not offered Titles.
+    /// </summary>
+    public IReadOnlyList<(string Name, string Color)> Roles { get; private set; } = [];
+
     internal TrackHeaderViewModel(TimelineViewModel timeline, string trackId)
     {
         _timeline = timeline;
@@ -84,6 +91,13 @@ public sealed partial class TrackHeaderViewModel : ObservableObject
         int at = Array.FindIndex(all, role => string.Equals(role.Name, RoleName, StringComparison.OrdinalIgnoreCase));
         RoleColor = at >= 0 ? all[at].Color : "#808080";
         _nextRole = all.Length == 0 ? string.Empty : all[(at + 1) % all.Length].Name;
+        string[] picture = [Role.Video, Role.Titles];
+        bool sound = track.Kind == TrackKind.Audio;
+        Roles = [.. all
+            .Where(role => !Role.BuiltIn.Any(builtIn => string.Equals(builtIn.Name, role.Name, StringComparison.OrdinalIgnoreCase))
+                || picture.Contains(role.Name, StringComparer.OrdinalIgnoreCase) != sound
+                || string.Equals(role.Name, RoleName, StringComparison.OrdinalIgnoreCase))
+            .Select(role => (role.Name, role.Color))];
         IsTarget = isTarget;
         CanTarget = track.Kind is TrackKind.Video or TrackKind.Audio;
         _committedName = track.Name;
@@ -123,6 +137,11 @@ public sealed partial class TrackHeaderViewModel : ObservableObject
     /// <summary>Gives the track the next of the project's roles.</summary>
     [RelayCommand]
     public Task NextRoleAsync() => _nextRole.Length == 0 ? Task.CompletedTask : _timeline.RunAsync(new SetTrackRoleCommand(TrackId, _nextRole));
+
+    /// <summary>Gives the track a role picked from its role menu.</summary>
+    [RelayCommand]
+    public Task SetRoleAsync(string? role) =>
+        role is null || string.Equals(role, RoleName, StringComparison.OrdinalIgnoreCase) ? Task.CompletedTask : _timeline.RunAsync(new SetTrackRoleCommand(TrackId, role));
 
     /// <summary>Targets the track for edits from the source monitor, or stops.</summary>
     [RelayCommand]

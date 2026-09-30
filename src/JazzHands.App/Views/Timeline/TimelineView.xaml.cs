@@ -19,6 +19,32 @@ public partial class TimelineView : UserControl
         InitializeComponent();
     }
 
+    /// <summary>A track's role was clicked: the roles that suit it, each in its colour, the current one ticked.</summary>
+    private void OnRoleClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { DataContext: TrackHeaderViewModel header } button)
+        {
+            return;
+        }
+
+        var brushes = new ColorBrushConverter();
+        var menu = new ContextMenu { PlacementTarget = button, Placement = PlacementMode.Bottom };
+        foreach ((string name, string color) in header.Roles)
+        {
+            menu.Items.Add(new MenuItem
+            {
+                Header = name,
+                IsChecked = string.Equals(name, header.RoleName, StringComparison.OrdinalIgnoreCase),
+                Foreground = (System.Windows.Media.Brush)brushes.Convert(color, typeof(System.Windows.Media.Brush), null!, System.Globalization.CultureInfo.InvariantCulture),
+                Command = header.SetRoleCommand,
+                CommandParameter = name,
+            });
+        }
+
+        menu.IsOpen = true;
+        e.Handled = true;
+    }
+
     private void OnNameKeyDown(object sender, KeyEventArgs e)
     {
         if (sender is not TextBox { DataContext: TrackHeaderViewModel header } box)

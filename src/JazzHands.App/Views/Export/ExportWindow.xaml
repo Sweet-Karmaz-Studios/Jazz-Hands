@@ -7,8 +7,10 @@
         mc:Ignorable="d"
         d:DataContext="{d:DesignInstance vm:ExportDialogViewModel}"
         Title="{Binding Heading, Mode=OneWay}"
-        Height="780"
-        Width="640"
+        Height="860"
+        Width="680"
+        MinHeight="480"
+        MinWidth="560"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
         Background="{DynamicResource Brush.Background.Panel}"
@@ -18,7 +20,15 @@
         <BooleanToVisibilityConverter x:Key="Visible" />
     </Window.Resources>
 
-    <Grid Margin="16" TextElement.Foreground="{DynamicResource Brush.Text.Primary}">
+    <!-- The form scrolls; the buttons stay at the bottom. It was one fixed height grid, and opening
+         the preset's overrides squeezed the plan to nothing (found 2026-09-30). -->
+    <Grid Margin="16,16,16,12" TextElement.Foreground="{DynamicResource Brush.Text.Primary}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+    <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+    <Grid Margin="0,0,8,0">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -311,6 +321,7 @@
                 Grid.Column="0"
                 Grid.ColumnSpan="3"
                 Margin="0,8,0,0"
+                MinHeight="120"
                 Padding="8"
                 Background="{DynamicResource Brush.Background.Base}">
             <StackPanel>
@@ -333,7 +344,10 @@
             </StackPanel>
         </Border>
 
-        <StackPanel Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,12,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
+    </Grid>
+    </ScrollViewer>
+
+        <StackPanel Grid.Row="1" Margin="0,12,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button Style="{StaticResource Button.Secondary}"
                     Content="Cancel"
                     IsCancel="True"

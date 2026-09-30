@@ -213,20 +213,29 @@
                                                      LostKeyboardFocus="OnNameLostFocus"
                                                      AutomationProperties.Name="Track name" />
 
-                                            <!-- The track's role, in its colour: a click moves it to the next role (Phase 40). -->
+                                            <!-- The track's role, in its colour: a click opens the roles to pick from (Phase 40; a
+                                                 click that only stepped to the next role was not found, 2026-09-30). -->
                                             <Button Grid.Column="2"
                                                     Margin="2,22,0,0"
                                                     HorizontalAlignment="Left"
                                                     VerticalAlignment="Top"
                                                     Cursor="Hand"
-                                                    Command="{Binding NextRoleCommand, Mode=OneWay}"
-                                                    ToolTip="Role: what the track is for, for stems and muting by role. Click for the next."
+                                                    Click="OnRoleClick"
+                                                    ToolTip="Role: what the track is for, for stems and muting by role. Click to choose."
                                                     AutomationProperties.Name="Track role">
                                                 <Button.Template>
                                                     <ControlTemplate TargetType="Button">
-                                                        <TextBlock Text="{Binding RoleName, Mode=OneWay}"
-                                                                   FontSize="{DynamicResource Text.Caption}"
-                                                                   Foreground="{Binding RoleColor, Converter={StaticResource ColorBrush}, Mode=OneWay}" />
+                                                        <Border Background="Transparent" Padding="0,0,4,0">
+                                                            <TextBlock x:Name="Text"
+                                                                       Text="{Binding RoleName, Mode=OneWay}"
+                                                                       FontSize="{DynamicResource Text.Caption}"
+                                                                       Foreground="{Binding RoleColor, Converter={StaticResource ColorBrush}, Mode=OneWay}" />
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="Text" Property="TextDecorations" Value="Underline" />
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
                                                     </ControlTemplate>
                                                 </Button.Template>
                                             </Button>
