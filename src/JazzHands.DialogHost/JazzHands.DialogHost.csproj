@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <ApplicationIcon>..\JazzHands.App\Assets\jazz.ico</ApplicationIcon>
+    <OutputType>WinExe</OutputType>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>jazz-dialog</AssemblyName>
+    <RootNamespace>JazzHands.DialogHost</RootNamespace>
+    <Description>Shows one Windows file dialog for the editor in a process of its own, so an Explorer add-on that crashes the dialog takes only this down.</Description>
+  </PropertyGroup>
+
+</Project>

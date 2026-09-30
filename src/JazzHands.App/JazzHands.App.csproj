@@ -43,6 +43,8 @@
   <ItemGroup>
     <ProjectReference Include="..\JazzHands.Control\JazzHands.Control.csproj" />
     <ProjectReference Include="..\JazzHands.Engine\JazzHands.Engine.csproj" />
+    <!-- jazz-dialog.exe, which shows Windows' file dialogs in a process of their own, beside the editor. -->
+    <ProjectReference Include="..\JazzHands.DialogHost\JazzHands.DialogHost.csproj" />
   </ItemGroup>
 
   <ItemGroup>

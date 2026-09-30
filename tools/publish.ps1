@@ -61,6 +61,7 @@ Publish 'src\JazzHands.App\JazzHands.App.csproj'
 Publish 'src\JazzHands.Cli\JazzHands.Cli.csproj'
 Publish 'src\JazzHands.Mcp\JazzHands.Mcp.csproj'
 Publish 'src\JazzHands.PluginHost\JazzHands.PluginHost.csproj'
+Publish 'src\JazzHands.DialogHost\JazzHands.DialogHost.csproj'
 
 # FFmpeg beside the executables, where FfmpegLoader looks first; ffmpeg.exe for the fallback exporter.
 $ffmpegOut = Join-Path $files 'ffmpeg'
@@ -74,7 +75,7 @@ Copy-Item (Join-Path $root 'LICENSES.md') $files
 Copy-Item (Join-Path $root 'README.md') $files
 Get-ChildItem $files -Filter *.pdb | Remove-Item
 
-foreach ($exe in 'JazzHands.exe', 'jazz.exe', 'jazz-mcp.exe', 'jazz-plugin-host.exe') {
+foreach ($exe in 'JazzHands.exe', 'jazz.exe', 'jazz-mcp.exe', 'jazz-plugin-host.exe', 'jazz-dialog.exe') {
     if (-not (Test-Path (Join-Path $files $exe))) { throw "$exe is missing from the published files." }
 }
 

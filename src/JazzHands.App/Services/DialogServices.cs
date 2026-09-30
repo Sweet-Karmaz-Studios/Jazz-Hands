@@ -3,6 +3,7 @@ using JazzHands.App.ViewModels.Export;
 using JazzHands.App.ViewModels.Media;
 using JazzHands.App.Views.Export;
 using JazzHands.App.Views.Media;
+using JazzHands.DialogHost;
 using Microsoft.Win32;
 
 namespace JazzHands.App.Services;
@@ -417,6 +418,7 @@ public sealed class FileDialogService : IFileDialogService
         return paths;
     }
 
+
     /// <inheritdoc />
     public IReadOnlyList<string> OpenMedia()
     {
@@ -425,20 +427,14 @@ public sealed class FileDialogService : IFileDialogService
             return picked;
         }
 
-        var dialog = new OpenFileDialog
-        {
-            Title = "Import media",
-            Multiselect = true,
-            CheckFileExists = true,
-            Filter =
-                "Media|*.mp4;*.mov;*.mkv;*.avi;*.webm;*.m4v;*.mxf;*.wav;*.mp3;*.flac;*.aac;*.png;*.jpg;*.jpeg;*.exr;*.tif;*.tiff;*.dpx" +
-                "|Video|*.mp4;*.mov;*.mkv;*.avi;*.webm;*.m4v;*.mxf" +
-                "|Audio|*.wav;*.mp3;*.flac;*.aac;*.m4a" +
-                "|Images|*.png;*.jpg;*.jpeg;*.exr;*.tif;*.tiff;*.dpx" +
-                "|Everything|*.*",
-        };
-
-        return dialog.ShowDialog() == true ? dialog.FileNames : [];
+        return ShellDialogs.Pick(new FilePick(
+            FilePickKind.OpenMany,
+            "Import media",
+            "Media|*.mp4;*.mov;*.mkv;*.avi;*.webm;*.m4v;*.mxf;*.wav;*.mp3;*.flac;*.aac;*.png;*.jpg;*.jpeg;*.exr;*.tif;*.tiff;*.dpx" +
+            "|Video|*.mp4;*.mov;*.mkv;*.avi;*.webm;*.m4v;*.mxf" +
+            "|Audio|*.wav;*.mp3;*.flac;*.aac;*.m4a" +
+            "|Images|*.png;*.jpg;*.jpeg;*.exr;*.tif;*.tiff;*.dpx" +
+            "|Everything|*.*")) ?? [];
     }
 
     /// <inheritdoc />
@@ -449,145 +445,63 @@ public sealed class FileDialogService : IFileDialogService
             return picked.FirstOrDefault();
         }
 
-        var dialog = new OpenFileDialog
+        return One(new FilePick(FilePickKind.Open, "Quick Trim a recording", Movies));
+    }
+
+    /// <inheritdoc />
+    public string? SaveExport(string suggested) => One(Save(
+        "Export to",
+        "MP4|*.mp4|Matroska|*.mkv|QuickTime|*.mov",
+        suggested) with
+    {
+        FilterIndex = System.IO.Path.GetExtension(suggested).ToLowerInvariant() switch
         {
-            Title = "Quick Trim a recording",
-            CheckFileExists = true,
-            Filter = Movies,
-        };
-
-        return dialog.ShowDialog() == true ? dialog.FileName : null;
-    }
+            ".mkv" => 2,
+            ".mov" => 3,
+            _ => 1,
+        },
+    });
 
     /// <inheritdoc />
-    public string? SaveExport(string suggested)
-    {
-        var dialog = new SaveFileDialog
-        {
-            Title = "Export to",
-            FileName = System.IO.Path.GetFileName(suggested),
-            InitialDirectory = System.IO.Path.GetDirectoryName(suggested),
-            Filter = "MP4|*.mp4|Matroska|*.mkv|QuickTime|*.mov",
-            FilterIndex = System.IO.Path.GetExtension(suggested).ToLowerInvariant() switch
-            {
-                ".mkv" => 2,
-                ".mov" => 3,
-                _ => 1,
-            },
-            OverwritePrompt = true,
-        };
-
-        return dialog.ShowDialog() == true ? dialog.FileName : null;
-    }
+    public string? OpenSubtitles() =>
+        One(new FilePick(FilePickKind.Open, "Import subtitles", "Subtitles|*.srt;*.vtt;*.ass;*.ssa|SubRip|*.srt|WebVTT|*.vtt|ASS|*.ass;*.ssa"));
 
     /// <inheritdoc />
-    public string? OpenSubtitles()
-    {
-        var dialog = new OpenFileDialog
-        {
-            Title = "Import subtitles",
-            CheckFileExists = true,
-            Filter = "Subtitles|*.srt;*.vtt;*.ass;*.ssa|SubRip|*.srt|WebVTT|*.vtt|ASS|*.ass;*.ssa",
-        };
-
-        return dialog.ShowDialog() == true ? dialog.FileName : null;
-    }
+    public string? SaveSubtitles(string suggested) =>
+        One(Save("Export subtitles to", "SubRip|*.srt|WebVTT|*.vtt|ASS|*.ass", suggested));
 
     /// <inheritdoc />
-    public string? SaveSubtitles(string suggested)
-    {
-        var dialog = new SaveFileDialog
-        {
-            Title = "Export subtitles to",
-            FileName = System.IO.Path.GetFileName(suggested),
-            InitialDirectory = System.IO.Path.GetDirectoryName(suggested),
-            Filter = "SubRip|*.srt|WebVTT|*.vtt|ASS|*.ass",
-            OverwritePrompt = true,
-        };
-
-        return dialog.ShowDialog() == true ? dialog.FileName : null;
-    }
+    public string? OpenProject() =>
+        One(new FilePick(FilePickKind.Open, "Open a project", "Jazz Hands project|*.jazz|Everything|*.*"));
 
     /// <inheritdoc />
-    public string? OpenProject()
-    {
-        var dialog = new OpenFileDialog { Title = "Open a project", CheckFileExists = true, Filter = "Jazz Hands project|*.jazz|Everything|*.*" };
-        return dialog.ShowDialog() == true ? dialog.FileName : null;
-    }
+    public string? SaveProject(string suggested) =>
+        One(Save("Save the project as", "Jazz Hands project|*.jazz", suggested) with { DefaultExt = ".jazz" });
 
     /// <inheritdoc />
-    public string? SaveProject(string suggested)
-    {
-        var dialog = new SaveFileDialog
-        {
-            Title = "Save the project as",
-            FileName = System.IO.Path.GetFileName(suggested),
-            InitialDirectory = System.IO.Path.GetDirectoryName(suggested),
-            DefaultExt = ".jazz",
-            Filter = "Jazz Hands project|*.jazz",
-            OverwritePrompt = true,
-        };
-
-        return dialog.ShowDialog() == true ? dialog.FileName : null;
-    }
+    public string? PickFolder(string title) => One(new FilePick(FilePickKind.Folder, title));
 
     /// <inheritdoc />
-    public string? PickFolder(string title)
-    {
-        var dialog = new OpenFolderDialog { Title = title };
-        return dialog.ShowDialog() == true ? dialog.FolderName : null;
-    }
+    public string? SaveArchive(string suggested) =>
+        One(Save("Archive the project to", "Zip archive|*.zip", suggested) with { DefaultExt = ".zip" });
 
     /// <inheritdoc />
-    public string? SaveArchive(string suggested)
-    {
-        var dialog = new SaveFileDialog
-        {
-            Title = "Archive the project to",
-            FileName = System.IO.Path.GetFileName(suggested),
-            InitialDirectory = System.IO.Path.GetDirectoryName(suggested),
-            DefaultExt = ".zip",
-            Filter = "Zip archive|*.zip",
-            OverwritePrompt = true,
-        };
-
-        return dialog.ShowDialog() == true ? dialog.FileName : null;
-    }
+    public string? OpenKeymap() => One(new FilePick(FilePickKind.Open, "Import a keymap", "Keymap|*.json", CheckFileExists: false));
 
     /// <inheritdoc />
-    public string? OpenKeymap()
-    {
-        var dialog = new OpenFileDialog { Title = "Import a keymap", Filter = "Keymap|*.json" };
-        return dialog.ShowDialog() == true ? dialog.FileName : null;
-    }
+    public string? SaveKeymap(string suggested) => One(Save("Export the keymap", "Keymap|*.json", suggested));
 
     /// <inheritdoc />
-    public string? SaveKeymap(string suggested)
-    {
-        var dialog = new SaveFileDialog
-        {
-            Title = "Export the keymap",
-            FileName = System.IO.Path.GetFileName(suggested),
-            InitialDirectory = System.IO.Path.GetDirectoryName(suggested),
-            Filter = "Keymap|*.json",
-            OverwritePrompt = true,
-        };
+    public string? SaveScript(string suggested) => One(Save("Save the commands as a script", "Jazz script|*.json", suggested));
 
-        return dialog.ShowDialog() == true ? dialog.FileName : null;
-    }
+    /// <summary>A save dialog suggesting a file's name in its folder.</summary>
+    private static FilePick Save(string title, string filter, string suggested) => new(
+        FilePickKind.Save,
+        title,
+        filter,
+        InitialDirectory: System.IO.Path.GetDirectoryName(suggested),
+        FileName: System.IO.Path.GetFileName(suggested));
 
-    /// <inheritdoc />
-    public string? SaveScript(string suggested)
-    {
-        var dialog = new SaveFileDialog
-        {
-            Title = "Save the commands as a script",
-            FileName = System.IO.Path.GetFileName(suggested),
-            InitialDirectory = System.IO.Path.GetDirectoryName(suggested),
-            Filter = "Jazz script|*.json",
-            OverwritePrompt = true,
-        };
-
-        return dialog.ShowDialog() == true ? dialog.FileName : null;
-    }
+    /// <summary>A dialog of one answer, in a process of its own (<see cref="ShellDialogs"/>).</summary>
+    private static string? One(FilePick pick) => ShellDialogs.Pick(pick)?.FirstOrDefault();
 }
