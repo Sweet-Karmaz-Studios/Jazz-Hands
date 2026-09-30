@@ -55,6 +55,8 @@
     <DockPanel Margin="{DynamicResource Space.Normal}">
         <!-- What is shown, and the tools. -->
         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+            <Button DockPanel.Dock="Right" Style="{StaticResource Button.Text}" Content="Make captions" Command="{Binding MakeCaptionsCommand, Mode=OneWay}"
+                    ToolTip="Lay these words out as captions on a subtitle track (a new Captions track when there is none). Again after an edit, to bring them up to date. One undo" />
             <Button DockPanel.Dock="Right" Style="{StaticResource Button.Text}" Content="Remove fillers and pauses" Command="{Binding RemoveFillersCommand, Mode=OneWay}"
                     ToolTip="Cut every greyed filler word, and shorten every pause over a second to a quarter second. One undo" />
             <Button DockPanel.Dock="Right" Style="{StaticResource Button.Text}" Content="Transcribe" Command="{Binding TranscribeCommand, Mode=OneWay}"

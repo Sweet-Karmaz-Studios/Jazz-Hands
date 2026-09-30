@@ -254,6 +254,35 @@ public sealed partial class TranscriptPanelViewModel : ToolViewModel
         }
     }
 
+    /// <summary>
+    /// Lays the words shown out as captions (<c>subtitle.from-transcript</c>) on the first unlocked
+    /// subtitle track, or on a new one called Captions, as one undo step. Cues already there over
+    /// the same stretch are replaced, so pressing it again after an edit brings them up to date.
+    /// </summary>
+    [RelayCommand]
+    private void MakeCaptions()
+    {
+        if (Words.Count == 0 || _session.Project.ActiveSequence is not { } sequence)
+        {
+            return;
+        }
+
+        var commands = new List<ICommand>();
+        string trackId;
+        if (sequence.Tracks.FirstOrDefault(track => track.Kind == TrackKind.Subtitle && !track.Locked) is { } existing)
+        {
+            trackId = existing.Id;
+        }
+        else
+        {
+            trackId = Id.New();
+            commands.Add(new AddTrackCommand(TrackKind.Subtitle, "Captions", TrackId: trackId));
+        }
+
+        commands.AddRange(Words.Select(word => word.ClipId).Distinct(StringComparer.Ordinal).Select(clip => (ICommand)new SubtitleFromTranscriptCommand(trackId, clip)));
+        Send(new BatchCommand([.. commands], "Make captions"));
+    }
+
     /// <summary>Goes to the next word that matches the search, after the playhead.</summary>
     [RelayCommand]
     private void FindNext()

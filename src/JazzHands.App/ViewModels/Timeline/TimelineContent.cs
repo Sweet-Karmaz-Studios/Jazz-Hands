@@ -28,10 +28,15 @@ public sealed record ClipView(Clip Clip, string TrackId, TrackKind Kind, bool Me
     /// <summary>Where it ends, exclusive.</summary>
     public Flicks End => Clip.End;
 
-    /// <summary>What the body shows: the clip's name, and its speed when it is not 1x.</summary>
-    public string Label { get; } = Clip.EffectiveSpeed == Rational.One
-        ? Clip.Name
-        : $"{Clip.Name}  {Clip.EffectiveSpeed.ToDouble() * 100:0.#}%{(Clip.Reverse ? " reversed" : string.Empty)}";
+    /// <summary>
+    /// What the body shows: the clip's name, and its speed when it is not 1x. A caption shows its
+    /// text, both lines: its name is only the first (a two line caption showed half, 2026-09-30).
+    /// </summary>
+    public string Label { get; } = Clip.Cue is { } cue
+        ? string.Join('\n', Core.Titles.TitleMarkup.PlainText(cue.Text).Replace("\r", string.Empty, StringComparison.Ordinal).Split('\n').Select(line => line.Trim()).Where(line => line.Length > 0).Take(2))
+        : Clip.EffectiveSpeed == Rational.One
+            ? Clip.Name
+            : $"{Clip.Name}  {Clip.EffectiveSpeed.ToDouble() * 100:0.#}%{(Clip.Reverse ? " reversed" : string.Empty)}";
 }
 
 /// <summary>One transition as the timeline draws it: where it plays, not only where its cut is.</summary>
