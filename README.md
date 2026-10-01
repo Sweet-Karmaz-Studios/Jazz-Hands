@@ -15,9 +15,9 @@ or with no window at all.
 
 ## Download
 
-No release has been published yet; for now, [build from source](#build-from-source). Releases
-will be on the [Releases page](https://github.com/Sweet-Karmaz-Studios/Jazz-Hands/releases),
-each with two downloads:
+Get the latest from the [Releases page](https://github.com/Sweet-Karmaz-Studios/Jazz-Hands/releases)
+(previews until 1.0.0 is out), or [build from source](#build-from-source). Each release has two
+downloads:
 
 - `JazzHands-<version>-win-x64.msi` installs for the current user, with no administrator rights,
   and puts `jazz` on your PATH.
