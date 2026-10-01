@@ -49,13 +49,15 @@ if (-not (Test-Path (Join-Path $ffmpeg 'bin\avcodec-62.dll'))) {
     throw 'third_party\ffmpeg has no DLLs. Run tools\get-ffmpeg.ps1 first.'
 }
 
+# ContinuousIntegrationBuild makes the build deterministic and records source paths in the embedded
+# debug information as /_/src/..., not the folder this ran in (which would name the user's profile).
 function Publish([string] $project) {
     Write-Host "Publishing $project..."
     $previous = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     & dotnet publish (Join-Path $root $project) -c Release -r win-x64 --self-contained true `
         -p:PublishReadyToRun=true -p:PublishSingleFile=false -p:PublishTrimmed=false `
-        -p:DebugType=embedded -p:Version=$Version -p:PublishProfile= -o $files 2>&1 |
+        -p:DebugType=embedded -p:ContinuousIntegrationBuild=true -p:Version=$Version -p:PublishProfile= -o $files 2>&1 |
         Where-Object { $_ -match 'error|warn' -and $_ -notmatch ' 0 (Warning|Error)' } | Write-Host
     $code = $LASTEXITCODE
     $ErrorActionPreference = $previous
