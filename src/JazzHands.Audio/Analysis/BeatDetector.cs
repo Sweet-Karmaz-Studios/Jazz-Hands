@@ -196,28 +196,74 @@ public static class BeatDetector
         return near / (double)rate;
     }
 
-    /// <summary>The beat period in seconds, and how clearly it stood out (0 to 1).</summary>
+    /// <summary>
+    /// The beat period in seconds, and how clearly it stood out (0 to 1). The attack signal is summed
+    /// into 10 ms frames with its mean taken away, so loose or swung playing still lines up with
+    /// itself; each candidate period is scored with the periods of two beats and of a bar, so the
+    /// pulse a bar of four is built on wins over a subdivision of it (brushed or swung jazz otherwise
+    /// reads about a quarter fast); and a gentle lean towards 120 only settles halves and doubles.
+    /// </summary>
     private static (double Period, double Clarity) Tempo(double[] rise, double hop)
     {
-        int shortest = (int)(60.0 / 200 / hop);
-        int longest = Math.Min(rise.Length / 2, (int)(60.0 / 60 / hop));
+        const double Coarse = 0.010;
+        int per = Math.Max(1, (int)Math.Round(Coarse / hop));
+        int count = rise.Length / per;
+        int shortest = (int)Math.Floor(60.0 / 200 / Coarse);
+        int longest = (int)Math.Ceiling(60.0 / 60 / Coarse);
+        if (count < longest * 2)
+        {
+            return (0.5, 0);
+        }
+
+        double[] envelope = new double[count];
+        double mean = 0;
+        for (int index = 0; index < count; index++)
+        {
+            double sum = 0;
+            for (int part = 0; part < per; part++)
+            {
+                sum += rise[(index * per) + part];
+            }
+
+            envelope[index] = sum;
+            mean += sum;
+        }
+
+        mean /= count;
+        for (int index = 0; index < count; index++)
+        {
+            envelope[index] -= mean;
+        }
+
+        int furthest = Math.Min(count / 2, longest * 4 + 1);
+        double[] correlation = new double[furthest + 2];
+        for (int lag = 1; lag <= furthest; lag++)
+        {
+            double sum = 0;
+            for (int index = lag; index < count; index++)
+            {
+                sum += envelope[index] * envelope[index - lag];
+            }
+
+            correlation[lag] = sum / (count - lag);
+        }
+
+        double Near(int lag) => lag + 1 > furthest
+            ? 0
+            : Math.Max(correlation[lag], Math.Max(correlation[lag - 1], correlation[lag + 1]));
+
         double best = double.MinValue;
         int bestLag = shortest;
         double total = 0;
         int counted = 0;
-
+        double[] scores = new double[longest + 2];
         for (int lag = shortest; lag <= longest; lag++)
         {
-            double sum = 0;
-            for (int frame = lag; frame < rise.Length; frame++)
-            {
-                sum += rise[frame] * rise[frame - lag];
-            }
-
-            // A drummer counts near 120: halves and doubles of the true tempo correlate too.
-            double octaves = Math.Log2(lag * hop / 0.5);
-            double weighted = sum * Math.Exp(-0.5 * octaves * octaves / 0.25);
-            total += weighted;
+            double support = correlation[lag] + (0.5 * Near(2 * lag)) + (0.5 * Near(4 * lag));
+            double octaves = Math.Log2(lag * Coarse / 0.5);
+            double weighted = support * Math.Exp(-0.5 * octaves * octaves);
+            scores[lag] = weighted;
+            total += Math.Max(0, weighted);
             counted++;
             if (weighted > best)
             {
@@ -226,8 +272,20 @@ public static class BeatDetector
             }
         }
 
-        double mean = counted == 0 ? 0 : total / counted;
-        return (bestLag * hop, best <= 0 ? 0 : Math.Clamp(1 - (mean / best), 0, 1));
+        // Between frames: a parabola through the best score and its neighbours.
+        double refined = bestLag;
+        if (bestLag > shortest && bestLag < longest)
+        {
+            double before = scores[bestLag - 1], after = scores[bestLag + 1];
+            double bend = before - (2 * best) + after;
+            if (bend < 0)
+            {
+                refined += 0.5 * (before - after) / bend;
+            }
+        }
+
+        double average = counted == 0 ? 0 : total / counted;
+        return (refined * Coarse, best <= 0 ? 0 : Math.Clamp(1 - (average / best), 0, 1));
     }
 
     /// <summary>Where the grid of beats at a period lands on the most attack.</summary>
