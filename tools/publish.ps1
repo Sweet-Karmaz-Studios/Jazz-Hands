@@ -15,7 +15,7 @@
     SHA256SUMS.txt               a hash of each
 
   The version is Directory.Build.props' VersionPrefix unless -Version says otherwise. Nothing is
-  signed (Docs/DESIGN.md, "Signing"). Needs tools/get-ffmpeg.ps1 to have run.
+  signed. Needs tools/get-ffmpeg.ps1 to have run. A prerelease: -Version 1.0.0-preview.1.
 
     powershell -ExecutionPolicy Bypass -File tools\publish.ps1
     powershell -ExecutionPolicy Bypass -File tools\publish.ps1 -SkipInstaller
@@ -33,6 +33,11 @@ if ($Version -eq '') {
     $props = [xml](Get-Content (Join-Path $root 'Directory.Build.props') -Raw)
     $Version = ($props.Project.PropertyGroup | ForEach-Object { $_.VersionPrefix } | Where-Object { $_ } | Select-Object -First 1)
 }
+
+# MSI versions are numeric (major.minor.build): a prerelease such as 1.0.0-preview.1 installs as
+# 1.0.0, and the installer allows same-version upgrades, so the next preview or the release
+# replaces it.
+$msiVersion = ($Version -split '[-+]')[0]
 
 $release = Join-Path $root "artifacts\release\$Version"
 $files = Join-Path $release 'files'
@@ -111,7 +116,7 @@ if (-not $SkipInstaller) {
     $ErrorActionPreference = 'Continue'
     & wix build (Join-Path $root 'installer\JazzHands.wxs') `
         -ext WixToolset.UI.wixext -ext WixToolset.Util.wixext `
-        -arch x64 -d "Version=$Version" -d "Files=$files" -d "Assets=$(Join-Path $root 'src\JazzHands.App\Assets')" `
+        -arch x64 -d "Version=$msiVersion" -d "Files=$files" -d "Assets=$(Join-Path $root 'src\JazzHands.App\Assets')" `
         -out $msi 2>&1 | Write-Host
     $code = $LASTEXITCODE
     $ErrorActionPreference = $previous
