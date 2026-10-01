@@ -98,7 +98,7 @@ public sealed class DecoderLease : IDisposable
 /// </remarks>
 public sealed class DecoderPool : IDisposable
 {
-    /// <summary>What the frame pools of every open decoder may add up to. 1.5 GB, as the hw-decode skill sets.</summary>
+    /// <summary>What the frame pools of every open decoder may add up to. 1.5 GB by default.</summary>
     public const long DefaultBudgetBytes = 1_610_612_736;
 
     /// <summary>Surfaces a playhead decoder keeps in flight, for decode-ahead.</summary>
@@ -269,8 +269,8 @@ public sealed class DecoderPool : IDisposable
     /// How much memory one decoder's frame pool is worth.
     /// </summary>
     /// <remarks>
-    /// Width times height times bytes per pixel times the surfaces in flight, as the hw-decode
-    /// skill sets out. It is an estimate: the real allocation is the driver's business and is
+    /// Width times height times bytes per pixel times the surfaces in flight. It is an
+    /// estimate: the real allocation is the driver's business and is
     /// rounded up to its own alignment. What it has to be is proportional and cheap, because it
     /// is what eviction is decided by.
     /// </remarks>

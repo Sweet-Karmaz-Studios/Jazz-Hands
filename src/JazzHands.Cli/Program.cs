@@ -155,7 +155,7 @@ namespace JazzHands.Cli
 
         private static Command BuildPerfCommand()
         {
-            var perf = new Command("perf", "Measure the engine. Numbers land in Docs/PERF.md.");
+            var perf = new Command("perf", "Measure the engine on this machine: decoding, scrubbing, playback, thumbnails, audio and more.");
             perf.Subcommands.Add(BuildDecodeBenchmarkCommand());
             perf.Subcommands.Add(BuildScrubBenchmarkCommand());
             perf.Subcommands.Add(BuildAudioBenchmarkCommand());

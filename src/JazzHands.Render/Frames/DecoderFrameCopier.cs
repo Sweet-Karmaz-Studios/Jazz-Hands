@@ -15,8 +15,7 @@ namespace JazzHands.Render.Frames;
 /// This is a GPU to GPU copy: the pixels never leave video memory, which is the whole point.
 ///
 /// It is still a copy, and it is the price of a frame outliving the decode that produced it. A
-/// frame going straight to the compositor should be sampled from the decoder's array instead; see
-/// the hw-decode skill.
+/// frame going straight to the compositor should be sampled from the decoder's array instead.
 /// </remarks>
 public sealed class DecoderFrameCopier(RenderDevice device)
 {

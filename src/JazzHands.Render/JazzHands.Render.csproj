@@ -14,7 +14,7 @@
 
   <ItemGroup>
     <!-- Shaders are embedded and compiled at runtime, so editing one needs no build step and the
-         compiled cache can key on the source hash. See the hlsl-effects skill. -->
+         compiled cache can key on the source hash. -->
     <EmbeddedResource Include="Shaders\*.hlsl" />
     <EmbeddedResource Include="Shaders\*.hlsli" />
   </ItemGroup>

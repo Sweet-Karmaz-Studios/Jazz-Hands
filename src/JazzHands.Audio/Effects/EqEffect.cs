@@ -8,7 +8,7 @@ namespace JazzHands.Audio.Effects;
 /// <remarks>
 /// Fixed band types rather than eight bands of any type, which is how the EQs in editors people
 /// already know are laid out and what a sentence can describe ("cut the rumble, a little air on
-/// top"); the skill's eight bands are all here. Each band is an RBJ biquad
+/// top"); eight bands. Each band is an RBJ biquad
 /// (<see cref="Biquad"/>). A band at 0 dB, or a cut that is off, is skipped. While a setting
 /// moves, coefficients are made again every 32 samples along the ramp, which keeps a sweep from
 /// zipping; a still EQ makes them once and keeps them.

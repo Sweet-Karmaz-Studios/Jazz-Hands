@@ -15,7 +15,7 @@ namespace JazzHands.App.Controls;
 /// A WPF menu item clicks inside the automation call. When the click opens a modal window (the
 /// Windows file picker behind Import media..., Open...), that window's message loop runs inside
 /// the call, and a screen reader or the UI suite waits on it until the window closes, with the
-/// editor answering nothing meanwhile (Docs/UX_FINDINGS.md, finding 7). A mouse or a key is
+/// editor answering nothing meanwhile. A mouse or a key is
 /// unchanged.
 /// </remarks>
 public class QueuedMenu : Menu

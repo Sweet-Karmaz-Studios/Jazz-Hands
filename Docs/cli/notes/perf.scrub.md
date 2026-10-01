@@ -22,4 +22,4 @@ hevc10_2160p60_5s.mp4
 
 The four combinations answer different questions and their numbers are not comparable. Random and
 exact is the worst case and is dominated by the decode from the enclosing keyframe; drag is what a
-person does; nearest is what a shuttle does. `Docs/PERF.md` records all of them for the corpus.
+person does; nearest is what a shuttle does.

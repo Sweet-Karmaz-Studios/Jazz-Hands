@@ -1,7 +1,7 @@
 // The colour correction effects: basic correction, wheels, curves, the HSL qualifier, LUTs and
 // white balance. One file, one constant buffer shaped for all of them (five float4s and four
-// flags), each effect using what it needs. See the color-science skill for which space each
-// adjustment belongs in: light (exposure, white balance, contrast about 18% grey) in linear,
+// flags), each effect using what it needs. Each adjustment works in its own
+// space: light (exposure, white balance, contrast about 18% grey) in linear,
 // what a colourist judges by eye (wheels, curves, qualifiers) in perceptual sRGB-encoded values.
 
 #include "Effect.hlsli"

@@ -15,7 +15,7 @@ namespace JazzHands.App.Spikes;
 /// <summary>
 /// Spike S1. Renders a moving 4K test pattern on a background thread and presents it in WPF,
 /// measuring presented frame rate, UI thread cost and recovery. Throwaway: it exists to produce
-/// the numbers in Docs/SPIKES.md, and it is compiled only when JazzSpikes is on.
+/// the spike's numbers, and it is compiled only when JazzSpikes is on.
 /// </summary>
 internal sealed class SpikeWindow : Window
 {

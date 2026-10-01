@@ -5,7 +5,7 @@ using System.Text.Json.Serialization;
 
 namespace JazzHands.App.Spikes;
 
-/// <summary>The numbers Docs/SPIKES.md records for S1.</summary>
+/// <summary>The numbers spike S1 records.</summary>
 public sealed record SpikeReport
 {
     /// <summary>Which presentation path was measured.</summary>
@@ -92,7 +92,7 @@ public sealed record SpikeReport
     /// <summary>Anything the run wants the reader to know.</summary>
     public IReadOnlyList<string> Notes { get; init; } = [];
 
-    /// <summary>Serializes the report the way SPIKES.md quotes it.</summary>
+    /// <summary>Serializes the report as one readable block.</summary>
     public string ToJson() => JsonSerializer.Serialize(this, ReportJson.Options);
 }
 

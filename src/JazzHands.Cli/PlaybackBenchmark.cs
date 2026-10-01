@@ -79,7 +79,7 @@ public sealed record PlaybackBenchmarkResult(
 /// Each frame is presented to a target that does what the preview panel's presenter does: a
 /// filtered blit of the program texture into a panel-sized surface and a wait for the GPU to
 /// finish. The one thing missing is WPF taking the surface, which spike S1 measured on its own at
-/// a few microseconds; <c>Docs/spikes/S1.md</c> has the numbers.
+/// a few microseconds (spike S1).
 /// </remarks>
 public static class PlaybackBenchmark
 {

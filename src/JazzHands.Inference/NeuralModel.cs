@@ -29,7 +29,7 @@ public enum ExecutionProvider
 /// <para>
 /// Frames reach a model through the processor (a copy down from the GPU and one back up): our
 /// frames are Direct3D 11 textures and DirectML takes Direct3D 12 buffers. That copy is the named
-/// exception to "frames stay on the GPU" (Docs/ARCHITECTURE.md), measured in Docs/SPIKES.md S10.
+/// exception to "frames stay on the GPU", measured in spike S10.
 /// </para>
 /// </remarks>
 public sealed class NeuralModel : IDisposable

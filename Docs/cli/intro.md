@@ -6,8 +6,7 @@ description `--help` prints. Change a description in the code, or the prose in `
 (`intro.md`, `exit-codes.md`, `guides.md`, and a note per verb in `notes/`), and regenerate. A
 test fails when this file is out of date.
 
-See the `cli-conventions` skill for the rules the CLI follows, and "Guides" at the end for how
-the verbs fit together.
+See "Guides" at the end for how the verbs fit together.
 
 ```
 jazz <verb> [arguments] [--options]

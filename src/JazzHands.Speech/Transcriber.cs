@@ -21,7 +21,7 @@ public sealed record HeardSpeech(IReadOnlyList<TranscribedWord> Words, string La
 /// <summary>
 /// Speech to text on this machine (Phase 39): whisper.cpp through Whisper.net, 16 kHz mono in,
 /// words with their times out. The GPU is reached through Vulkan, which the graphics driver
-/// provides; whisper.cpp's CUDA build needs NVIDIA's cuBLAS, which is not here (Docs/SPIKES.md S9).
+/// provides; whisper.cpp's CUDA build needs NVIDIA's cuBLAS, which is not here (spike S9).
 /// </summary>
 /// <remarks>
 /// <para>

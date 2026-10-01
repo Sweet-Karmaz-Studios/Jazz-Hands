@@ -1,5 +1,5 @@
 // Transfer functions and gamut conversion, one function each, so every pass converts the same
-// way. See the color-science skill for which one applies where.
+// way.
 
 #ifndef JAZZ_COLOR_HLSLI
 #define JAZZ_COLOR_HLSLI
@@ -72,7 +72,7 @@ float3 HlgToNits(float3 encoded)
 #define TONEMAP_CLIP 3
 
 // HDR's reference white (BT.2408) is SDR's white: 203 nits is 1.0 in the working space. The
-// skill's 100 nit target is the same thing in SDR's units; mapping to 203 keeps a graded HDR
+// SDR 100 nit target is the same thing in SDR's units; mapping to 203 keeps a graded HDR
 // face as bright in the SDR result as an SDR grade would have it.
 static const float ReferenceWhiteNits = 203.0;
 

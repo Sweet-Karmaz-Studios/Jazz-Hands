@@ -71,7 +71,7 @@ public sealed unsafe class VideoDecoder : IVideoSource
     /// </param>
     /// <param name="poolDepth">
     /// Decoder surfaces to keep in flight. Small for a seek decoder, larger for the one following
-    /// the playhead; see the hw-decode skill.
+    /// the playhead.
     /// </param>
     /// <param name="tuning">What the frames are for. Thumbnail decoding is software only.</param>
     public VideoDecoder(

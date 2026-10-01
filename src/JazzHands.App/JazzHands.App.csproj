@@ -11,7 +11,7 @@
 
   <!-- Spike windows are throwaway harnesses under Spikes/. They are compiled in Debug, and in
        Release only when asked for, so a spike can be measured on an optimised build without
-       shipping in a normal one. See Docs/SPIKES.md. -->
+       shipping in a normal one. -->
   <PropertyGroup>
     <JazzSpikes Condition="'$(JazzSpikes)' == '' and '$(Configuration)' == 'Debug'">true</JazzSpikes>
     <JazzSpikes Condition="'$(JazzSpikes)' == ''">false</JazzSpikes>

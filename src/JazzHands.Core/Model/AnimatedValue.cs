@@ -30,8 +30,7 @@ public enum Interp
 /// </summary>
 /// <remarks>
 /// Times are relative to the clip start, so moving a clip carries its animation with it. For
-/// track and sequence level parameters they are relative to the sequence start. See the
-/// keyframes skill.
+/// track and sequence level parameters they are relative to the sequence start.
 /// </remarks>
 /// <param name="Time">When this value applies, relative to the owner.</param>
 /// <param name="Value">The value at that time.</param>

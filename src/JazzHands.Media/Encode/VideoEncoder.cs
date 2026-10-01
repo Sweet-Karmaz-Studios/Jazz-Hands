@@ -689,7 +689,7 @@ public sealed unsafe class VideoEncoder : IDisposable
 
     private static void Nvenc(List<KeyValuePair<string, string>> options, VideoEncoderSettings settings, string quality)
     {
-        // The export-pipeline skill's settings: p5 with the HQ tune, adaptive quantization both
+        // The export settings: p5 with the HQ tune, adaptive quantization both
         // ways, a 32 frame lookahead and B-frames used as references where the codec allows it.
         Set(options, "preset", settings.Speed switch
         {

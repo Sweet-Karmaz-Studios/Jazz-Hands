@@ -2,7 +2,7 @@
 //
 // This is the first pass of every render graph: everything downstream composites in linear light
 // at half float, so the YUV to RGB matrix, the range expansion and the transfer function all
-// happen exactly once, here. See the color-science skill.
+// happen exactly once, here.
 
 cbuffer YuvConstants : register(b0)
 {

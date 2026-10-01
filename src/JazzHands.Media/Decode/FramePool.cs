@@ -13,7 +13,7 @@ namespace JazzHands.Media.Decode;
 /// decoders is the difference between a quiet heap and a gen0 collection every second.
 ///
 /// Thread safety: rent and return are safe from any thread, but a given decoder is thread-affine
-/// and should only be driven from its own thread. See the ffmpeg-interop skill.
+/// and should only be driven from its own thread.
 /// </remarks>
 public sealed class FramePool : IDisposable
 {

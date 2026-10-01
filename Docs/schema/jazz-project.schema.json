@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://jazzhands.dev/schema/jazz-project.schema.json",
   "title": "Jazz Hands project (.jazz)",
-  "description": "Generated from the JazzHands.Core model by tools/gen-schema. Do not edit by hand: change the records and regenerate. Members not described here are preserved on save and reported as warnings rather than rejected.",
+  "description": "Generated from the JazzHands.Core model. Do not edit by hand: change the records and regenerate. Members not described here are preserved on save and reported as warnings rather than rejected.",
   "type": "object",
   "properties": {
     "schemaVersion": {

@@ -48,7 +48,7 @@ public readonly record struct ToneMapParameters(ToneMapOperator Operator, float 
 /// <remarks>
 /// Getting this wrong is the classic way footage ends up subtly washed out or too contrasty, and
 /// the mistakes are invisible until you compare against the source. The coefficients come from
-/// the specs rather than from a table someone typed; see the color-science skill.
+/// the specs rather than from a table someone typed.
 /// </remarks>
 public sealed record YuvColorSpace(Matrix4x4 Matrix, bool IsFullRange, TransferFunction Transfer, int BitDepth)
 {

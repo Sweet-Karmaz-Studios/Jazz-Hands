@@ -6,8 +6,7 @@ description `--help` prints. Change a description in the code, or the prose in `
 (`intro.md`, `exit-codes.md`, `guides.md`, and a note per verb in `notes/`), and regenerate. A
 test fails when this file is out of date.
 
-See the `cli-conventions` skill for the rules the CLI follows, and "Guides" at the end for how
-the verbs fit together.
+See "Guides" at the end for how the verbs fit together.
 
 ```
 jazz <verb> [arguments] [--options]
@@ -3279,7 +3278,7 @@ Drive a parameter with an expression (time, wiggle, audio, param, marker) instea
 
 ## `jazz perf`
 
-Measure the engine. Numbers land in Docs/PERF.md.
+Measure the engine on this machine: decoding, scrubbing, playback, thumbnails, audio and more.
 
 ### `jazz perf decode <file>`
 
@@ -3296,8 +3295,8 @@ Decode a file as fast as possible and report throughput.
 | `--reuse` | Keep one decoder across passes and rewind, the way playback loops do. This is what separates a decode leak from the cost of churning decoders. |
 
 Decodes a file as fast as the machine allows and reports throughput, managed allocation per
-frame, and video memory growth. This is the harness behind spike S2 and the decode half of
-`Docs/PERF.md`; it renders nothing, so a regression here is unambiguous.
+frame, and video memory growth. It renders nothing, so a regression
+here is unambiguous.
 
 ```bash
 jazz perf decode tests\corpus\hevc10_2160p60_5s.mp4 --passes 3
@@ -3315,7 +3314,7 @@ hevc10_2160p60_5s.mp4
 ```
 
 The allocation figure averages the whole run, warm-up included, so it sits a little above the
-steady-state 96 bytes per frame recorded in `Docs/spikes/S2.md`. The allocation test is the one
+steady-state 96 bytes per frame of a long run. The allocation test is the one
 that holds the line; this number is for spotting a change, not for quoting.
 
 ### `jazz perf scrub <file>`
@@ -3360,7 +3359,7 @@ hevc10_2160p60_5s.mp4
 
 The four combinations answer different questions and their numbers are not comparable. Random and
 exact is the worst case and is dominated by the decode from the enclosing keyframe; drag is what a
-person does; nearest is what a shuttle does. `Docs/PERF.md` records all of them for the corpus.
+person does; nearest is what a shuttle does.
 
 ### `jazz perf audio <file>`
 

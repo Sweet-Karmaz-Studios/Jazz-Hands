@@ -17,7 +17,7 @@ namespace JazzHands.App.Views.Playback;
 /// <remarks>
 /// The presenter lives exactly as long as the view is loaded, because AvalonDock unloads a panel
 /// when it is floated or docked somewhere else and loads it again after. Resizing is debounced to
-/// 100 ms, as the d3d-wpf-interop skill asks: dragging a splitter otherwise reallocates two 4K
+/// 100 ms: dragging a splitter otherwise reallocates two 4K
 /// textures per mouse move.
 /// </remarks>
 public partial class PreviewPanelView : UserControl

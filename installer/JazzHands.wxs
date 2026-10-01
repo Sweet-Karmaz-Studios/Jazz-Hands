@@ -12,13 +12,13 @@
   they went could not be checked. The .jazz association and the Explorer verbs are written by the
   editor itself when it first starts (ShellRegistration), in the person's own session, so the
   uninstaller cannot take them back either: Settings, General, "Remove from Windows" (app.unregister,
-  or JazzHands.exe with its unregister switch) does, before uninstalling (Docs/USER_GUIDE.md). Uninstalling asks a
+  or JazzHands.exe with its unregister switch) does, before uninstalling. Uninstalling asks a
   running editor to quit and removes what the installer wrote. Settings and the cache stay
   unless REMOVEUSERDATA=1 is given to the uninstall:
 
     msiexec /x JazzHands-1.0.0-win-x64.msi REMOVEUSERDATA=1
 
-  Unsigned (Docs/DESIGN.md, "Signing"); the classic Explorer verbs only, since the Windows 11
+  Unsigned; the classic Explorer verbs only, since the Windows 11
   first-level menu needs a signed package.
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"

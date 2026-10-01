@@ -19,7 +19,7 @@ namespace JazzHands.Render.Passes;
 /// pass is where the zero-copy decode path pays off, because the frame goes from the decoder to
 /// the compositor without ever touching system memory. NV12 and P010 surfaces expose their luma
 /// and chroma planes through two shader resource views on the same resource, chosen by view
-/// format; see the hw-decode skill.
+/// format.
 /// </remarks>
 public sealed class YuvToLinearPass : IDisposable
 {

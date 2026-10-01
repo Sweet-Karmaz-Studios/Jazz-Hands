@@ -13,7 +13,7 @@ namespace JazzHands.Media.Audio;
 /// the same shape. Doing it here rather than per node means the rate conversion filter runs once
 /// per block rather than once per stage.
 ///
-/// Kaiser windowed sinc, as the audio-engine skill sets. It costs more than the default and the
+/// Kaiser windowed sinc. It costs more than the default and the
 /// difference is audible on a 44.1 to 48 conversion, which is most of what a game capture folder
 /// contains.
 ///

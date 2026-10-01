@@ -5,7 +5,7 @@ Downloads the pinned FFmpeg shared build into third_party/ffmpeg and verifies it
 .DESCRIPTION
 Jazz Hands links against FFmpeg 8.1 through FFmpeg.AutoGen 8.1.x. The pin below is a
 dated BtbN autobuild tag, not 'latest', so a clean clone always gets the same binaries.
-Docs/CODECS.md records the build and its hash. Changing the pin is a phase-level decision.
+The tag, asset and SHA-256 below are the pin.
 
 .PARAMETER Force
 Re-download and overwrite an existing third_party/ffmpeg.
@@ -40,7 +40,7 @@ if (-not (Test-Path $Zip)) {
 $hash = (Get-FileHash $Zip -Algorithm SHA256).Hash
 if ($hash -ne $Sha256) {
     Remove-Item $Zip -Force
-    throw "SHA-256 mismatch for $Asset. Expected $Sha256, got $hash. The pin in this script and Docs/CODECS.md must agree with the asset."
+    throw "SHA-256 mismatch for $Asset. Expected $Sha256, got $hash. The pin in this script must agree with the asset."
 }
 
 $Extract = Join-Path $env:TEMP 'jazz-ffmpeg-extract'

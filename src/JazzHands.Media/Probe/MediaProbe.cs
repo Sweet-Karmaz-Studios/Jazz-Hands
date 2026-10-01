@@ -33,7 +33,7 @@ public enum FrameRateMode
     /// <summary>Constant frame rate: every presentation timestamp delta is the same.</summary>
     Constant,
 
-    /// <summary>Variable frame rate. Conform to CFR on import; see the time-model skill.</summary>
+    /// <summary>Variable frame rate. Conform to CFR on import.</summary>
     Variable,
 }
 

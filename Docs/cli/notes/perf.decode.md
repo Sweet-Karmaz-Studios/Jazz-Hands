@@ -1,6 +1,6 @@
 Decodes a file as fast as the machine allows and reports throughput, managed allocation per
-frame, and video memory growth. This is the harness behind spike S2 and the decode half of
-`Docs/PERF.md`; it renders nothing, so a regression here is unambiguous.
+frame, and video memory growth. It renders nothing, so a regression
+here is unambiguous.
 
 ```bash
 jazz perf decode tests\corpus\hevc10_2160p60_5s.mp4 --passes 3
@@ -18,5 +18,5 @@ hevc10_2160p60_5s.mp4
 ```
 
 The allocation figure averages the whole run, warm-up included, so it sits a little above the
-steady-state 96 bytes per frame recorded in `Docs/spikes/S2.md`. The allocation test is the one
+steady-state 96 bytes per frame of a long run. The allocation test is the one
 that holds the line; this number is for spotting a change, not for quoting.

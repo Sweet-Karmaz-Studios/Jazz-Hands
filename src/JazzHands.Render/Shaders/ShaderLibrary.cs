@@ -27,7 +27,7 @@ namespace JazzHands.Render.Shaders;
 ///
 /// Setting <c>JAZZ_SHADER_DIR</c> to the Shaders folder reads the source from disk instead and
 /// watches it: saving a shader bumps <see cref="Generation"/>, and the compositor rebuilds its
-/// passes before the next frame. That is the hot reload the hlsl-effects skill asks for.
+/// passes before the next frame. That is the hot reload.
 /// </remarks>
 public static partial class ShaderLibrary
 {

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://jazzhands.dev/schema/export-preset.schema.json",
   "title": "Jazz Hands export preset",
-  "description": "Generated from the JazzHands.Core model by tools/gen-schema. Do not edit by hand. Which containers take which codecs is in Docs/CODECS.md; presets.save checks a preset against those rules as well as this shape.",
+  "description": "Generated from the JazzHands.Core model. Do not edit by hand. The presets.save command checks a preset against which containers take which codecs as well as this shape.",
   "type": "object",
   "properties": {
     "name": {

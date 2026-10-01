@@ -1,7 +1,7 @@
 // The scopes: histogram, luma waveform, RGB parade and vectorscope, measured on the output frame
 // (BT.1886 encoded, as delivered), so they show the signal an export will carry. One pass counts
 // every pixel into a raw buffer with atomic adds; one pass per picture turns the counts into an
-// image. See the color-science skill. A frame over a megapixel is sampled every other pixel each
+// image. A frame over a megapixel is sampled every other pixel each
 // way: the pictures are 512 and 256 across, so a quarter of a 1080p frame still puts several
 // samples in every cell, and the histograms keep their shape.
 //

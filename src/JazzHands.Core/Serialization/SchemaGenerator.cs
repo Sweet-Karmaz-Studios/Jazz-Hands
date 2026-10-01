@@ -18,7 +18,7 @@ namespace JazzHands.Core.Serialization;
 /// schema that lies is worse than none: it rejects good files and accepts broken ones.
 ///
 /// <c>Docs/schema/jazz-project.schema.json</c> is the published copy, written by
-/// <c>tools/gen-schema</c>. A test compares it against this generator's output, so a model change
+/// the schema generator tool. A test compares it against this generator's output, so a model change
 /// that was not published fails the build rather than shipping a stale document.
 ///
 /// Unknown members are deliberately allowed: the schema never sets <c>additionalProperties</c> to
@@ -64,9 +64,9 @@ public static class SchemaGenerator
             ["$id"] = PresetSchemaId,
             ["title"] = "Jazz Hands export preset",
             ["description"] =
-                "Generated from the JazzHands.Core model by tools/gen-schema. Do not edit by hand. "
-                + "Which containers take which codecs is in Docs/CODECS.md; presets.save checks a "
-                + "preset against those rules as well as this shape.",
+                "Generated from the JazzHands.Core model. Do not edit by hand. "
+                + "The presets.save command checks a preset against which containers take which "
+                + "codecs as well as this shape.",
         };
 
         foreach ((string name, JsonNode? value) in root)
@@ -102,7 +102,7 @@ public static class SchemaGenerator
             ["$id"] = SchemaId,
             ["title"] = "Jazz Hands project (.jazz)",
             ["description"] =
-                "Generated from the JazzHands.Core model by tools/gen-schema. Do not edit by hand: "
+                "Generated from the JazzHands.Core model. Do not edit by hand: "
                 + "change the records and regenerate. Members not described here are preserved on "
                 + "save and reported as warnings rather than rejected.",
         };

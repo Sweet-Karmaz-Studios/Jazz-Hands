@@ -41,7 +41,7 @@ public sealed class ControlTarget
 /// Commands a client may send, per second: a burst, then a steady rate.
 /// </summary>
 /// <remarks>
-/// A token bucket. The skill's 200 a second is the steady rate, and it protects the editor from a
+/// A token bucket. 200 a second is the steady rate, and it protects the editor from a
 /// runaway script; the burst of a thousand lets a script send a thousand edits at once, which is
 /// the phase's speed criterion. A batch is one command. Queries are not counted.
 /// </remarks>

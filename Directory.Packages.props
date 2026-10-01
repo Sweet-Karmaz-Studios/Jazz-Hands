@@ -6,7 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup Label="Media">
-    <!-- Must track the FFmpeg major pinned by tools/get-ffmpeg.ps1 (8.1). See Docs/CODECS.md. -->
+    <!-- Must track the FFmpeg major pinned by tools/get-ffmpeg.ps1 (8.1). -->
     <PackageVersion Include="FFmpeg.AutoGen" Version="8.1.0" />
     <PackageVersion Include="FFmpeg.AutoGen.Abstractions" Version="8.1.0" />
   </ItemGroup>

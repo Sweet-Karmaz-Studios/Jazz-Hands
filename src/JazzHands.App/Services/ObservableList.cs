@@ -9,8 +9,7 @@ namespace JazzHands.App.Services;
 /// <remarks>
 /// Clearing and re-adding an <see cref="ObservableCollection{T}"/> raises one event per item, and
 /// each one makes the bound list rebuild containers. A search box that refilters on every
-/// keystroke does that several times a second, so the refill is a single reset instead. See
-/// <c>Docs/PERF.md</c> for the measurement behind this.
+/// keystroke does that several times a second, so the refill is a single reset instead.
 /// </remarks>
 public sealed class ObservableList<T> : ObservableCollection<T>
 {

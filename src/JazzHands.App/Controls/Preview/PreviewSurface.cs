@@ -17,7 +17,7 @@ namespace JazzHands.App.Controls.Preview;
 /// buffer. A D3D11 texture created with the Shared misc flag can be opened by a D3D9Ex device
 /// through its shared handle, so both APIs address the same allocation: the compositor renders
 /// in D3D11 and WPF presents the result without the frame ever touching system memory. This is
-/// the only zero-copy route in WPF. See the d3d-wpf-interop skill and Docs/SPIKES.md S1.
+/// the only zero-copy route in WPF (measured against the alternatives in spike S1).
 ///
 /// Threading: <see cref="Texture"/> is rendered on the caller's render thread.
 /// <see cref="Present"/> must be called on the UI thread. The caller is responsible for not

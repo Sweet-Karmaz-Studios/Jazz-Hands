@@ -48,7 +48,7 @@ public sealed class PersonMatteEffect : VideoEffect
 /// </summary>
 /// <remarks>
 /// The upload is the named exception's other half: the matte was made on the CPU from a network
-/// (Docs/ARCHITECTURE.md, Section 7b) and comes up once a frame, a few hundred kilobytes at 720p.
+/// and comes up once a frame, a few hundred kilobytes at 720p.
 /// </remarks>
 /// <param name="matte">The frame's matte.</param>
 /// <param name="parameters">The effect's parameters at this frame.</param>

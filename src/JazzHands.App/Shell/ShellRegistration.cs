@@ -62,7 +62,7 @@ public sealed class CurrentUserRegistry : IUserRegistry
 /// <para>
 /// The verbs are under <c>SystemFileAssociations</c>, which puts them on the classic menu (Show
 /// more options on Windows 11). The first-level Windows 11 menu needs an <c>IExplorerCommand</c>
-/// handler in a package with an identity; see Docs/SPIKES.md, S5.
+/// handler in a package with an identity (spike S5).
 /// </para>
 /// </remarks>
 public sealed partial class ShellRegistration

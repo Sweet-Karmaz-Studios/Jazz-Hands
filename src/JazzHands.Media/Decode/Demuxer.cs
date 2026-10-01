@@ -11,8 +11,7 @@ namespace JazzHands.Media.Decode;
 /// </summary>
 /// <remarks>
 /// One demuxer per open file, and thread-affine: create it, read from it and dispose it on the
-/// same thread. Cross-thread use is a bug, not a race to be papered over with a lock. See the
-/// ffmpeg-interop skill.
+/// same thread. Cross-thread use is a bug, not a race to be papered over with a lock.
 /// </remarks>
 public sealed unsafe class Demuxer : IDisposable
 {

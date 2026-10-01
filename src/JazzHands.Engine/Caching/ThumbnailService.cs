@@ -43,7 +43,7 @@ public sealed class ThumbnailService : IDisposable
     /// <summary>The height every thumbnail is cached at.</summary>
     public const int Height = ThumbnailExtractor.DefaultHeight;
 
-    /// <summary>How many thumbnails are kept in memory: the caching skill's 4000.</summary>
+    /// <summary>How many thumbnails are kept in memory: 4000.</summary>
     public const int MemoryCapacity = 4000;
 
     private static readonly Flicks ChunkLength = Flicks.FromSeconds(4);

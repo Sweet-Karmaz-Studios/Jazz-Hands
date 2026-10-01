@@ -11,7 +11,7 @@ namespace JazzHands.App.Spikes;
 /// The alternative the spike measures for comparison only: render in D3D11, copy the frame down
 /// to system memory, and push it into a <see cref="WriteableBitmap"/>. Every frame crosses the
 /// PCIe bus twice and lands on the UI thread, which is exactly what the D3DImage path avoids.
-/// Kept so the decision in Docs/SPIKES.md is backed by a number rather than an assertion.
+/// Kept so the decision against it is backed by a number rather than an assertion.
 /// </summary>
 internal sealed class WriteableBitmapPresenter : IDisposable
 {

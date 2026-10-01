@@ -9,7 +9,7 @@ namespace JazzHands.Engine.Caching;
 /// <param name="CapBytes">The most thumbnails and waveforms may take; 0 for no limit.</param>
 public sealed record CacheSettings(string? Location = null, long CapBytes = CacheSettings.DefaultCapBytes)
 {
-    /// <summary>20 GB, as the caching skill sets.</summary>
+    /// <summary>20 GB by default.</summary>
     public const long DefaultCapBytes = 20L * 1024 * 1024 * 1024;
 }
 

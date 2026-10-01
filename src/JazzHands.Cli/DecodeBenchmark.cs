@@ -76,7 +76,7 @@ public sealed record DecodeBenchmarkResult(
 /// Decodes a file as fast as it can and reports throughput, allocation and memory growth.
 /// </summary>
 /// <remarks>
-/// This is the harness behind spike S2 and the decode half of Docs/PERF.md. It deliberately does
+/// This is the harness behind spike S2 and the decode performance numbers. It deliberately does
 /// no rendering: it measures the decoder and nothing else, so a regression here is unambiguous.
 /// </remarks>
 public static class DecodeBenchmark

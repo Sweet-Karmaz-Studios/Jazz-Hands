@@ -1,7 +1,7 @@
 // The first pass of every layer: a decoded frame, in whatever layout it arrived, to premultiplied
 // linear BT.709 light at half float, at the source's own size. Everything after this works in
 // that one format, so range expansion, the matrix and the transfer function happen here and
-// nowhere else. See the color-science skill.
+// nowhere else.
 
 #include "Common.hlsli"
 #include "Color.hlsli"

@@ -14,7 +14,7 @@ namespace JazzHands.Media;
 /// </remarks>
 public static class FfmpegLoader
 {
-    /// <summary>The FFmpeg major.minor this build is pinned to. See Docs/CODECS.md.</summary>
+    /// <summary>The FFmpeg major.minor this build is pinned to (tools/get-ffmpeg.ps1).</summary>
     public const string RequiredVersionPrefix = "n8.1";
 
     private static readonly Lock Gate = new();

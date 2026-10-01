@@ -28,7 +28,7 @@ public sealed record ModelFile(string Name, string File, string Url, string Sha2
 /// </remarks>
 public static class ModelStore
 {
-    /// <summary>The speech model: whisper large-v3-turbo, whisper.cpp's ggml build (Docs/SPIKES.md S9).</summary>
+    /// <summary>The speech model: whisper large-v3-turbo, whisper.cpp's ggml build (spike S9).</summary>
     public static ModelFile Whisper { get; } = new(
         "whisper-large-v3-turbo",
         "ggml-large-v3-turbo.bin",

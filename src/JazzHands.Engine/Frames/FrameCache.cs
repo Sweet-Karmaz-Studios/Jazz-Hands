@@ -31,7 +31,7 @@ public readonly record struct FrameKey(string Hash, int StreamIndex, Flicks Pts)
 /// </remarks>
 public sealed class FrameCache : IDisposable
 {
-    /// <summary>What the cache may hold. 1.5 GB, as the caching skill sets.</summary>
+    /// <summary>What the cache may hold. 1.5 GB by default.</summary>
     public const long DefaultBudgetBytes = 1_610_612_736;
 
     private readonly ILogger _log = Log.ForContext<FrameCache>();
