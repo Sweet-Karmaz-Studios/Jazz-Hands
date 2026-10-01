@@ -199,6 +199,9 @@ public static class ExportPlanner
         return [.. stems];
     }
 
+    /// <summary>Whether a clip edge really fades: a fade of no length is a hard edge.</summary>
+    private static bool Fades(Fade? fade) => fade is not null && fade.Duration > Flicks.Zero;
+
     /// <summary>For a copy or a smart cut, about how many of the source's bytes it takes: its share of the file by time.</summary>
     private static long CopiedBytes(Project project, ExportPlan plan)
     {
@@ -838,7 +841,8 @@ public static class ExportPlanner
                 return null;
             }
 
-            if (clip.Volume is not null || clip.Pan is not null || clip.FadeIn is not null || clip.FadeOut is not null
+            // A zero length fade is a hard edge (a split leaves Fade.None at the cut), not a change.
+            if (clip.Volume is not null || clip.Pan is not null || Fades(clip.FadeIn) || Fades(clip.FadeOut)
                 || !clip.Effects.IsEmpty || clip.ChannelMap is not null)
             {
                 reasons.Add($"'{clip.Name}' on {track.Name} has its level, pan, fades, effects or channels changed.");
