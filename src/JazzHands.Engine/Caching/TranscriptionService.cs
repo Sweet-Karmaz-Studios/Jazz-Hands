@@ -22,8 +22,8 @@ namespace JazzHands.Engine.Caching;
 /// A transcript is of the whole stream, not a clip's stretch of it: clips share it and trims do
 /// not make it stale. It is kept beside the project rather than in it (a ten minute talk is a few
 /// thousand words), keyed to the file by its content hash like every other analysis, under the
-/// kind <c>speech1:&lt;model&gt;:&lt;language&gt;</c>, and the latest of any model or language also
-/// under <c>speech1</c>, which is what the words of a clip are read from.
+/// kind <c>speech2:&lt;model&gt;:&lt;language&gt;</c>, and the latest of any model or language also
+/// under <c>speech2</c>, which is what the words of a clip are read from.
 /// </para>
 /// <para>
 /// One transcription runs at a time (the model takes gigabytes of video memory); two requests for
@@ -32,8 +32,12 @@ namespace JazzHands.Engine.Caching;
 /// </remarks>
 public sealed class TranscriptionService(CacheManager? cache = null)
 {
-    /// <summary>The cache kind of the latest transcript of a stream, whatever its model and language.</summary>
-    public const string LatestKind = "speech1";
+    /// <summary>
+    /// The cache kind of the latest transcript of a stream, whatever its model and language. Version 2
+    /// keeps spoken fillers (the transcriber's verbatim prompt); version 1 transcripts dropped them and
+    /// are not read.
+    /// </summary>
+    public const string LatestKind = "speech2";
 
     private static readonly SemaphoreSlim OneAtATime = new(1, 1);
     private readonly ConcurrentDictionary<(string Hash, int Stream, string Kind), Transcript> _known = new();

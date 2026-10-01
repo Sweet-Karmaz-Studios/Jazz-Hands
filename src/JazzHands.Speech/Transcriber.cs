@@ -115,6 +115,12 @@ public static class Transcriber
         }
     }
 
+    /// <summary>
+    /// The context English speech is heard after: disfluent on purpose, so the words that come back
+    /// keep the fillers a person said.
+    /// </summary>
+    internal const string VerbatimPrompt = "Um, so, uh, I was, like, thinking... hmm, er, you know, the, uh, the edit.";
+
     /// <summary>The name of the semaphore that keeps to one hearing at a time on the machine.</summary>
     internal const string MachineGate = @"Local\JazzHands.Speech";
 
@@ -137,6 +143,12 @@ public static class Transcriber
                 .WithProbabilities()
                 .WithProgressHandler(percent => progress?.Report((start + (length * percent / 100.0)) / samples.Length));
             builder = language is not null ? builder.WithLanguage(language) : builder.WithLanguageDetection();
+            if (language is "en")
+            {
+                // Whisper writes clean prose unless the text before it is verbatim: without this it
+                // drops "um" and "uh" and leaves a silent gap, and clip.remove-fillers finds nothing.
+                builder = builder.WithPrompt(VerbatimPrompt);
+            }
 
             await using WhisperProcessor processor = builder.Build();
             double offset = start / (double)SampleRate;
