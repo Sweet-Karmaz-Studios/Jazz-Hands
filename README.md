@@ -30,6 +30,8 @@ The builds are not code signed, so Windows SmartScreen asks once: **More info**,
 - Windows 11, x64
 - A Direct3D 11 GPU. An NVIDIA GPU is recommended for hardware decoding and NVENC export; without
   one Jazz Hands decodes and encodes in software.
+- Background removal runs on the GPU through the DirectML that comes with Windows, or on the CPU
+  where Windows has none new enough.
 
 ## Build from source
 

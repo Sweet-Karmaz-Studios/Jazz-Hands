@@ -81,9 +81,10 @@ Copy-Item (Join-Path $root 'LICENSE.txt') $files
 Copy-Item (Join-Path $root 'LICENSES.md') $files
 Copy-Item (Join-Path $root 'README.md') $files
 Get-ChildItem $files -Filter *.pdb | Remove-Item
-# DirectML's debug layer comes with its NuGet package for development; nothing here loads it, and
-# only DirectML.dll is meant to be redistributed.
-Get-ChildItem $files -Filter DirectML.Debug.dll | Remove-Item
+# DirectML is not shipped: ONNX Runtime delay-loads DirectML.dll, and without a copy beside it
+# Windows' own (System32) is used, a system library. Where Windows has none new enough, the neural
+# networks run on the CPU instead (NeuralModel.Load). The debug layer is for development only.
+Get-ChildItem $files -Filter DirectML*.dll | Remove-Item
 
 foreach ($exe in 'JazzHands.exe', 'jazz.exe', 'jazz-mcp.exe', 'jazz-plugin-host.exe', 'jazz-dialog.exe') {
     if (-not (Test-Path (Join-Path $files $exe))) { throw "$exe is missing from the published files." }
