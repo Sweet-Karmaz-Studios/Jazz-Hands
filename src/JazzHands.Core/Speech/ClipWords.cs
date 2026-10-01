@@ -155,13 +155,17 @@ public static class ClipWords
                 continue;
             }
 
-            if (longPause is { } threshold && index + 1 < words.Count && !(removeFillers && words[index + 1].Filler))
+            if (longPause is { } threshold && index + 1 < words.Count)
             {
                 Flicks gap = words[index + 1].Start - word.End;
                 if (gap > threshold && gap > keep)
                 {
-                    Flicks half = keep / 2;
-                    cuts.Add((Snap(word.End + half, frameRate), Snap(words[index + 1].Start - (keep - half), frameRate), "pause", string.Empty));
+                    // Before fillers that go, their cut takes the pause after them, so all of what is
+                    // kept stays here; otherwise half is left each side.
+                    bool fillersNext = removeFillers && words[index + 1].Filler;
+                    Flicks before = fillersNext ? keep : keep / 2;
+                    Flicks after = fillersNext ? Flicks.Zero : keep - (keep / 2);
+                    cuts.Add((Snap(word.End + before, frameRate), Snap(words[index + 1].Start - after, frameRate), "pause", string.Empty));
                 }
             }
         }
