@@ -3,16 +3,34 @@ obj/
 .vs/
 *.user
 .claude/
-third_party/ffmpeg/
-third_party/aces/
-third_party/clap/
-samples/*
-!samples/README.md
-tests/corpus/*
-!tests/corpus/.gitkeep
+third_party/
 *.jazz.d/
 TestResults/
 BenchmarkDotNet.Artifacts/
 
-# Published builds (dotnet publish -p:PublishProfile=win-x64).
+# Published builds (dotnet publish -p:PublishProfile=win-x64, tools/publish.ps1).
 artifacts/
+
+# Development material kept on the development machine only. The repository holds what is needed
+# to build, run and package the application.
+CLAUDE.md
+CHANGELOG.md
+Prompts/
+Skills/
+tests/
+samples/
+.github/
+dotnet-tools.json
+JazzHands.Dev.slnx
+
+# Docs: only what the application builds in (the CLI and MCP reference) and the published schema.
+Docs/*
+!Docs/cli/
+!Docs/mcp/
+!Docs/CLI.md
+!Docs/schema/
+
+# Tools: only what a fresh clone needs to build and package.
+tools/*
+!tools/get-ffmpeg.ps1
+!tools/publish.ps1

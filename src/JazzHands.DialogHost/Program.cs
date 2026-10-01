@@ -10,7 +10,7 @@ namespace JazzHands.DialogHost;
 /// </summary>
 /// <remarks>
 /// A file dialog loads other programs' Explorer add-ons into its process to draw their icons, and
-/// one of them can crash it: one of them, built on .NET Framework 2.0, started that runtime
+/// one of them can crash it: one built on .NET Framework 2.0 started that runtime
 /// inside the editor and ended it at once (2026-09-30). Here only this process ends; the editor
 /// sees the exit code and carries on. Arguments: the request (<see cref="FilePick.ToArgument"/>),
 /// and the editor window to sit over, as a handle.

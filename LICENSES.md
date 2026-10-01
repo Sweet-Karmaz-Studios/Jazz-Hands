@@ -33,7 +33,7 @@ in `aces-output`, Copyright Contributors to the ACES Project, licensed under the
 version 2.0**: <https://github.com/aces-aswf/aces-core>, <https://github.com/aces-aswf/aces-output>.
 The camera gamut matrices are the ones the manufacturers' ACES input transforms publish. Nothing
 from ACES ships as a file; the port is checked against OpenColorIO (BSD-3-Clause), which is used
-only by the test tools (`tools/get-aces-reference.ps1`, `tools/aces-reference.py`) and not shipped.
+only by the development test tools and not shipped.
 ACES is a trademark of the Academy of Motion Picture Arts and Sciences.
 
 ## Machine learning models
@@ -75,16 +75,14 @@ Each is used as published on nuget.org, unmodified.
 
 DirectML.dll is Microsoft's own licence, not an open source one. It permits shipping it inside a
 Windows application built with machine learning frameworks. Whether a GPL build of Jazz Hands may
-ship it beside the GPL FFmpeg is a question to settle before a release that includes it (it is
-used from Phase 43; Docs/HANDOFF.md, Open items). The alternative is the copy Windows itself
-carries in System32, if ONNX Runtime accepts its version.
+ship it beside the GPL FFmpeg is a question to settle before a release that includes it. The
+alternative is the copy Windows itself carries in System32, if ONNX Runtime accepts its version.
 
 ## Audio plugins
 
 Jazz Hands hosts CLAP plugins (Phase 46) through the CLAP 1.2.10 headers, MIT licensed
-(<https://github.com/free-audio/clap>). The headers are only read to write the C# declarations and
-to build the test plugins (`tools/get-clap.ps1`, into `third_party/clap`, which is not committed);
-nothing of CLAP is shipped. The test plugins (`tools/clap-test-plugins`) are ours. Plugins a person
+(<https://github.com/free-audio/clap>). The headers were only read to write the C# declarations and
+to build test plugins; nothing of CLAP is shipped. Plugins a person
 installs keep their own licences and run in a process of their own.
 
 ## Fonts and icons

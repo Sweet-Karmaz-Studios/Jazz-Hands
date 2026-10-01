@@ -16,7 +16,7 @@ namespace JazzHands.App.Services;
 /// </summary>
 /// <remarks>
 /// A file dialog loads other programs' Explorer add-ons into whatever process shows it. On
-/// 2026-09-30 one of them, built on .NET Framework 2.0, started that runtime inside the editor
+/// 2026-09-30 one built on .NET Framework 2.0 started that runtime inside the editor
 /// and the process ended at once, with nothing saved and no report of our own. Now the editor waits
 /// for the helper with its windows taking no input and still painting, as a dialog of its own
 /// would leave them, reads the chosen paths from the helper's output, and says what happened when
