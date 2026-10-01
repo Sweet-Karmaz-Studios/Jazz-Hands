@@ -72,9 +72,9 @@ Each is used as published on nuget.org, unmodified.
 | Whisper.net, Whisper.net.Runtime, Whisper.net.Runtime.Vulkan (whisper.cpp and ggml inside) | MIT | <https://github.com/sandrohanea/whisper.net>, <https://github.com/ggml-org/whisper.cpp> |
 | JsonSchema.Net, JsonPointer.Net, Json.More.Net | MIT source; the published binaries come with the json-everything EULA | <https://github.com/json-everything/json-everything> |
 
-DirectML is not shipped. ONNX Runtime's DirectML provider uses the DirectML that is part of
-Windows (`System32\DirectML.dll`), part of the operating system rather than of Jazz Hands. Where Windows has no
-DirectML new enough for ONNX Runtime, the neural networks run on the CPU instead, more slowly.
+DirectML is not shipped: ONNX Runtime's DirectML provider uses the copy that comes with Windows
+(`System32\DirectML.dll`). Where Windows has none new enough for ONNX Runtime, the neural networks
+run on the CPU instead, more slowly.
 
 ## Audio plugins
 
