@@ -73,7 +73,7 @@ Each is used as published on nuget.org, unmodified.
 | JsonSchema.Net, JsonPointer.Net, Json.More.Net | MIT source; the published binaries come with the json-everything EULA | <https://github.com/json-everything/json-everything> |
 
 DirectML is not shipped. ONNX Runtime's DirectML provider uses the DirectML that is part of
-Windows (`System32\DirectML.dll`), a system library under the GPL's terms. Where Windows has no
+Windows (`System32\DirectML.dll`), part of the operating system rather than of Jazz Hands. Where Windows has no
 DirectML new enough for ONNX Runtime, the neural networks run on the CPU instead, more slowly.
 
 ## Audio plugins
