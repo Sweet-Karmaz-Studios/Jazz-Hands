@@ -109,6 +109,11 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
     private AudioTempoFilter? _stretcher;
     private StretchRing? _feeding;
     private long _stretchSource;
+
+    // The project the shuttle's graph has yet to be built from, or null when it is up to date. It
+    // is built on the decode thread when a shuttle needs it, not on every edit: most edits are
+    // never shuttled through, and building it doubled what an edit spent on the mix.
+    private Project? _stretchPending;
     private StretchRing? _stretchRing;
     private long _stretchArmed;
     private StretchRing? _activeRing;
@@ -266,9 +271,11 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
         // Names first, so every media id in the new mix already resolves when the mix arrives.
         _server.Update(project, projectPath);
         _graph.Publish(snapshot);
-        // Its own build: the two graphs run on different threads, and an effect instance with
-        // state (a filter's memory) must only ever be run by one of them.
-        _stretchGraph.Publish(AudioGraphBuilder.Build(project, effects: _stretchEffects));
+
+        // The shuttle's graph is its own build, made when it is next needed: the two graphs run on
+        // different threads, and an effect instance with state (a filter's memory) must only ever
+        // be run by one of them, so its effects are made and run on the decode thread alone.
+        Volatile.Write(ref _stretchPending, project);
         _wake.Set();
     }
 
@@ -733,6 +740,12 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
         }
 
         int sampleRate = _output.SampleRate;
+
+        // An edit since the graph was last built: build it now, before mixing from it.
+        if (Interlocked.Exchange(ref _stretchPending, null) is { } project)
+        {
+            _stretchGraph.Publish(AudioGraphBuilder.Build(project, effects: _stretchEffects));
+        }
 
         if (_feeding?.Sequence != sequence)
         {
