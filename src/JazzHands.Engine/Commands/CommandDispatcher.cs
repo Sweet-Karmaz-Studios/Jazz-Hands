@@ -135,10 +135,50 @@ public sealed class CommandDispatcher : IAsyncDisposable
     /// <param name="issuer">Who asked.</param>
     /// <param name="ids">Active on the dispatcher's thread while the command runs; null for none.</param>
     /// <param name="cancellationToken">Gives up while it is still queued.</param>
-    public Task<CommandResult> ExecuteAsync(ICommand command, string issuer, IdScope? ids, CancellationToken cancellationToken = default)
+    public async Task<CommandResult> ExecuteAsync(ICommand command, string issuer, IdScope? ids, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
-        return Enqueue(new Job(command, NewCompletion(), issuer ?? string.Empty, Ids: ids, Token: cancellationToken), cancellationToken);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        // A handler's slow part runs first, off the queue (IPreparingHandler): the commands asked
+        // for meanwhile go on. Its refusal is the command's.
+        object? prepared = null;
+        if (Preparer(command) is { } prepare)
+        {
+            try
+            {
+                var context = new HandlerContext(_services, _clock, ProjectPath) { Later = Later, Cancellation = cancellationToken };
+                Project now = Project;
+                prepared = await Task.Run(() => prepare(now, context), cancellationToken).ConfigureAwait(false);
+            }
+            catch (CommandException error)
+            {
+                _log.Debug("{Command} refused while preparing: {Code}", CommandRegistry.NameOf(command), error.Code);
+                return CommandResult.Failure(Version, error);
+            }
+        }
+
+        return await Enqueue(new Job(command, NewCompletion(), issuer ?? string.Empty, Ids: ids, Token: cancellationToken, Prepared: prepared), cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>The prepare step of a command's handler, or null when it has none.</summary>
+    private Func<Project, HandlerContext, object?>? Preparer(ICommand command)
+    {
+        if (command is UndoCommand or RedoCommand or BatchCommand)
+        {
+            return null;
+        }
+
+        Type type = command.GetType();
+        Type preparing = typeof(IPreparingHandler<>).MakeGenericType(type);
+        object? handler = _services.GetService(typeof(ICommandHandler<>).MakeGenericType(type));
+        if (handler is null || !preparing.IsInstanceOfType(handler))
+        {
+            return null;
+        }
+
+        System.Reflection.MethodInfo method = preparing.GetMethod(nameof(IPreparingHandler<ICommand>.Prepare))!;
+        return (project, context) => method.Invoke(handler, System.Reflection.BindingFlags.DoNotWrapExceptions, null, [project, command, context], null);
     }
 
     /// <summary>
@@ -264,7 +304,7 @@ public sealed class CommandDispatcher : IAsyncDisposable
             {
                 using (job.Ids?.Enter())
                 {
-                    job.Completion.TrySetResult(Run(job.Command!, job.Issuer, job.Token));
+                    job.Completion.TrySetResult(Run(job.Command!, job.Issuer, job.Token, job.Prepared));
                 }
             }
             catch (CommandException error)
@@ -288,20 +328,20 @@ public sealed class CommandDispatcher : IAsyncDisposable
         }
     }
 
-    private CommandResult Run(ICommand command, string issuer, CancellationToken cancellation) => command switch
+    private CommandResult Run(ICommand command, string issuer, CancellationToken cancellation, object? prepared = null) => command switch
     {
         UndoCommand undo => RunUndo(undo, issuer),
         RedoCommand redo => RunRedo(redo, issuer),
         BatchCommand batch => RunBatch(batch, issuer, cancellation),
-        _ => RunOne(command, issuer, cancellation),
+        _ => RunOne(command, issuer, cancellation, prepared),
     };
 
-    private CommandResult RunOne(ICommand command, string issuer, CancellationToken cancellation)
+    private CommandResult RunOne(ICommand command, string issuer, CancellationToken cancellation, object? prepared = null)
     {
         CommandMetadata metadata = CommandRegistry.Describe(command);
         Project before = _project;
 
-        var context = new HandlerContext(_services, _clock, ProjectPath) { Later = Later, Cancellation = cancellation };
+        var context = new HandlerContext(_services, _clock, ProjectPath) { Later = Later, Cancellation = cancellation, Prepared = prepared };
         Project after = SettleTitles(before, SettleTransitions(before, Magnetize(before, Apply(before, command, context), context), context), context);
 
         return Commit(command, metadata, before, after, context.ChangedIds, ChangeOrigin.Command, issuer);
@@ -588,7 +628,7 @@ public sealed class CommandDispatcher : IAsyncDisposable
     }
 
     /// <summary>A command to run for someone, or session work to run in its turn.</summary>
-    private sealed record Job(ICommand? Command, TaskCompletionSource<CommandResult> Completion, string Issuer, Func<CommandResult>? Exclusive = null, IdScope? Ids = null, CancellationToken Token = default);
+    private sealed record Job(ICommand? Command, TaskCompletionSource<CommandResult> Completion, string Issuer, Func<CommandResult>? Exclusive = null, IdScope? Ids = null, CancellationToken Token = default, object? Prepared = null);
 
     private interface IHandlerAdapter
     {

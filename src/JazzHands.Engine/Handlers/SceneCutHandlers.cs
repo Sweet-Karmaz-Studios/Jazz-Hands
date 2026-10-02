@@ -81,6 +81,26 @@ internal static class SceneCutHelp
             : null;
 
     /// <summary>The media item a clip plays, refusing anything that is not a video file.</summary>
+    /// <summary>
+    /// Reads the shot changes of a clip's file, or a media item's, into the cache before the
+    /// command that needs them is queued (IPreparingHandler): the handler then finds them there.
+    /// Anything wrong is left for the handler to refuse in its turn.
+    /// </summary>
+    internal static object? Warm(Project project, string targetId, double threshold, Flicks? minShot, HandlerContext context)
+    {
+        (MediaItem? item, int? stream) = project.FindClip(targetId) is { } found
+            ? (found.Clip.MediaId is { } mediaId ? project.MediaItem(mediaId) : null, found.Clip.SourceStreamIndex)
+            : (project.MediaItem(targetId), (int?)null);
+        if (item is not { Kind: MediaKind.Movie })
+        {
+            return null;
+        }
+
+        int? video = stream is { } index && item.Info?.Streams.FirstOrDefault(candidate => candidate.Index == index)?.Kind == MediaStreamKind.Video ? index : null;
+        _ = Cuts(item, video, threshold, minShot, context.ProjectPath, context.Services, context.Cancellation);
+        return null;
+    }
+
     internal static MediaItem MediaOf(Project project, Clip clip) =>
         clip.MediaId is { } mediaId && MediaServices.Require(project, mediaId) is { Kind: MediaKind.Movie } item
             ? item
@@ -163,8 +183,17 @@ public sealed class DetectCutsHandler : IQueryHandler<DetectCutsQuery, SceneCutI
 }
 
 /// <summary>Splits a clip, and the clips linked to it, at the shot changes in its video.</summary>
-public sealed class SplitClipAtCutsHandler : ICommandHandler<SplitClipAtCutsCommand>
+public sealed class SplitClipAtCutsHandler : ICommandHandler<SplitClipAtCutsCommand>, IPreparingHandler<SplitClipAtCutsCommand>
 {
+    /// <summary>Reads the shot changes before the command is queued.</summary>
+    public object? Prepare(Project project, SplitClipAtCutsCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+        return SceneCutHelp.Warm(project, command.ClipId, command.Threshold, command.MinShot, context);
+    }
+
     /// <inheritdoc />
     public Project Handle(Project project, SplitClipAtCutsCommand command, HandlerContext context)
     {
@@ -201,8 +230,17 @@ public sealed class SplitClipAtCutsHandler : ICommandHandler<SplitClipAtCutsComm
 }
 
 /// <summary>Marks the shot changes on a clip or on a media item.</summary>
-public sealed class AddMarkersAtCutsHandler : ICommandHandler<AddMarkersAtCutsCommand>
+public sealed class AddMarkersAtCutsHandler : ICommandHandler<AddMarkersAtCutsCommand>, IPreparingHandler<AddMarkersAtCutsCommand>
 {
+    /// <summary>Reads the shot changes before the command is queued.</summary>
+    public object? Prepare(Project project, AddMarkersAtCutsCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+        return SceneCutHelp.Warm(project, command.TargetId, command.Threshold, command.MinShot, context);
+    }
+
     /// <inheritdoc />
     public Project Handle(Project project, AddMarkersAtCutsCommand command, HandlerContext context)
     {
@@ -277,8 +315,17 @@ public sealed class AddSubclipHandler : ICommandHandler<AddSubclipCommand>
 }
 
 /// <summary>Makes a subclip of every shot in a file.</summary>
-public sealed class SubclipsFromCutsHandler : ICommandHandler<SubclipsFromCutsCommand>
+public sealed class SubclipsFromCutsHandler : ICommandHandler<SubclipsFromCutsCommand>, IPreparingHandler<SubclipsFromCutsCommand>
 {
+    /// <summary>Reads the shot changes before the command is queued.</summary>
+    public object? Prepare(Project project, SubclipsFromCutsCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+        return SceneCutHelp.Warm(project, command.MediaId, command.Threshold, command.MinShot, context);
+    }
+
     /// <inheritdoc />
     public Project Handle(Project project, SubclipsFromCutsCommand command, HandlerContext context)
     {

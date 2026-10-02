@@ -84,8 +84,28 @@ public sealed class FindStaticHandler : IQueryHandler<FindStaticQuery, StaticReg
 }
 
 /// <summary>Hides a clip's still regions.</summary>
-public sealed class HideStaticHandler : ICommandHandler<HideStaticCommand>
+/// <remarks>Without --regions, the frames are compared before the command is queued.</remarks>
+public sealed class HideStaticHandler : ICommandHandler<HideStaticCommand>, IPreparingHandler<HideStaticCommand>
 {
+    /// <inheritdoc />
+    public object? Prepare(Project project, HideStaticCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        if (command.Regions is { Length: > 0 } || project.FindClip(command.ClipId) is not { } found)
+        {
+            return null;
+        }
+
+        return new PreparedWork(Key(project, found), HudHelp.Find(project, found.Clip.Id, 24, context.ProjectPath));
+    }
+
+    /// <summary>What the still regions were found in: the clip as it is, its track's kind and its file.</summary>
+    private static (Clip, TrackKind, MediaItem?) Key(Project project, ClipLocation found) =>
+        (found.Clip, found.Track.Kind, found.Clip.MediaId is { } media ? project.MediaItem(media) : null);
+
     /// <inheritdoc />
     public Project Handle(Project project, HideStaticCommand command, HandlerContext context)
     {
@@ -103,7 +123,7 @@ public sealed class HideStaticHandler : ICommandHandler<HideStaticCommand>
 
         StaticRegionInfo[] regions = command.Regions is { Length: > 0 } text
             ? HudHelp.Parse(text)
-            : HudHelp.Find(project, clip.Id, 24, context.ProjectPath);
+            : PreparedWork.Reuse(context, Key(project, found), () => HudHelp.Find(project, clip.Id, 24, context.ProjectPath));
         if (regions.Length == 0)
         {
             throw new CommandException("nothing-still", $"Nothing stands still over '{clip.Name}' to hide; give --regions to hide a place anyway.");

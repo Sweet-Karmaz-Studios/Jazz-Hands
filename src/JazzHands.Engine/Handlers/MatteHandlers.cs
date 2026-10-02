@@ -49,8 +49,24 @@ internal static class MatteHelp
 }
 
 /// <summary>Cuts a person out of a clip: makes its file's matte, then puts the effect first.</summary>
-public sealed class RemoveBackgroundHandler : ICommandHandler<RemoveBackgroundCommand>
+/// <remarks>The matte is made before the command is queued, so edits go on meanwhile.</remarks>
+public sealed class RemoveBackgroundHandler : ICommandHandler<RemoveBackgroundCommand>, IPreparingHandler<RemoveBackgroundCommand>
 {
+    /// <inheritdoc />
+    public object? Prepare(Project project, RemoveBackgroundCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        if (!command.Off && project.FindClip(command.ClipId) is { Clip.IsMedia: true } found)
+        {
+            MatteHelp.Ensure(project, found.Clip, context);
+        }
+
+        return null;
+    }
+
     /// <inheritdoc />
     public Project Handle(Project project, RemoveBackgroundCommand command, HandlerContext context)
     {

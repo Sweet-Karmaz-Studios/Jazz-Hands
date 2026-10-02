@@ -54,6 +54,13 @@ public sealed class HandlerContext
     /// </summary>
     public CancellationToken Cancellation { get; init; }
 
+    /// <summary>
+    /// What the handler's <see cref="IPreparingHandler{TCommand}.Prepare"/> worked out before the
+    /// command was queued, or null when it was not prepared (inside a batch, on a replay, in a
+    /// test that calls the handler itself): the handler then does that work itself.
+    /// </summary>
+    public object? Prepared { get; init; }
+
     /// <summary>Everything the handler touched, in the order it said so.</summary>
     public ImmutableArray<string> ChangedIds { get; private set; } = [];
 
@@ -115,6 +122,26 @@ public sealed class HandlerContext
 
         throw new CommandException(result.Error!.Code, result.Error.Message);
     }
+}
+
+/// <summary>
+/// A handler with a slow part that reads but does not change the project (analysing a recording,
+/// hearing speech, copying files), which runs before the command is queued so the commands asked
+/// for meanwhile do not wait behind it.
+/// </summary>
+/// <remarks>
+/// <see cref="Prepare"/> runs on a worker thread against the project as it is when the command is
+/// asked for, with the command's cancellation; a refusal there is the command's refusal. What it
+/// returns reaches <see cref="ICommandHandler{TCommand}.Handle"/> as <see cref="HandlerContext.Prepared"/>
+/// once the command's turn comes; often it fills a cache the handler then reads. Its changed ids
+/// are not kept: the handler reports what changes.
+/// </remarks>
+/// <typeparam name="TCommand">The command type.</typeparam>
+public interface IPreparingHandler<in TCommand>
+    where TCommand : ICommand
+{
+    /// <summary>Does the slow part, off the command queue.</summary>
+    object? Prepare(Project project, TCommand command, HandlerContext context);
 }
 
 /// <summary>Turns one command into a new project.</summary>

@@ -116,8 +116,18 @@ internal static class Noise
 }
 
 /// <summary>Learns a clip's noise and puts it on its noise reduction.</summary>
-public sealed class LearnNoiseHandler : ICommandHandler<LearnNoiseCommand>
+/// <remarks>The sound is read and its noise learned before the command is queued.</remarks>
+public sealed class LearnNoiseHandler : ICommandHandler<LearnNoiseCommand>, IPreparingHandler<LearnNoiseCommand>
 {
+    /// <inheritdoc />
+    public object? Prepare(Project project, LearnNoiseCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+        return new PreparedWork(Key(project, command), Learn(project, command, context.ProjectPath));
+    }
+
     /// <inheritdoc />
     public Project Handle(Project project, LearnNoiseCommand command, HandlerContext context)
     {
@@ -125,26 +135,46 @@ public sealed class LearnNoiseHandler : ICommandHandler<LearnNoiseCommand>
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(context);
 
+        Dictionary<string, double[]> profiles = PreparedWork.Reuse(context, Key(project, command), () => Learn(project, command, context.ProjectPath));
+        foreach ((string id, double[] profile) in profiles)
+        {
+            ClipLocation found = HandlerHelp.Clip(project, id);
+            HandlerHelp.RequireUnlocked(found.Track);
+            Clip learned = Noise.WithDenoise(found.Clip, effect => effect.WithParameter("profile", AnimatedValue.Constant(new ParamValue.Text(NoiseProfile.Format(profile)))), context);
+            project = project.ReplaceTrack(found.Track.ReplaceClip(learned));
+        }
+
+        return project;
+    }
+
+    /// <summary>What the noise is learned from: the clip named and every sound clip learned with it, and their files.</summary>
+    private static (EquatableArray<Clip>, EquatableArray<MediaItem>) Key(Project project, LearnNoiseCommand command)
+    {
+        Clip[] clips = [HandlerHelp.Clip(project, command.ClipId).Clip, .. Noise.SoundClips(project, command.ClipId).Select(id => HandlerHelp.Clip(project, id).Clip)];
+        return ([.. clips], [.. clips.Select(clip => clip.MediaId is { } media ? project.MediaItem(media) : null).OfType<MediaItem>()]);
+    }
+
+    /// <summary>Each sound clip's noise profile, learned from its file.</summary>
+    private static Dictionary<string, double[]> Learn(Project project, LearnNoiseCommand command, string projectPath)
+    {
+        var profiles = new Dictionary<string, double[]>(StringComparer.Ordinal);
         ClipLocation given = HandlerHelp.Clip(project, command.ClipId);
         foreach (string id in Noise.SoundClips(project, command.ClipId))
         {
             ClipLocation found = HandlerHelp.Clip(project, id);
             HandlerHelp.RequireUnlocked(found.Track);
-            (string path, int stream) = Noise.Source(project, found.Clip, context.ProjectPath);
+            (string path, int stream) = Noise.Source(project, found.Clip, projectPath);
 
             // The stretch is given on the sequence, against the clip that was named: its linked
             // sound is learned over the same moments.
             Flicks shift = found.Clip.Start - given.Clip.Start;
             (Flicks from, Flicks length) = Noise.Stretch(found.Clip, path, stream, command.From + shift, command.To + shift);
             float[] samples = MonoReader.Read(path, stream, from, length, Noise.Rate);
-            double[] profile = NoiseProfile.Learn(samples, Noise.Rate)
+            profiles[id] = NoiseProfile.Learn(samples, Noise.Rate)
                 ?? throw new CommandException("too-short", "The stretch of noise is too short to learn from.");
-
-            Clip learned = Noise.WithDenoise(found.Clip, effect => effect.WithParameter("profile", AnimatedValue.Constant(new ParamValue.Text(NoiseProfile.Format(profile)))), context);
-            project = project.ReplaceTrack(found.Track.ReplaceClip(learned));
         }
 
-        return project;
+        return profiles;
     }
 }
 

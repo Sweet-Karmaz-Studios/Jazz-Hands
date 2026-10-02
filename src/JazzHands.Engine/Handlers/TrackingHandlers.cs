@@ -35,10 +35,20 @@ internal static class TrackingHelp
 }
 
 /// <summary>Tracks a point through a clip's frames.</summary>
-public sealed class TrackPointHandler : ICommandHandler<TrackPointCommand>
+/// <remarks>The frames are read and the point followed before the command is queued.</remarks>
+public sealed class TrackPointHandler : ICommandHandler<TrackPointCommand>, IPreparingHandler<TrackPointCommand>
 {
     /// <summary>A match below this, and the point is taken as lost.</summary>
     public const double Lost = 0.5;
+
+    /// <inheritdoc />
+    public object? Prepare(Project project, TrackPointCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+        return new PreparedWork(Key(project, command), Points(project, command, context.ProjectPath));
+    }
 
     /// <inheritdoc />
     public Project Handle(Project project, TrackPointCommand command, HandlerContext context)
@@ -47,6 +57,47 @@ public sealed class TrackPointHandler : ICommandHandler<TrackPointCommand>
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(context);
 
+        ClipLocation found = HandlerHelp.Clip(project, command.ClipId);
+        HandlerHelp.RequireUnlocked(found.Track);
+        Clip clip = found.Clip;
+        TrackPoint[] followed = PreparedWork.Reuse(context, Key(project, command), () => Points(project, command, context.ProjectPath));
+        Flicks local = command.At - clip.Start;
+
+        // Re-tracking keeps what is on the other side of the corrected point.
+        PointTrack? existing = command.TrackId is { } id ? clip.PointTracks.FirstOrDefault(track => track.Id == id) : null;
+        IEnumerable<TrackPoint> kept = existing is null
+            ? []
+            : existing.Points.Where(point => command.Direction switch
+            {
+                TrackDirection.Forward => point.Time < local,
+                TrackDirection.Backward => point.Time > local,
+                _ => false,
+            });
+
+        TrackPoint[] merged = [.. kept.Concat(followed).GroupBy(point => point.Time).Select(group => group.Last()).OrderBy(point => point.Time)];
+        PointTrack track = existing is { } before
+            ? before with { Size = command.Size, Points = [.. merged] }
+            : new PointTrack(command.TrackId is { } fresh ? CommandValues.ParseId(fresh) : Id.New(), command.Name ?? $"Track {clip.PointTracks.Length + 1}", command.Size, [.. merged]);
+
+        EquatableArray<PointTrack> tracks = existing is null
+            ? clip.PointTracks.Add(track)
+            : [.. clip.PointTracks.Select(candidate => candidate.Id == track.Id ? track : candidate)];
+
+        context.Changed(clip.Id);
+        context.Changed(track.Id);
+        return project.ReplaceTrack(found.Track.ReplaceClip(clip with { PointTracks = tracks }));
+    }
+
+    /// <summary>What the point is followed through: the clip as it is and its file.</summary>
+    private static (Clip, TrackKind, MediaItem?) Key(Project project, TrackPointCommand command)
+    {
+        ClipLocation found = HandlerHelp.Clip(project, command.ClipId);
+        return (found.Clip, found.Track.Kind, found.Clip.MediaId is { } media ? project.MediaItem(media) : null);
+    }
+
+    /// <summary>The point followed through the clip's frames from where it was picked, in order.</summary>
+    private static TrackPoint[] Points(Project project, TrackPointCommand command, string projectPath)
+    {
         ClipLocation found = HandlerHelp.Clip(project, command.ClipId);
         HandlerHelp.RequireUnlocked(found.Track);
         Clip clip = found.Clip;
@@ -80,7 +131,7 @@ public sealed class TrackPointHandler : ICommandHandler<TrackPointCommand>
         MediaStream stream = item.Info?.Streams.FirstOrDefault(candidate => candidate.Index == clip.SourceStreamIndex && candidate.Kind == MediaStreamKind.Video) is { FrameRate: { Num: > 0 } } video
             ? video
             : throw new CommandException("not-media", $"'{item.Name}' has no video to track.");
-        string path = HandlerHelp.Resolve(context, item.RelativePath);
+        string path = HandlerHelp.Resolve(projectPath, item.RelativePath);
         if (!File.Exists(path))
         {
             throw new CommandException("media-missing", $"'{item.Name}' is not at {path}. Relink it first.");
@@ -131,29 +182,7 @@ public sealed class TrackPointHandler : ICommandHandler<TrackPointCommand>
             }
         }
 
-        // Re-tracking keeps what is on the other side of the corrected point.
-        PointTrack? existing = command.TrackId is { } id ? clip.PointTracks.FirstOrDefault(track => track.Id == id) : null;
-        IEnumerable<TrackPoint> kept = existing is null
-            ? []
-            : existing.Points.Where(point => command.Direction switch
-            {
-                TrackDirection.Forward => point.Time < local,
-                TrackDirection.Backward => point.Time > local,
-                _ => false,
-            });
-
-        TrackPoint[] merged = [.. kept.Concat(points.Values).GroupBy(point => point.Time).Select(group => group.Last()).OrderBy(point => point.Time)];
-        PointTrack track = existing is { } before
-            ? before with { Size = command.Size, Points = [.. merged] }
-            : new PointTrack(command.TrackId is { } fresh ? CommandValues.ParseId(fresh) : Id.New(), command.Name ?? $"Track {clip.PointTracks.Length + 1}", command.Size, [.. merged]);
-
-        EquatableArray<PointTrack> tracks = existing is null
-            ? clip.PointTracks.Add(track)
-            : [.. clip.PointTracks.Select(candidate => candidate.Id == track.Id ? track : candidate)];
-
-        context.Changed(clip.Id);
-        context.Changed(track.Id);
-        return project.ReplaceTrack(found.Track.ReplaceClip(clip with { PointTracks = tracks }));
+        return [.. points.Values];
     }
 }
 

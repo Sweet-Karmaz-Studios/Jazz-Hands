@@ -83,8 +83,18 @@ public sealed class SyncOffsetHandler : IQueryHandler<SyncOffsetQuery, SyncOffse
 }
 
 /// <summary>Moves a clip so its sound lines up with another's.</summary>
-public sealed class SyncAudioHandler : ICommandHandler<SyncAudioCommand>
+/// <remarks>The two sounds are read and matched before the command is queued.</remarks>
+public sealed class SyncAudioHandler : ICommandHandler<SyncAudioCommand>, IPreparingHandler<SyncAudioCommand>
 {
+    /// <inheritdoc />
+    public object? Prepare(Project project, SyncAudioCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+        return new PreparedWork(Key(project, command), ClipSync.Find(project, command.ClipId, command.ToClipId, context.ProjectPath));
+    }
+
     /// <inheritdoc />
     public Project Handle(Project project, SyncAudioCommand command, HandlerContext context)
     {
@@ -92,7 +102,7 @@ public sealed class SyncAudioHandler : ICommandHandler<SyncAudioCommand>
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(context);
 
-        SyncOffsetInfo found = ClipSync.Find(project, command.ClipId, command.ToClipId, context.ProjectPath);
+        SyncOffsetInfo found = PreparedWork.Reuse(context, Key(project, command), () => ClipSync.Find(project, command.ClipId, command.ToClipId, context.ProjectPath));
         if (!command.Force && (found.Confidence < ClipSync.Sure || found.Ambiguous))
         {
             throw new CommandException(
@@ -109,4 +119,8 @@ public sealed class SyncAudioHandler : ICommandHandler<SyncAudioCommand>
 
         return context.Run(project, new MoveClipCommand(command.ClipId, found.Start));
     }
+
+    /// <summary>What the match is between: the sequence as it is (the clips and their linked sound) and the media.</summary>
+    private static (Sequence?, EquatableArray<MediaItem>) Key(Project project, SyncAudioCommand command) =>
+        (project.FindClip(command.ClipId)?.Sequence, project.Media);
 }

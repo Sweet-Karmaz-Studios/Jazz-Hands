@@ -152,27 +152,45 @@ public sealed class MediaUsageHandler : IQueryHandler<MediaUsageQuery, MediaUsag
 }
 
 /// <summary>Gathers the project and its media into a folder; the open project is not changed.</summary>
-public sealed class ConsolidateProjectHandler : ICommandHandler<ConsolidateProjectCommand>
+/// <remarks>The copying and cutting is done before the command is queued, so edits go on meanwhile.</remarks>
+public sealed class ConsolidateProjectHandler : ICommandHandler<ConsolidateProjectCommand>, IPreparingHandler<ConsolidateProjectCommand>
 {
+    /// <inheritdoc />
+    public object? Prepare(Project project, ConsolidateProjectCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(context);
+        return Consolidator.Run(project, context.ProjectPath, command, context.Services?.GetService(typeof(Export.ExportEnvironment)) as Export.ExportEnvironment, context.Cancellation);
+    }
+
     /// <inheritdoc />
     public Project Handle(Project project, ConsolidateProjectCommand command, HandlerContext context)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(context);
-        _ = Consolidator.Run(project, context.ProjectPath, command, context.Services?.GetService(typeof(Export.ExportEnvironment)) as Export.ExportEnvironment, context.Cancellation);
+        _ = context.Prepared as ConsolidateResult ?? Prepare(project, command, context);
         return project;
     }
 }
 
 /// <summary>Writes the project and its media into a zip; the open project is not changed.</summary>
-public sealed class ArchiveProjectHandler : ICommandHandler<ArchiveProjectCommand>
+/// <remarks>The gathering and zipping is done before the command is queued, so edits go on meanwhile.</remarks>
+public sealed class ArchiveProjectHandler : ICommandHandler<ArchiveProjectCommand>, IPreparingHandler<ArchiveProjectCommand>
 {
+    /// <inheritdoc />
+    public object? Prepare(Project project, ArchiveProjectCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(context);
+        return Consolidator.Archive(project, context.ProjectPath, command, context.Services?.GetService(typeof(Export.ExportEnvironment)) as Export.ExportEnvironment, context.Cancellation);
+    }
+
     /// <inheritdoc />
     public Project Handle(Project project, ArchiveProjectCommand command, HandlerContext context)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(context);
-        _ = Consolidator.Archive(project, context.ProjectPath, command, context.Services?.GetService(typeof(Export.ExportEnvironment)) as Export.ExportEnvironment, context.Cancellation);
+        _ = context.Prepared as ConsolidateResult ?? Prepare(project, command, context);
         return project;
     }
 }

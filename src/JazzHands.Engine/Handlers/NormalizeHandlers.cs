@@ -7,9 +7,24 @@ using JazzHands.Engine.Commands;
 namespace JazzHands.Engine.Handlers;
 
 /// <summary>Sets a clip's, a track's or the mix's gain so it measures a target.</summary>
-public sealed class NormalizeAudioHandler : ICommandHandler<NormalizeAudioCommand>
+/// <remarks>The sound is mixed and measured before the command is queued.</remarks>
+public sealed class NormalizeAudioHandler : ICommandHandler<NormalizeAudioCommand>, IPreparingHandler<NormalizeAudioCommand>
 {
     private const double MaxGain = 24.0;
+
+    /// <inheritdoc />
+    public object? Prepare(Project project, NormalizeAudioCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        AudioSubject subject = AudioSubject.Resolve(project, command.ClipId, command.TrackId, command.Mix, command.SequenceId);
+        return new PreparedWork(Key(project, subject), AudioMeasure.Measure(project, subject, context.ProjectPath, context.Cancellation));
+    }
+
+    /// <summary>What a measurement is of: the sequence as it is, which the mix is made from, and the media.</summary>
+    private static (Sequence, EquatableArray<MediaItem>) Key(Project project, AudioSubject subject) => (subject.Sequence, project.Media);
 
     /// <inheritdoc />
     public Project Handle(Project project, NormalizeAudioCommand command, HandlerContext context)
@@ -25,7 +40,7 @@ public sealed class NormalizeAudioHandler : ICommandHandler<NormalizeAudioComman
         }
 
         AudioSubject subject = AudioSubject.Resolve(project, command.ClipId, command.TrackId, command.Mix, command.SequenceId);
-        AudioLevels levels = AudioMeasure.Measure(project, subject, context.ProjectPath, context.Cancellation);
+        AudioLevels levels = PreparedWork.Reuse(context, Key(project, subject), () => AudioMeasure.Measure(project, subject, context.ProjectPath, context.Cancellation));
         double measured = levels.Level(command.Mode)
             ?? throw new CommandException("silent", "It is silent there, or too quiet to measure, so there is no gain that would reach a level.");
         double change = Math.Round(target - measured, 2);

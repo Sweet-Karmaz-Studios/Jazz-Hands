@@ -230,14 +230,32 @@ internal static class SpeechHelp
 }
 
 /// <summary>Transcribes a media item, a clip's file, or a sequence's sounding clips.</summary>
-public sealed class TranscribeHandler : ICommandHandler<TranscribeCommand>
+public sealed class TranscribeHandler : ICommandHandler<TranscribeCommand>, IPreparingHandler<TranscribeCommand>
 {
+    /// <summary>Hears the speech before the command is queued, so edits go on meanwhile: the media items heard.</summary>
+    public object? Prepare(Project project, TranscribeCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+        return Hear(project, command, context);
+    }
+
     /// <inheritdoc />
     public Project Handle(Project project, TranscribeCommand command, HandlerContext context)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(context);
+
+        context.Changed(context.Prepared as List<string> ?? Hear(project, command, context));
+        return project;
+    }
+
+    /// <summary>Every sound the command names, transcribed or read from the cache; the media items' ids.</summary>
+    private static List<string> Hear(Project project, TranscribeCommand command, HandlerContext context)
+    {
+        var heard = new List<string>();
 
         string? language = command.Language.Trim().ToLowerInvariant() is "auto" or "" ? null : command.Language.Trim().ToLowerInvariant();
         var targets = new List<(MediaItem Item, int Stream)>();
@@ -274,7 +292,7 @@ public sealed class TranscribeHandler : ICommandHandler<TranscribeCommand>
             string path = HandlerHelp.Resolve(context.ProjectPath, item.RelativePath);
             if (!command.Again && service.Cached(item.Hash, stream, ModelStore.Whisper.Name, language) is not null)
             {
-                context.Changed(item.Id);
+                heard.Add(item.Id);
                 continue;
             }
 
@@ -297,10 +315,10 @@ public sealed class TranscribeHandler : ICommandHandler<TranscribeCommand>
                 throw new CommandException("analysis-failed", $"The sound of '{item.Name}' could not be read: {exception.Message}");
             }
 
-            context.Changed(item.Id);
+            heard.Add(item.Id);
         }
 
-        return project;
+        return heard;
     }
 }
 

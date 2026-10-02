@@ -50,8 +50,23 @@ internal static class EnhanceHelp
 }
 
 /// <summary>Enhances a clip's speech: makes the enhanced sound, then puts the effect on with its amount.</summary>
-public sealed class EnhanceSpeechHandler : ICommandHandler<EnhanceSpeechCommand>
+public sealed class EnhanceSpeechHandler : ICommandHandler<EnhanceSpeechCommand>, IPreparingHandler<EnhanceSpeechCommand>
 {
+    /// <summary>Enhances the file's sound before the command is queued, so edits go on meanwhile.</summary>
+    public object? Prepare(Project project, EnhanceSpeechCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        if (!command.Off && project.FindClip(command.ClipId) is { Clip.IsMedia: true } found)
+        {
+            EnhanceHelp.Ensure(project, found, context);
+        }
+
+        return null;
+    }
+
     /// <inheritdoc />
     public Project Handle(Project project, EnhanceSpeechCommand command, HandlerContext context)
     {

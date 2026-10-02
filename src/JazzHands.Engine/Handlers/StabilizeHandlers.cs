@@ -51,8 +51,28 @@ internal static class StabilizeHelp
 }
 
 /// <summary>Steadies a clip: its analysis if needed, then its Stabilize effect.</summary>
-public sealed class StabilizeClipHandler : ICommandHandler<StabilizeClipCommand>
+/// <remarks>The analysis, minutes for a long recording, is done before the command is queued.</remarks>
+public sealed class StabilizeClipHandler : ICommandHandler<StabilizeClipCommand>, IPreparingHandler<StabilizeClipCommand>
 {
+    /// <inheritdoc />
+    public object? Prepare(Project project, StabilizeClipCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        // Anything the handler refuses it refuses itself, in its turn; here only the analysis.
+        if (command.Off || project.FindClip(command.ClipId)?.Clip is not { MediaId: { } mediaId } clip
+            || project.MediaItem(mediaId) is not { Kind: MediaKind.Movie } item)
+        {
+            return null;
+        }
+
+        MediaStream stream = StabilizeHelp.VideoStream(item, clip.SourceStreamIndex);
+        _ = PreparedWork.Reuse(context, (item.Hash, stream.Index, command.Reanalyze), () => StabilizeHelp.Analysis(item, stream.Index, context, command.Reanalyze) is not null);
+        return new PreparedWork((item.Hash, stream.Index, command.Reanalyze), true);
+    }
+
     /// <inheritdoc />
     public Project Handle(Project project, StabilizeClipCommand command, HandlerContext context)
     {
@@ -107,8 +127,22 @@ public sealed class StabilizeClipHandler : ICommandHandler<StabilizeClipCommand>
 }
 
 /// <summary>Analyses a video's camera motion ahead of stabilizing it.</summary>
-public sealed class AnalyzeMotionHandler : ICommandHandler<AnalyzeMotionCommand>
+/// <remarks>The analysis is done before the command is queued, so edits go on meanwhile.</remarks>
+public sealed class AnalyzeMotionHandler : ICommandHandler<AnalyzeMotionCommand>, IPreparingHandler<AnalyzeMotionCommand>
 {
+    /// <inheritdoc />
+    public object? Prepare(Project project, AnalyzeMotionCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        MediaItem item = MediaServices.Require(project, command.MediaId);
+        MediaStream stream = StabilizeHelp.VideoStream(item, command.Stream);
+        StabilizeHelp.Analysis(item, stream.Index, context, again: true);
+        return new PreparedWork((item.Hash, stream.Index), true);
+    }
+
     /// <inheritdoc />
     public Project Handle(Project project, AnalyzeMotionCommand command, HandlerContext context)
     {
@@ -118,7 +152,7 @@ public sealed class AnalyzeMotionHandler : ICommandHandler<AnalyzeMotionCommand>
 
         MediaItem item = MediaServices.Require(project, command.MediaId);
         MediaStream stream = StabilizeHelp.VideoStream(item, command.Stream);
-        StabilizeHelp.Analysis(item, stream.Index, context, again: true);
+        _ = PreparedWork.Reuse(context, (item.Hash, stream.Index), () => StabilizeHelp.Analysis(item, stream.Index, context, again: true) is not null);
         context.Changed(item.Id);
         return project;
     }

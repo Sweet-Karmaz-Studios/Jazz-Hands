@@ -189,8 +189,32 @@ internal static class EffectHelp
 }
 
 /// <summary>Adds an effect to a clip or a track.</summary>
-public sealed class AddEffectHandler : ICommandHandler<AddEffectCommand>
+public sealed class AddEffectHandler : ICommandHandler<AddEffectCommand>, IPreparingHandler<AddEffectCommand>
 {
+    /// <summary>For the effects that need their file worked on first (a person matte, enhanced speech), does that before the command is queued.</summary>
+    public object? Prepare(Project project, AddEffectCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        if (project.FindClip(command.OwnerId) is not { Clip.IsMedia: true } found)
+        {
+            return null;
+        }
+
+        if (string.Equals(command.TypeId, Render.Effects.Keying.PersonMatteEffect.TypeId, StringComparison.Ordinal))
+        {
+            MatteHelp.Ensure(project, found.Clip, context);
+        }
+        else if (string.Equals(command.TypeId, JazzHands.Audio.Effects.EnhanceSpeechEffect.TypeId, StringComparison.Ordinal))
+        {
+            EnhanceHelp.Ensure(project, found, context);
+        }
+
+        return null;
+    }
+
     /// <inheritdoc />
     public Project Handle(Project project, AddEffectCommand command, HandlerContext context)
     {

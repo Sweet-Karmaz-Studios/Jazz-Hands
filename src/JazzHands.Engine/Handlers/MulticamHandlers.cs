@@ -155,8 +155,22 @@ public sealed class SyncMulticamHandler : IQueryHandler<SyncMulticamQuery, Multi
 }
 
 /// <summary>Makes a multicam clip.</summary>
-public sealed class CreateMulticamHandler : ICommandHandler<CreateMulticamCommand>
+/// <remarks>Synced by sound, the angles are heard and matched before the command is queued.</remarks>
+public sealed class CreateMulticamHandler : ICommandHandler<CreateMulticamCommand>, IPreparingHandler<CreateMulticamCommand>
 {
+    /// <inheritdoc />
+    public object? Prepare(Project project, CreateMulticamCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+        return new PreparedWork(Key(project, command), MulticamHelp.Sync(project, [.. command.MediaIds], command.Sync, context.ProjectPath, context.Cancellation));
+    }
+
+    /// <summary>What the angles are synced from: their media items as they are, and how.</summary>
+    private static (EquatableArray<MediaItem>, MulticamSync) Key(Project project, CreateMulticamCommand command) =>
+        ([.. command.MediaIds.Select(id => project.MediaItem(id)).OfType<MediaItem>()], command.Sync);
+
     /// <inheritdoc />
     public Project Handle(Project project, CreateMulticamCommand command, HandlerContext context)
     {
@@ -164,7 +178,7 @@ public sealed class CreateMulticamHandler : ICommandHandler<CreateMulticamComman
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(context);
 
-        MulticamSyncInfo sync = MulticamHelp.Sync(project, [.. command.MediaIds], command.Sync, context.ProjectPath, context.Cancellation);
+        MulticamSyncInfo sync = PreparedWork.Reuse(context, Key(project, command), () => MulticamHelp.Sync(project, [.. command.MediaIds], command.Sync, context.ProjectPath, context.Cancellation));
         if (!command.Force && sync.Angles.Skip(1).FirstOrDefault(angle => angle.Confidence < ClipSync.Sure) is { } unsure)
         {
             throw new CommandException(

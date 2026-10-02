@@ -64,8 +64,20 @@ internal static class BeatHelp
 }
 
 /// <summary>Finds a clip's beats and marks them.</summary>
-public sealed class DetectBeatsHandler : ICommandHandler<DetectBeatsCommand>
+/// <remarks>The music is read and its beats found before the command is queued.</remarks>
+public sealed class DetectBeatsHandler : ICommandHandler<DetectBeatsCommand>, IPreparingHandler<DetectBeatsCommand>
 {
+    /// <inheritdoc />
+    public object? Prepare(Project project, DetectBeatsCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        (ClipLocation found, BeatAnalysis analysis, BeatInfo[] beats) = BeatHelp.Analyze(project, command.ClipId, context.ProjectPath);
+        return new PreparedWork(Key(project, found), (analysis, beats));
+    }
+
     /// <inheritdoc />
     public Project Handle(Project project, DetectBeatsCommand command, HandlerContext context)
     {
@@ -73,7 +85,12 @@ public sealed class DetectBeatsHandler : ICommandHandler<DetectBeatsCommand>
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(context);
 
-        (ClipLocation found, BeatAnalysis analysis, BeatInfo[] beats) = BeatHelp.Analyze(project, command.ClipId, context.ProjectPath);
+        ClipLocation found = HandlerHelp.Clip(project, command.ClipId);
+        (BeatAnalysis analysis, BeatInfo[] beats) = PreparedWork.Reuse(context, Key(project, found), () =>
+        {
+            (_, BeatAnalysis fresh, BeatInfo[] freshBeats) = BeatHelp.Analyze(project, command.ClipId, context.ProjectPath);
+            return (fresh, freshBeats);
+        });
         if (beats.Length == 0)
         {
             throw new CommandException("no-beats", "No beats were found: the clip is silent, too short, or has no steady attacks.");
@@ -100,6 +117,10 @@ public sealed class DetectBeatsHandler : ICommandHandler<DetectBeatsCommand>
         context.Changed(clip.Id);
         return project.ReplaceSequence(sequence with { Markers = [.. kept.Concat(added).OrderBy(marker => marker.Time)] });
     }
+
+    /// <summary>What the beats were found from: the clip as it is, its track's kind and its file.</summary>
+    private static (Clip, TrackKind, MediaItem?) Key(Project project, ClipLocation found) =>
+        (found.Clip, found.Track.Kind, found.Clip.MediaId is { } media ? project.MediaItem(media) : null);
 }
 
 /// <summary>What beat detection finds in a clip.</summary>
