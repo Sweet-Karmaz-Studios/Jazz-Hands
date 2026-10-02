@@ -87,6 +87,13 @@ public sealed unsafe class PluginProcess : IDisposable
     /// <summary>Raised once, on whatever thread noticed, when the plugin fails.</summary>
     public event Action<PluginProcess>? Crashed;
 
+    /// <summary>
+    /// How long a request to the host (load, scan, activate, values, state) may take before the
+    /// host is taken to have stopped answering and is stopped. Long enough for a plugin that loads
+    /// a large library; sound itself is held to its own, much shorter, limit in <see cref="Run"/>.
+    /// </summary>
+    internal static TimeSpan ControlTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
     /// <summary>The host program beside this assembly.</summary>
     public static string HostPath => Path.Combine(AppContext.BaseDirectory, "jazz-plugin-host.exe");
 
@@ -303,7 +310,20 @@ public sealed unsafe class PluginProcess : IDisposable
     {
         host.StandardInput.WriteLine(request.ToJsonString());
         host.StandardInput.Flush();
-        string? line = host.StandardOutput.ReadLine();
+
+        // A plugin that hangs while loading or answering must not hang whoever asked: found
+        // 2026-10-02, a request read with no limit could wait for ever, its host left running.
+        string? line;
+        try
+        {
+            line = ReadLine(host.StandardOutput, ControlTimeout);
+        }
+        catch (TimeoutException)
+        {
+            Kill(host);
+            throw new PluginCrashedException($"The plugin host stopped answering while asked to {request["op"]} (nothing in {ControlTimeout.TotalSeconds:0.#} s), so it was stopped.");
+        }
+
         if (line is null)
         {
             host.WaitForExit(2000);
@@ -316,6 +336,14 @@ public sealed unsafe class PluginProcess : IDisposable
         return reply["ok"]?.GetValue<bool>() == true
             ? reply
             : throw new InvalidOperationException(reply["error"]?.GetValue<string>() ?? "The plugin host refused.");
+    }
+
+    /// <summary>A line from a reader, or <see cref="TimeoutException"/> when none comes in time; null at its end.</summary>
+    internal static string? ReadLine(TextReader reader, TimeSpan timeout)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+        Task<string?> read = reader.ReadLineAsync();
+        return read.Wait(timeout) ? read.Result : throw new TimeoutException("No line came in time.");
     }
 
     private static void Quit(Process host)
