@@ -5,7 +5,9 @@ using JazzHands.App.Services;
 using JazzHands.Core.Commands;
 using JazzHands.Core.Effects;
 using JazzHands.Core.Model;
+using JazzHands.Core.Stabilization;
 using JazzHands.Core.Time;
+using JazzHands.Engine.Effects;
 using JazzHands.Engine.Selection;
 using JazzHands.Render.Compositing;
 using Serilog;
@@ -113,6 +115,7 @@ public sealed partial class MaskHandlesViewModel : ObservableObject
     private readonly ISession _session;
     private readonly SelectionService _selection;
     private readonly IPreviewEngine _preview;
+    private readonly IUiDispatcher _ui;
     private readonly List<Vector2> _drawing = [];
     private readonly List<MaskNode> _drawingNodes = [];
     private ICommand? _pending;
@@ -122,6 +125,15 @@ public sealed partial class MaskHandlesViewModel : ObservableObject
     private Matrix3x2 _toSequence = Matrix3x2.Identity;
     private Matrix3x2 _toSource = Matrix3x2.Identity;
     private Vector2? _drawFrom;
+
+    /// <summary>The stabilized clip's motion analysis the handles follow, by what it was read for.</summary>
+    private (string Key, CameraMotion? Motion)? _motion;
+
+    /// <summary>What is being read now, off the UI thread, or null.</summary>
+    private string? _reading;
+
+    /// <summary>True when the project changed since the analysis was read, so it may have been made again.</summary>
+    private bool _motionStale;
 
     /// <summary>The masks drawn on the preview; empty when the selected clip has none or none is selected.</summary>
     [ObservableProperty]
@@ -154,9 +166,14 @@ public sealed partial class MaskHandlesViewModel : ObservableObject
         _session = session;
         _selection = selection;
         _preview = preview;
+        _ui = ui;
 
         _selection.Changed += (_, _) => ui.Post(Refresh);
-        _session.ProjectChanged += (_, _) => ui.Post(Refresh);
+        _session.ProjectChanged += (_, _) => ui.Post(() =>
+        {
+            _motionStale = true;
+            Refresh();
+        });
         _preview.PlayheadMoved += (_, _) => ui.Post(Refresh);
         Refresh();
     }
@@ -584,7 +601,9 @@ public sealed partial class MaskHandlesViewModel : ObservableObject
         (Vector2 size, ConformPolicy policy) = SourceOf(project, clip, frame);
         Transform transform = clip.Transform ?? Transform.Identity;
 
-        _toSequence = RenderGraphBuilder.Placement(
+        // A stabilized clip's picture is moved back onto its smoothed path before it is placed,
+        // and its masks with it, so the handles go where the renderer draws them.
+        _toSequence = Steady(project, clip, size) * RenderGraphBuilder.Placement(
                 size,
                 frame,
                 policy,
@@ -652,6 +671,45 @@ public sealed partial class MaskHandlesViewModel : ObservableObject
         }
 
         Masks = views;
+    }
+
+    /// <summary>
+    /// The renderer's stabilize correction for the clip at the playhead; the identity until its
+    /// motion analysis has been read, which is done off the UI thread and then lays the handles
+    /// out again.
+    /// </summary>
+    private Matrix3x2 Steady(Project project, Clip clip, Vector2 size)
+    {
+        if (!RenderGraphBuilder.IsStabilized(clip) || clip.MediaId is not { } mediaId || project.MediaItem(mediaId) is not { Hash.Length: > 0 } item)
+        {
+            return Matrix3x2.Identity;
+        }
+
+        string path = _session.ProjectPath;
+        string key = FormattableString.Invariant($"{path}|{item.Hash}|{clip.SourceStreamIndex}");
+        bool have = _motion is { } known && known.Key == key;
+        if ((!have || _motionStale) && _reading != key)
+        {
+            _reading = key;
+            _motionStale = false;
+            string hash = item.Hash;
+            int stream = clip.SourceStreamIndex;
+            _ = Task.Run(() => MotionStore.For(path).Load(hash, stream)).ContinueWith(
+                read => _ui.Post(() =>
+                {
+                    if (_reading == key)
+                    {
+                        _reading = null;
+                        _motion = (key, read.IsCompletedSuccessfully ? read.Result : null);
+                        Build();
+                    }
+                }),
+                TaskScheduler.Default);
+        }
+
+        // While a newer reading is on its way, the last one for this clip stands, so the handles do
+        // not jump back to where the unstabilized picture would be and then forward again.
+        return have ? RenderGraphBuilder.Stabilization(project, clip, _preview.Position, size, _motion!.Value.Motion, EffectCatalog.Registry) : Matrix3x2.Identity;
     }
 
     private static Vector2 Eval2(AnimatedValue value, string name, Flicks local, Vector2 fallback) =>

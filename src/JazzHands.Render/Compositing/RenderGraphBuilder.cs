@@ -941,13 +941,37 @@ public static partial class RenderGraphBuilder
     /// the zoom that hides the edges. The identity when the clip is not stabilized or its motion has
     /// not been analysed.
     /// </summary>
-    private static Matrix3x2 Steady(Project project, Clip clip, Flicks time, Vector2 size, IFrameProvider frames, RenderOptions options)
+    private static Matrix3x2 Steady(Project project, Clip clip, Flicks time, Vector2 size, IFrameProvider frames, RenderOptions options) =>
+        IsStabilized(clip) ? Stabilization(project, clip, time, size, frames.Motion(project, clip), options.Effects) : Matrix3x2.Identity;
+
+    /// <summary>True when a clip has an enabled stabilize effect, so its picture is moved by <see cref="Stabilization"/>.</summary>
+    public static bool IsStabilized(Clip clip)
     {
-        if (clip.Effects.IsEmpty
-            || clip.Effects.FirstOrDefault(effect => effect.Enabled && string.Equals(effect.TypeId, StabilizeEffect.TypeId, StringComparison.Ordinal)) is not { } effect
-            || options.Effects.Find(StabilizeEffect.TypeId) is not { } descriptor
+        ArgumentNullException.ThrowIfNull(clip);
+        return clip.Effects.Any(effect => effect.Enabled && string.Equals(effect.TypeId, StabilizeEffect.TypeId, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// A stabilized clip's correction at a moment, in its picture's pixels, to go before its
+    /// <see cref="Placement"/>: what the renderer draws it with, for anything drawn over the
+    /// picture that has to stay on it (the preview's mask handles). The identity when the clip is
+    /// not stabilized or <paramref name="motion"/> is null.
+    /// </summary>
+    /// <param name="project">The project.</param>
+    /// <param name="clip">The clip.</param>
+    /// <param name="time">The sequence time.</param>
+    /// <param name="size">The clip's picture size, in its own pixels.</param>
+    /// <param name="motion">The clip's stream's motion analysis, or null when it has none.</param>
+    /// <param name="effects">The registry the stabilize effect's parameters are read with.</param>
+    public static Matrix3x2 Stabilization(Project project, Clip clip, Flicks time, Vector2 size, CameraMotion? motion, EffectRegistry effects)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(clip);
+        ArgumentNullException.ThrowIfNull(effects);
+        if (clip.Effects.FirstOrDefault(effect => effect.Enabled && string.Equals(effect.TypeId, StabilizeEffect.TypeId, StringComparison.Ordinal)) is not { } effect
+            || effects.Find(StabilizeEffect.TypeId) is not { } descriptor
             || SourceRate(project, clip) is not { } rate
-            || frames.Motion(project, clip) is not { Count: > 0, Width: > 0, Height: > 0 } motion)
+            || motion is not { Count: > 0, Width: > 0, Height: > 0 })
         {
             return Matrix3x2.Identity;
         }
