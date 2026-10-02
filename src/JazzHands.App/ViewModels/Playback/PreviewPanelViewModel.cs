@@ -125,8 +125,11 @@ public sealed partial class PreviewPanelViewModel : ToolViewModel
     /// <summary>The selected clip's masks on the picture, and the tools that draw new ones; null where the panel has no selection to follow.</summary>
     public MaskHandlesViewModel? MaskHandles { get; }
 
+    /// <summary>The selected 3D clip's handle on the picture (Phase 49a); null where the panel has no selection to follow.</summary>
+    public Gizmo3DViewModel? Gizmo { get; }
+
     /// <summary>Creates the panel.</summary>
-    public PreviewPanelViewModel(ISession session, IPreviewEngine engine, IUiDispatcher ui, IFullScreenPreview? fullScreen = null, PointPicker? picker = null, IDisplaySettings? display = null, TitleHandlesViewModel? titles = null, MaskHandlesViewModel? masks = null)
+    public PreviewPanelViewModel(ISession session, IPreviewEngine engine, IUiDispatcher ui, IFullScreenPreview? fullScreen = null, PointPicker? picker = null, IDisplaySettings? display = null, TitleHandlesViewModel? titles = null, MaskHandlesViewModel? masks = null, Gizmo3DViewModel? gizmo = null)
         : base(PanelId, "Preview")
     {
         ArgumentNullException.ThrowIfNull(session);
@@ -141,6 +144,7 @@ public sealed partial class PreviewPanelViewModel : ToolViewModel
         _displaySettings = display;
         Titles = titles;
         MaskHandles = masks;
+        Gizmo = gizmo;
         _display = display?.Transfer ?? DisplayTransfer.Srgb;
 
         // The inspector's points and picks show on the picture.

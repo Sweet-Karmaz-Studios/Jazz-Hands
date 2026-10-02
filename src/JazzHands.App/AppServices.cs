@@ -165,6 +165,11 @@ public static class AppServices
                 provider.GetRequiredService<ISession>(),
                 provider.GetRequiredService<SelectionService>(),
                 provider.GetRequiredService<IPreviewEngine>(),
+                provider.GetRequiredService<IUiDispatcher>()),
+            new Gizmo3DViewModel(
+                provider.GetRequiredService<ISession>(),
+                provider.GetRequiredService<SelectionService>(),
+                provider.GetRequiredService<IPreviewEngine>(),
                 provider.GetRequiredService<IUiDispatcher>())));
         services.AddSingleton<IDisplaySettings>(_ => new FileDisplaySettings());
 

@@ -53,6 +53,11 @@
                                          Corners="{Binding Titles.Corners, Mode=OneWay}"
                                          RotateHandle="{Binding Titles.RotateHandle, Mode=OneWay}"
                                          Brush="{DynamicResource Brush.Accent}" />
+            <!-- The selected 3D clip's handle: drag an arrow to move along it, the square to move across,
+                 the ring to turn about Z, the knobs to tip and turn about X and Y (Shift: 15 degree steps). -->
+            <preview:Gizmo3DOverlay x:Name="GizmoFrame"
+                                    Gizmo="{Binding Gizmo, Mode=OneWay}"
+                                    Brush="{DynamicResource Brush.Accent}" />
             <!-- The selected clip's masks: drag a point, a handle (Alt breaks a pair), a corner, the
                  inside, or the feather knob above; the tools below draw new ones. -->
             <preview:MaskHandlesOverlay x:Name="MaskFrame"

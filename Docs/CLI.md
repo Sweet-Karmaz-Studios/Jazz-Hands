@@ -1092,6 +1092,19 @@ Find the source and frame a clip shows at a time.
 |---|---|
 | `--at <time>` | Required. The time on the timeline. |
 
+### `jazz clip measure-3d <project> <clip-id>`
+
+Where a 3D clip's pivot and axes are on the frame through the camera.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The clip id. |
+
+| Option | Meaning |
+|---|---|
+| `--at <time>` | When, on the sequence; the clip's middle when left out. |
+
 ### `jazz clip move <project> <clip-id>`
 
 Move a clip to another time or track.

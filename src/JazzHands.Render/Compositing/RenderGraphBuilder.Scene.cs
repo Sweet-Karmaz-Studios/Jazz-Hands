@@ -81,6 +81,29 @@ public static partial class RenderGraphBuilder
         return new SceneCamera(position, right, down, forward, zoom, frameSize);
     }
 
+    /// <summary>
+    /// Where a 3D clip's pivot is in the world at a time (Phase 49a): its anchor, carried by its
+    /// placement, which its turns are about and its position and depth move. For a picture the
+    /// anchor is fitted to the frame as the picture is; text, shapes and models are not fitted.
+    /// </summary>
+    public static Vector3 Pivot(Project project, Clip clip, Flicks local, Vector2 frameSize)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(clip);
+
+        Vector2 fit = Vector2.One;
+        if (!SceneObjects.IsMesh(clip.GeneratorId)
+            && clip.MediaId is { } mediaId
+            && project.MediaItem(mediaId) is { } item
+            && item.Info?.Streams.FirstOrDefault(stream => stream.Index == clip.SourceStreamIndex) is { Width: > 0, Height: > 0 } stream)
+        {
+            fit = FitScale(new Vector2(stream.Width, stream.Height), frameSize, item.Conform);
+        }
+
+        Vector2 anchor = Float2((clip.Transform ?? Transform.Identity).Anchor, Intrinsic.Anchor, local) * fit;
+        return Vector3.Transform(new Vector3(anchor, 0.0f), LayerPlacement(clip, local, fit));
+    }
+
     /// <summary>A 3D clip's place in the world at a time: from its picture's own space (sequence pixels from the fitted picture's centre, unscaled) to the world.</summary>
     public static Matrix4x4 LayerPlacement(Clip clip, Flicks local, Vector2 fit)
     {

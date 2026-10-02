@@ -228,6 +228,7 @@ public partial class PreviewPanelView : UserControl
             Overlay.Picture = Rect.Empty;
             TitleFrame.Picture = Rect.Empty;
             MaskFrame.Picture = Rect.Empty;
+            GizmoFrame.Picture = Rect.Empty;
             return;
         }
 
@@ -252,6 +253,8 @@ public partial class PreviewPanelView : UserControl
         TitleFrame.SequenceSize = Overlay.SequenceSize;
         MaskFrame.Picture = Overlay.Picture;
         MaskFrame.SequenceSize = Overlay.SequenceSize;
+        GizmoFrame.Picture = Overlay.Picture;
+        GizmoFrame.SequenceSize = Overlay.SequenceSize;
         PlaceTitleEditor();
     }
 
@@ -367,6 +370,19 @@ public partial class PreviewPanelView : UserControl
             return;
         }
 
+        // The selected 3D clip's handle (Phase 49a): a press on an arrow, the square, the ring or a knob drags it.
+        if (e.ChangedButton == MouseButton.Left && _model?.Gizmo is { IsShown: true } gizmo && !Overlay.Picture.IsEmpty)
+        {
+            System.Numerics.Vector2 at = TitleHandlesOverlay.ToSequence(e.GetPosition(Stage), Overlay.Picture, Overlay.SequenceSize);
+            Gizmo3DGrip grip = gizmo.HitTest(at, GripTolerance());
+            if (grip != Gizmo3DGrip.None && gizmo.Begin(grip, at))
+            {
+                Stage.CaptureMouse();
+                e.Handled = true;
+                return;
+            }
+        }
+
         // The masks: a drawing tool takes every press; with the select tool a press on a mask drags it.
         if (e.ChangedButton == MouseButton.Left && _model?.MaskHandles is { } masks && !Overlay.Picture.IsEmpty)
         {
@@ -417,6 +433,29 @@ public partial class PreviewPanelView : UserControl
 
     private void OnStageMouseMove(object sender, MouseEventArgs e)
     {
+        if (_model?.Gizmo is { IsShown: true } gizmo && !Overlay.Picture.IsEmpty)
+        {
+            System.Numerics.Vector2 at = TitleHandlesOverlay.ToSequence(e.GetPosition(Stage), Overlay.Picture, Overlay.SequenceSize);
+            if (gizmo.IsDragging)
+            {
+                gizmo.Move(at, snap: Keyboard.Modifiers.HasFlag(ModifierKeys.Shift));
+                return;
+            }
+
+            Gizmo3DGrip over = gizmo.HitTest(at, GripTolerance());
+            if (over != Gizmo3DGrip.None)
+            {
+                Stage.Cursor = over switch
+                {
+                    Gizmo3DGrip.Move => Cursors.SizeAll,
+                    Gizmo3DGrip.TurnX => Cursors.SizeNS,
+                    Gizmo3DGrip.TurnY => Cursors.SizeWE,
+                    _ => Cursors.Hand,
+                };
+                return;
+            }
+        }
+
         if (_model?.MaskHandles is { } masks && !Overlay.Picture.IsEmpty)
         {
             System.Numerics.Vector2 at = TitleHandlesOverlay.ToSequence(e.GetPosition(Stage), Overlay.Picture, Overlay.SequenceSize);
@@ -483,6 +522,14 @@ public partial class PreviewPanelView : UserControl
 
     private void OnStageMouseUp(object sender, MouseButtonEventArgs e)
     {
+        if (e.ChangedButton == MouseButton.Left && _model?.Gizmo is { IsDragging: true } gizmo)
+        {
+            gizmo.End();
+            Stage.ReleaseMouseCapture();
+            e.Handled = true;
+            return;
+        }
+
         if (e.ChangedButton == MouseButton.Left && _model?.MaskHandles is { } masks && (masks.IsDragging || masks.IsDrawing))
         {
             masks.End(TitleHandlesOverlay.ToSequence(e.GetPosition(Stage), Overlay.Picture, Overlay.SequenceSize));
