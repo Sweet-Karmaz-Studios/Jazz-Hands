@@ -141,8 +141,9 @@
                                 Visibility="{Binding HasSlider, Mode=OneWay, Converter={StaticResource Visible}}"
                                 IsTabStop="False"
                                 AutomationProperties.Name="{Binding Label, Mode=OneWay}" />
+                        <!-- Room for "-1920.00 px" or "-360.00 deg" in the mono face (finding 70). -->
                         <controls:NumberBox Grid.Column="1"
-                                            Width="64"
+                                            Width="90"
                                             Value="{Binding Number, Mode=TwoWay}"
                                             Minimum="{Binding Minimum, Mode=OneWay}"
                                             Maximum="{Binding Maximum, Mode=OneWay}"
@@ -152,17 +153,25 @@
                                             AutomationProperties.Name="{Binding Label, Mode=OneWay}" />
                     </Grid>
 
-                    <!-- Two numbers; a point can also be picked on the preview. -->
-                    <StackPanel Orientation="Horizontal" Visibility="{Binding IsPair, Mode=OneWay, Converter={StaticResource Visible}}">
-                        <controls:NumberBox Width="72" Value="{Binding X, Mode=TwoWay}" Step="{Binding Step, Mode=OneWay}" Decimals="{Binding Decimals, Mode=OneWay}" Unit="{Binding Unit, Mode=OneWay}" AutomationProperties.Name="X" />
-                        <controls:NumberBox Width="72" Margin="4,0,0,0" Value="{Binding Y, Mode=TwoWay}" Step="{Binding Step, Mode=OneWay}" Decimals="{Binding Decimals, Mode=OneWay}" Unit="{Binding Unit, Mode=OneWay}" AutomationProperties.Name="Y" />
-                        <Button Style="{StaticResource Button.Small}"
+                    <!-- Two numbers; a point can also be picked on the preview. They share the row, so a
+                         value like "255.35 px" is not cut short (finding 70), up to a width a
+                         wide Inspector does not stretch them past. -->
+                    <Grid Visibility="{Binding IsPair, Mode=OneWay, Converter={StaticResource Visible}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" MinWidth="72" MaxWidth="124" />
+                            <ColumnDefinition Width="*" MinWidth="76" MaxWidth="128" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <controls:NumberBox Grid.Column="0" Value="{Binding X, Mode=TwoWay}" Step="{Binding Step, Mode=OneWay}" Decimals="{Binding Decimals, Mode=OneWay}" Unit="{Binding Unit, Mode=OneWay}" AutomationProperties.Name="X" />
+                        <controls:NumberBox Grid.Column="1" Margin="4,0,0,0" Value="{Binding Y, Mode=TwoWay}" Step="{Binding Step, Mode=OneWay}" Decimals="{Binding Decimals, Mode=OneWay}" Unit="{Binding Unit, Mode=OneWay}" AutomationProperties.Name="Y" />
+                        <Button Grid.Column="2"
+                                Style="{StaticResource Button.Small}"
                                 Content="&#xE81D;"
                                 Visibility="{Binding IsPoint, Mode=OneWay, Converter={StaticResource Visible}}"
                                 Command="{Binding PickCommand, Mode=OneWay}"
                                 ToolTip="Pick this point on the preview"
                                 AutomationProperties.Name="Pick on the preview" />
-                    </StackPanel>
+                    </Grid>
 
                     <UniformGrid Columns="4" Visibility="{Binding IsQuad, Mode=OneWay, Converter={StaticResource Visible}}">
                         <controls:NumberBox MinWidth="40" Margin="0,0,2,0" Value="{Binding X, Mode=TwoWay}" Decimals="1" AutomationProperties.Name="First" />
