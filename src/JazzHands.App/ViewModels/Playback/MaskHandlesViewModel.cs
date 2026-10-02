@@ -247,7 +247,11 @@ public sealed partial class MaskHandlesViewModel : ObservableObject
         string? chosen = null;
         if (_selection.Ids.Length == 1 && project.FindClip(_selection.Ids[0]) is { } found
             && found.Track.Kind is TrackKind.Video or TrackKind.Adjustment
-            && _preview.Position >= found.Clip.Start && _preview.Position < found.Clip.End)
+            && _preview.Position >= found.Clip.Start && _preview.Position < found.Clip.End
+
+            // A 3D layer is placed through the camera, which these handles do not follow; a
+            // camera or a light has no picture to mask (Phase 47).
+            && found.Clip.Layer3D is null && !SceneObjects.Is(found.Clip))
         {
             chosen = found.Clip.Id;
         }

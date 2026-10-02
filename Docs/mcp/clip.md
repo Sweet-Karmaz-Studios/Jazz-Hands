@@ -24,3 +24,5 @@ Speed: `clip_speed_preset` puts a packaged ramp on a clip at a moment: `impact` 
 By what is said: `clip_remove_words` and `clip_remove_fillers` cut words, fillers and long pauses out of a clip (see jazz://docs/speech).
 
 AI (on this computer): `clip_remove_background` cuts a person out of a clip without a green screen (Robust Video Matting, made once per file; choke, feather, invert and matte view on its `video.matte.person` effect). A missing model is refused with `model-missing`; ask the person before `model_download`.
+
+`clip_set_3d` makes a picture clip a 3D layer, with depth, a turn about X and Y and a material, seen through the sequence's camera and lit by its lights; `jazz://docs/3d` has the whole of it.

@@ -189,6 +189,30 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         ("4x", new Rational(4, 1)),
     ];
 
+    /// <summary>Whether a picture clip is a 3D layer (Phase 47), sent as <c>clip.set-3d</c>.</summary>
+    internal static ParamDescriptor ThreeDParam { get; } = new(
+        "3d", ParamType.Bool, new ParamValue.Bool(false), "3D layer",
+        "Gives the clip depth, a turn about X and Y and a material, seen through the sequence's camera and lit by its lights. Off makes it flat again.",
+        Animatable: false);
+
+    /// <summary>Whether a 3D layer takes the scene's lights (Phase 47), sent as <c>clip.set-3d --lights</c>.</summary>
+    internal static ParamDescriptor LightsParam { get; } = new(
+        "lights", ParamType.Bool, new ParamValue.Bool(true), "Takes lights",
+        "Lit by the scene's lights; off shows the picture as it is.",
+        Animatable: false);
+
+    /// <summary>Whether a 3D layer throws shadows (Phase 47), sent as <c>clip.set-3d --casts-shadows</c>.</summary>
+    internal static ParamDescriptor CastsShadowsParam { get; } = new(
+        "casts-shadows", ParamType.Bool, new ParamValue.Bool(false), "Casts shadows",
+        "Throws a shadow from lights that cast them, onto the layers behind.",
+        Animatable: false);
+
+    /// <summary>Whether a 3D layer is darkened by shadows (Phase 47), sent as <c>clip.set-3d --accepts-shadows</c>.</summary>
+    internal static ParamDescriptor AcceptsShadowsParam { get; } = new(
+        "accepts-shadows", ParamType.Bool, new ParamValue.Bool(true), "Takes shadows",
+        "Darkened by the shadows other layers throw on it.",
+        Animatable: false);
+
     /// <summary>How a picture clip shows the moments between its source frames (Phase 42), sent as <c>clip.set-retime</c>.</summary>
     internal static ParamDescriptor RetimeParam { get; } = new(
         "retime", ParamType.Enum, new ParamValue.Enum("nearest"), "Between frames",
@@ -207,7 +231,8 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         Animatable: false, Choices: new EquatableArray<string>([.. FadeCurves.Select(pair => pair.Name)]));
 
     private static bool IsFadeRow(ParamRowViewModel row) =>
-        ReferenceEquals(row.Descriptor, KeepPitchParam) || ReferenceEquals(row.Descriptor, RetimeParam) || ReferenceEquals(row.Descriptor, SpeedBlurParam) || ReferenceEquals(row.Descriptor, FastMuteParam) || ReferenceEquals(row.Descriptor, FadeInLength) || ReferenceEquals(row.Descriptor, FadeInShape)
+        ReferenceEquals(row.Descriptor, ThreeDParam) || ReferenceEquals(row.Descriptor, LightsParam) || ReferenceEquals(row.Descriptor, CastsShadowsParam) || ReferenceEquals(row.Descriptor, AcceptsShadowsParam)
+        || ReferenceEquals(row.Descriptor, KeepPitchParam) || ReferenceEquals(row.Descriptor, RetimeParam) || ReferenceEquals(row.Descriptor, SpeedBlurParam) || ReferenceEquals(row.Descriptor, FastMuteParam) || ReferenceEquals(row.Descriptor, FadeInLength) || ReferenceEquals(row.Descriptor, FadeInShape)
         || ReferenceEquals(row.Descriptor, FadeOutLength) || ReferenceEquals(row.Descriptor, FadeOutShape);
 
     /// <summary>Adds an effect to the inspected clip, for a drop from the effects panel.</summary>
@@ -488,6 +513,21 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
                 view.Rows.Add(new ParamRowViewModel(this, clip.Id, parameter, section.Name));
             }
 
+            // A picture on a video track can be made 3D (Phase 47): the switch sits under its
+            // place, and a 3D layer's material switches under its depth and turns.
+            // Text, a shape or a model is always 3D, so it has no switch, only its shadow switches.
+            if (ReferenceEquals(section, ParamTargets.Transform) && found.Track.Kind == TrackKind.Video && !SceneObjects.IsMesh(clip.GeneratorId))
+            {
+                view.Rows.Add(new ParamRowViewModel(this, clip.Id, ThreeDParam, section.Name));
+            }
+            else if (ReferenceEquals(section, ParamTargets.Space) || ReferenceEquals(section, ParamTargets.MeshSpace))
+            {
+                foreach (ParamDescriptor material in (ParamDescriptor[])[LightsParam, CastsShadowsParam, AcceptsShadowsParam])
+                {
+                    view.Rows.Add(new ParamRowViewModel(this, clip.Id, material, section.Name));
+                }
+            }
+
             Sections.Add(view);
         }
 
@@ -763,6 +803,27 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
     /// <summary>A fade row's value on a clip: the fade's length in seconds, or its shape.</summary>
     private static ParamValue FadeValue(Clip clip, ParamDescriptor row)
     {
+        if (ReferenceEquals(row, ThreeDParam))
+        {
+            return new ParamValue.Bool(clip.Layer3D is not null);
+        }
+
+        if (ReferenceEquals(row, LightsParam))
+        {
+            return new ParamValue.Bool(clip.Layer3D?.AcceptsLights ?? true);
+        }
+
+        if (ReferenceEquals(row, CastsShadowsParam))
+        {
+            // Geometry throws shadows unless somebody says otherwise.
+            return new ParamValue.Bool(clip.Layer3D?.CastsShadows ?? SceneObjects.IsMesh(clip.GeneratorId));
+        }
+
+        if (ReferenceEquals(row, AcceptsShadowsParam))
+        {
+            return new ParamValue.Bool(clip.Layer3D?.AcceptsShadows ?? true);
+        }
+
         if (ReferenceEquals(row, KeepPitchParam))
         {
             return new ParamValue.Bool(clip.KeepsPitch);
@@ -794,6 +855,26 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
     /// <summary>What a fade row sends for one clip: that fade with the row's half changed and the other half kept.</summary>
     private ICommand FadeEdit(string clipId, ParamRowViewModel row, string text)
     {
+        if (ReferenceEquals(row.Descriptor, ThreeDParam))
+        {
+            return new SetClip3DCommand(clipId, Off: !((ParamValue.Bool)ParamValues.Parse(ThreeDParam, text)).Value);
+        }
+
+        if (ReferenceEquals(row.Descriptor, LightsParam))
+        {
+            return new SetClip3DCommand(clipId, Lights: ((ParamValue.Bool)ParamValues.Parse(LightsParam, text)).Value);
+        }
+
+        if (ReferenceEquals(row.Descriptor, CastsShadowsParam))
+        {
+            return new SetClip3DCommand(clipId, CastsShadows: ((ParamValue.Bool)ParamValues.Parse(CastsShadowsParam, text)).Value);
+        }
+
+        if (ReferenceEquals(row.Descriptor, AcceptsShadowsParam))
+        {
+            return new SetClip3DCommand(clipId, AcceptsShadows: ((ParamValue.Bool)ParamValues.Parse(AcceptsShadowsParam, text)).Value);
+        }
+
         if (ReferenceEquals(row.Descriptor, KeepPitchParam))
         {
             return new SetClipKeepPitchCommand(clipId, ((ParamValue.Bool)ParamValues.Parse(KeepPitchParam, text)).Value);
@@ -1020,7 +1101,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
     private static string Shape(ClipLocation found) =>
         string.Join(
             "|",
-            [found.Clip.Id, found.Track.Kind.ToString(), found.Clip.GeneratorId ?? string.Empty, .. EffectChains.Visible(found.Clip, found.Clip.Effects).Select(effect => $"{effect.Id}:{effect.TypeId}")]);
+            [found.Clip.Id, found.Track.Kind.ToString(), found.Clip.GeneratorId ?? string.Empty, found.Clip.Layer3D is null ? "flat" : "3d", .. EffectChains.Visible(found.Clip, found.Clip.Effects).Select(effect => $"{effect.Id}:{effect.TypeId}")]);
 
     private static string SourceOf(Project project, Clip clip)
     {

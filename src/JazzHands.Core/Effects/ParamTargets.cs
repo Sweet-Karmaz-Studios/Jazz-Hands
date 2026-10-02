@@ -80,6 +80,22 @@ public static class ParamTargets
         new ParamDescriptor("transform.rotation", ParamType.Float, new ParamValue.Float(0), "Rotation", "Degrees clockwise.", Min: -36000, Max: 36000, SliderMax: 360, Unit: "deg"),
         new ParamDescriptor("transform.anchor", ParamType.Float2, new ParamValue.Float2(0, 0), "Anchor", "The pivot, in picture pixels from the picture's centre.", Unit: "px"));
 
+    /// <summary>A 3D layer's depth, its turn about X and Y, and its material (Phase 47).</summary>
+    public static EffectDescriptor Space { get; } = Section("intrinsic.3d", "3D",
+        new ParamDescriptor("transform.z", ParamType.Float, new ParamValue.Float(0), "Depth", "Distance away from the viewer, in sequence pixels; negative comes towards the camera.", Min: -1000000, Max: 1000000, SliderMax: 3000, Unit: "px"),
+        new ParamDescriptor("transform.rotation-x", ParamType.Float, new ParamValue.Float(0), "X rotation", "Degrees about the horizontal axis; positive tips the top edge away.", Min: -36000, Max: 36000, SliderMax: 360, Unit: "deg"),
+        new ParamDescriptor("transform.rotation-y", ParamType.Float, new ParamValue.Float(0), "Y rotation", "Degrees about the vertical axis; positive turns the right edge away.", Min: -36000, Max: 36000, SliderMax: 360, Unit: "deg"),
+        new ParamDescriptor("material.ambient", ParamType.Float, new ParamValue.Float(1), "Ambient", "How much ambient light it takes, 0 to 1.", Min: 0, Max: 1),
+        new ParamDescriptor("material.diffuse", ParamType.Float, new ParamValue.Float(1), "Diffuse", "How much direct light it scatters, 0 to 1.", Min: 0, Max: 1),
+        new ParamDescriptor("material.specular", ParamType.Float, new ParamValue.Float(0.25f), "Specular", "How bright its highlights are, 0 to 1.", Min: 0, Max: 1),
+        new ParamDescriptor("material.roughness", ParamType.Float, new ParamValue.Float(0.5f), "Roughness", "How spread its highlights are: 0 a mirror, 1 matte.", Min: 0, Max: 1));
+
+    /// <summary>
+    /// The depth and turns of text, a shape or a model (Phase 48): <see cref="Space"/> without the
+    /// layer material, since geometry has materials of its own.
+    /// </summary>
+    public static EffectDescriptor MeshSpace { get; } = Section("intrinsic.3d-mesh", "3D", [.. Space.Params.Where(parameter => parameter.Name.StartsWith("transform.", StringComparison.Ordinal))]);
+
     /// <summary>A clip's opacity.</summary>
     public static EffectDescriptor Opacity { get; } = Section("intrinsic.opacity", "Opacity",
         new ParamDescriptor("opacity", ParamType.Float, new ParamValue.Float(1), "Opacity", "0 is invisible, 1 fully opaque.", Min: 0, Max: 1));
@@ -201,10 +217,11 @@ public static class ParamTargets
         return owner.Kind switch
         {
             // A generator's own parameters (a solid's colour) come first, as what the clip is.
+            // A camera or a light is its own parameters alone: it has no picture to place.
+            ParamOwnerKind.Clip when owner.Track.Kind == TrackKind.Video && SceneObjects.Is(owner.Clip!) =>
+                registry.Find(owner.Clip!.GeneratorId) is { Kind: EffectKind.Generator } sceneObject ? [sceneObject] : [],
             ParamOwnerKind.Clip when owner.Track.Kind is TrackKind.Video or TrackKind.Adjustment =>
-                registry.Find(owner.Clip!.GeneratorId) is { Kind: EffectKind.Generator } generator
-                    ? [generator, Transform, Opacity, Crop]
-                    : owner.Clip.IsMedia && owner.Clip.IsRemapped ? [Transform, Opacity, Crop, RemapParams] : [Transform, Opacity, Crop],
+                PictureSections(owner.Clip!, registry),
             ParamOwnerKind.Clip when owner.Track.Kind == TrackKind.Audio =>
                 registry.Find(owner.Clip!.GeneratorId) is { Kind: EffectKind.AudioGenerator } sound
                     ? [sound, Audio]
@@ -215,6 +232,40 @@ public static class ParamTargets
             ParamOwnerKind.Transition => registry.Find(owner.Transition!.TypeId) is { } transition ? [transition] : [],
             _ => [],
         };
+    }
+
+    /// <summary>A picture clip's sections: what a generator is, its place, its 3D when it is a 3D layer, opacity, crop and speed.</summary>
+    private static ImmutableArray<EffectDescriptor> PictureSections(Clip clip, EffectRegistry registry)
+    {
+        var sections = ImmutableArray.CreateBuilder<EffectDescriptor>();
+        if (registry.Find(clip.GeneratorId) is { Kind: EffectKind.Generator } generator)
+        {
+            sections.Add(generator);
+        }
+
+        // Text, a shape or a model is geometry: always in 3D, and with no picture to crop.
+        bool mesh = SceneObjects.IsMesh(clip.GeneratorId);
+        sections.Add(Transform);
+        if (mesh)
+        {
+            sections.Add(MeshSpace);
+        }
+        else if (clip.Layer3D is not null)
+        {
+            sections.Add(Space);
+        }
+
+        sections.Add(Opacity);
+        if (!mesh)
+        {
+            sections.Add(Crop);
+        }
+        if (clip.GeneratorId is null && clip.IsMedia && clip.IsRemapped)
+        {
+            sections.Add(RemapParams);
+        }
+
+        return sections.ToImmutable();
     }
 
     /// <summary>Every parameter an owner has, in inspector order.</summary>
@@ -391,7 +442,11 @@ public static class ParamTargets
     private static bool IsIntrinsic(string name) =>
         name is "opacity" or "volume" or "pan" or Animation.TimeRemap.Parameter
         || name.StartsWith("transform.", StringComparison.Ordinal)
+        || name.StartsWith("material.", StringComparison.Ordinal)
         || name.StartsWith("crop.", StringComparison.Ordinal);
+
+    private static bool Is3D(string name) =>
+        name is "transform.z" or "transform.rotation-x" or "transform.rotation-y" || name.StartsWith("material.", StringComparison.Ordinal);
 
     private static AnimatedValue? ClipValue(Clip clip, string name) => name switch
     {
@@ -400,6 +455,13 @@ public static class ParamTargets
         "transform.scale" => clip.Transform?.Scale,
         "transform.rotation" => clip.Transform?.Rotation,
         "transform.anchor" => clip.Transform?.Anchor,
+        "transform.z" => clip.Layer3D?.Z,
+        "transform.rotation-x" => clip.Layer3D?.RotationX,
+        "transform.rotation-y" => clip.Layer3D?.RotationY,
+        "material.ambient" => clip.Layer3D?.Ambient,
+        "material.diffuse" => clip.Layer3D?.Diffuse,
+        "material.specular" => clip.Layer3D?.Specular,
+        "material.roughness" => clip.Layer3D?.Roughness,
         "opacity" => clip.Opacity,
         "crop.left" => clip.Crop?.Left,
         "crop.top" => clip.Crop?.Top,
@@ -443,6 +505,25 @@ public static class ParamTargets
                 return clip with { Pan = value };
             case Animation.TimeRemap.Parameter:
                 return clip with { Remap = value };
+        }
+
+        if (Is3D(name))
+        {
+            // Only a 3D layer is offered these (Sections), so the clip already has its Layer3D.
+            Layer3D space = clip.Layer3D ?? Layer3D.Default;
+            return clip with
+            {
+                Layer3D = name switch
+                {
+                    "transform.z" => space with { Z = value },
+                    "transform.rotation-x" => space with { RotationX = value },
+                    "transform.rotation-y" => space with { RotationY = value },
+                    "material.ambient" => space with { Ambient = value },
+                    "material.diffuse" => space with { Diffuse = value },
+                    "material.specular" => space with { Specular = value },
+                    _ => space with { Roughness = value },
+                },
+            };
         }
 
         if (name.StartsWith("transform.", StringComparison.Ordinal))

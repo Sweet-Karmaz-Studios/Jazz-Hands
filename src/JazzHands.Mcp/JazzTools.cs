@@ -374,6 +374,7 @@ public sealed class JazzTools
     {
         "undo" or "redo" => "history",
         "scopes" => "color",
+        "camera" or "light" or "text3d" or "shape3d" or "model3d" => "3d",
         _ => area,
     };
 

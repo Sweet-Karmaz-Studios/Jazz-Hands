@@ -474,6 +474,16 @@
               "type": "null"
             }
           ]
+        },
+        "layer3D": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/layer3D"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -794,6 +804,90 @@
         "time",
         "value"
       ]
+    },
+    "layer3D": {
+      "type": "object",
+      "properties": {
+        "z": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/animatedValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rotationX": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/animatedValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rotationY": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/animatedValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "acceptsLights": {
+          "type": "boolean"
+        },
+        "castsShadows": {
+          "type": "boolean"
+        },
+        "acceptsShadows": {
+          "type": "boolean"
+        },
+        "ambient": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/animatedValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "diffuse": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/animatedValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "specular": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/animatedValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "roughness": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/animatedValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
     },
     "marker": {
       "type": "object",

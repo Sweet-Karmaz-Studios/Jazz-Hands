@@ -14,6 +14,7 @@ using JazzHands.Render.Effects.Looks;
 using JazzHands.Render.Effects.Keying;
 using JazzHands.Render.Effects.Stabilize;
 using JazzHands.Render.Frames;
+using JazzHands.Render.Scene;
 
 namespace JazzHands.Render.Compositing;
 
@@ -132,7 +133,7 @@ public sealed record RenderOptions
 /// position (pixels from the frame centre), then the preview quality. Keyframe times are relative
 /// to the clip's start, so moving a clip moves its animation with it.
 /// </remarks>
-public static class RenderGraphBuilder
+public static partial class RenderGraphBuilder
 {
     /// <summary>The generator type for a flat colour.</summary>
     public const string SolidGenerator = "gen.solid";
@@ -226,6 +227,20 @@ public static class RenderGraphBuilder
 
         // A track another uses as its matte is drawn only as that matte.
         HashSet<string> mattes = TrackMatte.Sources(sequence);
+        AcesOutput? aces = project.Settings.ColorManagement is { IsAces: true } managed ? managed.Output : null;
+
+        // 3D layers next to each other in the stack are drawn together as one scene (Phase 47).
+        // Cameras and lights draw nothing and do not break a run; anything else that is drawn does.
+        (SceneCamera Camera, ImmutableArray<SceneLight> Lights)? setup = null;
+        var scene = new List<ScenePart>();
+        void EndScene()
+        {
+            if (scene.Count > 0)
+            {
+                layers.Add(SceneNode(project, sequence, time, frames, scene, setup!.Value, (width, height), options, settings.FrameRate));
+                scene.Clear();
+            }
+        }
 
         // Tracks are kept in stacking order by every edit and by loading, so this is bottom first.
         foreach (Track track in sequence.Tracks)
@@ -234,6 +249,7 @@ public static class RenderGraphBuilder
             {
                 if (options.Subtitles && !track.Muted)
                 {
+                    EndScene();
                     layers.AddRange(Subtitles(track, time, settings, frameSize, options));
                 }
 
@@ -251,17 +267,44 @@ public static class RenderGraphBuilder
 
             if (moment.Span is { } span)
             {
+                // A cut between two cameras or two lights: neither is a picture to mix.
+                if (SceneObjects.Is(span.Left) && SceneObjects.Is(span.Right))
+                {
+                    continue;
+                }
+
+                EndScene();
                 layers.Add(Transition(project, sequence, track, span, time, frameSize, (width, height), frames, options, depth, settings.FrameRate)
                     with { TrackMatte = Matted(project, sequence, track.Matte, time, frames, options, depth) });
                 continue;
             }
 
-            if (moment.Clip is not { Enabled: true } clip)
+            if (moment.Clip is not { Enabled: true } clip || (track.Kind == TrackKind.Video && SceneObjects.Is(clip)))
             {
                 continue;
             }
 
             DriverScope.Origin = clip.Start;
+
+            if (track.Kind == TrackKind.Video && SceneObjects.IsMesh(clip.GeneratorId))
+            {
+                setup ??= SceneAt(project, sequence, time, options, frames);
+                DriverScope.Origin = clip.Start;
+                scene.Add(MeshPartOf(track, clip, time, options));
+                continue;
+            }
+
+            if (track.Kind == TrackKind.Video && clip.Layer3D is not null)
+            {
+                setup ??= SceneAt(project, sequence, time, options, frames);
+                DriverScope.Origin = clip.Start;
+                if (SceneLayerOf(project, sequence, track, clip, time, frameSize, (width, height), frames, options, depth, settings.FrameRate, setup.Value.Camera, aces) is { } item)
+                {
+                    scene.Add(item);
+                }
+
+                continue;
+            }
 
             Flicks local = time - clip.Start;
 
@@ -269,6 +312,7 @@ public static class RenderGraphBuilder
 
             if (track.Kind == TrackKind.Adjustment)
             {
+                EndScene();
                 layers.Add(Adjustment(clip, local, frameSize, options) with { Effects = effects });
                 continue;
             }
@@ -280,17 +324,20 @@ public static class RenderGraphBuilder
 
             LayerNode layer = Layer(clip, local, source, frameSize, options, Steady(project, clip, time, source.Size, frames, options)) with { Effects = effects };
             TrackMatteNode? matte = Matted(project, sequence, TrackMatte.For(clip, track), time, frames, options, depth);
+            EndScene();
             layers.Add((Echoed(project, track, clip, time, source, layer, frameSize, (width, height), frames, options, depth, settings.FrameRate)
                 ?? Blurred(project, sequence, track, clip, time, source, layer, frameSize, (width, height), frames, options, depth, settings.FrameRate)
                 ?? layer) with { TrackMatte = matte });
         }
+
+        EndScene();
 
         return new RenderGraph(width, height, layers.ToImmutable())
         {
             Bicubic = options.Bicubic,
             ProjectFolder = options.ProjectFolder,
             CacheLayers = options.CacheLayers,
-            Aces = project.Settings.ColorManagement is { IsAces: true } aces ? aces.Output : null,
+            Aces = aces,
         };
     }
 
@@ -1214,6 +1261,13 @@ public static class RenderGraphBuilder
         public static readonly ParamDescriptor Scale = ParamTargets.Transform.Param("transform.scale")!;
         public static readonly ParamDescriptor Rotation = ParamTargets.Transform.Param("transform.rotation")!;
         public static readonly ParamDescriptor Anchor = ParamTargets.Transform.Param("transform.anchor")!;
+        public static readonly ParamDescriptor Depth = ParamTargets.Space.Param("transform.z")!;
+        public static readonly ParamDescriptor RotationX = ParamTargets.Space.Param("transform.rotation-x")!;
+        public static readonly ParamDescriptor RotationY = ParamTargets.Space.Param("transform.rotation-y")!;
+        public static readonly ParamDescriptor Ambient = ParamTargets.Space.Param("material.ambient")!;
+        public static readonly ParamDescriptor Diffuse = ParamTargets.Space.Param("material.diffuse")!;
+        public static readonly ParamDescriptor Specular = ParamTargets.Space.Param("material.specular")!;
+        public static readonly ParamDescriptor Roughness = ParamTargets.Space.Param("material.roughness")!;
         public static readonly ParamDescriptor Opacity = ParamTargets.Opacity.Param("opacity")!;
         public static readonly ParamDescriptor CropLeft = ParamTargets.Crop.Param("crop.left")!;
         public static readonly ParamDescriptor CropTop = ParamTargets.Crop.Param("crop.top")!;

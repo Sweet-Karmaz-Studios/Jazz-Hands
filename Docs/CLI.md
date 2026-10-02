@@ -760,6 +760,39 @@ Show what the cache holds and its size limit.
 |---|---|
 | `<project>` | The .jazz file to work on. |
 
+## `jazz camera`
+
+3D cameras: put one on the timeline to move, orbit, zoom and focus through the 3D layers.
+
+### `jazz camera add <project>`
+
+Put a 3D camera on the timeline.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--at <time>` | Where it starts; the timeline's start when left out. |
+| `--dur <time>` | How long it lasts; to the end of the sequence when left out. |
+| `--track <id>` | Which video track; the lowest free one above every picture when left out. |
+| `--dolly <number>` | How far it moves in from rest, with its point of interest, in sequence pixels; negative pulls back. |
+| `--orbit <number>` | Degrees round the point of interest, left and right. |
+| `--tilt <number>` | Degrees round the point of interest, up (positive) and down. |
+| `--roll <number>` | Degrees about the way it looks, clockwise. |
+| `--angle <number>` | Angle of view across the frame in degrees; 39.6 is a 50 mm lens. |
+| `--position <position>` | Where it is across the frame, as 'x, y' in sequence pixels from the centre. |
+| `--target <target>` | Its point of interest across the frame, as 'x, y'. |
+| `--target-z <number>` | The depth of its point of interest, in sequence pixels. |
+| `--dof` | Blur what is nearer or farther than the focus distance. |
+| `--focus <number>` | Focus distance in sequence pixels; the point of interest when left out. |
+| `--aperture <number>` | The blur, in pixels, of something infinitely far; 20 when left out. |
+| `--name <name>` | Its display name. |
+| `--id <id>` | The identifier to give it. |
+| `--sequence <id>` | Which sequence, when no track is named. |
+| `--no-save` | Do not write the project back. |
+
 ## `jazz chapter`
 
 Chapters: markers that become a file's chapters, from markers or imported from media.
@@ -1368,6 +1401,23 @@ Move the cut between two touching clips.
 | Option | Meaning |
 |---|---|
 | `--by <time>` | Required. How far to move the cut. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz clip set-3d <project> <clip-id>`
+
+Make a clip a 3D layer, or flat again.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The clip id. |
+
+| Option | Meaning |
+|---|---|
+| `--off` | Make it flat again, dropping its depth, turns and material. |
+| `--lights` | true to be lit by the scene's lights, false to show the picture as it is. |
+| `--casts-shadows` | true to throw shadows from lights that cast them. |
+| `--accepts-shadows` | true to be darkened by shadows other layers throw. |
 | `--no-save` | Do not write the project back. |
 
 ### `jazz clip set-blend <project> <clip-id> <mode>`
@@ -2624,6 +2674,43 @@ The layouts layout.apply knows, with how many clips each takes.
 |---|---|
 | `<project>` | The .jazz file to work on. |
 
+## `jazz light`
+
+3D lights: point, spot, directional, ambient and environment, with shadows, for the 3D scenes.
+
+### `jazz light add <project>`
+
+Put a 3D light on the timeline.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--kind <kind>` | point, spot, directional, ambient or environment. Default: point. |
+| `--at <time>` | Where it starts; the timeline's start when left out. |
+| `--dur <time>` | How long it lasts; to the end of the sequence when left out. |
+| `--track <id>` | Which video track; the lowest free one above every picture when left out. |
+| `--color <color>` | Its colour, for example #FFE8C0. |
+| `--intensity <number>` | How bright; 1 lights a white layer facing it to full brightness. |
+| `--position <position>` | Where it is across the frame, as 'x, y' in sequence pixels from the centre. |
+| `--z <number>` | Its depth in sequence pixels; negative is in front of the frame, towards the camera. |
+| `--target <target>` | What a spot or directional light points at, as 'x, y'. |
+| `--target-z <number>` | The depth of what it points at. |
+| `--cone <number>` | A spot light's cone, in degrees. |
+| `--feather <number>` | How soft a spot light's edge is, in percent. |
+| `--falloff <falloff>` | none, smooth or inverse-square. |
+| `--radius <number>` | How far a point or spot light reaches at full strength, in sequence pixels. |
+| `--shadows` | Layers that cast shadows throw them from this light. |
+| `--softness <number>` | How soft its shadows' edges are, in sequence pixels. |
+| `--darkness <number>` | How much of the light a shadow takes away, 0 to 1. |
+| `--image <image>` | For an environment light: the media item, by id, whose still surrounds the scene and is reflected. |
+| `--name <name>` | Its display name. |
+| `--id <id>` | The identifier to give it. |
+| `--sequence <id>` | Which sequence, when no track is named. |
+| `--no-save` | Do not write the project back. |
+
 ## `jazz marker`
 
 Markers on a sequence or a clip: points and ranges, names, colours, chapters.
@@ -3092,6 +3179,40 @@ List the machine learning models and whether each is downloaded.
 | Argument | Meaning |
 |---|---|
 | `<project>` | The .jazz file to work on. |
+
+## `jazz model3d`
+
+3D models: glTF 2.0 files with their materials and animations, in the 3D scene.
+
+### `jazz model3d add <project> <file>`
+
+Put a glTF 3D model on the timeline.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<file>` | The .gltf or .glb file. |
+
+| Option | Meaning |
+|---|---|
+| `--at <time>` | Where it starts; the timeline's start when left out. |
+| `--dur <time>` | How long it lasts; its animation's length or to the end of the sequence when left out. |
+| `--track <id>` | Which video track; the lowest free one above every picture when left out. |
+| `--size <number>` | Its largest side, in sequence pixels; 400 when left out. |
+| `--animation <animation>` | Which of its animations plays, by name or number from 0; the first when left out. |
+| `--name <name>` | Its display name; the file's when left out. |
+| `--id <id>` | The identifier to give it. |
+| `--sequence <id>` | Which sequence, when no track is named. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz model3d info <project> <file>`
+
+Say what is in a glTF model: meshes, materials, animations and anything left out.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<file>` | The .gltf or .glb file. |
 
 ## `jazz multicam`
 
@@ -4325,6 +4446,34 @@ Change one of the editor's settings.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+## `jazz shape3d`
+
+3D shapes: cube, sphere, cylinder, cone, torus and plane, in the 3D scene.
+
+### `jazz shape3d add <project>`
+
+Put a 3D shape on the timeline.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--kind <kind>` | cube, sphere, cylinder, cone, torus or plane. Default: cube. |
+| `--at <time>` | Where it starts; the timeline's start when left out. |
+| `--dur <time>` | How long it lasts; to the end of the sequence when left out. |
+| `--track <id>` | Which video track; the lowest free one above every picture when left out. |
+| `--size <size>` | Width and height, as 'w, h' in sequence pixels. |
+| `--depth <number>` | Front to back, in sequence pixels. |
+| `--color <color>` | Its colour, for example #3080FF. |
+| `--metallic <number>` | 0 painted, 1 metal. |
+| `--roughness <number>` | 0 polished, 1 matte. |
+| `--name <name>` | Its display name. |
+| `--id <id>` | The identifier to give it. |
+| `--sequence <id>` | Which sequence, when no track is named. |
+| `--no-save` | Do not write the project back. |
+
 ## `jazz source`
 
 The source monitor: open a file, mark in and out, play it; edits from it are in clip.
@@ -4712,6 +4861,38 @@ Save clips and their effects as a motion template, with chosen values as paramet
 | `--label <label>` | What the editor calls it. |
 | `--description <description>` | What it makes. |
 | `--force` | Replace a template of the same name. |
+| `--no-save` | Do not write the project back. |
+
+## `jazz text3d`
+
+3D text: extruded, bevelled letters as solid geometry in the 3D scene.
+
+### `jazz text3d add <project>`
+
+Put extruded, bevelled 3D text on the timeline.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--text <text>` | What it says; \n starts a line. Default: JAZZ. |
+| `--at <time>` | Where it starts; the timeline's start when left out. |
+| `--dur <time>` | How long it lasts; to the end of the sequence when left out. |
+| `--track <id>` | Which video track; the lowest free one above every picture when left out. |
+| `--font <font>` | The font family, as fonts list shows them. |
+| `--weight <weight>` | thin, light, regular, medium, semibold, bold or black. |
+| `--size <number>` | Letter height in sequence pixels. |
+| `--depth <number>` | How deep the letters are, front to back, in sequence pixels. |
+| `--bevel <number>` | The rounded edge round the faces, in sequence pixels; 0 for none. |
+| `--color <color>` | The faces and the bevel, for example #FFC040. |
+| `--side-color <side-color>` | The sides, for example #404858. |
+| `--metallic <number>` | 0 painted, 1 metal. |
+| `--roughness <number>` | 0 polished, 1 matte. |
+| `--name <name>` | Its display name; its text when left out. |
+| `--id <id>` | The identifier to give it. |
+| `--sequence <id>` | Which sequence, when no track is named. |
 | `--no-save` | Do not write the project back. |
 
 ## `jazz timeline`

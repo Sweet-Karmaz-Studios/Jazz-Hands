@@ -272,7 +272,7 @@ public static class Validator
                 }
             }
 
-            if (node.Key is { } key && graph.Node(key) is not { Effect.TypeId: "color.hsl" })
+            if (node.Key is { } key && graph.Node(key)?.Effect.TypeId != "color.hsl")
             {
                 issues.Add(new ValidationIssue(Severity.Warning, "key-not-qualifier", $"{nodePath}/key", $"Node '{node.Id}' is keyed by '{key}', which is not an HSL qualifier node of the graph; it applies everywhere."));
             }
@@ -608,6 +608,17 @@ public static class Validator
             yield return ("transform/scale", transform.Scale);
             yield return ("transform/rotation", transform.Rotation);
             yield return ("transform/anchor", transform.Anchor);
+        }
+
+        if (clip.Layer3D is { } space)
+        {
+            yield return ("layer3D/z", space.Z);
+            yield return ("layer3D/rotationX", space.RotationX);
+            yield return ("layer3D/rotationY", space.RotationY);
+            yield return ("layer3D/ambient", space.Ambient);
+            yield return ("layer3D/diffuse", space.Diffuse);
+            yield return ("layer3D/specular", space.Specular);
+            yield return ("layer3D/roughness", space.Roughness);
         }
 
         for (int index = 0; index < clip.Effects.Length; index++)

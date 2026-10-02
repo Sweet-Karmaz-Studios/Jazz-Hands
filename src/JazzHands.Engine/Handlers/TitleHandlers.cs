@@ -156,7 +156,7 @@ public sealed class AddTitleHandler : ICommandHandler<AddTitleCommand>
         HandlerHelp.RequireUnused(project, id);
         var range = new TimeRange(command.At, duration);
 
-        (Sequence sequence, Track track, bool made) = Place(project, command, range);
+        (Sequence sequence, Track track, bool made) = HandlerHelp.FreeVideoTrack(project, command.TrackId, command.SequenceId, range, "A title");
         Vector2 frame = TitleHelp.Frame(project, sequence);
 
         string text = command.Text ?? TitleMarkup.ScaleSizes(preset.Text, TitlePreset.SizeScale(frame));
@@ -209,54 +209,6 @@ public sealed class AddTitleHandler : ICommandHandler<AddTitleCommand>
         return TitleAnimations.IsKnown(trimmed)
             ? trimmed
             : throw new CommandException("invalid-value", $"'{name}' is not an animation. There are {string.Join(", ", TitleAnimations.Names)}.");
-    }
-
-    /// <summary>
-    /// The track a title goes on: the one named, or the lowest video track free for its whole length
-    /// above every track with a picture or an adjustment there (a title under the shot would not be
-    /// seen), or a new video track above everything when none is.
-    /// </summary>
-    private static (Sequence Sequence, Track Track, bool Made) Place(Project project, AddTitleCommand command, TimeRange range)
-    {
-        var probe = new Clip("probe", range, Flicks.Zero);
-
-        if (command.TrackId is { Length: > 0 } trackId)
-        {
-            (Sequence on, Track named) = HandlerHelp.Track(project, trackId);
-            HandlerHelp.RequireUnlocked(named);
-            if (named.Kind != TrackKind.Video)
-            {
-                throw new CommandException("wrong-track-kind", $"'{named.Name}' is not a video track. A title goes on a video track.");
-            }
-
-            if (EditOps.Overlaps(named, probe))
-            {
-                throw new CommandException(
-                    "would-overlap",
-                    $"A clip already occupies that part of '{named.Name}'. Leave --track out to use a free track, or pick another time.");
-            }
-
-            return (on, named, false);
-        }
-
-        Sequence sequence = HandlerHelp.Sequence(project, command.SequenceId);
-        int covered = sequence.Tracks
-            .Where(track => track.Kind is TrackKind.Video or TrackKind.Adjustment && EditOps.Overlaps(track, probe))
-            .Select(track => track.Order)
-            .DefaultIfEmpty(int.MinValue)
-            .Max();
-        Track? free = sequence.Tracks
-            .Where(track => track.Kind == TrackKind.Video && !track.Locked && track.Order > covered)
-            .OrderBy(track => track.Order)
-            .FirstOrDefault(track => !EditOps.Overlaps(track, probe));
-
-        if (free is not null)
-        {
-            return (sequence, free, false);
-        }
-
-        var made = new Track(Id.New(), TrackKind.Video, HandlerHelp.TrackName(sequence, TrackKind.Video), sequence.NextTrackOrder());
-        return (sequence, made, true);
     }
 }
 

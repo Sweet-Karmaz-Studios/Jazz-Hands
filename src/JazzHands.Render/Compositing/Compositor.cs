@@ -8,6 +8,7 @@ using JazzHands.Render.Color;
 using JazzHands.Render.Effects;
 using JazzHands.Render.Effects.Transitions;
 using JazzHands.Render.Frames;
+using JazzHands.Render.Scene;
 using JazzHands.Render.Shaders;
 using Serilog;
 using Vortice.Direct3D;
@@ -89,6 +90,8 @@ public sealed class Compositor : IDisposable
     private readonly Dictionary<Type, VideoGenerator?> _generators = [];
     private readonly Dictionary<string, VideoTransition?> _transitions = new(StringComparer.Ordinal);
 
+    private Scene3D? _scene;
+    private Dictionary<RenderGraph, RenderTarget>? _sharedCanvases;
     private Shaders? _shaders;
     private int _shaderGeneration = -1;
     private bool _disposed;
@@ -281,6 +284,7 @@ public sealed class Compositor : IDisposable
         _disposed = true;
         Cache.Dispose();
         _masks.Dispose();
+        _scene?.Dispose();
         _shaders?.Dispose();
         _acesResources.Dispose();
 
@@ -819,6 +823,9 @@ public sealed class Compositor : IDisposable
             case MotionBlurLayerSource blur:
                 return Average(graph, blur);
 
+            case SceneLayerSource scene:
+                return DrawScene(graph, layer, scene);
+
             default:
                 throw new NotSupportedException($"{layer.Source.GetType().Name} is not a source the compositor knows.");
         }
@@ -868,6 +875,34 @@ public sealed class Compositor : IDisposable
             return sum;
         }
 
+        // A blurred 3D scene draws its canvases once for all its moments.
+        bool sharing = _sharedCanvases is null && source.Samples.Any(sample => sample.Source is SceneLayerSource);
+        if (sharing)
+        {
+            _sharedCanvases = new Dictionary<RenderGraph, RenderTarget>(ReferenceEqualityComparer.Instance);
+        }
+
+        try
+        {
+            return Accumulate(graph, source, sum);
+        }
+        finally
+        {
+            if (sharing)
+            {
+                foreach (RenderTarget canvas in _sharedCanvases!.Values)
+                {
+                    Pool.Return(canvas);
+                }
+
+                _sharedCanvases = null;
+            }
+        }
+    }
+
+    /// <summary>Adds each moment of a blurred layer into the sum at its share.</summary>
+    private RenderTarget Accumulate(RenderGraph graph, MotionBlurLayerSource source, RenderTarget sum)
+    {
         // Bilinear, not bicubic: at an exact texel an identity draw then copies it unchanged.
         RenderGraph exact = graph with { Bicubic = false };
         var whole = new LayerNode(new SolidLayerSource(Vector4.Zero), graph.Width, graph.Height, Matrix3x2.Identity, LayerNode.NoCrop, 1.0f, BlendMode.Normal, []);
@@ -915,6 +950,65 @@ public sealed class Compositor : IDisposable
 
         return sum;
     }
+
+    /// <summary>
+    /// A run of 3D layers (Phase 47): each layer drawn alone into its canvas, with its effects and
+    /// masks in its own space, then the canvases set in space and drawn through the camera.
+    /// </summary>
+    private RenderTarget DrawScene(RenderGraph graph, LayerNode layer, SceneLayerSource scene)
+    {
+        var canvases = new List<RenderTarget>(scene.Layers.Length);
+        var owned = new List<RenderTarget>(scene.Layers.Length);
+        try
+        {
+            foreach (SceneLayer item in scene.Layers)
+            {
+                // The moments of a blurred scene share their canvases: each is drawn once.
+                if (_sharedCanvases is { } shared)
+                {
+                    if (!shared.TryGetValue(item.Canvas, out RenderTarget? kept))
+                    {
+                        kept = Render(item.Canvas);
+                        shared[item.Canvas] = kept;
+                    }
+
+                    canvases.Add(kept);
+                    continue;
+                }
+
+                RenderTarget canvas = Render(item.Canvas);
+                canvases.Add(canvas);
+                owned.Add(canvas);
+            }
+
+            // A canvas renders through Render, which re-aims these at its own graph.
+            _effectContext.ProjectFolder = graph.ProjectFolder;
+            _effectContext.IsAces = graph.Aces is not null;
+            _aces = graph.Aces;
+
+            // An environment light's picture in linear light, the first there is (Phase 48).
+            RenderTarget? environment = null;
+            if (scene.Lights.FirstOrDefault(light => light.Kind == SceneLightKind.Environment && light.Image is not null) is { Image: { } image } surround)
+            {
+                var picture = new LayerNode(image, (int)surround.ImageSize.X, (int)surround.ImageSize.Y, Matrix3x2.Identity, LayerNode.NoCrop, 1.0f, BlendMode.Normal, []);
+                environment = Linear(graph, picture);
+                owned.Add(environment);
+            }
+
+            _scene ??= new Scene3D(_device, Pool, _samplers);
+            return _scene.Draw(scene, canvases, graph.Width, graph.Height, layer.Scale, graph.Bicubic, environment);
+        }
+        finally
+        {
+            foreach (RenderTarget canvas in owned)
+            {
+                Pool.Return(canvas);
+            }
+        }
+    }
+
+    /// <summary>The scene renderer, once a 3D scene has been drawn; for tests of what it drew.</summary>
+    internal Scene3D? SceneRenderer => _scene;
 
     /// <summary>A layer that is only its picture placed: no effects, masks or track matte, blended normally.</summary>
     private static bool Plain(LayerNode layer) => layer.Effects.IsDefaultOrEmpty && Unmatted(layer) && layer.Blend == BlendMode.Normal;

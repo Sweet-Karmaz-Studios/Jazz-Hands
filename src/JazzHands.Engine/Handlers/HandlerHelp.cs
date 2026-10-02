@@ -1,4 +1,5 @@
 using JazzHands.Core.Commands;
+using JazzHands.Core.Editing;
 using JazzHands.Core.Model;
 using JazzHands.Core.Serialization;
 using JazzHands.Core.Time;
@@ -161,6 +162,60 @@ internal static class HandlerHelp
         }
 
         return settings;
+    }
+
+    /// <summary>
+    /// The track something laid over the picture goes on (a title, a 3D camera or light): the one
+    /// named, or the lowest video track free for its whole length above every track with a picture
+    /// or an adjustment there (a title under the shot would not be seen), or a new video track
+    /// above everything when none is.
+    /// </summary>
+    /// <param name="project">The project.</param>
+    /// <param name="trackId">The track asked for, or null to find one.</param>
+    /// <param name="sequenceId">The sequence to look in when no track is named; the active one when null.</param>
+    /// <param name="range">Where on the timeline it goes.</param>
+    /// <param name="what">What it is, for the refusals: "A title".</param>
+    internal static (Sequence Sequence, Track Track, bool Made) FreeVideoTrack(Project project, string? trackId, string? sequenceId, TimeRange range, string what)
+    {
+        var probe = new Clip("probe", range, Flicks.Zero);
+
+        if (trackId is { Length: > 0 })
+        {
+            (Sequence on, Track named) = Track(project, trackId);
+            RequireUnlocked(named);
+            if (named.Kind != TrackKind.Video)
+            {
+                throw new CommandException("wrong-track-kind", $"'{named.Name}' is not a video track. {what} goes on a video track.");
+            }
+
+            if (EditOps.Overlaps(named, probe))
+            {
+                throw new CommandException(
+                    "would-overlap",
+                    $"A clip already occupies that part of '{named.Name}'. Leave --track out to use a free track, or pick another time.");
+            }
+
+            return (on, named, false);
+        }
+
+        Sequence sequence = Sequence(project, sequenceId);
+        int covered = sequence.Tracks
+            .Where(track => track.Kind is TrackKind.Video or TrackKind.Adjustment && EditOps.Overlaps(track, probe))
+            .Select(track => track.Order)
+            .DefaultIfEmpty(int.MinValue)
+            .Max();
+        Track? free = sequence.Tracks
+            .Where(track => track.Kind == TrackKind.Video && !track.Locked && track.Order > covered)
+            .OrderBy(track => track.Order)
+            .FirstOrDefault(track => !EditOps.Overlaps(track, probe));
+
+        if (free is not null)
+        {
+            return (sequence, free, false);
+        }
+
+        var made = new Track(Id.New(), TrackKind.Video, TrackName(sequence, TrackKind.Video), sequence.NextTrackOrder());
+        return (sequence, made, true);
     }
 
     /// <summary>The name a new track gets when the command did not say: V1, A2 and so on.</summary>

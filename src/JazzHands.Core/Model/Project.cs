@@ -401,6 +401,7 @@ public sealed record Marker(
 /// <param name="InputTransform">How an ACES project brings this clip's picture into ACES (Phase 44). Null for automatic: HDR PQ as HDR10, anything else as sRGB.</param>
 /// <param name="BlurFollowsSpeed">True for a picture that blurs with its speed, as a camera's shutter would: the source is averaged across the shutter, so the fast part of a speed ramp streaks; less than a source frame of movement under the shutter leaves it sharp. Null (the default) for off. Only written when true.</param>
 /// <param name="MuteFasterThan">The speed above which the clip's sound is silent, as in the fast part of a speed ramp; null (the default) never.</param>
+/// <param name="Layer3D">Depth, the turn about X and Y, and a material, which make the clip a 3D layer (Phase 47); null for a flat one.</param>
 public sealed record Clip(
     string Id,
     TimeRange Range,
@@ -439,7 +440,8 @@ public sealed record Clip(
     bool? PitchFollowsSpeed = null,
     InputTransform? InputTransform = null,
     bool? BlurFollowsSpeed = null,
-    Rational? MuteFasterThan = null) : IEquatable<Clip>
+    Rational? MuteFasterThan = null,
+    Layer3D? Layer3D = null) : IEquatable<Clip>
 {
     /// <summary>Playback rate, defaulting to normal speed.</summary>
     public Rational EffectiveSpeed => Speed ?? Rational.One;
