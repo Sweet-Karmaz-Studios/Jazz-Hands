@@ -19,6 +19,8 @@ public partial class CompPanelView : UserControl
     private Point _grab;
     private Point _start;
     private CompNodeViewModel? _wiring;
+    private Point? _panFrom;
+    private Point _panOffset;
 
     /// <summary>Creates the view.</summary>
     public CompPanelView() => InitializeComponent();
@@ -64,8 +66,47 @@ public partial class CompPanelView : UserControl
         }
     }
 
+    /// <summary>The empty graph dragged with the left button pans it.</summary>
+    private void OnSurfaceDown(object sender, MouseButtonEventArgs e)
+    {
+        StartPan(e);
+        Focus();
+    }
+
+    /// <summary>The middle button pans from anywhere, over nodes too.</summary>
+    private void OnScrollerDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton == MouseButton.Middle)
+        {
+            StartPan(e);
+        }
+    }
+
+    private void StartPan(MouseButtonEventArgs e)
+    {
+        _panFrom = e.GetPosition(Scroller);
+        _panOffset = new Point(Scroller.HorizontalOffset, Scroller.VerticalOffset);
+        Surface.CaptureMouse();
+        e.Handled = true;
+    }
+
     private void OnSurfaceMove(object sender, MouseEventArgs e)
     {
+        if (_panFrom is { } grabbed)
+        {
+            if (e.LeftButton == MouseButtonState.Released && e.MiddleButton == MouseButtonState.Released)
+            {
+                _panFrom = null;
+                Surface.ReleaseMouseCapture();
+                return;
+            }
+
+            Vector moved = e.GetPosition(Scroller) - grabbed;
+            Scroller.ScrollToHorizontalOffset(_panOffset.X - moved.X);
+            Scroller.ScrollToVerticalOffset(_panOffset.Y - moved.Y);
+            return;
+        }
+
         Point at = e.GetPosition(Surface);
         if (_moving is { } node)
         {
@@ -81,6 +122,13 @@ public partial class CompPanelView : UserControl
 
     private void OnSurfaceUp(object sender, MouseButtonEventArgs e)
     {
+        if (_panFrom is not null)
+        {
+            _panFrom = null;
+            Surface.ReleaseMouseCapture();
+            return;
+        }
+
         Point at = e.GetPosition(Surface);
         CompPanelViewModel? panel = Panel;
         if (_moving is { } node && panel is not null)
@@ -145,6 +193,7 @@ public partial class CompPanelView : UserControl
 
         _moving = null;
         _wiring = null;
+        _panFrom = null;
         DragLine.Data = null;
     }
 

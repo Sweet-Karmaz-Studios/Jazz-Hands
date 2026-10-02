@@ -40,6 +40,9 @@
                 <Button Style="{StaticResource Button.Text}" Content="Remove" Command="{Binding RemoveSelectedCommand, Mode=OneWay}"
                         IsEnabled="{Binding HasGraph, Mode=OneWay}"
                         ToolTip="Take the selected node out (Delete)" AutomationProperties.Name="Remove node" />
+                <ToggleButton Style="{StaticResource Button.Text}" Content="Viewer" IsChecked="{Binding ShowViewer, Mode=TwoWay}"
+                              Visibility="{Binding HasViewer, Mode=OneTime, Converter={StaticResource Visible}}"
+                              ToolTip="Show the selected node's picture beside the graph" AutomationProperties.Name="Show viewer" />
             </StackPanel>
             <TextBlock Text="{Binding Heading, Mode=OneWay}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                        Foreground="{DynamicResource Brush.Text.Primary}" />
@@ -47,15 +50,26 @@
         <TextBlock DockPanel.Dock="Bottom" Text="{Binding Status, Mode=OneWay}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"
                    FontSize="{DynamicResource Text.Caption}" Foreground="{DynamicResource Brush.Warning}" />
 
+        <!-- The viewer: the selected node (or the output) of the clip alone, at the playhead. -->
+        <DockPanel DockPanel.Dock="Right" Width="260" Margin="8,0,0,0"
+                   Visibility="{Binding ShowViewer, Mode=OneWay, Converter={StaticResource Visible}}">
+            <TextBlock DockPanel.Dock="Bottom" Text="{Binding ViewerCaption, Mode=OneWay}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"
+                       FontSize="{DynamicResource Text.Caption}" Foreground="{DynamicResource Brush.Text.Secondary}" />
+            <Border Background="Black" VerticalAlignment="Top" BorderThickness="1" BorderBrush="{DynamicResource Brush.Border}">
+                <Image Source="{Binding ViewerImage, Mode=OneWay}" Stretch="Uniform" MinHeight="146" AutomationProperties.Name="Node viewer" />
+            </Border>
+        </DockPanel>
+
         <!-- The graph: drag a node by its title, drag from its right dot onto another node's port to wire them,
-             right-click a port to take its wire out, right-click the graph to add a node there, Ctrl+wheel to zoom. -->
+             right-click a port to take its wire out, right-click the graph to add a node there, drag the empty graph (or with the middle button) to pan, Ctrl+wheel to zoom. -->
         <Border Background="{DynamicResource Brush.Background.Input}" CornerRadius="3">
             <ScrollViewer x:Name="Scroller" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
-                          PreviewMouseWheel="OnWheel">
+                          PreviewMouseWheel="OnWheel" PreviewMouseDown="OnScrollerDown">
                 <Grid x:Name="Surface"
                       Width="{Binding SurfaceWidth, Mode=OneWay}"
                       Height="{Binding SurfaceHeight, Mode=OneWay}"
                       Background="Transparent"
+                      MouseLeftButtonDown="OnSurfaceDown"
                       MouseMove="OnSurfaceMove"
                       MouseLeftButtonUp="OnSurfaceUp"
                       MouseRightButtonUp="OnSurfaceRightUp"

@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows;
+using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using JazzHands.App.Services;
@@ -7,7 +8,9 @@ using JazzHands.App.Shell;
 using JazzHands.Core.Commands;
 using JazzHands.Core.Effects;
 using JazzHands.Core.Model;
+using JazzHands.Core.Time;
 using JazzHands.Engine.Effects;
+using JazzHands.Engine.Playback;
 using JazzHands.Engine.Selection;
 using Serilog;
 using ICommand = JazzHands.Core.Commands.ICommand;
@@ -134,9 +137,10 @@ public sealed partial class CompPanelViewModel : ToolViewModel
     private readonly SelectionService _selection;
     private readonly IUiDispatcher _ui;
     private readonly IPreviewEngine? _preview;
+    private readonly INodeViewer? _viewer;
 
     /// <summary>Creates the panel.</summary>
-    public CompPanelViewModel(ISession session, SelectionService selection, IUiDispatcher ui, IPreviewEngine? preview = null)
+    public CompPanelViewModel(ISession session, SelectionService selection, IUiDispatcher ui, IPreviewEngine? preview = null, INodeViewer? viewer = null)
         : base(PanelId, "Nodes")
     {
         ArgumentNullException.ThrowIfNull(session);
@@ -147,8 +151,18 @@ public sealed partial class CompPanelViewModel : ToolViewModel
         _selection = selection;
         _ui = ui;
         _preview = preview;
+        _viewer = viewer;
         _session.ProjectChanged += (_, _) => _ui.Post(Rebuild);
         _selection.Changed += (_, _) => _ui.Post(Rebuild);
+
+        // The viewer follows the playhead while it is parked; playing, it waits for it to stop.
+        _preview?.PlayheadMoved += (_, moved) =>
+        {
+            if (moved.State != TransportState.Playing)
+            {
+                _ui.Post(RefreshViewer);
+            }
+        };
         Rebuild();
     }
 
@@ -199,6 +213,24 @@ public sealed partial class CompPanelViewModel : ToolViewModel
     /// <summary>How far the view is zoomed: 1 is actual size.</summary>
     [ObservableProperty]
     private double _zoom = 1.0;
+
+    /// <summary>The viewer's picture: the selected node (or the output) of the clip alone, at the playhead (Phase 49a).</summary>
+    [ObservableProperty]
+    private ImageSource? _viewerImage;
+
+    /// <summary>What the viewer shows, in words.</summary>
+    [ObservableProperty]
+    private string _viewerCaption = string.Empty;
+
+    /// <summary>True while the viewer is open beside the graph.</summary>
+    [ObservableProperty]
+    private bool _showViewer = true;
+
+    /// <summary>True when there is a viewer to show: the host gave the panel one.</summary>
+    public bool HasViewer => _viewer is not null;
+
+    /// <summary>The viewer's last draw, for tests to wait on.</summary>
+    public Task Viewing { get; private set; } = Task.CompletedTask;
 
     /// <summary>Why the last change did not take, or empty.</summary>
     [ObservableProperty]
@@ -439,6 +471,35 @@ public sealed partial class CompPanelViewModel : ToolViewModel
         SurfaceHeight = Math.Max(300, Nodes.Select(node => node.Y + node.Height).DefaultIfEmpty(0).Max() + Margin);
         _origin = new Vector(offsetX, offsetY);
         OnPropertyChanged(nameof(Selected));
+        RefreshViewer();
+    }
+
+    /// <summary>Draws the viewer again.</summary>
+    public void RefreshViewer() => Viewing = ViewAsync();
+
+    partial void OnShowViewerChanged(bool value) => RefreshViewer();
+
+    private async Task ViewAsync()
+    {
+        CompNodeViewModel? shown = Selected ?? Nodes.FirstOrDefault(node => node.IsOutput);
+        if (_viewer is null || !ShowViewer || ClipId is not { } clipId || shown is null || _session.Project.FindClip(clipId) is not { } found)
+        {
+            ViewerImage = null;
+            ViewerCaption = string.Empty;
+            return;
+        }
+
+        Clip clip = found.Clip;
+        Flicks at = _preview?.Position is { } playhead && playhead >= clip.Start && playhead < clip.End ? playhead : clip.Start;
+        string caption = $"{shown.Title} at {Timecode.FormatClock(at)}";
+        ImageSource? image = await _viewer.RenderAsync(_session.Project, clipId, shown.Id, at, _session.ProjectPath).ConfigureAwait(true);
+
+        // A newer draw that finished first is not covered by an older one; a draw cut short changes nothing.
+        if (image is not null)
+        {
+            ViewerImage = image;
+            ViewerCaption = caption;
+        }
     }
 
     /// <summary>The groups leading to the graph that holds a node directly, outermost first; null when the graph does not have it.</summary>
