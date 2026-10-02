@@ -304,6 +304,15 @@ public static class MediaLibrary
             }
         }
 
+        // A clip whose comp graph or light uses an item counts as one of its clips (Phase 49a).
+        foreach ((string clipId, string id) in ParamReferences.All(project)
+            .Where(reference => reference.Kind == ParamReferenceKind.Media && reference.Clip.MediaId != reference.Value)
+            .Select(reference => (reference.Clip.Id, reference.Value))
+            .Distinct())
+        {
+            counts[id] = counts.GetValueOrDefault(id) + 1;
+        }
+
         return counts;
     }
 

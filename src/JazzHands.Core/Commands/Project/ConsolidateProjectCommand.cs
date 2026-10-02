@@ -16,6 +16,13 @@ namespace JazzHands.Core.Commands;
 /// point at the pieces. A file that cannot be smart cut, and anything that is not a moving
 /// picture, is copied whole. Copying keeps each file's date, so its thumbnails and proxies follow.
 /// </para>
+/// <para>
+/// Media a comp graph's media node or an environment light uses is gathered whole and never
+/// trimmed. Each 3D model is copied into <c>models</c> in a folder of its own, with the buffers and
+/// pictures a .gltf reads beside it, and its clips and nodes point at the copy; models are copied
+/// even with <c>--move</c>. A missing model file, or one that reads a file outside its own folder, is
+/// refused before anything is written.
+/// </para>
 /// </remarks>
 /// <param name="To">The folder to gather into; made if it is not there.</param>
 /// <param name="Trim">Keep only the used parts of each recording.</param>

@@ -215,6 +215,49 @@ public static class Gltf
         return new Reader(document.RootElement, bin, folder, key).Read();
     }
 
+    /// <summary>
+    /// The files a model reads beside its own: buffers and pictures named by a relative URI, as
+    /// paths relative to the model's folder, each once, in the order the file names them. Embedded
+    /// data and absolute URIs are left out. Empty for a file that is not glTF.
+    /// </summary>
+    public static IReadOnlyList<string> SideFiles(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        byte[] file = File.ReadAllBytes(path);
+        byte[] json = file.Length >= 12 && BinaryPrimitives.ReadUInt32LittleEndian(file) == GlbMagic ? Glb(file).Json : file;
+
+        var found = new List<string>();
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(json, new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
+            foreach (string name in (string[])["buffers", "images"])
+            {
+                if (!document.RootElement.TryGetProperty(name, out JsonElement array) || array.ValueKind != JsonValueKind.Array)
+                {
+                    continue;
+                }
+
+                foreach (JsonElement item in array.EnumerateArray())
+                {
+                    if (item.ValueKind == JsonValueKind.Object && item.TryGetProperty("uri", out JsonElement uri) && uri.GetString() is { Length: > 0 } text
+                        && !text.StartsWith("data:", StringComparison.OrdinalIgnoreCase)
+                        && System.Uri.UnescapeDataString(text) is var relative
+                        && !Path.IsPathRooted(relative) && !relative.Contains("://", StringComparison.Ordinal)
+                        && !found.Contains(relative, StringComparer.OrdinalIgnoreCase))
+                    {
+                        found.Add(relative);
+                    }
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+
+        return found;
+    }
+
     /// <summary>A translation or scale channel's value at a time.</summary>
     internal static Vector3 Vector3At(GltfChannel channel, float seconds)
     {

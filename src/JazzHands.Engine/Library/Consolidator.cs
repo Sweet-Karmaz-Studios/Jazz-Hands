@@ -11,6 +11,7 @@ using JazzHands.Core.Time;
 using JazzHands.Engine.Export;
 using JazzHands.Media.Import;
 using JazzHands.Media.Interop;
+using JazzHands.Render.Scene;
 using Serilog;
 
 namespace JazzHands.Engine.Library;
@@ -50,6 +51,9 @@ public static class Consolidator
     /// <summary>The media folder inside a gathered project.</summary>
     public const string MediaFolder = "media";
 
+    /// <summary>The folder inside a gathered project that 3D models go in, each in a folder of its own with the files it reads.</summary>
+    public const string ModelsFolder = "models";
+
     /// <summary>Gathers the project into a folder.</summary>
     /// <param name="project">The project as it is now.</param>
     /// <param name="projectPath">Where it lives, or empty for one never saved.</param>
@@ -87,6 +91,21 @@ public static class Consolidator
                 $"{Words.Count(missing.Length, "media file")} {(missing.Length == 1 ? "is" : "are")} missing: {string.Join(", ", missing.Select(item => item.Name))}. Relink them first (media.relink --auto).");
         }
 
+        // A 3D model is a file a parameter names, not media (Phase 49a): it must be there too.
+        ParamReference[] fileReferences = [.. ParamReferences.All(project).Where(reference => reference.Kind == ParamReferenceKind.File)];
+        string[] modelFiles = [.. fileReferences.Select(reference => ProjectPaths.Resolve(projectPath, reference.Value)).Distinct(StringComparer.OrdinalIgnoreCase)];
+        string[] lost = [.. modelFiles.Where(path => !File.Exists(path))];
+        if (lost.Length > 0)
+        {
+            throw new CommandException(
+                "files-missing",
+                $"{Words.Count(lost.Length, "model file")} {(lost.Length == 1 ? "is" : "are")} missing: {string.Join(", ", lost.Select(Path.GetFileName))}. Put {(lost.Length == 1 ? "it" : "them")} back, or point the model at another file, first.");
+        }
+
+        // Media a comp graph's node or a light names is gathered whole: its id must keep meaning
+        // the whole file, wherever in it the node plays.
+        HashSet<string> referenced = ParamReferences.MediaIds(project);
+
         Flicks handles = command.Handles ?? Flicks.FromSeconds(1);
         if (handles < Flicks.Zero)
         {
@@ -100,6 +119,7 @@ public static class Consolidator
         // everything back: moved files returned, copies and pieces removed (Phase 33).
         bool folderExisted = Directory.Exists(folder);
         bool mediaExisted = Directory.Exists(media);
+        bool modelsExisted = Directory.Exists(Path.Combine(folder, ModelsFolder));
         HashSet<string> before = mediaExisted
             ? new HashSet<string>(Directory.EnumerateFileSystemEntries(media, "*", SearchOption.AllDirectories), StringComparer.OrdinalIgnoreCase)
             : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -118,13 +138,13 @@ public static class Consolidator
             foreach (MediaItem item in project.Media)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (!used.TryGetValue(item.Id, out ImmutableArray<TimeRange> ranges))
+                if (!used.TryGetValue(item.Id, out ImmutableArray<TimeRange> ranges) && !referenced.Contains(item.Id))
                 {
                     continue;
                 }
 
                 string source = MediaLibrary.FullPath(projectPath, item);
-                if (command.Trim && Trimmable(item, ranges) is { } aligned
+                if (command.Trim && !referenced.Contains(item.Id) && Trimmable(item, ranges) is { } aligned
                     && TryTrim(project, projectPath, item, source, aligned, media, names, environment, cancellationToken) is { } cut)
                 {
                     pieces[item.Id] = cut;
@@ -141,6 +161,8 @@ public static class Consolidator
                 bytes += item.Kind == MediaKind.ImageSequence ? 0 : new FileInfo(written).Length;
             }
 
+            Dictionary<string, string> models = CopyModels(modelFiles, folder, ref files, ref bytes, cancellationToken);
+
             // Every clip points where its picture went; media nothing uses is left behind.
             Project gathered = project with
             {
@@ -151,11 +173,21 @@ public static class Consolidator
                 })],
             };
 
+            gathered = ParamReferences.Replace(gathered, reference =>
+                reference.Kind == ParamReferenceKind.File && models.TryGetValue(ProjectPaths.Resolve(projectPath, reference.Value), out string? copy)
+                    ? ProjectPaths.Store(target, copy)
+                    : null);
+
             CopyFonts(projectPath, folder);
             ProjectFile.Save(target, gathered);
         }
         catch (Exception)
         {
+            if (!modelsExisted && Directory.Exists(Path.Combine(folder, ModelsFolder)))
+            {
+                Directory.Delete(Path.Combine(folder, ModelsFolder), recursive: true);
+            }
+
             Rollback(folder, media, folderExisted, mediaExisted, before, moved);
             throw;
         }
@@ -168,7 +200,7 @@ public static class Consolidator
             bytes,
             trimmed);
 
-        return new ConsolidateResult(target, files, bytes, trimmed, project.Media.Length - used.Count);
+        return new ConsolidateResult(target, files, bytes, trimmed, project.Media.Count(item => !used.ContainsKey(item.Id) && !referenced.Contains(item.Id)));
     }
 
     /// <summary>Gathers the project into a folder beside the zip, zips it, and removes the folder.</summary>
@@ -419,6 +451,55 @@ public static class Consolidator
         }
 
         return target;
+    }
+
+    /// <summary>
+    /// Each model copied into a folder of its own under <see cref="ModelsFolder"/>, with the
+    /// buffers and pictures a .gltf names beside it, in the same places relative to it so the file
+    /// reads unchanged; a map from each model's full path to its copy. Models are always copied,
+    /// even when the media is moved: one model is often shared by several projects.
+    /// </summary>
+    private static Dictionary<string, string> CopyModels(string[] sources, string folder, ref int files, ref long bytes, CancellationToken cancellationToken)
+    {
+        var copies = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        string models = Path.Combine(folder, ModelsFolder);
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string source in sources)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            string home = Unique(Path.Combine(models, Path.GetFileNameWithoutExtension(source)), names);
+            string from = Path.GetDirectoryName(source)!;
+            var written = new List<(string From, string To)> { (source, Path.Combine(home, Path.GetFileName(source))) };
+            foreach (string side in Gltf.SideFiles(source))
+            {
+                string to = Path.GetFullPath(Path.Combine(home, side));
+                if (!to.StartsWith(home + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new CommandException(
+                        "model-reaches-out",
+                        $"'{Path.GetFileName(source)}' reads '{side}', outside its own folder, so a copy of it could not find it. Move the file beside the model (and change its path in the .gltf) first.");
+                }
+
+                string sideFrom = Path.GetFullPath(Path.Combine(from, side));
+                if (File.Exists(sideFrom))
+                {
+                    written.Add((sideFrom, to));
+                }
+            }
+
+            foreach ((string copyFrom, string copyTo) in written)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(copyTo)!);
+                File.Copy(copyFrom, copyTo, overwrite: true);
+                File.SetLastWriteTimeUtc(copyTo, File.GetLastWriteTimeUtc(copyFrom));
+                files++;
+                bytes += new FileInfo(copyTo).Length;
+            }
+
+            copies[source] = written[0].To;
+        }
+
+        return copies;
     }
 
     private static void CopyFonts(string projectPath, string folder)

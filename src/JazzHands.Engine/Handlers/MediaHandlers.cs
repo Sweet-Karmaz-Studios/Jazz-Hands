@@ -143,6 +143,15 @@ public sealed class RemoveMediaHandler : ICommandHandler<RemoveMediaCommand>
                     .Select(clip => new ClipLocation(pair.sequence, pair.track, clip))),
         ];
 
+        // A comp graph's media node or an environment light using it is not a clip to take away
+        // with it, so it is refused either way (Phase 49a).
+        if (ParamReferences.All(project).FirstOrDefault(reference => reference.Kind == ParamReferenceKind.Media && reference.Value == item.Id) is { } reference)
+        {
+            throw new CommandException(
+                "media-in-use",
+                $"'{item.Name}' is used by '{reference.Effect.TypeId}' {reference.Effect.Id} on '{reference.Clip.Name}'. Remove that node or light, or point it at other media, first.");
+        }
+
         if (users.Length > 0 && !command.WithClips)
         {
             throw new CommandException(
