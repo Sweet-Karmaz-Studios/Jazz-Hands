@@ -43,6 +43,7 @@ public sealed unsafe class PluginProcess : IDisposable
 
     private static readonly ILogger Log = Serilog.Log.ForContext<PluginProcess>();
     private readonly Process _host;
+    private readonly TimeSpan _patience;
     private readonly Lock _control = new();
     private MemoryMappedFile? _memory;
     private MemoryMappedViewAccessor? _view;
@@ -53,9 +54,10 @@ public sealed unsafe class PluginProcess : IDisposable
     private bool _disposed;
     private volatile bool _failed;
 
-    private PluginProcess(Process host, string library, string pluginId, JsonNode loaded)
+    private PluginProcess(Process host, string library, string pluginId, JsonNode loaded, TimeSpan patience)
     {
         _host = host;
+        _patience = patience;
         Library = library;
         PluginId = pluginId;
         Name = loaded["name"]?.GetValue<string>() ?? pluginId;
@@ -92,21 +94,25 @@ public sealed unsafe class PluginProcess : IDisposable
     /// host is taken to have stopped answering and is stopped. Long enough for a plugin that loads
     /// a large library; sound itself is held to its own, much shorter, limit in <see cref="Run"/>.
     /// </summary>
-    internal static TimeSpan ControlTimeout { get; set; } = TimeSpan.FromSeconds(30);
+    internal static TimeSpan ControlTimeout { get; } = TimeSpan.FromSeconds(30);
 
     /// <summary>The host program beside this assembly.</summary>
     public static string HostPath => Path.Combine(AppContext.BaseDirectory, "jazz-plugin-host.exe");
 
     /// <summary>Starts a host and loads a plugin in it.</summary>
-    public static PluginProcess Start(string library, string pluginId, string? hostPath = null)
+    public static PluginProcess Start(string library, string pluginId, string? hostPath = null) =>
+        Start(library, pluginId, hostPath, ControlTimeout);
+
+    /// <summary>Starts a host that is given this long to answer each request, for the tests of one that does not.</summary>
+    internal static PluginProcess Start(string library, string pluginId, string? hostPath, TimeSpan patience)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(library);
         ArgumentException.ThrowIfNullOrWhiteSpace(pluginId);
         Process host = Launch(hostPath ?? HostPath);
         try
         {
-            JsonNode reply = Ask(host, new JsonObject { ["op"] = "load", ["path"] = library, ["id"] = pluginId });
-            return new PluginProcess(host, library, pluginId, reply);
+            JsonNode reply = Ask(host, new JsonObject { ["op"] = "load", ["path"] = library, ["id"] = pluginId }, patience);
+            return new PluginProcess(host, library, pluginId, reply, patience);
         }
         catch
         {
@@ -125,7 +131,7 @@ public sealed unsafe class PluginProcess : IDisposable
         Process host = Launch(hostPath ?? HostPath);
         try
         {
-            JsonNode reply = Ask(host, new JsonObject { ["op"] = "scan", ["path"] = library });
+            JsonNode reply = Ask(host, new JsonObject { ["op"] = "scan", ["path"] = library }, ControlTimeout);
             return [.. (reply["plugins"]?.AsArray() ?? []).Select(node => new ClapDescriptor(
                 node!["id"]!.GetValue<string>(),
                 node["name"]?.GetValue<string>() ?? string.Empty,
@@ -306,7 +312,7 @@ public sealed unsafe class PluginProcess : IDisposable
         return host;
     }
 
-    private static JsonNode Ask(Process host, JsonObject request)
+    private static JsonNode Ask(Process host, JsonObject request, TimeSpan patience)
     {
         host.StandardInput.WriteLine(request.ToJsonString());
         host.StandardInput.Flush();
@@ -316,12 +322,12 @@ public sealed unsafe class PluginProcess : IDisposable
         string? line;
         try
         {
-            line = ReadLine(host.StandardOutput, ControlTimeout);
+            line = ReadLine(host.StandardOutput, patience);
         }
         catch (TimeoutException)
         {
             Kill(host);
-            throw new PluginCrashedException($"The plugin host stopped answering while asked to {request["op"]} (nothing in {ControlTimeout.TotalSeconds:0.#} s), so it was stopped.");
+            throw new PluginCrashedException($"The plugin host stopped answering while asked to {request["op"]} (nothing in {patience.TotalSeconds:0.#} s), so it was stopped.");
         }
 
         if (line is null)
@@ -391,7 +397,7 @@ public sealed unsafe class PluginProcess : IDisposable
         {
             try
             {
-                return Ask(_host, request);
+                return Ask(_host, request, _patience);
             }
             catch (PluginCrashedException exception)
             {
