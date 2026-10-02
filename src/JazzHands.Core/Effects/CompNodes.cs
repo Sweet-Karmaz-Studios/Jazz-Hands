@@ -79,11 +79,14 @@ public static class CompNodes
             new ParamDescriptor("accepts-shadows", ParamType.Bool, new ParamValue.Bool(true), "Takes shadows", "Darkened by shadows.", Animatable: false),
         ]);
 
+    /// <summary>A graph of its own inside this one.</summary>
+    public static EffectDescriptor Group { get; } = Node(CompGraph.Group, "Group", "A graph of its own: its In is the picture wired into it (the clip's when nothing is), and what reaches its Out is what it gives.");
+
     /// <summary>A 3D scene of what is wired into it.</summary>
     public static EffectDescriptor Render3D { get; } = Node(CompGraph.Render3D, "3D render", "A 3D scene of the planes, text, shapes, models, camera and lights wired into it, seen through the camera (the default one when none is).");
 
     /// <summary>Every node type a graph has of its own.</summary>
-    public static ImmutableArray<EffectDescriptor> All { get; } = [In, Out, Media, Merge, Transform, Matte, Plane, Render3D];
+    public static ImmutableArray<EffectDescriptor> All { get; } = [In, Out, Media, Merge, Transform, Matte, Plane, Render3D, Group];
 
     /// <summary>Short names a person types for node types: <c>merge</c> for <c>comp.merge</c>, <c>text3d</c> for <c>3d.text</c>.</summary>
     public static IReadOnlyDictionary<string, string> ShortNames { get; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -101,6 +104,7 @@ public static class CompNodes
         ["model3d"] = SceneObjects.Model,
         ["camera3d"] = SceneObjects.Camera,
         ["light3d"] = SceneObjects.Light,
+        ["group"] = CompGraph.Group,
     };
 
     /// <summary>A graph node type's own descriptor, or null for a registered effect or generator.</summary>

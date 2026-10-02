@@ -75,6 +75,9 @@ public sealed partial class CompNodeViewModel : ObservableObject
     /// <summary>True for the output, which nothing reads.</summary>
     public bool IsOutput => TypeId == CompGraph.Out;
 
+    /// <summary>True for a group, which is opened by a double click.</summary>
+    public bool IsGroup => TypeId == CompGraph.Group;
+
     /// <summary>True for nodes that give a picture, which have an output dot.</summary>
     public bool HasOutput => !IsOutput;
 
@@ -152,8 +155,17 @@ public sealed partial class CompPanelViewModel : ToolViewModel
     /// <summary>The clip whose graph is shown, or null.</summary>
     public string? ClipId { get; private set; }
 
-    /// <summary>The graph shown, or null when the clip has none.</summary>
+    /// <summary>The clip's graph, or null when the clip has none.</summary>
     public string? GraphId { get; private set; }
+
+    /// <summary>The graph the panel shows and adds to: the clip's, or the group it is inside (Phase 49a).</summary>
+    public string? TargetId { get; private set; }
+
+    /// <summary>The groups the panel is inside, outermost first.</summary>
+    public IReadOnlyList<string> Path => _path;
+
+    private List<string> _path = [];
+    private string? _pathClip;
 
     /// <summary>The nodes.</summary>
     public ObservableCollection<CompNodeViewModel> Nodes { get; } = [];
@@ -192,8 +204,15 @@ public sealed partial class CompPanelViewModel : ToolViewModel
     [ObservableProperty]
     private string _status = string.Empty;
 
+    /// <summary>True when the panel is inside a group, so Up goes back out.</summary>
+    [ObservableProperty]
+    private bool _canGoUp;
+
     /// <summary>The node the Inspector shows, or null.</summary>
     public CompNodeViewModel? Selected => Nodes.FirstOrDefault(node => node.IsSelected);
+
+    /// <summary>Every node selected here, in the graph's order.</summary>
+    public IReadOnlyList<CompNodeViewModel> SelectedNodes => [.. Nodes.Where(node => node.IsSelected)];
 
     /// <summary>Gives the clip a graph.</summary>
     [RelayCommand]
@@ -201,12 +220,12 @@ public sealed partial class CompPanelViewModel : ToolViewModel
 
     /// <summary>Adds a node of a type at a place in the view.</summary>
     public Task AddAsync(string typeId, Point at) =>
-        GraphId is { } graph ? RunAsync(new AddCompNodeCommand(graph, typeId, X: Math.Round(at.X), Y: Math.Round(at.Y))) : Task.CompletedTask;
+        TargetId is { } graph ? RunAsync(new AddCompNodeCommand(graph, typeId, X: Math.Round(at.X), Y: Math.Round(at.Y))) : Task.CompletedTask;
 
     /// <summary>Adds a node of a type wired from the selected node, or beside the others.</summary>
     [RelayCommand]
     private Task AddTypeAsync(string typeId) =>
-        GraphId is { } graph
+        TargetId is { } graph
             ? RunAsync(new AddCompNodeCommand(graph, typeId, From: Selected is { HasOutput: true } selected && CompGraph.PortsOf(typeId, IsGenerator(typeId)).Count > 0 ? selected.Id : null))
             : Task.CompletedTask;
 
@@ -223,11 +242,73 @@ public sealed partial class CompPanelViewModel : ToolViewModel
         return RunAsync(new ViewCompNodeCommand(node is not null && node != viewed ? node : null));
     }
 
-    /// <summary>Shows a node in the Inspector.</summary>
-    public void Select(CompNodeViewModel node)
+    /// <summary>Puts the selected nodes into a group of their own.</summary>
+    [RelayCommand]
+    private async Task GroupSelectedAsync()
+    {
+        if (SelectedNodes is not { Count: > 0 } chosen)
+        {
+            return;
+        }
+
+        // The new group is selected as it is made, so the panel stays here rather than following
+        // the nodes inside it; refused, the nodes are selected again.
+        string[] ids = [.. chosen.Select(node => node.Id)];
+        string group = Id.New();
+        _selection.Set([group]);
+        if (!await TryAsync(new GroupCompNodesCommand([.. ids], group)).ConfigureAwait(true))
+        {
+            _selection.Set(ids);
+        }
+    }
+
+    /// <summary>Takes the selected group's nodes back out.</summary>
+    [RelayCommand]
+    private Task UngroupSelectedAsync() =>
+        Selected is { IsGroup: true } group ? RunAsync(new UngroupCompNodeCommand(group.Id)) : Task.CompletedTask;
+
+    /// <summary>Goes out of the group the panel is inside, with that group selected.</summary>
+    [RelayCommand]
+    private void Up()
+    {
+        if (_path.Count > 0)
+        {
+            string left = _path[^1];
+            _path.RemoveAt(_path.Count - 1);
+            _selection.Set([left]);
+            Rebuild();
+        }
+    }
+
+    /// <summary>Goes inside a group.</summary>
+    public void Enter(CompNodeViewModel node)
     {
         ArgumentNullException.ThrowIfNull(node);
-        _selection.Set([node.Id]);
+        if (node.IsGroup)
+        {
+            _path.Add(node.Id);
+            _selection.Set([]);
+            Rebuild();
+        }
+    }
+
+    /// <summary>Shows a node in the Inspector; with <paramref name="extend"/>, adds it to the nodes selected, or takes it away.</summary>
+    public void Select(CompNodeViewModel node, bool extend = false)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        if (!extend)
+        {
+            _selection.Set([node.Id]);
+            return;
+        }
+
+        List<string> ids = [.. SelectedNodes.Select(item => item.Id)];
+        if (!ids.Remove(node.Id))
+        {
+            ids.Add(node.Id);
+        }
+
+        _selection.Set(ids);
     }
 
     /// <summary>Moves a node to where a drag left it: one command.</summary>
@@ -270,8 +351,9 @@ public sealed partial class CompPanelViewModel : ToolViewModel
         Wires.Clear();
         if (found is not { Track.Kind: TrackKind.Video } || SceneObjects.Is(found.Clip))
         {
-            ClipId = GraphId = null;
-            HasClip = HasGraph = false;
+            ClipId = GraphId = TargetId = null;
+            HasClip = HasGraph = CanGoUp = false;
+            _path = [];
             Heading = "Select a clip to see its comp graph.";
             OnPropertyChanged(nameof(Selected));
             return;
@@ -282,10 +364,43 @@ public sealed partial class CompPanelViewModel : ToolViewModel
         HasClip = true;
         Effect? holder = picked.Effects.FirstOrDefault(effect => effect.TypeId == CompGraph.TypeId);
         GraphId = holder?.Id;
-        CompGraph graph = holder?.Comp ?? CompGraph.Empty;
-        HasGraph = holder is not null && !graph.Nodes.IsEmpty;
+        CompGraph top = holder?.Comp ?? CompGraph.Empty;
+        HasGraph = holder is not null && !top.Nodes.IsEmpty;
+
+        // Another clip starts at its top; a node selected inside a group opens the groups holding it.
+        if (_pathClip != picked.Id)
+        {
+            _path = [];
+            _pathClip = picked.Id;
+        }
+
+        HashSet<string> chosen = new(_selection.Ids, StringComparer.Ordinal);
+        if (selected is not null && Inside(top, _path).Node(selected) is null && PathTo(top, selected) is { } into)
+        {
+            _path = into;
+        }
+
+        // The groups still there, as far as they go.
+        CompGraph graph = top;
+        var reached = new List<string>();
+        var names = new List<string> { $"'{picked.Name}'" };
+        foreach (string id in _path)
+        {
+            if (graph.Node(id) is not { Effect: { TypeId: CompGraph.Group, Comp: { } inner } })
+            {
+                break;
+            }
+
+            reached.Add(id);
+            names.Add($"Group {id[^4..]}");
+            graph = inner;
+        }
+
+        _path = reached;
+        CanGoUp = _path.Count > 0;
+        TargetId = _path.Count > 0 ? _path[^1] : GraphId;
         Heading = HasGraph
-            ? $"'{picked.Name}': {graph.Nodes.Length} nodes"
+            ? $"{string.Join(" > ", names)}: {graph.Nodes.Length} nodes"
             : $"'{picked.Name}' has no comp graph.";
 
         string? viewed = _preview?.CompView;
@@ -296,7 +411,7 @@ public sealed partial class CompPanelViewModel : ToolViewModel
             IReadOnlyList<string> ports = CompGraph.PortsOf(node.Effect.TypeId, IsGenerator(node.Effect.TypeId));
             var view = new CompNodeViewModel(node.Id, node.Effect.TypeId, Name(node.Effect.TypeId), node.X - offsetX, node.Y - offsetY, ports, node.Effect.Enabled)
             {
-                IsSelected = node.Id == selected,
+                IsSelected = chosen.Contains(node.Id),
                 IsViewed = node.Id == viewed,
             };
             for (int index = 0; index < ports.Count; index++)
@@ -326,6 +441,41 @@ public sealed partial class CompPanelViewModel : ToolViewModel
         OnPropertyChanged(nameof(Selected));
     }
 
+    /// <summary>The groups leading to the graph that holds a node directly, outermost first; null when the graph does not have it.</summary>
+    private static List<string>? PathTo(CompGraph graph, string id)
+    {
+        if (graph.Node(id) is not null)
+        {
+            return [];
+        }
+
+        foreach (CompNode node in graph.Nodes)
+        {
+            if (node.Effect is { TypeId: CompGraph.Group, Comp: { } inner } && PathTo(inner, id) is { } below)
+            {
+                return [node.Id, .. below];
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>The graph a path of groups leads to, as far as it goes.</summary>
+    private static CompGraph Inside(CompGraph graph, IEnumerable<string> path)
+    {
+        foreach (string id in path)
+        {
+            if (graph.Node(id) is not { Effect: { TypeId: CompGraph.Group, Comp: { } inner } })
+            {
+                break;
+            }
+
+            graph = inner;
+        }
+
+        return graph;
+    }
+
     /// <summary>Where the view's top left is in the graph's own coordinates, which drags and adds are given in.</summary>
     public Point ToGraph(Point view) => view + _origin;
 
@@ -346,6 +496,7 @@ public sealed partial class CompPanelViewModel : ToolViewModel
             new("Node", "Media", CompGraph.Media),
             new("Node", "In", CompGraph.In),
             new("Node", "Out", CompGraph.Out),
+            new("Node", "Group", CompGraph.Group),
             new("3D", "3D render", CompGraph.Render3D),
             new("3D", "3D plane", CompGraph.Plane),
             new("3D", "3D text", SceneObjects.Text),
@@ -366,7 +517,10 @@ public sealed partial class CompPanelViewModel : ToolViewModel
         return types;
     }
 
-    private async Task RunAsync(ICommand command)
+    private Task RunAsync(ICommand command) => TryAsync(command);
+
+    /// <summary>Runs a command; true when it took, otherwise false with why in <see cref="Status"/>.</summary>
+    private async Task<bool> TryAsync(ICommand command)
     {
         Status = string.Empty;
         try
@@ -376,6 +530,8 @@ public sealed partial class CompPanelViewModel : ToolViewModel
             {
                 Status = result.Error ?? result.Code ?? "That did not work.";
             }
+
+            return result.Ok;
         }
         catch (CommandException refused)
         {
@@ -386,5 +542,7 @@ public sealed partial class CompPanelViewModel : ToolViewModel
             _log.Warning(error, "A comp graph change failed");
             Status = error.Message;
         }
+
+        return false;
     }
 }

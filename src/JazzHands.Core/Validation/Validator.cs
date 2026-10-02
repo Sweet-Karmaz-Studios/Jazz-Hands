@@ -298,9 +298,9 @@ public static class Validator
     /// never goes round in a circle, and holds no graph inside a node. Each is a warning: a graph
     /// the renderer cannot follow shows its picture unchanged.
     /// </summary>
-    private static void CheckComp(Effect effect, CompGraph comp, string path, ImmutableArray<ValidationIssue>.Builder issues)
+    private static void CheckComp(Effect effect, CompGraph comp, string path, ImmutableArray<ValidationIssue>.Builder issues, int depth = 0)
     {
-        if (effect.TypeId != CompGraph.TypeId)
+        if (effect.TypeId is not (CompGraph.TypeId or CompGraph.Group))
         {
             issues.Add(new ValidationIssue(Severity.Warning, "graph-on-other-effect", path, $"Effect '{effect.Id}' is a '{effect.TypeId}', which does not use nodes; they are ignored."));
             return;
@@ -340,9 +340,21 @@ public static class Validator
                 }
             }
 
-            if (node.Effect.Graph is not null || node.Effect.Comp is not null)
+            // A group holds a graph of its own (Phase 49a), checked in turn; nothing else does.
+            if (node.Effect is { TypeId: CompGraph.Group, Comp: { } inner, Graph: null })
             {
-                issues.Add(new ValidationIssue(Severity.Warning, "nested-graph", $"{nodePath}/effect", $"Node '{node.Id}' holds nodes of its own; a graph does not go inside a graph, so they are ignored."));
+                if (depth + 1 >= CompGraph.MostDepth)
+                {
+                    issues.Add(new ValidationIssue(Severity.Warning, "too-deep", $"{nodePath}/effect/comp", $"Group '{node.Id}' is more than {CompGraph.MostDepth} groups deep, so it passes its picture on unchanged."));
+                }
+                else
+                {
+                    CheckComp(node.Effect, inner, $"{nodePath}/effect/comp", issues, depth + 1);
+                }
+            }
+            else if (node.Effect.Graph is not null || node.Effect.Comp is not null)
+            {
+                issues.Add(new ValidationIssue(Severity.Warning, "nested-graph", $"{nodePath}/effect", $"Node '{node.Id}' holds nodes of its own, which only a group does, so they are ignored."));
             }
         }
 

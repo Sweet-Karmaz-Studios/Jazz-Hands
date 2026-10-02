@@ -1984,6 +1984,20 @@ Describe a clip's comp graph in readable text.
 | `<project>` | The .jazz file to work on. |
 | `<target>` | A comp graph, or a clip whose graph it is. |
 
+### `jazz comp group <project> <node-ids>`
+
+Put nodes of a comp graph into a group.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<node-ids>` | Comma-separated node ids. |
+
+| Option | Meaning |
+|---|---|
+| `--id <id>` | The identifier for the group. |
+| `--no-save` | Do not write the project back. |
+
 ### `jazz comp node-add <project> <target> <type>`
 
 Add a node to a comp graph.
@@ -2054,6 +2068,19 @@ Take a node out of a comp graph.
 |---|---|
 | `<project>` | The .jazz file to work on. |
 | `<node-id>` | The node. |
+
+| Option | Meaning |
+|---|---|
+| `--no-save` | Do not write the project back. |
+
+### `jazz comp ungroup <project> <node-id>`
+
+Take a comp group's nodes back out.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<node-id>` | The group node. |
 
 | Option | Meaning |
 |---|---|

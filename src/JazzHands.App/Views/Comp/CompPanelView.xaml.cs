@@ -29,6 +29,20 @@ public partial class CompPanelView : UserControl
     {
         if (sender is FrameworkElement { DataContext: CompNodeViewModel node } && Panel is { } panel)
         {
+            if (e.ClickCount == 2 && node.IsGroup)
+            {
+                panel.Enter(node);
+                e.Handled = true;
+                return;
+            }
+
+            if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+            {
+                panel.Select(node, extend: true);
+                e.Handled = true;
+                return;
+            }
+
             panel.Select(node);
             _moving = node;
             _grab = e.GetPosition(Surface);

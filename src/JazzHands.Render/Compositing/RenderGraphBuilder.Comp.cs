@@ -39,7 +39,10 @@ public static partial class RenderGraphBuilder
 
     /// <summary>
     /// A graph as steps: the nodes its output (or the node being looked at) needs, each after what
-    /// it reads. A graph with no output, or one that goes round in a circle, draws nothing.
+    /// it reads. A graph with no output, or one that goes round in a circle, draws nothing. A group
+    /// (Phase 49a) is its own graph's steps in place, its In the step wired into the group (the
+    /// clip's picture when none is), its Out what the group gives; a node being looked at inside a
+    /// group is reached through the groups holding it.
     /// </summary>
     private static ImmutableArray<CompStep> CompSteps(
         Project project,
@@ -54,36 +57,67 @@ public static partial class RenderGraphBuilder
         int depth,
         Rational frameRate)
     {
-        CompNode? last = options.CompView is { } view && comp.Node(view) is { } viewed ? viewed : comp.OutputNode;
-        if (last is null || comp.OrderFrom(last) is not { Count: > 0 } order)
+        string? view = options.CompView;
+        if (Last(comp) is null)
         {
             return [];
         }
 
         Flicks local = time - clip.Start;
-        var index = new Dictionary<string, int>(StringComparer.Ordinal);
-        var steps = ImmutableArray.CreateBuilder<CompStep>(order.Count);
-        foreach (CompNode node in order)
+        var steps = ImmutableArray.CreateBuilder<CompStep>();
+        return Emit(comp, null, 0) < 0 ? [] : steps.ToImmutable();
+
+        // The node a graph ends at: the one being looked at, the group holding it, or its output.
+        CompNode? Last(CompGraph graph) => view is not null && graph.Towards(view) is { } towards ? towards : graph.OutputNode;
+
+        // A graph's steps added to the list; the index of the last, or -1 when it draws nothing.
+        int Emit(CompGraph graph, int? groupInput, int level)
         {
-            string type = node.Effect.TypeId;
-            EffectDescriptor? registered = options.Effects.Find(type);
-            bool generator = registered is { Kind: EffectKind.Generator };
-            ImmutableArray<int> inputs = [.. CompGraph.PortsOf(type, generator).Select(port => node.Input(port) is { } from && index.TryGetValue(from, out int at) ? at : -1)];
-            CompStep step = node.Effect.Enabled || type is CompGraph.In or CompGraph.Out
-                ? Step(node, type, registered, inputs)
-                : new CompStep(CompStepKind.Pass, inputs.IsEmpty ? [-1] : [inputs[0]]);
-            index[node.Id] = steps.Count;
-            steps.Add(step with { NodeId = node.Id });
+            if (Last(graph) is not { } last || graph.OrderFrom(last) is not { Count: > 0 } order)
+            {
+                return -1;
+            }
+
+            var index = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (CompNode node in order)
+            {
+                string type = node.Effect.TypeId;
+                EffectDescriptor? registered = options.Effects.Find(type);
+                bool generator = registered is { Kind: EffectKind.Generator };
+                ImmutableArray<int> inputs = [.. CompGraph.PortsOf(type, generator).Select(port => node.Input(port) is { } from && index.TryGetValue(from, out int at) ? at : -1)];
+
+                // A group draws its own graph here, with what is wired into it as its In.
+                if (type == CompGraph.Group && node.Effect.Enabled && node.Effect.Comp is { } inner && level + 1 < CompGraph.MostDepth)
+                {
+                    int given = Emit(inner, inputs[0] >= 0 ? inputs[0] : null, level + 1);
+                    if (given >= 0)
+                    {
+                        index[node.Id] = given;
+                        continue;
+                    }
+                }
+
+                CompStep step = type == CompGraph.In && groupInput is { } wired
+                    ? new CompStep(CompStepKind.Pass, [wired])
+                    : node.Effect.Enabled || type is CompGraph.In or CompGraph.Out
+                        ? Step(graph, index, node, type, registered, inputs)
+                        : new CompStep(CompStepKind.Pass, inputs.IsEmpty ? [-1] : [inputs[0]]);
+                index[node.Id] = steps.Count;
+                steps.Add(step with { NodeId = node.Id });
+            }
+
+            return index[last.Id];
         }
 
-        return steps.MoveToImmutable();
-
-        CompStep Step(CompNode node, string type, EffectDescriptor? registered, ImmutableArray<int> inputs)
+        CompStep Step(CompGraph graph, Dictionary<string, int> index, CompNode node, string type, EffectDescriptor? registered, ImmutableArray<int> inputs)
         {
             switch (type)
             {
                 case CompGraph.In:
                     return new CompStep(CompStepKind.In, []);
+
+                case CompGraph.Group:
+                    return new CompStep(CompStepKind.Pass, inputs);
 
                 case CompGraph.Out:
                 case CompGraph.Plane:
@@ -133,7 +167,7 @@ public static partial class RenderGraphBuilder
                     };
 
                 case CompGraph.Render3D:
-                    return Render3D(node, inputs);
+                    return Render3D(graph, index, node, inputs);
 
                 case var _ when CompGraph.IsObject3D(type):
                     return new CompStep(CompStepKind.Empty, []);
@@ -187,7 +221,7 @@ public static partial class RenderGraphBuilder
             return new CompStep(CompStepKind.Picture, []) { Picture = Placed(source with { Policy = policy }) };
         }
 
-        CompStep Render3D(CompNode node, ImmutableArray<int> inputs)
+        CompStep Render3D(CompGraph comp, Dictionary<string, int> index, CompNode node, ImmutableArray<int> inputs)
         {
             var layers = ImmutableArray.CreateBuilder<SceneLayer>();
             var planes = ImmutableArray.CreateBuilder<int>();

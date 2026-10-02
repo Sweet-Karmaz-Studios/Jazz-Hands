@@ -17,7 +17,7 @@ internal static class CompHelp
     /// <summary>A graph found: the effect holding it, where that sits, and the graph.</summary>
     internal sealed record Found(ParamOwner Holder, CompGraph Graph);
 
-    /// <summary>The graph a graph id or a clip id names: the clip's first comp graph.</summary>
+    /// <summary>The graph a graph id, a group's id or a clip id names: for a clip, its first comp graph.</summary>
     internal static Found Graph(Project project, string target)
     {
         if (ParamTargets.Find(project, target) is { } owner)
@@ -25,6 +25,11 @@ internal static class CompHelp
             if (owner.Kind == ParamOwnerKind.Effect && owner.Graph is null && owner.Effect is { TypeId: CompGraph.TypeId } effect)
             {
                 return new Found(owner, effect.Comp ?? CompGraph.Empty);
+            }
+
+            if (owner.Kind == ParamOwnerKind.Effect && owner.Graph?.Comp is not null && owner.Effect is { TypeId: CompGraph.Group } group)
+            {
+                return new Found(owner, group.Comp ?? CompGraph.Empty);
             }
 
             if (owner.Kind == ParamOwnerKind.Clip
@@ -37,7 +42,7 @@ internal static class CompHelp
 
         throw new CommandException(
             "comp-not-found",
-            $"'{target}' is neither a comp graph nor a clip with one. Give the clip one with 'jazz comp create <clip>'.",
+            $"'{target}' is neither a comp graph, a group, nor a clip with a graph. Give the clip one with 'jazz comp create <clip>'.",
             "target");
     }
 
@@ -88,13 +93,24 @@ internal static class CompHelp
 
         throw new CommandException(
             "unknown-type",
-            $"'{typed}' is not a node type. There are in, out, media, merge, transform, matte, plane3d, render3d, text3d, shape3d, model3d, camera3d and light3d, and every video effect and generator ('jazz effect list').",
+            $"'{typed}' is not a node type. There are in, out, media, merge, transform, matte, group, plane3d, render3d, text3d, shape3d, model3d, camera3d and light3d, and every video effect and generator ('jazz effect list').",
             "type");
     }
 
     /// <summary>The ports a node in the graph has.</summary>
     internal static IReadOnlyList<string> Ports(CompNode node) =>
         CompGraph.PortsOf(node.Effect.TypeId, EffectCatalog.Registry.Find(node.Effect.TypeId) is { Kind: EffectKind.Generator });
+
+    /// <summary>A new group's graph: an In wired to an Out, the picture coming in passed on.</summary>
+    internal static CompGraph StartingGroup()
+    {
+        Effect input = Effect.Create(CompGraph.In);
+        return new CompGraph(
+        [
+            new CompNode(input, X: 0, Y: 0),
+            new CompNode(Effect.Create(CompGraph.Out), [new CompInput("input", input.Id)], X: Spacing * 2, Y: 0),
+        ]);
+    }
 
     /// <summary>A readable name for a node: its type's.</summary>
     internal static string Name(CompNode node) =>
@@ -169,6 +185,11 @@ public sealed class AddCompNodeHandler : ICommandHandler<AddCompNodeCommand>
             throw new CommandException("output-exists", $"The graph already has its output, '{output.Id}'. Wire into it, or remove it first.", "type");
         }
 
+        if (type == CompGraph.Group)
+        {
+            CompDepth.Require(CompDepth.Of(project, found.Holder) + 1);
+        }
+
         string id = HandlerHelp.IdOr(command.NodeId);
         HandlerHelp.RequireUnused(project, id);
 
@@ -187,7 +208,7 @@ public sealed class AddCompNodeHandler : ICommandHandler<AddCompNodeCommand>
         double x = command.X ?? (from is not null ? from.X + CompHelp.Spacing : graph.Nodes.Select(node => node.X).DefaultIfEmpty(-CompHelp.Spacing).Max() + CompHelp.Spacing);
         double y = command.Y ?? from?.Y ?? 0;
         var node = new CompNode(
-            Effect.Create(type) with { Id = id },
+            Effect.Create(type) with { Id = id, Comp = type == CompGraph.Group ? CompHelp.StartingGroup() : null },
             from is null ? [] : [new CompInput(ports[0], from.Id)],
             x,
             y);
@@ -328,7 +349,7 @@ public sealed class ViewCompNodeHandler : ICommandHandler<ViewCompNodeCommand>
     }
 }
 
-/// <summary>Describes a comp graph as text.</summary>
+/// <summary>Describes a comp graph as text, a group's nodes indented under it.</summary>
 public sealed class DescribeCompHandler : IQueryHandler<DescribeCompQuery, string>
 {
     /// <inheritdoc />
@@ -341,21 +362,27 @@ public sealed class DescribeCompHandler : IQueryHandler<DescribeCompQuery, strin
         CompGraph graph = found.Graph;
         var text = new StringBuilder();
         string owner = found.Holder.Clip is { } clip ? $" on '{clip.Name}'" : string.Empty;
-        text.Append(CultureInfo.InvariantCulture, $"Comp graph {found.Holder.Id}{owner}: {graph.Nodes.Length} nodes.").AppendLine();
-
-        IReadOnlyList<CompNode>? order = graph.Order();
+        string kind = found.Holder.Effect?.TypeId == CompGraph.Group ? "Group" : "Comp graph";
+        text.Append(CultureInfo.InvariantCulture, $"{kind} {found.Holder.Id}{owner}: {graph.Nodes.Length} nodes.").AppendLine();
         if (graph.OutputNode is null)
         {
             text.AppendLine("It has no output, so the clip shows its picture unchanged.");
         }
-        else if (order is null)
+        else if (graph.Order() is null)
         {
             text.AppendLine("It goes round in a circle or reads a node it does not have, so the clip shows its picture unchanged.");
         }
 
+        Describe(text, graph, string.Empty, "Drawn, from the picture coming in to the output:", 0);
+        return text.ToString();
+    }
+
+    /// <summary>A graph's nodes in the order they are drawn, then those not reaching its output; a group's inside under it.</summary>
+    private static void Describe(StringBuilder text, CompGraph graph, string indent, string heading, int depth)
+    {
         void Line(CompNode node)
         {
-            text.Append(CultureInfo.InvariantCulture, $"  {CompHelp.Name(node)} {node.Id}");
+            text.Append(CultureInfo.InvariantCulture, $"{indent}  {CompHelp.Name(node)} {node.Id}");
             if (!node.Effect.Enabled)
             {
                 text.Append(" (off)");
@@ -372,12 +399,16 @@ public sealed class DescribeCompHandler : IQueryHandler<DescribeCompQuery, strin
             }
 
             text.AppendLine();
+            if (node.Effect is { TypeId: CompGraph.Group, Comp: { } inner } && depth + 1 < CompGraph.MostDepth)
+            {
+                Describe(text, inner, indent + "    ", "Inside, from what comes in to what it gives:", depth + 1);
+            }
         }
 
         HashSet<string> used = new(StringComparer.Ordinal);
-        if (order is not null)
+        if (graph.Order() is { } order)
         {
-            text.AppendLine("Drawn, from the picture coming in to the output:");
+            text.Append(indent).AppendLine(heading);
             foreach (CompNode node in order)
             {
                 used.Add(node.Id);
@@ -388,14 +419,12 @@ public sealed class DescribeCompHandler : IQueryHandler<DescribeCompQuery, strin
         CompNode[] unused = [.. graph.Nodes.Where(node => !used.Contains(node.Id))];
         if (unused.Length > 0)
         {
-            text.AppendLine("Not reaching the output:");
+            text.Append(indent).AppendLine(depth == 0 ? "Not reaching the output:" : "Inside, not reaching its output:");
             foreach (CompNode node in unused)
             {
                 Line(node);
             }
         }
-
-        return text.ToString();
     }
 
     private static string Value(AnimatedValue value) => value switch

@@ -445,11 +445,13 @@ public static class ParamTargets
             return ReplaceEffect(project, owner with { Graph = null }, holder with { Graph = graph.Replace(node with { Effect = effect }) });
         }
 
-        // A node of a comp graph goes back into its graph, and the graph into the chain.
+        // A node of a comp graph goes back into its graph, and the graph where it is: into the
+        // chain, or, for a group (Phase 49a), into the graph holding the group, and so on up.
         if (owner.Graph is { Comp: { } comp } compHolder && !Is(compHolder.Id, effect.Id))
         {
             CompNode node = comp.Node(effect.Id) ?? throw new InvalidOperationException($"Node '{effect.Id}' is not in comp '{compHolder.Id}'.");
-            return ReplaceEffect(project, owner with { Graph = null }, compHolder with { Comp = comp.Replace(node with { Effect = effect }) });
+            ParamOwner above = compHolder.TypeId == CompGraph.Group && Find(project, compHolder.Id) is { } parent ? parent : owner with { Graph = null };
+            return ReplaceEffect(project, above, compHolder with { Comp = comp.Replace(node with { Effect = effect }) });
         }
 
         if (owner.Clip is { } clip)
@@ -612,6 +614,12 @@ public static class ParamTargets
                 if (MaskOf(node.Effect.Masks, id) is { } mask)
                 {
                     return new ParamOwner(ParamOwnerKind.Mask, id, sequence, track, clip, node.Effect, mask, Graph: effect);
+                }
+
+                // Inside a group (Phase 49a): the group is the graph holding it.
+                if (node.Effect is { TypeId: CompGraph.Group, Comp: not null } && InGraph(node.Effect, id, sequence, track, clip) is { } inner)
+                {
+                    return inner;
                 }
             }
         }

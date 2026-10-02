@@ -64,6 +64,16 @@ public sealed record CompGraph(EquatableArray<CompNode> Nodes) : IEquatable<Comp
     /// <summary>A 3D scene of the planes, text, shapes, models, camera and lights wired into it.</summary>
     public const string Render3D = "comp.render3d";
 
+    /// <summary>
+    /// A graph of its own inside this one (Phase 49a), held in its effect's <c>Comp</c>: its
+    /// <c>comp.in</c> is the picture wired into the group (the clip's own when nothing is), and what
+    /// reaches its <c>comp.out</c> is what the group gives.
+    /// </summary>
+    public const string Group = "comp.group";
+
+    /// <summary>How many groups deep a graph may go; deeper ones show their input unchanged.</summary>
+    public const int MostDepth = 8;
+
     /// <summary>The most things a 3D render takes.</summary>
     public const int MostObjects = 8;
 
@@ -78,7 +88,7 @@ public sealed record CompGraph(EquatableArray<CompNode> Nodes) : IEquatable<Comp
     public static IReadOnlyList<string> PortsOf(string typeId, bool isGenerator) => typeId switch
     {
         In or Media => [],
-        Out or Transform or Plane => ["input"],
+        Out or Transform or Plane or Group => ["input"],
         Merge => ["background", "foreground", "mask"],
         Matte => ["input", "matte"],
         Render3D => [.. Enumerable.Range(1, MostObjects).Select(index => index.ToString(System.Globalization.CultureInfo.InvariantCulture))],
@@ -91,6 +101,14 @@ public sealed record CompGraph(EquatableArray<CompNode> Nodes) : IEquatable<Comp
 
     /// <summary>The node with an id, or null.</summary>
     public CompNode? Node(string id) => Nodes.FirstOrDefault(node => node.Id == id);
+
+    /// <summary>True when a node with an id is in this graph or inside one of its groups, however deep.</summary>
+    public bool Contains(string id) =>
+        Nodes.Any(node => node.Id == id || (node.Effect.TypeId == Group && node.Effect.Comp is { } inner && inner.Contains(id)));
+
+    /// <summary>The node of this graph that is a node with an id, or the group holding it; null when it is in neither.</summary>
+    public CompNode? Towards(string id) =>
+        Node(id) ?? Nodes.FirstOrDefault(node => node.Effect.TypeId == Group && node.Effect.Comp is { } inner && inner.Contains(id));
 
     /// <summary>The graph's output node, or null when it has none.</summary>
     public CompNode? OutputNode => Nodes.FirstOrDefault(node => node.Effect.TypeId == Out);

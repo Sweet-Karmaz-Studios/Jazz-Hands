@@ -18,6 +18,9 @@
         <!-- What is shown, and the graph's commands. -->
         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button Style="{StaticResource Button.Text}" Content="Up" Command="{Binding UpCommand, Mode=OneWay}"
+                        Visibility="{Binding CanGoUp, Mode=OneWay, Converter={StaticResource Visible}}"
+                        ToolTip="Go back out of this group" AutomationProperties.Name="Up out of group" />
                 <Button Style="{StaticResource Button.Text}" Content="Make comp" Command="{Binding CreateCommand, Mode=OneWay}"
                         Visibility="{Binding HasClip, Mode=OneWay, Converter={StaticResource Visible}}"
                         IsEnabled="{Binding HasGraph, Mode=OneWay, Converter={x:Static local:Not.Instance}}"
@@ -28,6 +31,12 @@
                 <Button Style="{StaticResource Button.Text}" Content="View" Command="{Binding ViewSelectedCommand, Mode=OneWay}"
                         IsEnabled="{Binding HasGraph, Mode=OneWay}"
                         ToolTip="Show the selected node's picture in the program monitor, or the program again" AutomationProperties.Name="View node" />
+                <Button Style="{StaticResource Button.Text}" Content="Group" Command="{Binding GroupSelectedCommand, Mode=OneWay}"
+                        IsEnabled="{Binding HasGraph, Mode=OneWay}"
+                        ToolTip="Put the selected nodes (Ctrl+click for more than one) into a group of their own" AutomationProperties.Name="Group nodes" />
+                <Button Style="{StaticResource Button.Text}" Content="Ungroup" Command="{Binding UngroupSelectedCommand, Mode=OneWay}"
+                        IsEnabled="{Binding HasGraph, Mode=OneWay}"
+                        ToolTip="Take the selected group's nodes back out" AutomationProperties.Name="Ungroup" />
                 <Button Style="{StaticResource Button.Text}" Content="Remove" Command="{Binding RemoveSelectedCommand, Mode=OneWay}"
                         IsEnabled="{Binding HasGraph, Mode=OneWay}"
                         ToolTip="Take the selected node out (Delete)" AutomationProperties.Name="Remove node" />
@@ -90,7 +99,7 @@
                                     <Border x:Name="Title" Height="24" VerticalAlignment="Top"
                                             CornerRadius="4,4,0,0" Background="Transparent" Cursor="SizeAll"
                                             MouseLeftButtonDown="OnNodeDown"
-                                            ToolTip="Click to show it in the Inspector; drag to move it">
+                                            ToolTip="Click to show it in the Inspector, Ctrl+click to select more; drag to move it; double-click a group to go inside">
                                         <TextBlock x:Name="Caption" Text="{Binding Title, Mode=OneWay}" Margin="8,0,14,0" VerticalAlignment="Center"
                                                    TextTrimming="CharacterEllipsis" FontWeight="SemiBold"
                                                    Foreground="{DynamicResource Brush.Text.Primary}" />
@@ -135,6 +144,9 @@
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding IsEnabled, Mode=OneWay}" Value="False">
                                         <Setter TargetName="Caption" Property="Foreground" Value="{DynamicResource Brush.Text.Disabled}" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsGroup, Mode=OneWay}" Value="True">
+                                        <Setter TargetName="Body" Property="BorderThickness" Value="1,1,1,4" />
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding IsOutput, Mode=OneWay}" Value="True">
                                         <Setter TargetName="Body" Property="Background" Value="{DynamicResource Brush.Background.Selected}" />
