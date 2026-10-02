@@ -12,7 +12,22 @@ namespace JazzHands.Engine.Handlers;
 /// <param name="Value">What it worked out.</param>
 internal sealed record PreparedWork(object Key, object? Value)
 {
+    /// <summary>
+    /// The identifiers made while preparing, filled in by the dispatcher. They are the command's:
+    /// taken up with the value, they go in its record, so the history log replays the edit with
+    /// the same ones.
+    /// </summary>
+    internal IReadOnlyList<string> Ids { get; init; } = [];
+
     /// <summary>The prepared value when it was worked out from <paramref name="key"/>; otherwise <paramref name="work"/> done now.</summary>
-    internal static T Reuse<T>(HandlerContext context, object key, Func<T> work) =>
-        context.Prepared is PreparedWork done && Equals(done.Key, key) && done.Value is T value ? value : work();
+    internal static T Reuse<T>(HandlerContext context, object key, Func<T> work)
+    {
+        if (context.Prepared is PreparedWork done && Equals(done.Key, key) && done.Value is T value)
+        {
+            Core.Model.IdScope.Adopt(done.Ids);
+            return value;
+        }
+
+        return work();
+    }
 }

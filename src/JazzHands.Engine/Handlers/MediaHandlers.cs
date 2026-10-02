@@ -15,11 +15,22 @@ namespace JazzHands.Engine.Handlers;
 /// <remarks>
 /// The one handler in this phase that touches the disk, which is why it takes its importer from
 /// the context rather than making one: a test gives it an importer with no cache, and the app
-/// gives it one wired to the per-user cache.
+/// gives it one wired to the per-user cache. The files are read (hashed and probed) before the
+/// command is queued, so a folder of hundreds holds no other edit back, and between files is
+/// where it stops when whoever asked gives up.
 /// </remarks>
-public sealed class AddMediaHandler : ICommandHandler<AddMediaCommand>
+public sealed class AddMediaHandler : ICommandHandler<AddMediaCommand>, IPreparingHandler<AddMediaCommand>
 {
     private readonly ILogger _log = Log.ForContext<AddMediaHandler>();
+
+    /// <inheritdoc />
+    public object? Prepare(Project project, AddMediaCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+        return new PreparedWork(Key(command, context), Read(command, context));
+    }
 
     /// <inheritdoc />
     public Project Handle(Project project, AddMediaCommand command, HandlerContext context)
@@ -28,6 +39,74 @@ public sealed class AddMediaHandler : ICommandHandler<AddMediaCommand>
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(context);
 
+        Files read = PreparedWork.Reuse(context, Key(command, context), () => Read(command, context));
+        var failures = new List<string>(read.Failures);
+        Project updated = project;
+        int added = 0;
+
+        foreach (ImportedMedia imported in read.Imported)
+        {
+            // A project's media is keyed by content, so importing the same file twice is a no-op
+            // rather than two bin entries that thumbnail and proxy themselves separately.
+            if (updated.Media.FirstOrDefault(existing =>
+                string.Equals(existing.Hash, imported.Item.Hash, StringComparison.Ordinal)) is { } already)
+            {
+                _log.Debug("{Path} is already in the project as {Name}", imported.FullPath, already.Name);
+                continue;
+            }
+
+            MediaItem item = imported.Item with
+            {
+                RelativePath = HandlerHelp.Store(context, imported.Item.RelativePath),
+            };
+
+            updated = updated.WithMedia(item);
+            context.Changed(item.Id);
+            added++;
+
+            foreach (ImportWarning warning in imported.Warnings)
+            {
+                _log.Information("{Name}: {Code}: {Message}", item.Name, warning.Code, warning.Message);
+            }
+
+            if (Core.Export.ProxyPresets.IsWorthAProxy(item))
+            {
+                // The editor offers these from proxy.list's Suggested; a script reads it here.
+                _log.Information(
+                    "{Name} is heavy to decode and would edit smoothly with a proxy: jazz proxy generate <project> --media {Id} (or --auto for all of them)",
+                    item.Name,
+                    item.Id);
+            }
+        }
+
+        if (added == 0)
+        {
+            throw failures.Count > 0
+                ? new CommandException("import-failed", $"Nothing could be imported. {string.Join("; ", failures)}")
+                : new CommandException(
+                    "already-imported",
+                    "Everything named is already in the project. Media is matched by content, not by path.");
+        }
+
+        if (failures.Count > 0)
+        {
+            _log.Warning("{Count} file(s) could not be imported: {Failures}", failures.Count, string.Join("; ", failures));
+        }
+
+        context.Changed(project.Id);
+        return updated;
+    }
+
+    /// <summary>What the files are read from: the command, and the folder its paths are taken from.</summary>
+    private static (AddMediaCommand Command, string ProjectPath) Key(AddMediaCommand command, HandlerContext context) =>
+        (command, context.ProjectPath);
+
+    /// <summary>
+    /// Reads every file the command names: a media item for each that could be read, and why the
+    /// rest could not. Nothing here looks at the project.
+    /// </summary>
+    private static Files Read(AddMediaCommand command, HandlerContext context)
+    {
         if (command.Paths.IsEmpty)
         {
             throw new CommandException("nothing-to-import", "Name at least one file, folder or glob.");
@@ -55,47 +134,15 @@ public sealed class AddMediaHandler : ICommandHandler<AddMediaCommand>
             command.VfrConform,
             ImageFrameRate: command.Fps);
 
-        Project updated = project;
-        var failures = new List<string>();
-        int added = 0;
-
+        var imported = ImmutableArray.CreateBuilder<ImportedMedia>(sources.Length);
+        var failures = ImmutableArray.CreateBuilder<string>();
         foreach (ImportSource source in sources)
         {
-            // A project's media is keyed by content, so importing the same file twice is a no-op
-            // rather than two bin entries that thumbnail and proxy themselves separately.
+            // Between files is where an import of many stops when whoever asked gives up.
+            context.Cancellation.ThrowIfCancellationRequested();
             try
             {
-                ImportedMedia imported = importer.Import(source, options);
-
-                if (updated.Media.FirstOrDefault(existing =>
-                    string.Equals(existing.Hash, imported.Item.Hash, StringComparison.Ordinal)) is { } already)
-                {
-                    _log.Debug("{Path} is already in the project as {Name}", source.Path, already.Name);
-                    continue;
-                }
-
-                MediaItem item = imported.Item with
-                {
-                    RelativePath = HandlerHelp.Store(context, imported.Item.RelativePath),
-                };
-
-                updated = updated.WithMedia(item);
-                context.Changed(item.Id);
-                added++;
-
-                foreach (ImportWarning warning in imported.Warnings)
-                {
-                    _log.Information("{Name}: {Code}: {Message}", item.Name, warning.Code, warning.Message);
-                }
-
-                if (Core.Export.ProxyPresets.IsWorthAProxy(item))
-                {
-                    // The editor offers these from proxy.list's Suggested; a script reads it here.
-                    _log.Information(
-                        "{Name} is heavy to decode and would edit smoothly with a proxy: jazz proxy generate <project> --media {Id} (or --auto for all of them)",
-                        item.Name,
-                        item.Id);
-                }
+                imported.Add(importer.Import(source, options));
             }
             catch (Exception error) when (error is FfmpegException or FileNotFoundException or IOException)
             {
@@ -103,23 +150,11 @@ public sealed class AddMediaHandler : ICommandHandler<AddMediaCommand>
             }
         }
 
-        if (added == 0)
-        {
-            throw failures.Count > 0
-                ? new CommandException("import-failed", $"Nothing could be imported. {string.Join("; ", failures)}")
-                : new CommandException(
-                    "already-imported",
-                    "Everything named is already in the project. Media is matched by content, not by path.");
-        }
-
-        if (failures.Count > 0)
-        {
-            _log.Warning("{Count} file(s) could not be imported: {Failures}", failures.Count, string.Join("; ", failures));
-        }
-
-        context.Changed(project.Id);
-        return updated;
+        return new Files(imported.ToImmutable(), failures.ToImmutable());
     }
+
+    /// <summary>The files a command named, read: those that could be, and why the rest could not.</summary>
+    private sealed record Files(ImmutableArray<ImportedMedia> Imported, ImmutableArray<string> Failures);
 }
 
 /// <summary>Takes a file out of the project.</summary>
@@ -382,9 +417,21 @@ public sealed class RelinkMediaHandler : ICommandHandler<RelinkMediaCommand>
 }
 
 /// <summary>Reads a media item's file again and updates what the project knows.</summary>
-public sealed class ReprobeMediaHandler : ICommandHandler<ReprobeMediaCommand>
+/// <remarks>The files are read before the command is queued, so reprobing a whole bin holds no other edit back.</remarks>
+public sealed class ReprobeMediaHandler : ICommandHandler<ReprobeMediaCommand>, IPreparingHandler<ReprobeMediaCommand>
 {
     private readonly ILogger _log = Log.ForContext<ReprobeMediaHandler>();
+
+    /// <inheritdoc />
+    public object? Prepare(Project project, ReprobeMediaCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        EquatableArray<MediaItem> items = Items(project, command);
+        return new PreparedWork(Key(items, context), Read(items, context));
+    }
 
     /// <inheritdoc />
     public Project Handle(Project project, ReprobeMediaCommand command, HandlerContext context)
@@ -393,14 +440,8 @@ public sealed class ReprobeMediaHandler : ICommandHandler<ReprobeMediaCommand>
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(context);
 
-        MediaItem[] items = command.MediaId is { Length: > 0 } id
-            ? [MediaServices.Require(project, id)]
-            : [.. project.Media];
-
-        if (items.Length == 0)
-        {
-            throw new CommandException("no-media", "The project has no media to reprobe.");
-        }
+        EquatableArray<MediaItem> items = Items(project, command);
+        Dictionary<string, ImportedMedia> read = PreparedWork.Reuse(context, Key(items, context), () => Read(items, context));
 
         MediaImporter importer = MediaServices.Importer(context);
         Project updated = project;
@@ -408,6 +449,65 @@ public sealed class ReprobeMediaHandler : ICommandHandler<ReprobeMediaCommand>
 
         foreach (MediaItem item in items)
         {
+            if (!read.TryGetValue(item.Id, out ImportedMedia? imported))
+            {
+                continue;
+            }
+
+            MediaItem refreshed = item with
+            {
+                Hash = imported.Item.Hash,
+                Info = imported.Item.Info,
+                Duration = item.Kind == MediaKind.Still ? item.Duration : imported.Item.Duration,
+            };
+
+            if (refreshed == item)
+            {
+                continue;
+            }
+
+            if (refreshed.Hash != item.Hash && refreshed.Info is { } info && item.Info is { } was && info with { ProbedAt = was.ProbedAt } == was)
+            {
+                // Only touched: the same streams, size and length under a new date. What was
+                // made from it (thumbnails, waveform, keyframes, a proxy) still holds.
+                importer.Cache?.Rekey(item.Hash, refreshed.Hash);
+                (context.Services?.GetService(typeof(Caching.ProxyService)) as Caching.ProxyService)?.Rekey(item.Hash, refreshed.Hash);
+            }
+            else if (refreshed.Hash != item.Hash)
+            {
+                CacheHelp.ForgetContent(context.Services, importer.Cache, item.Hash);
+            }
+
+            updated = updated.WithMedia(refreshed);
+            context.Changed(item.Id);
+            changed++;
+        }
+
+        return changed == 0 ? project : updated;
+    }
+
+    /// <summary>The items the command is about: the one it names, or all of them.</summary>
+    private static EquatableArray<MediaItem> Items(Project project, ReprobeMediaCommand command)
+    {
+        EquatableArray<MediaItem> items = command.MediaId is { Length: > 0 } id
+            ? [MediaServices.Require(project, id)]
+            : project.Media;
+
+        return items.IsEmpty ? throw new CommandException("no-media", "The project has no media to reprobe.") : items;
+    }
+
+    /// <summary>What the files are read for: the items as they are, and the folder their paths are taken from.</summary>
+    private static (EquatableArray<MediaItem> Items, string ProjectPath) Key(EquatableArray<MediaItem> items, HandlerContext context) =>
+        (items, context.ProjectPath);
+
+    /// <summary>Reads each item's file again, by the item's id; one that is missing or unreadable is left out, and said.</summary>
+    private Dictionary<string, ImportedMedia> Read(EquatableArray<MediaItem> items, HandlerContext context)
+    {
+        MediaImporter importer = MediaServices.Importer(context);
+        var read = new Dictionary<string, ImportedMedia>(StringComparer.Ordinal);
+        foreach (MediaItem item in items)
+        {
+            context.Cancellation.ThrowIfCancellationRequested();
             string full = HandlerHelp.Resolve(context, item.RelativePath);
 
             if (!File.Exists(full))
@@ -423,37 +523,9 @@ public sealed class ReprobeMediaHandler : ICommandHandler<ReprobeMediaCommand>
                 // out to have changed; reprobing a file nobody touched costs nothing.
                 importer.Cache?.Forget(item.Hash, CacheParts.Probes);
 
-                ImportedMedia imported = importer.Import(
+                read[item.Id] = importer.Import(
                     new ImportSource(full, item.Kind == MediaKind.ImageSequence ? MediaKind.Movie : item.Kind),
                     new ImportOptions(item.Folder, item.Tags, item.Color, item.Conform, item.Deinterlace, item.VfrConform));
-
-                MediaItem refreshed = item with
-                {
-                    Hash = imported.Item.Hash,
-                    Info = imported.Item.Info,
-                    Duration = item.Kind == MediaKind.Still ? item.Duration : imported.Item.Duration,
-                };
-
-                if (refreshed == item)
-                {
-                    continue;
-                }
-
-                if (refreshed.Hash != item.Hash && refreshed.Info is { } info && item.Info is { } was && info with { ProbedAt = was.ProbedAt } == was)
-                {
-                    // Only touched: the same streams, size and length under a new date. What was
-                    // made from it (thumbnails, waveform, keyframes, a proxy) still holds.
-                    importer.Cache?.Rekey(item.Hash, refreshed.Hash);
-                    (context.Services?.GetService(typeof(Caching.ProxyService)) as Caching.ProxyService)?.Rekey(item.Hash, refreshed.Hash);
-                }
-                else if (refreshed.Hash != item.Hash)
-                {
-                    CacheHelp.ForgetContent(context.Services, importer.Cache, item.Hash);
-                }
-
-                updated = updated.WithMedia(refreshed);
-                context.Changed(item.Id);
-                changed++;
             }
             catch (Exception error) when (error is FfmpegException or IOException)
             {
@@ -461,7 +533,7 @@ public sealed class ReprobeMediaHandler : ICommandHandler<ReprobeMediaCommand>
             }
         }
 
-        return changed == 0 ? project : updated;
+        return read;
     }
 }
 

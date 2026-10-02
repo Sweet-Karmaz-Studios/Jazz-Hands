@@ -141,15 +141,25 @@ public sealed class CommandDispatcher : IAsyncDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         // A handler's slow part runs first, off the queue (IPreparingHandler): the commands asked
-        // for meanwhile go on. Its refusal is the command's.
+        // for meanwhile go on. Its refusal is the command's. A replay of the history log does
+        // not prepare: the handler does the work in its turn, where the recorded identifiers are.
         object? prepared = null;
-        if (Preparer(command) is { } prepare)
+        if (ids is not { IsReplaying: true } && Preparer(command) is { } prepare)
         {
             try
             {
                 var context = new HandlerContext(_services, _clock, ProjectPath) { Later = Later, Cancellation = cancellationToken };
                 Project now = Project;
-                prepared = await Task.Run(() => prepare(now, context), cancellationToken).ConfigureAwait(false);
+                prepared = await Task.Run(
+                    () =>
+                    {
+                        // The identifiers made here are the command's: kept with what was
+                        // prepared, and written down when the handler takes it up.
+                        using IdScope made = IdScope.Recording().Enter();
+                        object? result = prepare(now, context);
+                        return result is Handlers.PreparedWork work ? work with { Ids = [.. made.Issued] } : result;
+                    },
+                    cancellationToken).ConfigureAwait(false);
             }
             catch (CommandException error)
             {

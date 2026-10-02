@@ -30,6 +30,35 @@ public sealed class IdScope : IDisposable
     /// <summary>The identifiers made while this scope was active, in order.</summary>
     public IReadOnlyList<string> Issued => _issued;
 
+    /// <summary>True when it hands recorded identifiers out again, rather than writing new ones down.</summary>
+    public bool IsReplaying => _replay is not null;
+
+    /// <summary>
+    /// Counts identifiers made outside the scope as made in it, at this point. A handler's slow
+    /// part runs before its command's turn, on another thread, and what it made there is the
+    /// command's all the same: written down where the handler takes it up, which is where a
+    /// replay, doing that part in its turn, makes them.
+    /// </summary>
+    public static void Adopt(IReadOnlyList<string> ids)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+        if (_current is not { } scope)
+        {
+            return;
+        }
+
+        foreach (string id in ids)
+        {
+            // Replaying, the recorded one for this place is spent, so those after it still line up.
+            if (scope._replay is { Count: > 0 } replay)
+            {
+                replay.Dequeue();
+            }
+
+            scope._issued.Add(id);
+        }
+    }
+
     /// <summary>A scope that writes down every identifier made while it is active.</summary>
     public static IdScope Recording() => new(null);
 
