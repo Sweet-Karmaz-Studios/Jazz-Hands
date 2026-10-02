@@ -185,36 +185,18 @@ public sealed class SplitClipAtCutsHandler : ICommandHandler<SplitClipAtCutsComm
             return project;
         }
 
-        // The clip and, when asked, the clips linked to it on unlocked tracks.
-        string[] ids = command.Linked && clip.LinkGroupId is { } group
-            ? [.. found.Sequence.Tracks
-                .Where(track => !track.Locked || track.Id == found.Track.Id)
-                .SelectMany(track => track.Clips)
-                .Where(candidate => candidate.Id == clip.Id || string.Equals(candidate.LinkGroupId, group, StringComparison.Ordinal))
-                .Select(candidate => candidate.Id)]
-            : [clip.Id];
-
         // Latest first, so the part before each time keeps the original id and still holds every
-        // earlier one.
+        // earlier one; when asked, the clips linked to it on unlocked tracks are cut at each time
+        // too, and each shot's pieces are linked to each other rather than to every other shot's.
+        Sequence before = found.Sequence;
+        Sequence after = before;
         foreach (Flicks at in Enumerable.Reverse(times))
         {
-            foreach (string id in ids)
-            {
-                if (project.FindClip(id) is not { } located || located.Clip.Start >= at || located.Clip.End <= at)
-                {
-                    continue;
-                }
-
-                string newId = Id.New();
-                Track track = HandlerContext.Require(EditOps.Split(located.Track, id, at, newId));
-                project = project.ReplaceTrack(track);
-                context.Changed(newId);
-                context.Changed(id);
-                context.Changed(track.Id);
-            }
+            after = HandlerContext.Require(EditOps.SplitLinked(after, clip.Id, at, Id.New(), Id.New, command.Linked));
         }
 
-        return project;
+        context.Changed(EditOps.Changed(before, after));
+        return project.ReplaceSequence(after);
     }
 }
 

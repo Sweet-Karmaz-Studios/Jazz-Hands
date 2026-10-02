@@ -1736,6 +1736,7 @@ Cut a clip in two at a timeline time.
 |---|---|
 | `--at <time>` | Required. Where to cut, on the timeline. |
 | `--id <id>` | The identifier for the right half. |
+| `--alone` | Cut only this clip, not the clips linked to it. |
 | `--no-save` | Do not write the project back. |
 
 ### `jazz clip split-at-cuts <project> <clip-id>`

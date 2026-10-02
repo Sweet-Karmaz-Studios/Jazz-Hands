@@ -7,7 +7,7 @@ Clips on one track never overlap. `clip_add` refuses a place that is taken; `cli
 The edits, from simple to editorial:
 
 - `clip_move` puts a clip at another time or track. `clip_nudge` moves by whole frames.
-- `clip_split` cuts a clip in two at a sequence time; the right half gets a new id (the second of `changedIds`, or yours with `newClipId`).
+- `clip_split` cuts a clip in two at a sequence time; the right half gets a new id (yours with `newClipId`; `changedIds` lists every piece). The clips linked to it (its sound, or its picture) that run across the moment are cut too, and the right pieces are linked to each other; `alone` cuts only the clip.
 - `clip_trim` moves a clip's start (`in`) or end (`out`) on the timeline, showing more or less of its media; `ripple` moves everything after it along.
 - `clip_remove` takes a clip out, leaving a gap, or closing it with `ripple`. `clip_ripple_delete` does that for several clips across every sync-locked track.
 - `clip_lift` and `clip_extract` remove a range of time from tracks: lift leaves the gap, extract closes it.

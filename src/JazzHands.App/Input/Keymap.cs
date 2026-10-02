@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Windows.Input;
 using JazzHands.Core.Commands;
+using JazzHands.Core.Editing;
 using JazzHands.Core.Model;
 using JazzHands.Core.Serialization;
 using JazzHands.Core.Time;
@@ -314,6 +315,13 @@ public sealed class Keymap
 
                     case "$selection" or "$clipsAtPlayhead" or "$allClips":
                         ImmutableArray<string> ids = Ids(word, context);
+
+                        // A split cuts the clips linked to it, so they are not sent one of their own.
+                        if (binding.Command == "clip.split" && context.Project.ActiveSequence is { } sequence)
+                        {
+                            ids = [.. EditOps.OnePerLink(sequence, ids)];
+                        }
+
                         if (ids.IsEmpty)
                         {
                             nothing = word == "$clipsAtPlayhead" ? "There is no clip under the playhead." : "Nothing is selected.";

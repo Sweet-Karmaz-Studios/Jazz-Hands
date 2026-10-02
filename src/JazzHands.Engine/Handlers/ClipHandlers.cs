@@ -285,12 +285,12 @@ public sealed class SplitClipHandler : ICommandHandler<SplitClipCommand>
         string newId = HandlerHelp.IdOr(command.NewClipId);
         HandlerHelp.RequireUnused(project, newId);
 
-        Track updated = HandlerContext.Require(EditOps.Split(found.Track, command.ClipId, command.At, newId));
+        // Its linked clips are cut with it (found while recording the promo, 2026-10-01: a picture
+        // cut alone left its sound whole, and a ripple delete of a piece was then blocked).
+        Sequence after = HandlerContext.Require(EditOps.SplitLinked(found.Sequence, command.ClipId, command.At, newId, Id.New, linked: !command.Alone));
 
-        context.Changed(command.ClipId);
-        context.Changed(newId);
-        context.Changed(found.Track.Id);
-        return project.ReplaceTrack(updated);
+        context.Changed(EditOps.Changed(found.Sequence, after));
+        return project.ReplaceSequence(after);
     }
 }
 

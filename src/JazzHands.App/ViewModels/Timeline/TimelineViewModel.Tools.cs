@@ -279,7 +279,7 @@ public sealed partial class TimelineViewModel
             }),
             new("Paste", "Ctrl+V", () => PasteAsync(playhead, null, insert: false), canPaste),
             TimelineMenuItem.Separator,
-            new("Split at playhead", "Ctrl+K", () => RunAsync(Batch([.. underPlayhead.Select(id => (ICommand)new SplitClipCommand(id, playhead))], "Split")), underPlayhead.Length > 0),
+            new("Split at playhead", "Ctrl+K", () => RunAsync(Batch([.. EditOps.OnePerLink(Content.Sequence, underPlayhead).Select(id => (ICommand)new SplitClipCommand(id, playhead))], "Split")), underPlayhead.Length > 0),
             new("Freeze frame at playhead", null, () => RunAsync(new FreezeFrameCommand(clip.Id, playhead)), clip.Kind != TrackKind.Audio && clip.Start <= playhead && playhead < clip.End),
             new(clip.Clip.IsRemapped ? "Remove the speed curve" : "Speed curve", null, () => RunAsync(new SetClipRemapCommand(clip.Id, Off: clip.Clip.IsRemapped)), clip.Clip.IsMedia && clip.Kind != TrackKind.Audio),
             new("Split at scene cuts...", null, () => _dialogs?.ShowSceneCutsAsync(clip.Clip.MediaId!, clip.Id) ?? Task.CompletedTask, HasShots(clip)),
@@ -717,7 +717,9 @@ public sealed partial class TimelineViewModel
             : Content.Companions(grabbed.Id).Where(view => view.Id == grabbed.Id || view.Clip.LinkGroupId is not null);
 
         ClipView[] cut = [.. candidates.Where(view => view.Start < at && at < view.End)];
-        _pending = [.. cut.Select(view => (ICommand)new SplitClipCommand(view.Id, at))];
+
+        // Each split cuts the clips linked to it, so a linked clip is not sent one of its own.
+        _pending = [.. EditOps.OnePerLink(Content.Sequence, cut.Select(view => view.Id)).Select(id => (ICommand)new SplitClipCommand(id, at))];
         SetGuide(at);
     }
 
