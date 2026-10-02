@@ -255,6 +255,7 @@ public partial class PreviewPanelView : UserControl
         MaskFrame.SequenceSize = Overlay.SequenceSize;
         GizmoFrame.Picture = Overlay.Picture;
         GizmoFrame.SequenceSize = Overlay.SequenceSize;
+        _model.Gizmo?.PixelsPerScreen = (float)(Overlay.SequenceSize.Width / Math.Max(1.0, Overlay.Picture.Width));
         PlaceTitleEditor();
     }
 

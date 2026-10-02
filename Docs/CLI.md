@@ -4430,7 +4430,7 @@ Choose which clips and markers are selected.
 | Argument | Meaning |
 |---|---|
 | `<project>` | The .jazz file to work on. |
-| `<ids>` | Comma-separated clip and marker ids. |
+| `<ids>` | Comma-separated clip, marker or comp node ids. |
 
 | Option | Meaning |
 |---|---|

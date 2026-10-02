@@ -45,20 +45,26 @@ public enum Gizmo3DGrip
 /// </summary>
 /// <remarks>
 /// Drawn from <c>clip.measure-3d</c> at the playhead, so it sits on the pivot through whatever
-/// camera there is. A drag along an arrow is its move on screen measured along the arrow, turned
-/// into world pixels by the arrow's length; the square solves for both X and Y the same way. Every
+/// camera there is, at the same size on screen however big the monitor is (the view says how many
+/// sequence pixels a screen pixel is): the arrows are the projected steps scaled together, so the
+/// one seen end on is still the shortest. A drag along an arrow is its move on screen measured along
+/// the projected step, turned into world pixels by the step's length; the square solves for both X
+/// and Y the same way. Every
 /// drag sends one parameter (<c>transform.position</c>, <c>transform.z</c> or a turn) with
 /// <c>param.set</c> at the playhead, latest wins, merging into one undo step.
 /// </remarks>
 public sealed partial class Gizmo3DViewModel : ObservableObject
 {
-    /// <summary>The ring's radius, in sequence pixels at 1080 lines: outside the arrows, so neither covers the other.</summary>
-    public const float Ring = 130.0f;
+    /// <summary>The ring's radius, in screen pixels: outside the arrows, so neither covers the other.</summary>
+    public const float Ring = 70.0f;
 
-    /// <summary>How far past the ring the knobs sit, at 1080 lines.</summary>
-    public const float KnobReach = 24.0f;
+    /// <summary>How far past the ring the knobs sit, in screen pixels.</summary>
+    public const float KnobReach = 20.0f;
 
-    /// <summary>Degrees a knob turns for each sequence pixel dragged, at 1080 lines.</summary>
+    /// <summary>The longest arrow's length, in screen pixels.</summary>
+    public const float Arrow = 48.0f;
+
+    /// <summary>Degrees a knob turns for each screen pixel dragged.</summary>
     public const float DegreesPerPixel = 0.4f;
 
     private readonly ILogger _log = Log.ForContext<Gizmo3DViewModel>();
@@ -98,6 +104,25 @@ public sealed partial class Gizmo3DViewModel : ObservableObject
     /// <summary>The clip the handle is on, or null.</summary>
     public string? ClipId { get; private set; }
 
+    /// <summary>
+    /// How many sequence pixels one screen pixel is on the monitor now, which the view sets as the
+    /// picture is fitted or zoomed; the handle keeps its size on screen by it.
+    /// </summary>
+    public float PixelsPerScreen
+    {
+        get => _pixelsPerScreen;
+        set
+        {
+            if (value > 0.0f && float.IsFinite(value) && value != _pixelsPerScreen)
+            {
+                _pixelsPerScreen = value;
+                OnPropertyChanged(string.Empty);
+            }
+        }
+    }
+
+    private float _pixelsPerScreen = 1.0f;
+
     /// <summary>True when there is a handle to draw.</summary>
     public bool IsShown => Place?.Pivot is not null;
 
@@ -105,41 +130,59 @@ public sealed partial class Gizmo3DViewModel : ObservableObject
     public Vector2 Pivot => Point(Place?.Pivot);
 
     /// <summary>The tip of the X arrow.</summary>
-    public Vector2 XEnd => Place?.XAxis is { } x ? Point(x) : Pivot;
+    public Vector2 XEnd => Pivot + (StepX * Shown);
 
     /// <summary>The tip of the Y arrow.</summary>
-    public Vector2 YEnd => Place?.YAxis is { } y ? Point(y) : Pivot;
+    public Vector2 YEnd => Pivot + (StepY * Shown);
+
+    /// <summary>The tip of the Z arrow; seen straight on it leans up and to the left (see <see cref="StepZ"/>).</summary>
+    public Vector2 ZEnd => Pivot + (StepZ * Shown);
+
+    /// <summary>The ring's radius here, in sequence pixels.</summary>
+    public float RingRadius => Ring * PixelsPerScreen;
+
+    /// <summary>The knob that tips it about X: above the ring.</summary>
+    public Vector2 TurnXKnob => Pivot - new Vector2(0.0f, (Ring + KnobReach) * PixelsPerScreen);
+
+    /// <summary>The knob that turns it about Y: right of the ring.</summary>
+    public Vector2 TurnYKnob => Pivot + new Vector2((Ring + KnobReach) * PixelsPerScreen, 0.0f);
+
+    /// <summary>A step right as the camera sees it, in sequence pixels on the frame.</summary>
+    internal Vector2 StepX => Place?.XAxis is { } x ? Point(x) - Pivot : Vector2.Zero;
+
+    /// <summary>A step down as the camera sees it.</summary>
+    internal Vector2 StepY => Place?.YAxis is { } y ? Point(y) - Pivot : Vector2.Zero;
 
     /// <summary>
-    /// The tip of the Z arrow. Seen straight on, away is a point; the arrow then leans up and to
-    /// the left, and dragging along it still means away.
+    /// A step away as the camera sees it. Seen straight on, away is a point; the step then leans up
+    /// and to the left at seven tenths of the longer of the other two, and dragging along it still
+    /// means away.
     /// </summary>
-    public Vector2 ZEnd
+    internal Vector2 StepZ
     {
         get
         {
             Vector2 seen = Place?.ZAxis is { } z ? Point(z) - Pivot : Vector2.Zero;
-            return Pivot + (seen.Length() >= 12.0f * Reach ? seen : new Vector2(-0.45f, -0.45f) * Ring * Reach);
+            float longest = MathF.Max(StepX.Length(), StepY.Length());
+            return seen.Length() >= 0.12f * longest ? seen : Vector2.Normalize(new Vector2(-1.0f, -1.0f)) * 0.7f * longest;
         }
     }
 
-    /// <summary>The ring's radius here, in sequence pixels.</summary>
-    public float RingRadius => Ring * Reach;
-
-    /// <summary>The knob that tips it about X: above the ring.</summary>
-    public Vector2 TurnXKnob => Pivot - new Vector2(0.0f, (Ring + KnobReach) * Reach);
-
-    /// <summary>The knob that turns it about Y: right of the ring.</summary>
-    public Vector2 TurnYKnob => Pivot + new Vector2((Ring + KnobReach) * Reach, 0.0f);
+    /// <summary>How much the steps are scaled by to be drawn: the longest at <see cref="Arrow"/> screen pixels.</summary>
+    private float Shown
+    {
+        get
+        {
+            float longest = MathF.Max(StepX.Length(), MathF.Max(StepY.Length(), StepZ.Length()));
+            return longest < 1e-3f ? 0.0f : Arrow * PixelsPerScreen / longest;
+        }
+    }
 
     /// <summary>True while a drag is under way.</summary>
     public bool IsDragging => _drag is not null;
 
     /// <summary>What is being sent, for a test to wait on.</summary>
     internal Task Sending => _pump;
-
-    /// <summary>The sequence's height over 1080, which handle sizes scale by.</summary>
-    private float Reach => _session.Project.ActiveSequence is { } sequence ? _session.Project.SettingsFor(sequence).Height / 1080.0f : 1.0f;
 
     /// <summary>Reads where the selected 3D clip is at the playhead.</summary>
     public void Refresh()
@@ -212,7 +255,7 @@ public sealed partial class Gizmo3DViewModel : ObservableObject
             return false;
         }
 
-        _drag = new Drag(grip, clipId, at, place, Pivot, XEnd - Pivot, YEnd - Pivot, ZEnd - Pivot);
+        _drag = new Drag(grip, clipId, at, place, Pivot, StepX, StepY, StepZ);
         Status = string.Empty;
         return true;
     }
@@ -228,7 +271,7 @@ public sealed partial class Gizmo3DViewModel : ObservableObject
         Vector2 delta = at - drag.From;
         Layer3DPlaceInfo start = drag.Place;
         double step = start.AxisLength;
-        float degrees = DegreesPerPixel / Reach;
+        float degrees = DegreesPerPixel / PixelsPerScreen;
         switch (drag.Grip)
         {
             case Gizmo3DGrip.Move:

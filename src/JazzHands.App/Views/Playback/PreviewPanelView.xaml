@@ -36,6 +36,7 @@
               Focusable="True"
               FocusVisualStyle="{x:Null}">
             <Image x:Name="Picture"
+                   AutomationProperties.Name="Program picture"
                    Stretch="Fill"
                    RenderOptions.BitmapScalingMode="NearestNeighbor"
                    SnapsToDevicePixels="True" />

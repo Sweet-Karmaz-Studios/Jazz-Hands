@@ -18,7 +18,7 @@ public enum SelectMode
     Toggle,
 }
 
-/// <summary>Chooses what is selected: clips and markers in the active sequence, by id.</summary>
+/// <summary>Chooses what is selected: clips, transitions, markers and comp graph nodes in the active sequence, by id.</summary>
 /// <remarks>
 /// The selection is what the editor is pointing at, shared by the timeline, the inspector and
 /// every remote client, so a script can select and then act the way a person clicks and then
@@ -33,5 +33,5 @@ public enum SelectMode
     Undoable = false,
     NotUndoableReason = "The selection is what the editor points at. It is not part of the project.")]
 public sealed record SetSelectionCommand(
-    [property: Arg(0, "Comma-separated clip and marker ids")] EquatableArray<string> Ids,
+    [property: Arg(0, "Comma-separated clip, marker or comp node ids")] EquatableArray<string> Ids,
     [property: Option("mode", "replace, add, remove or toggle")] SelectMode Mode = SelectMode.Replace) : ICommand;

@@ -61,7 +61,7 @@ public sealed class SelectionService
     /// <summary>Selects nothing.</summary>
     public void Clear() => Update(_ => []);
 
-    /// <summary>Drops every id that is not a clip or marker of the project's active sequence.</summary>
+    /// <summary>Drops every id that is not a clip, transition, marker or comp node of the project's active sequence.</summary>
     public void Prune(Project project)
     {
         ArgumentNullException.ThrowIfNull(project);
@@ -81,7 +81,11 @@ public sealed class SelectionService
         session.ProjectChanged += OnProjectChanged;
     }
 
-    /// <summary>The ids a selection may name: clips, transitions and markers of the active sequence.</summary>
+    /// <summary>
+    /// The ids a selection may name: clips, transitions and markers of the active sequence, and the
+    /// nodes of its clips' comp graphs, inside groups too (Phase 49a), which the Nodes panel selects
+    /// to show in the Inspector.
+    /// </summary>
     internal static HashSet<string> Present(Project project)
     {
         var present = new HashSet<string>(StringComparer.Ordinal);
@@ -96,6 +100,13 @@ public sealed class SelectionService
             foreach (Clip clip in track.Clips)
             {
                 present.Add(clip.Id);
+                foreach (Effect effect in clip.Effects)
+                {
+                    if (effect.Comp is { } comp)
+                    {
+                        AddNodes(comp, present);
+                    }
+                }
             }
 
             foreach (Transition transition in track.Transitions)
@@ -110,6 +121,18 @@ public sealed class SelectionService
         }
 
         return present;
+    }
+
+    private static void AddNodes(CompGraph comp, HashSet<string> present)
+    {
+        foreach (CompNode node in comp.Nodes)
+        {
+            present.Add(node.Id);
+            if (node.Effect.Comp is { } inner)
+            {
+                AddNodes(inner, present);
+            }
+        }
     }
 
     private static ImmutableArray<string> Combine(ImmutableArray<string> current, string[] ids, SelectMode mode) => mode switch

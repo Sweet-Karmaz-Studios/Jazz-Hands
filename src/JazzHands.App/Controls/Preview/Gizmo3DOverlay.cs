@@ -35,7 +35,7 @@ public sealed class Gizmo3DOverlay : FrameworkElement
         typeof(Gizmo3DOverlay),
         new FrameworkPropertyMetadata(new Size(1920, 1080), FrameworkPropertyMetadataOptions.AffectsRender));
 
-    /// <summary>The ring's and the knobs' colour.</summary>
+    /// <summary>The knobs' outline colour.</summary>
     public static readonly DependencyProperty BrushProperty = DependencyProperty.Register(
         nameof(Brush),
         typeof(Brush),
@@ -74,7 +74,7 @@ public sealed class Gizmo3DOverlay : FrameworkElement
         set => SetValue(SequenceSizeProperty, value);
     }
 
-    /// <summary>The ring's and the knobs' colour.</summary>
+    /// <summary>The knobs' outline colour.</summary>
     public Brush Brush
     {
         get => (Brush)GetValue(BrushProperty);
@@ -99,7 +99,8 @@ public sealed class Gizmo3DOverlay : FrameworkElement
         double grip = TitleHandlesOverlay.Grip;
 
         // The ring first, under the arrows.
-        Pen ring = FrozenPen(Brush, 1.25);
+        // Light over its dark shade, like the knobs, so it shows over blue footage as well as dark.
+        Pen ring = FrozenPen(Frozen(Color.FromArgb(0xE0, 0xFF, 0xFF, 0xFF)), 1.25);
         double radius = gizmo.RingRadius * scale;
         drawingContext.DrawEllipse(null, Shade, pivot, radius, radius);
         drawingContext.DrawEllipse(null, ring, pivot, radius, radius);
@@ -112,7 +113,7 @@ public sealed class Gizmo3DOverlay : FrameworkElement
         foreach (Vector2 knob in new[] { gizmo.TurnXKnob, gizmo.TurnYKnob })
         {
             Point at = Screen(knob);
-            drawingContext.DrawEllipse(Brushes.White, ring, at, grip, grip);
+            drawingContext.DrawEllipse(Brushes.White, FrozenPen(Brush, 1.25), at, grip, grip);
         }
 
         drawingContext.DrawRectangle(Brushes.White, FrozenPen(Brushes.Black, 1.0), new Rect(pivot.X - grip, pivot.Y - grip, grip * 2.0, grip * 2.0));

@@ -12,7 +12,7 @@ namespace JazzHands.Engine.Handlers;
 internal static class CompHelp
 {
     /// <summary>How far apart nodes are put when nobody says where.</summary>
-    internal const double Spacing = 150;
+    internal const double Spacing = 200;
 
     /// <summary>A graph found: the effect holding it, where that sits, and the graph.</summary>
     internal sealed record Found(ParamOwner Holder, CompGraph Graph);

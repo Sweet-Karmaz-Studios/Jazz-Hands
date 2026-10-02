@@ -15,50 +15,52 @@
         <BooleanToVisibilityConverter x:Key="Visible" />
     </UserControl.Resources>
     <DockPanel Margin="8">
-        <!-- What is shown, and the graph's commands. -->
-        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
-            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                <Button Style="{StaticResource Button.Text}" Content="Up" Command="{Binding UpCommand, Mode=OneWay}"
-                        Visibility="{Binding CanGoUp, Mode=OneWay, Converter={StaticResource Visible}}"
-                        ToolTip="Go back out of this group" AutomationProperties.Name="Up out of group" />
-                <Button Style="{StaticResource Button.Text}" Content="Make comp" Command="{Binding CreateCommand, Mode=OneWay}"
-                        Visibility="{Binding HasClip, Mode=OneWay, Converter={StaticResource Visible}}"
-                        IsEnabled="{Binding HasGraph, Mode=OneWay, Converter={x:Static local:Not.Instance}}"
-                        ToolTip="Give the clip a node graph: its picture in, wired to the output" AutomationProperties.Name="Make comp" />
-                <Button x:Name="AddButton" Style="{StaticResource Button.Text}" Content="Add node" Click="OnAddClick"
-                        IsEnabled="{Binding HasGraph, Mode=OneWay}"
-                        ToolTip="Add a node, wired from the selected one where it can be (or right-click the graph)" AutomationProperties.Name="Add node" />
-                <Button Style="{StaticResource Button.Text}" Content="View" Command="{Binding ViewSelectedCommand, Mode=OneWay}"
-                        IsEnabled="{Binding HasGraph, Mode=OneWay}"
-                        ToolTip="Show the selected node's picture in the program monitor, or the program again" AutomationProperties.Name="View node" />
-                <Button Style="{StaticResource Button.Text}" Content="Group" Command="{Binding GroupSelectedCommand, Mode=OneWay}"
-                        IsEnabled="{Binding HasGraph, Mode=OneWay}"
-                        ToolTip="Put the selected nodes (Ctrl+click for more than one) into a group of their own" AutomationProperties.Name="Group nodes" />
-                <Button Style="{StaticResource Button.Text}" Content="Ungroup" Command="{Binding UngroupSelectedCommand, Mode=OneWay}"
-                        IsEnabled="{Binding HasGraph, Mode=OneWay}"
-                        ToolTip="Take the selected group's nodes back out" AutomationProperties.Name="Ungroup" />
-                <Button Style="{StaticResource Button.Text}" Content="Remove" Command="{Binding RemoveSelectedCommand, Mode=OneWay}"
-                        IsEnabled="{Binding HasGraph, Mode=OneWay}"
-                        ToolTip="Take the selected node out (Delete)" AutomationProperties.Name="Remove node" />
-                <ToggleButton Style="{StaticResource Button.Text}" Content="Viewer" IsChecked="{Binding ShowViewer, Mode=TwoWay}"
-                              Visibility="{Binding HasViewer, Mode=OneTime, Converter={StaticResource Visible}}"
-                              ToolTip="Show the selected node's picture beside the graph" AutomationProperties.Name="Show viewer" />
-            </StackPanel>
-            <TextBlock Text="{Binding Heading, Mode=OneWay}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                       Foreground="{DynamicResource Brush.Text.Primary}" />
-        </DockPanel>
+        <!-- Where the panel is (the clip, and the groups it is inside), on a line of its own so the
+             buttons below never squeeze it away in a narrow pane (seen on screen 2026-10-02). -->
+        <TextBlock DockPanel.Dock="Top" Text="{Binding Heading, Mode=OneWay}" TextTrimming="CharacterEllipsis"
+                   Foreground="{DynamicResource Brush.Text.Primary}" />
+
+        <!-- The graph's commands, wrapping onto a second line when the pane is narrow. -->
+        <WrapPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="-6,2,0,6">
+            <Button Style="{StaticResource Button.Text}" Content="Up" Command="{Binding UpCommand, Mode=OneWay}"
+                    Visibility="{Binding CanGoUp, Mode=OneWay, Converter={StaticResource Visible}}"
+                    ToolTip="Go back out of this group" AutomationProperties.Name="Up out of group" />
+            <Button Style="{StaticResource Button.Text}" Content="Make comp" Command="{Binding CreateCommand, Mode=OneWay}"
+                    Visibility="{Binding HasClip, Mode=OneWay, Converter={StaticResource Visible}}"
+                    IsEnabled="{Binding HasGraph, Mode=OneWay, Converter={x:Static local:Not.Instance}}"
+                    ToolTip="Give the clip a node graph: its picture in, wired to the output" AutomationProperties.Name="Make comp" />
+            <Button x:Name="AddButton" Style="{StaticResource Button.Text}" Content="Add node" Click="OnAddClick"
+                    IsEnabled="{Binding HasGraph, Mode=OneWay}"
+                    ToolTip="Add a node, wired from the selected one where it can be (or right-click the graph)" AutomationProperties.Name="Add node" />
+            <Button Style="{StaticResource Button.Text}" Content="View" Command="{Binding ViewSelectedCommand, Mode=OneWay}"
+                    IsEnabled="{Binding HasGraph, Mode=OneWay}"
+                    ToolTip="Show the selected node's picture in the program monitor, or the program again" AutomationProperties.Name="View node" />
+            <Button Style="{StaticResource Button.Text}" Content="Group" Command="{Binding GroupSelectedCommand, Mode=OneWay}"
+                    IsEnabled="{Binding HasGraph, Mode=OneWay}"
+                    ToolTip="Put the selected nodes (Ctrl+click for more than one) into a group of their own" AutomationProperties.Name="Group nodes" />
+            <Button Style="{StaticResource Button.Text}" Content="Ungroup" Command="{Binding UngroupSelectedCommand, Mode=OneWay}"
+                    IsEnabled="{Binding HasGraph, Mode=OneWay}"
+                    ToolTip="Take the selected group's nodes back out" AutomationProperties.Name="Ungroup" />
+            <Button Style="{StaticResource Button.Text}" Content="Remove" Command="{Binding RemoveSelectedCommand, Mode=OneWay}"
+                    IsEnabled="{Binding HasGraph, Mode=OneWay}"
+                    ToolTip="Take the selected node out (Delete)" AutomationProperties.Name="Remove node" />
+            <ToggleButton Style="{StaticResource Button.Text}" Content="Viewer" IsChecked="{Binding ShowViewer, Mode=TwoWay}"
+                          Visibility="{Binding HasViewer, Mode=OneTime, Converter={StaticResource Visible}}"
+                          ToolTip="Show the selected node's picture above the graph" AutomationProperties.Name="Show viewer" />
+        </WrapPanel>
         <TextBlock DockPanel.Dock="Bottom" Text="{Binding Status, Mode=OneWay}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"
                    FontSize="{DynamicResource Text.Caption}" Foreground="{DynamicResource Brush.Warning}" />
 
-        <!-- The viewer: the selected node (or the output) of the clip alone, at the playhead. -->
-        <DockPanel DockPanel.Dock="Right" Width="260" Margin="8,0,0,0"
-                   Visibility="{Binding ShowViewer, Mode=OneWay, Converter={StaticResource Visible}}">
-            <TextBlock DockPanel.Dock="Bottom" Text="{Binding ViewerCaption, Mode=OneWay}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"
-                       FontSize="{DynamicResource Text.Caption}" Foreground="{DynamicResource Brush.Text.Secondary}" />
-            <Border Background="Black" VerticalAlignment="Top" BorderThickness="1" BorderBrush="{DynamicResource Brush.Border}">
-                <Image Source="{Binding ViewerImage, Mode=OneWay}" Stretch="Uniform" MinHeight="146" AutomationProperties.Name="Node viewer" />
+        <!-- The viewer: the selected node (or the output) of the clip alone, at the playhead; above
+             the graph, so the graph keeps the pane's width. -->
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,6"
+                    Visibility="{Binding ShowViewer, Mode=OneWay, Converter={StaticResource Visible}}">
+            <Border Background="Black" Height="144" HorizontalAlignment="Left" BorderThickness="1" BorderBrush="{DynamicResource Brush.Border}">
+                <Image Source="{Binding ViewerImage, Mode=OneWay}" Stretch="Uniform" Width="256" AutomationProperties.Name="Node viewer" />
             </Border>
-        </DockPanel>
+            <TextBlock Text="{Binding ViewerCaption, Mode=OneWay}" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"
+                       FontSize="{DynamicResource Text.Caption}" Foreground="{DynamicResource Brush.Text.Secondary}" />
+        </StackPanel>
 
         <!-- The graph: drag a node by its title, drag from its right dot onto another node's port to wire them,
              right-click a port to take its wire out, right-click the graph to add a node there, drag the empty graph (or with the middle button) to pan, Ctrl+wheel to zoom. -->
