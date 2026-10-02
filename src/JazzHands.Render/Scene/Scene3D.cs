@@ -725,13 +725,21 @@ public sealed class Scene3D : IDisposable
         return Matrix4x4.Invert(linear, out Matrix4x4 inverse) ? Matrix4x4.Transpose(inverse) : Matrix4x4.Identity;
     }
 
-    /// <summary>A mesh's GPU copy, made the first time it is drawn.</summary>
+    /// <summary>
+    /// A mesh's GPU copy, made the first time it is drawn. A bent mesh (Phase 49a) shares the copy
+    /// of the mesh at rest it was bent from, its corners rewritten when another pose is drawn.
+    /// </summary>
     private GpuMesh Gpu(MeshData mesh)
     {
-        if (!_meshes.TryGetValue(mesh, out GpuMesh? gpu))
+        MeshData key = mesh.Rest ?? mesh;
+        if (!_meshes.TryGetValue(key, out GpuMesh? gpu))
         {
-            gpu = new GpuMesh(_device, mesh);
-            _meshes[mesh] = gpu;
+            gpu = new GpuMesh(_device, mesh, bends: mesh.Rest is not null);
+            _meshes[key] = gpu;
+        }
+        else if (mesh.Rest is not null && !ReferenceEquals(gpu.Shown, mesh))
+        {
+            gpu.Show(_device.ImmediateContext, mesh);
         }
 
         gpu.Used = _frame;
@@ -1107,16 +1115,17 @@ public sealed class Scene3D : IDisposable
     /// <summary>A mesh on the GPU: its corners as a structured buffer the vertex shader reads by index, and its triangles.</summary>
     private sealed class GpuMesh : IDisposable
     {
-        public unsafe GpuMesh(RenderDevice device, MeshData mesh)
+        public unsafe GpuMesh(RenderDevice device, MeshData mesh, bool bends = false)
         {
             int stride = Unsafe.SizeOf<MeshVertex>();
+            Shown = mesh;
             fixed (MeshVertex* corners = mesh.Vertices)
             {
                 Vertices = device.Device.CreateBuffer(
                     new BufferDescription
                     {
                         ByteWidth = (uint)(Math.Max(mesh.Vertices.Length, 1) * stride),
-                        Usage = ResourceUsage.Immutable,
+                        Usage = bends ? ResourceUsage.Default : ResourceUsage.Immutable,
                         BindFlags = BindFlags.ShaderResource,
                         MiscFlags = ResourceOptionFlags.BufferStructured,
                         StructureByteStride = (uint)stride,
@@ -1145,6 +1154,20 @@ public sealed class Scene3D : IDisposable
         }
 
         public ID3D11Buffer Vertices { get; }
+
+        /// <summary>The pose whose corners the buffer holds.</summary>
+        public MeshData Shown { get; private set; }
+
+        /// <summary>Rewrites the corners for another pose of the same mesh.</summary>
+        public unsafe void Show(ID3D11DeviceContext context, MeshData mesh)
+        {
+            fixed (MeshVertex* corners = mesh.Vertices)
+            {
+                context.UpdateSubresource(Vertices, 0, null, (IntPtr)corners, 0, 0);
+            }
+
+            Shown = mesh;
+        }
 
         public ID3D11ShaderResourceView VertexView { get; }
 

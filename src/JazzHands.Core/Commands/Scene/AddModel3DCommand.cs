@@ -6,9 +6,10 @@ namespace JazzHands.Core.Commands;
 /// <remarks>
 /// A <c>3d.model</c> clip: the model's meshes with their own materials and textures, always in 3D,
 /// centred on the clip's position, sized so its largest side is <paramref name="Size"/>, lit,
-/// shadowed and seen through the scene's camera. Its animation plays over the clip. The file is read
-/// first and refused with <c>model-unreadable</c> when it cannot be drawn; what this reader leaves
-/// out (skins, morph targets, Draco) is reported by <c>model3d.info</c> rather than refused. The path
+/// shadowed and seen through the scene's camera. Its animation plays over the clip, bones and morph
+/// targets included. The file is read first and refused with <c>model-unreadable</c> when it cannot
+/// be drawn; what this reader leaves out (Draco, more than four bones a corner) is reported by
+/// <c>model3d.info</c> rather than refused. The path
 /// is kept relative to the project. Without a track it goes on the lowest video track free for its
 /// length above every picture, or on a new track on top.
 /// </remarks>

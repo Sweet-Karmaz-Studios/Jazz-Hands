@@ -469,7 +469,7 @@ public static partial class RenderGraphBuilder
                     }
                 }
 
-                return [.. model.Pose(p.Bool("animate") ? animation : -1, seconds).Select(drawn => Placed(model.Meshes[drawn.Mesh], model.MeshMaterials[drawn.Mesh], drawn.World * intoScene))];
+                return [.. model.Pose(p.Bool("animate") ? animation : -1, seconds).Select(drawn => Placed(drawn.Drawn, model.MeshMaterials[drawn.Mesh], drawn.World * intoScene))];
             }
 
             default:

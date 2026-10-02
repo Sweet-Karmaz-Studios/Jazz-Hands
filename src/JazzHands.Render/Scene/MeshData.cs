@@ -139,6 +139,12 @@ public sealed class MeshData
     /// <summary>What it is, for caches and logs.</summary>
     public string Key { get; }
 
+    /// <summary>
+    /// For a mesh bent by bones or morph targets (Phase 49a), the mesh at rest it was bent from:
+    /// it has the same triangles, and its GPU copy is kept and has its corners rewritten.
+    /// </summary>
+    public MeshData? Rest { get; init; }
+
     /// <summary>Its corners.</summary>
     public MeshVertex[] Vertices { get; }
 

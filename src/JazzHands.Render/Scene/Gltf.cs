@@ -15,7 +15,38 @@ namespace JazzHands.Render.Scene;
 /// <param name="Matrix">A whole matrix in place of the three, or null.</param>
 /// <param name="Mesh">The mesh it carries, or -1.</param>
 /// <param name="Children">The nodes under it.</param>
-public sealed record GltfNode(string Name, Vector3 Translation, Quaternion Rotation, Vector3 Scale, Matrix4x4? Matrix, int Mesh, ImmutableArray<int> Children);
+public sealed record GltfNode(string Name, Vector3 Translation, Quaternion Rotation, Vector3 Scale, Matrix4x4? Matrix, int Mesh, ImmutableArray<int> Children)
+{
+    /// <summary>The skin that bends its mesh, or -1 (Phase 49a).</summary>
+    public int Skin { get; init; } = -1;
+
+    /// <summary>Its mesh's morph target weights in place of the mesh's own, or null.</summary>
+    public float[]? Weights { get; init; }
+}
+
+/// <summary>A skin of a glTF model (Phase 49a): the nodes that are its bones, and each one's inverse bind matrix.</summary>
+/// <param name="Joints">The bone nodes.</param>
+/// <param name="InverseBind">For each bone, the matrix from the model's space into the bone's at rest.</param>
+public sealed record GltfSkin(ImmutableArray<int> Joints, Matrix4x4[] InverseBind);
+
+/// <summary>
+/// How a mesh bends (Phase 49a): its morph targets (a move of every corner, and of its normal, per
+/// target) with their weights at rest, and for a skinned mesh each corner's four bones and how much
+/// each pulls. Arrays are a corner each, as the mesh's corners are.
+/// </summary>
+/// <param name="Positions">For each target, every corner's move.</param>
+/// <param name="Normals">For each target, every corner's normal's change.</param>
+/// <param name="Weights">Each target's weight at rest.</param>
+/// <param name="Joints">For each corner, its four bones as indices into the skin's joints, or null when the mesh has none.</param>
+/// <param name="JointWeights">For each corner, how much each of its four bones pulls, or null.</param>
+public sealed record GltfDeform(Vector3[][] Positions, Vector3[][] Normals, float[] Weights, Vector4[]? Joints, Vector4[]? JointWeights)
+{
+    /// <summary>True when the mesh has morph targets.</summary>
+    public bool Morphs => Positions.Length > 0;
+
+    /// <summary>True when the mesh has bones to follow.</summary>
+    public bool Skinned => Joints is not null && JointWeights is not null;
+}
 
 /// <summary>What a glTF animation channel moves.</summary>
 public enum GltfPath
@@ -28,6 +59,9 @@ public enum GltfPath
 
     /// <summary>A node's scale.</summary>
     Scale,
+
+    /// <summary>A node's mesh's morph target weights, as many numbers as it has targets (Phase 49a).</summary>
+    Weights,
 }
 
 /// <summary>How a glTF animation channel goes between its keys.</summary>
@@ -62,7 +96,7 @@ public sealed record GltfAnimation(string Name, ImmutableArray<GltfChannel> Chan
 
 /// <summary>
 /// A glTF 2.0 model read into meshes, materials, a node tree and animations (Phase 48). Read by
-/// <see cref="Gltf.Read"/>; what this reader leaves out (skins, morph targets, compressed geometry)
+/// <see cref="Gltf.Read"/>; what this reader leaves out (compressed geometry, more than four bones a corner)
 /// is listed in <see cref="Problems"/> rather than failing the model.
 /// </summary>
 /// <param name="Meshes">The meshes, each of every primitive it has, a part per primitive.</param>
@@ -79,17 +113,40 @@ public sealed record GltfModel(
     ImmutableArray<GltfAnimation> Animations,
     ImmutableArray<string> Problems)
 {
+    /// <summary>The skins (Phase 49a).</summary>
+    public ImmutableArray<GltfSkin> Skins { get; init; } = [];
+
+    /// <summary>For each mesh, how it bends, or null for one that does not (Phase 49a).</summary>
+    public ImmutableArray<GltfDeform?> Deforms { get; init; } = [];
+
     /// <summary>
     /// Every mesh the scene draws, with its node's matrix in the model's own space (glTF's: y up,
     /// metres), at a time in an animation; at rest when <paramref name="animation"/> is negative.
+    /// A mesh with morph targets or a skin is drawn as its corners are then (Phase 49a): targets
+    /// blended by their weights, then each corner moved by its bones. A skinned mesh's corners
+    /// are in the model's space already, so its matrix is the identity, as glTF has it.
     /// </summary>
-    public IReadOnlyList<(int Mesh, Matrix4x4 World)> Pose(int animation, float seconds)
+    public IReadOnlyList<(int Mesh, Matrix4x4 World, MeshData Drawn)> Pose(int animation, float seconds)
     {
         var moved = new Dictionary<int, (Vector3? T, Quaternion? R, Vector3? S)>();
+        var weighted = new Dictionary<int, float[]>();
         if (animation >= 0 && animation < Animations.Length)
         {
             foreach (GltfChannel channel in Animations[animation].Channels)
             {
+                if (channel.Path == GltfPath.Weights)
+                {
+                    int targets = channel.Node >= 0 && channel.Node < Nodes.Length && Nodes[channel.Node].Mesh is var mesh && mesh >= 0 && mesh < Deforms.Length && Deforms[mesh] is { } deform
+                        ? deform.Weights.Length
+                        : 0;
+                    if (targets > 0)
+                    {
+                        weighted[channel.Node] = Gltf.WeightsAt(channel, seconds, targets);
+                    }
+
+                    continue;
+                }
+
                 (Vector3? t, Quaternion? r, Vector3? s) = moved.GetValueOrDefault(channel.Node);
                 switch (channel.Path)
                 {
@@ -108,7 +165,9 @@ public sealed record GltfModel(
             }
         }
 
-        var drawn = new List<(int, Matrix4x4)>();
+        // Every node's place in the model, which bones need wherever they are in the tree.
+        var global = new Matrix4x4?[Nodes.Length];
+        var meshNodes = new List<int>();
         var visiting = new HashSet<int>();
         void Visit(int index, Matrix4x4 parent)
         {
@@ -132,9 +191,10 @@ public sealed record GltfModel(
             }
 
             Matrix4x4 world = local * parent;
+            global[index] = world;
             if (node.Mesh >= 0 && node.Mesh < Meshes.Length)
             {
-                drawn.Add((node.Mesh, world));
+                meshNodes.Add(index);
             }
 
             foreach (int child in node.Children)
@@ -150,7 +210,38 @@ public sealed record GltfModel(
             Visit(root, Matrix4x4.Identity);
         }
 
+        var drawn = new List<(int, Matrix4x4, MeshData)>(meshNodes.Count);
+        foreach (int index in meshNodes)
+        {
+            GltfNode node = Nodes[index];
+            MeshData rest = Meshes[node.Mesh];
+            if (node.Mesh >= Deforms.Length || Deforms[node.Mesh] is not { } deform)
+            {
+                drawn.Add((node.Mesh, global[index]!.Value, rest));
+                continue;
+            }
+
+            float[] weights = weighted.GetValueOrDefault(index) ?? node.Weights ?? deform.Weights;
+            Matrix4x4[]? bones = deform.Skinned && node.Skin >= 0 && node.Skin < Skins.Length ? Bones(Skins[node.Skin], global) : null;
+            MeshData bent = Gltf.Bend(rest, deform, weights, bones);
+            drawn.Add((node.Mesh, bones is null ? global[index]!.Value : Matrix4x4.Identity, bent));
+        }
+
         return drawn;
+    }
+
+    /// <summary>Each bone's matrix now: the inverse bind matrix, then where the bone is in the model.</summary>
+    private static Matrix4x4[] Bones(GltfSkin skin, Matrix4x4?[] global)
+    {
+        var bones = new Matrix4x4[skin.Joints.Length];
+        for (int joint = 0; joint < bones.Length; joint++)
+        {
+            int node = skin.Joints[joint];
+            Matrix4x4 place = node >= 0 && node < global.Length && global[node] is { } found ? found : Matrix4x4.Identity;
+            bones[joint] = (joint < skin.InverseBind.Length ? skin.InverseBind[joint] : Matrix4x4.Identity) * place;
+        }
+
+        return bones;
     }
 
     /// <summary>The box round the model at rest, in its own space.</summary>
@@ -158,9 +249,9 @@ public sealed record GltfModel(
     {
         var low = new Vector3(float.MaxValue);
         var high = new Vector3(float.MinValue);
-        foreach ((int mesh, Matrix4x4 world) in Pose(-1, 0.0f))
+        foreach ((_, Matrix4x4 world, MeshData mesh) in Pose(-1, 0.0f))
         {
-            (Vector3 a, Vector3 b) = Meshes[mesh].Bounds;
+            (Vector3 a, Vector3 b) = mesh.Bounds;
             for (int corner = 0; corner < 8; corner++)
             {
                 var point = new Vector3((corner & 1) == 0 ? a.X : b.X, (corner & 2) == 0 ? a.Y : b.Y, (corner & 4) == 0 ? a.Z : b.Z);
@@ -256,6 +347,71 @@ public static class Gltf
         }
 
         return found;
+    }
+
+    /// <summary>A weights channel's values at a time, one per morph target.</summary>
+    internal static float[] WeightsAt(GltfChannel channel, float seconds, int targets) => Sample(channel, seconds, targets);
+
+    /// <summary>
+    /// A mesh bent (Phase 49a): each target's moves added in at its weight, then, with bones, each
+    /// corner carried by its four bones at their weights (normals and tangents turned with them).
+    /// A new mesh, which remembers the one it bent so its GPU copy is reused.
+    /// </summary>
+    internal static MeshData Bend(MeshData rest, GltfDeform deform, float[] weights, Matrix4x4[]? bones)
+    {
+        MeshVertex[] corners = (MeshVertex[])rest.Vertices.Clone();
+        for (int target = 0; target < deform.Positions.Length && target < weights.Length; target++)
+        {
+            float weight = weights[target];
+            if (weight == 0.0f)
+            {
+                continue;
+            }
+
+            Vector3[] moves = deform.Positions[target];
+            Vector3[] turns = target < deform.Normals.Length ? deform.Normals[target] : [];
+            for (int corner = 0; corner < corners.Length && corner < moves.Length; corner++)
+            {
+                corners[corner].Position += moves[corner] * weight;
+                if (corner < turns.Length)
+                {
+                    corners[corner].Normal += turns[corner] * weight;
+                }
+            }
+        }
+
+        if (bones is not null && deform.Joints is { } joints && deform.JointWeights is { } pulls)
+        {
+            for (int corner = 0; corner < corners.Length && corner < joints.Length; corner++)
+            {
+                Vector4 j = joints[corner];
+                Vector4 w = pulls[corner];
+                float total = w.X + w.Y + w.Z + w.W;
+                if (total <= 0.0f)
+                {
+                    continue;
+                }
+
+                Matrix4x4 skin = (Bone(bones, j.X) * (w.X / total)) + (Bone(bones, j.Y) * (w.Y / total)) + (Bone(bones, j.Z) * (w.Z / total)) + (Bone(bones, j.W) * (w.W / total));
+                corners[corner].Position = Vector3.Transform(corners[corner].Position, skin);
+                corners[corner].Normal = Vector3.TransformNormal(corners[corner].Normal, skin);
+                Vector3 tangent = Vector3.TransformNormal(new Vector3(corners[corner].Tangent.X, corners[corner].Tangent.Y, corners[corner].Tangent.Z), skin);
+                corners[corner].Tangent = new Vector4(tangent, corners[corner].Tangent.W);
+            }
+        }
+
+        for (int corner = 0; corner < corners.Length; corner++)
+        {
+            if (corners[corner].Normal.LengthSquared() > 1e-12f)
+            {
+                corners[corner].Normal = Vector3.Normalize(corners[corner].Normal);
+            }
+        }
+
+        return new MeshData(rest.Key, corners, rest.Indices, rest.Parts) { Rest = rest };
+
+        static Matrix4x4 Bone(Matrix4x4[] bones, float index) =>
+            (int)index is var at && at >= 0 && at < bones.Length ? bones[at] : Matrix4x4.Identity;
     }
 
     /// <summary>A translation or scale channel's value at a time.</summary>
@@ -406,27 +562,48 @@ public static class Gltf
                 }
             }
 
-            if (Array("skins").Any())
-            {
-                _problems.Add("It has skins (bones); they are not followed, so skinned meshes stay in their rest pose.");
-            }
-
             ImmutableArray<PbrMaterial> materials = [.. Array("materials").Select(Material)];
             var meshes = ImmutableArray.CreateBuilder<MeshData>();
             var meshMaterials = ImmutableArray.CreateBuilder<ImmutableArray<PbrMaterial>>();
+            var deforms = ImmutableArray.CreateBuilder<GltfDeform?>();
             int meshIndex = 0;
             foreach (JsonElement mesh in Array("meshes"))
             {
-                (MeshData data, ImmutableArray<PbrMaterial> used) = Mesh(mesh, meshIndex++, materials);
+                (MeshData data, ImmutableArray<PbrMaterial> used, GltfDeform? deform) = Mesh(mesh, meshIndex++, materials);
                 meshes.Add(data);
                 meshMaterials.Add(used);
+                deforms.Add(deform);
             }
+
+            ImmutableArray<GltfSkin> skins = [.. Array("skins").Select(Skin)];
 
             ImmutableArray<GltfNode> nodes = [.. Array("nodes").Select(Node)];
             ImmutableArray<int> roots = Roots(nodes);
             ImmutableArray<GltfAnimation> animations = [.. Array("animations").Select(Animation)];
 
-            return new GltfModel(meshes.ToImmutable(), meshMaterials.ToImmutable(), nodes, roots, animations, [.. _problems.Distinct(StringComparer.Ordinal)]);
+            return new GltfModel(meshes.ToImmutable(), meshMaterials.ToImmutable(), nodes, roots, animations, [.. _problems.Distinct(StringComparer.Ordinal)])
+            {
+                Skins = skins,
+                Deforms = deforms.ToImmutable(),
+            };
+        }
+
+        private GltfSkin Skin(JsonElement skin)
+        {
+            ImmutableArray<int> joints = skin.TryGetProperty("joints", out JsonElement list) ? [.. list.EnumerateArray().Select(joint => joint.GetInt32())] : [];
+            var inverse = new Matrix4x4[joints.Length];
+            System.Array.Fill(inverse, Matrix4x4.Identity);
+            if (skin.TryGetProperty("inverseBindMatrices", out JsonElement accessor))
+            {
+                float[] e = Accessor(accessor.GetInt32(), out int count);
+                for (int joint = 0; joint < inverse.Length && joint < count && (joint * 16) + 16 <= e.Length; joint++)
+                {
+                    int at = joint * 16;
+                    inverse[joint] = new Matrix4x4(e[at], e[at + 1], e[at + 2], e[at + 3], e[at + 4], e[at + 5], e[at + 6], e[at + 7], e[at + 8], e[at + 9], e[at + 10], e[at + 11], e[at + 12], e[at + 13], e[at + 14], e[at + 15]);
+                }
+            }
+
+            return new GltfSkin(joints, inverse);
         }
 
         private ImmutableArray<int> Roots(ImmutableArray<GltfNode> nodes)
@@ -462,7 +639,11 @@ public static class Gltf
 
             int mesh = node.TryGetProperty("mesh", out JsonElement meshIndex) ? meshIndex.GetInt32() : -1;
             ImmutableArray<int> children = node.TryGetProperty("children", out JsonElement list) ? [.. list.EnumerateArray().Select(child => child.GetInt32())] : [];
-            return new GltfNode(Text(node, "name"), translation, rotation, scale, matrix, mesh, children);
+            return new GltfNode(Text(node, "name"), translation, rotation, scale, matrix, mesh, children)
+            {
+                Skin = node.TryGetProperty("skin", out JsonElement skin) ? skin.GetInt32() : -1,
+                Weights = node.TryGetProperty("weights", out JsonElement weights) ? Floats(weights) : null,
+            };
         }
 
         private GltfAnimation Animation(JsonElement animation)
@@ -482,11 +663,11 @@ public static class Gltf
                     "translation" => GltfPath.Translation,
                     "rotation" => GltfPath.Rotation,
                     "scale" => GltfPath.Scale,
+                    "weights" => GltfPath.Weights,
                     _ => null,
                 };
                 if (path is null)
                 {
-                    _problems.Add("It animates morph target weights, which are not followed.");
                     continue;
                 }
 
@@ -506,8 +687,14 @@ public static class Gltf
             return new GltfAnimation(Text(animation, "name"), channels.ToImmutable());
         }
 
-        private (MeshData Mesh, ImmutableArray<PbrMaterial> Materials) Mesh(JsonElement mesh, int index, ImmutableArray<PbrMaterial> materials)
+        private (MeshData Mesh, ImmutableArray<PbrMaterial> Materials, GltfDeform? Deform) Mesh(JsonElement mesh, int index, ImmutableArray<PbrMaterial> materials)
         {
+            float[] restWeights = mesh.TryGetProperty("weights", out JsonElement meshWeights) ? Floats(meshWeights) : [];
+            var targetMoves = new List<List<Vector3>>();
+            var targetTurns = new List<List<Vector3>>();
+            var joints = new List<Vector4>();
+            var pulls = new List<Vector4>();
+            bool skinned = false;
             var vertices = new List<MeshVertex>();
             var indices = new List<uint>();
             var parts = ImmutableArray.CreateBuilder<MeshPart>();
@@ -526,11 +713,6 @@ public static class Gltf
                     && !primitive.GetProperty("attributes").TryGetProperty("POSITION", out _))
                 {
                     continue;
-                }
-
-                if (primitive.TryGetProperty("targets", out _))
-                {
-                    _problems.Add("It has morph targets, which are not followed.");
                 }
 
                 JsonElement attributes = primitive.GetProperty("attributes");
@@ -573,6 +755,41 @@ public static class Gltf
                     MeshData.ComputeTangents(corners, local);
                 }
 
+                // Morph targets: each a move of every corner (Phase 49a); a primitive without one moves nothing.
+                JsonElement[] targets = primitive.TryGetProperty("targets", out JsonElement targetList) ? [.. targetList.EnumerateArray()] : [];
+                while (targetMoves.Count < targets.Length)
+                {
+                    targetMoves.Add([.. Enumerable.Repeat(Vector3.Zero, vertices.Count)]);
+                    targetTurns.Add([.. Enumerable.Repeat(Vector3.Zero, vertices.Count)]);
+                }
+
+                for (int target = 0; target < targetMoves.Count; target++)
+                {
+                    float[]? moves = target < targets.Length && targets[target].TryGetProperty("POSITION", out JsonElement p) ? Accessor(p.GetInt32(), out _) : null;
+                    float[]? turns = target < targets.Length && targets[target].TryGetProperty("NORMAL", out JsonElement q) ? Accessor(q.GetInt32(), out _) : null;
+                    for (int corner = 0; corner < count; corner++)
+                    {
+                        targetMoves[target].Add(moves is { } mm && mm.Length >= (corner * 3) + 3 ? new Vector3(mm[corner * 3], mm[(corner * 3) + 1], mm[(corner * 3) + 2]) : Vector3.Zero);
+                        targetTurns[target].Add(turns is { } tn && tn.Length >= (corner * 3) + 3 ? new Vector3(tn[corner * 3], tn[(corner * 3) + 1], tn[(corner * 3) + 2]) : Vector3.Zero);
+                    }
+                }
+
+                // Bones: four per corner and how much each pulls.
+                float[]? bones = attributes.TryGetProperty("JOINTS_0", out JsonElement j) ? Accessor(j.GetInt32(), out _, exactIntegers: true) : null;
+                float[]? weights = attributes.TryGetProperty("WEIGHTS_0", out JsonElement w) ? Accessor(w.GetInt32(), out _) : null;
+                if (attributes.TryGetProperty("JOINTS_1", out _))
+                {
+                    _problems.Add("Some corners have more than four bones; only the first four are followed.");
+                }
+
+                skinned |= bones is not null && weights is not null;
+                for (int corner = 0; corner < count; corner++)
+                {
+                    bool has = bones is { } bb && weights is { } ww && bb.Length >= (corner * 4) + 4 && ww.Length >= (corner * 4) + 4;
+                    joints.Add(has ? new Vector4(bones![corner * 4], bones[(corner * 4) + 1], bones[(corner * 4) + 2], bones[(corner * 4) + 3]) : Vector4.Zero);
+                    pulls.Add(has ? new Vector4(weights![corner * 4], weights[(corner * 4) + 1], weights[(corner * 4) + 2], weights[(corner * 4) + 3]) : Vector4.Zero);
+                }
+
                 uint baseVertex = (uint)vertices.Count;
                 parts.Add(new MeshPart(indices.Count, local.Length, used.Count));
                 vertices.AddRange(corners);
@@ -581,7 +798,21 @@ public static class Gltf
                 used.Add(material >= 0 && material < materials.Length ? materials[material] : PbrMaterial.Default);
             }
 
-            return (new MeshData(string.Create(CultureInfo.InvariantCulture, $"gltf:{key}:{index}"), [.. vertices], [.. indices], parts.ToImmutable()), used.ToImmutable());
+            // Targets the later primitives did not have move nothing there either.
+            foreach (List<Vector3> list in targetMoves.Concat(targetTurns))
+            {
+                list.AddRange(Enumerable.Repeat(Vector3.Zero, vertices.Count - list.Count));
+            }
+
+            GltfDeform? deform = targetMoves.Count > 0 || skinned
+                ? new GltfDeform(
+                    [.. targetMoves.Select(list => list.ToArray())],
+                    [.. targetTurns.Select(list => list.ToArray())],
+                    [.. Enumerable.Range(0, targetMoves.Count).Select(target => target < restWeights.Length ? restWeights[target] : 0.0f)],
+                    skinned ? [.. joints] : null,
+                    skinned ? [.. pulls] : null)
+                : null;
+            return (new MeshData(string.Create(CultureInfo.InvariantCulture, $"gltf:{key}:{index}"), [.. vertices], [.. indices], parts.ToImmutable()), used.ToImmutable(), deform);
         }
 
         private PbrMaterial Material(JsonElement material)

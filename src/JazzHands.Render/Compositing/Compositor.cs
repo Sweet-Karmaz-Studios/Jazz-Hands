@@ -92,6 +92,10 @@ public sealed class Compositor : IDisposable
     private readonly Dictionary<string, VideoTransition?> _transitions = new(StringComparer.Ordinal);
 
     private Scene3D? _scene;
+
+    /// <summary>How many meshes the 3D scene keeps on the GPU, for tests.</summary>
+    internal int Scene3DMeshesHeld => _scene?.MeshesHeld ?? 0;
+
     private Dictionary<RenderGraph, RenderTarget>? _sharedCanvases;
     private Shaders? _shaders;
     private int _shaderGeneration = -1;
