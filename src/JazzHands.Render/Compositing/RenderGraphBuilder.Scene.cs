@@ -255,7 +255,8 @@ public static partial class RenderGraphBuilder
     /// <summary>
     /// A 3D clip as a scene layer: its picture drawn alone into a canvas at the resolution it is
     /// seen at, with its effects and masks, and the matrix that sets the canvas in the world.
-    /// Null when it has no picture or no size.
+    /// Null when it has no picture or no size. Inside a transition its picture is asked for on
+    /// the side's own decoder <paramref name="lane"/>, at the source time <paramref name="shown"/>.
     /// </summary>
     private static ScenePart? SceneLayerOf(
         Project project,
@@ -270,10 +271,13 @@ public static partial class RenderGraphBuilder
         int depth,
         Rational frameRate,
         SceneCamera camera,
-        AcesOutput? aces)
+        AcesOutput? aces,
+        int? lane = null,
+        Flicks? shown = null)
     {
         Flicks local = time - clip.Start;
-        if (Source(project, clip, time, track.Order, frameSize, output, frames, options, depth, frameRate) is not { } source)
+        Flicks picture = shown ?? time;
+        if (Source(project, clip, picture, lane ?? track.Order, frameSize, output, frames, options, depth, frameRate) is not { } source)
         {
             return null;
         }
@@ -288,7 +292,7 @@ public static partial class RenderGraphBuilder
         }
 
         Matrix4x4 placement = LayerPlacement(clip, local, fit);
-        ImmutableArray<EffectNode> effects = PersonMattes(project, clip, time, Effects(clip, track, local, time, sequence, options), frames);
+        ImmutableArray<EffectNode> effects = PersonMattes(project, clip, picture, Effects(clip, track, local, time, sequence, options), frames);
 
         // Canvas texels per sequence pixel of the unscaled picture: what one of them spans on
         // screen, so the canvas is drawn at about the size it is seen and neither blurs nor
@@ -314,13 +318,13 @@ public static partial class RenderGraphBuilder
         int height = (int)MathF.Ceiling(fitted.Y * texels) + (2 * margin);
         var canvasSize = new Vector2(width, height);
 
-        Matrix3x2 steady = Steady(project, clip, time, source.Size, frames, options);
+        Matrix3x2 steady = Steady(project, clip, picture, source.Size, frames, options);
         Matrix3x2 intoCanvas = steady
             * Matrix3x2.CreateTranslation(-source.Size / 2.0f)
             * Matrix3x2.CreateScale(fit * texels)
             * Matrix3x2.CreateTranslation(canvasSize / 2.0f);
 
-        var picture = new LayerNode(
+        var drawn = new LayerNode(
             source.Source,
             (int)source.Size.X,
             (int)source.Size.Y,
@@ -335,7 +339,7 @@ public static partial class RenderGraphBuilder
             Effects = Composited(project, clip, time, effects, frames, canvasSize / texels, (width, height), texels, options, depth, frameRate),
         };
 
-        var canvas = new RenderGraph(width, height, [picture])
+        var canvas = new RenderGraph(width, height, [drawn])
         {
             Bicubic = options.Bicubic,
             ProjectFolder = options.ProjectFolder,

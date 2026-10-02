@@ -292,23 +292,28 @@ public static partial class RenderGraphBuilder
 
             DriverScope.Origin = clip.Start;
 
-            if (track.Kind == TrackKind.Video && SceneObjects.IsMesh(clip.GeneratorId))
+            if (track.Kind == TrackKind.Video && (SceneObjects.IsMesh(clip.GeneratorId) || clip.Layer3D is not null))
             {
                 setup ??= SceneAt(project, sequence, time, options, frames);
                 DriverScope.Origin = clip.Start;
-                scene.Add(MeshPartOf(track, clip, time, options));
-                continue;
-            }
-
-            if (track.Kind == TrackKind.Video && clip.Layer3D is not null)
-            {
-                setup ??= SceneAt(project, sequence, time, options, frames);
-                DriverScope.Origin = clip.Start;
-                if (SceneLayerOf(project, sequence, track, clip, time, frameSize, (width, height), frames, options, depth, settings.FrameRate, setup.Value.Camera, aces) is { } item)
+                ScenePart? item = SceneObjects.IsMesh(clip.GeneratorId)
+                    ? MeshPartOf(track, clip, time, options)
+                    : SceneLayerOf(project, sequence, track, clip, time, frameSize, (width, height), frames, options, depth, settings.FrameRate, setup.Value.Camera, aces);
+                if (item is null)
                 {
-                    scene.Add(item);
+                    continue;
                 }
 
+                // A track matte cuts the 3D clip as it is seen (Phase 49a): it is drawn as a scene of
+                // its own, through the same camera and lights, and matted like any layer.
+                if (Matted(project, sequence, TrackMatte.For(clip, track), time, frames, options, depth) is { } cut)
+                {
+                    EndScene();
+                    layers.Add(SceneNode(project, sequence, time, frames, [item], setup.Value, (width, height), options, settings.FrameRate) with { TrackMatte = cut });
+                    continue;
+                }
+
+                scene.Add(item);
                 continue;
             }
 
@@ -377,7 +382,7 @@ public static partial class RenderGraphBuilder
     {
         LayerNode? Side(Clip clip, int lane)
         {
-            if (!clip.Enabled)
+            if (!clip.Enabled || SceneObjects.Is(clip))
             {
                 return null;
             }
@@ -385,6 +390,18 @@ public static partial class RenderGraphBuilder
             DriverScope.Origin = clip.Start;
             Flicks local = time - clip.Start;
             Flicks shown = TransitionTiming.ClampToSource(project, clip, time);
+
+            // A 3D clip is drawn as a scene of its own (Phase 49a): seen through the camera and lit
+            // by the lights there are, then mixed like any picture.
+            if (SceneObjects.IsMesh(clip.GeneratorId) || clip.Layer3D is not null)
+            {
+                (SceneCamera Camera, ImmutableArray<SceneLight> Lights) setup = SceneAt(project, sequence, time, options, frames);
+                AcesOutput? aces = project.Settings.ColorManagement is { IsAces: true } managed ? managed.Output : null;
+                ScenePart? part = SceneObjects.IsMesh(clip.GeneratorId)
+                    ? MeshPartOf(track, clip, time, options)
+                    : SceneLayerOf(project, sequence, track, clip, time, frameSize, output, frames, options, depth, frameRate, setup.Camera, aces, lane, shown);
+                return part is null ? null : SceneNode(project, sequence, time, frames, [part], setup, output, options, frameRate);
+            }
             if (Source(project, clip, shown, lane, frameSize, output, frames, options, depth, frameRate) is not { } source)
             {
                 return null;
