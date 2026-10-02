@@ -171,14 +171,14 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
 
     /// <summary>Whether a picture clip blurs with its speed (Phase 45), sent as <c>clip.set-speed-blur</c>.</summary>
     internal static ParamDescriptor SpeedBlurParam { get; } = new(
-        "speed-blur", ParamType.Bool, new ParamValue.Bool(false), "Blur follows speed",
-        "Where the clip runs fast the picture streaks as a camera's shutter would at that speed; at normal speed it stays sharp.",
+        "speed-blur", ParamType.Bool, new ParamValue.Bool(false), "Speed blur",
+        "Blur that follows the speed: where the clip runs fast the picture streaks as a camera's shutter would at that speed; at normal speed it stays sharp.",
         Animatable: false);
 
     /// <summary>Above what speed a sound clip is silent (Phase 45), sent as <c>clip.set-fast-mute</c>.</summary>
     internal static ParamDescriptor FastMuteParam { get; } = new(
-        "fast-mute", ParamType.Enum, new ParamValue.Enum("never"), "Silent when faster than",
-        "For speed ramps: the sound drops out where the clip plays faster than this, and comes back after.",
+        "fast-mute", ParamType.Enum, new ParamValue.Enum("never"), "Mute above",
+        "For speed ramps: the sound is silent where the clip plays faster than this, and comes back after.",
         Animatable: false, Choices: new EquatableArray<string>([.. FastMuteChoices.Select(pair => pair.Name)]));
 
     private static (string Name, Rational? Speed)[] FastMuteChoices =>
