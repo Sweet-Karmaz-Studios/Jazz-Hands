@@ -331,7 +331,8 @@ public static partial class RenderGraphBuilder
             Mattes(clip.Masks, local),
             texels)
         {
-            Effects = effects,
+            // A comp graph on a 3D layer works in its canvas: that is its frame.
+            Effects = Composited(project, clip, time, effects, frames, canvasSize / texels, (width, height), texels, options, depth, frameRate),
         };
 
         var canvas = new RenderGraph(width, height, [picture])
@@ -366,11 +367,21 @@ public static partial class RenderGraphBuilder
         }
 
         Flicks local = time - clip.Start;
-        Matrix4x4 placement = LayerPlacement(clip, local, Vector2.One);
-        float opacity = Float(clip.Opacity, Intrinsic.Opacity, local);
-        bool casts = clip.Layer3D?.CastsShadows ?? true;
-        bool accepts = clip.Layer3D?.AcceptsShadows ?? true;
-        bool lights = clip.Layer3D?.AcceptsLights ?? true;
+        return MeshesFrom(
+            type,
+            p,
+            local,
+            LayerPlacement(clip, local, Vector2.One),
+            Float(clip.Opacity, Intrinsic.Opacity, local),
+            clip.Layer3D?.CastsShadows ?? true,
+            clip.Layer3D?.AcceptsShadows ?? true,
+            clip.Layer3D?.AcceptsLights ?? true,
+            options);
+    }
+
+    /// <summary>The meshes of text, a shape or a model from its parameters at a moment, each placed in the world.</summary>
+    private static ImmutableArray<SceneMesh> MeshesFrom(string type, ParameterSet p, Flicks local, Matrix4x4 placement, float opacity, bool casts, bool accepts, bool lights, RenderOptions options)
+    {
         SceneMesh Placed(MeshData mesh, ImmutableArray<PbrMaterial> materials, Matrix4x4 own) => new(mesh, materials, own * placement, opacity, casts, accepts, lights);
         PbrMaterial Painted(Vector4 color) => new(color, Math.Clamp(p.Float("metallic"), 0.0f, 1.0f), Math.Clamp(p.Float("roughness"), 0.0f, 1.0f));
 
@@ -491,13 +502,12 @@ public static partial class RenderGraphBuilder
         return 0;
     }
 
-    private static SceneCamera CameraOf(Clip clip, Flicks time, Vector2 frameSize, RenderOptions options)
-    {
-        if (OwnParameters(clip, SceneObjects.Camera, time, options) is not { } p)
-        {
-            return DefaultCamera(frameSize);
-        }
+    private static SceneCamera CameraOf(Clip clip, Flicks time, Vector2 frameSize, RenderOptions options) =>
+        OwnParameters(clip, SceneObjects.Camera, time, options) is { } p ? CameraFrom(p, frameSize) : DefaultCamera(frameSize);
 
+    /// <summary>A camera from its parameters.</summary>
+    private static SceneCamera CameraFrom(ParameterSet p, Vector2 frameSize)
+    {
         float dolly = p.Float("dolly");
         var target = new Vector3(p.Float2("target"), p.Float("target-z"));
         (Vector3 position, Vector3 right, Vector3 down, Vector3 forward, float zoom) = SceneMath.Camera(
@@ -521,13 +531,12 @@ public static partial class RenderGraphBuilder
         return new SceneCamera(position, right, down, forward, zoom, frameSize, p.Bool("depth-of-field"), focus, MathF.Max(p.Float("aperture"), 0.0f));
     }
 
-    private static SceneLight? LightOf(Project project, Clip clip, Flicks time, RenderOptions options, IFrameProvider? frames)
-    {
-        if (OwnParameters(clip, SceneObjects.Light, time, options) is not { } p)
-        {
-            return null;
-        }
+    private static SceneLight? LightOf(Project project, Clip clip, Flicks time, RenderOptions options, IFrameProvider? frames) =>
+        OwnParameters(clip, SceneObjects.Light, time, options) is { } p ? LightFrom(project, clip.Id, p, frames) : null;
 
+    /// <summary>A light from its parameters; <paramref name="id"/> keeps an environment light's picture apart from any other.</summary>
+    private static SceneLight LightFrom(Project project, string id, ParameterSet p, IFrameProvider? frames)
+    {
         SceneLightKind kind = p.Enum("kind") switch
         {
             "ambient" => SceneLightKind.Ambient,
@@ -551,7 +560,7 @@ public static partial class RenderGraphBuilder
         if (kind == SceneLightKind.Environment && frames is not null && p.Text("image") is { Length: > 0 } mediaId
             && project.MediaItem(mediaId) is { } media)
         {
-            var still = new Clip(clip.Id + ":environment", new TimeRange(Flicks.Zero, Flicks.Max(media.Duration, new Flicks(1))), Flicks.Zero, MediaId: media.Id);
+            var still = new Clip(id + ":environment", new TimeRange(Flicks.Zero, Flicks.Max(media.Duration, new Flicks(1))), Flicks.Zero, MediaId: media.Id);
             if (frames.Frame(project, still, Flicks.Zero, EnvironmentLane) is { } frame)
             {
                 image = new FrameLayerSource(frame.Frame, frame.Color, frame.Identity);

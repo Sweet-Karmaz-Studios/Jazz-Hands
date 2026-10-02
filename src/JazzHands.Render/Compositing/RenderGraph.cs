@@ -207,6 +207,9 @@ public sealed record EffectNode(EffectDescriptor Descriptor, ParameterSet Parame
     /// <summary>A <c>color.graph</c> effect's nodes, in the order they are drawn; empty for every other effect.</summary>
     public ImmutableArray<GradeStep> Grade { get; init; } = [];
 
+    /// <summary>A <c>comp.graph</c> effect's nodes, in the order they are drawn, the output last; empty for every other effect.</summary>
+    public ImmutableArray<CompStep> Comp { get; init; } = [];
+
     /// <summary>A runner in place of the descriptor's class, for effects that are not registered.</summary>
     public ILayerEffect? Custom { get; init; }
 
@@ -228,3 +231,76 @@ public sealed record EffectNode(EffectDescriptor Descriptor, ParameterSet Parame
 /// <param name="Key">The step whose matte limits this one, or -1 for none.</param>
 /// <param name="IsMatte">True for a qualifier drawn as its matte, for another step's key.</param>
 public sealed record GradeStep(EffectNode? Node, ImmutableArray<int> Inputs, ImmutableArray<float> Shares, int Key = -1, bool IsMatte = false);
+
+/// <summary>What a step of a comp graph does (Phase 49).</summary>
+public enum CompStepKind
+{
+    /// <summary>The picture coming into the graph.</summary>
+    In,
+
+    /// <summary>A picture drawn alone: other media or a generator.</summary>
+    Picture,
+
+    /// <summary>An effect on its input.</summary>
+    Effect,
+
+    /// <summary>Its input moved, scaled and turned.</summary>
+    Transform,
+
+    /// <summary>A foreground over a background.</summary>
+    Merge,
+
+    /// <summary>Its input kept where a matte says.</summary>
+    Matte,
+
+    /// <summary>A 3D scene of planes and geometry.</summary>
+    Render3D,
+
+    /// <summary>Its input as it is: an output, a plane, a node switched off or one that cannot draw.</summary>
+    Pass,
+
+    /// <summary>No picture: a camera, a light or geometry, which only a 3D render reads.</summary>
+    Empty,
+}
+
+/// <summary>
+/// One step of a comp graph as drawn (Phase 49), with everything already evaluated at the frame.
+/// Every step makes a frame-sized picture at the working resolution.
+/// </summary>
+/// <param name="Kind">What it does.</param>
+/// <param name="Inputs">Earlier steps it reads, by index, in its ports' order; -1 for a port with nothing wired in.</param>
+public sealed record CompStep(CompStepKind Kind, ImmutableArray<int> Inputs)
+{
+    /// <summary>The node's id, for diagnostics.</summary>
+    public string NodeId { get; init; } = string.Empty;
+
+    /// <summary>An effect step's effect.</summary>
+    public EffectNode? Effect { get; init; }
+
+    /// <summary>A picture step's picture, as a layer drawn alone.</summary>
+    public LayerNode? Picture { get; init; }
+
+    /// <summary>The frame a transform's or a merge's matrix maps from, in its own pixels.</summary>
+    public Vector2 Frame { get; init; }
+
+    /// <summary>A transform's or a merge's foreground's matrix, frame pixels to output pixels.</summary>
+    public Matrix3x2 Transform { get; init; } = Matrix3x2.Identity;
+
+    /// <summary>A merge's opacity.</summary>
+    public float Opacity { get; init; } = 1.0f;
+
+    /// <summary>A merge's blend.</summary>
+    public BlendMode Blend { get; init; }
+
+    /// <summary>A merge's mask: the step whose alpha limits the foreground, or -1.</summary>
+    public int Mask { get; init; } = -1;
+
+    /// <summary>A matte's mode: 0 alpha, 1 luma, 2 and 3 those inverted.</summary>
+    public uint MatteMode { get; init; }
+
+    /// <summary>A 3D render's scene; its layers' canvases are the steps in <see cref="Planes"/>.</summary>
+    public Scene.SceneLayerSource? Scene { get; init; }
+
+    /// <summary>A 3D render: the step drawing each of its layers' pictures, in the scene's order.</summary>
+    public ImmutableArray<int> Planes { get; init; } = [];
+}

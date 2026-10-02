@@ -114,6 +114,12 @@ public sealed record RenderOptions
     /// </summary>
     public int MaxBlurSamples { get; init; } = MotionBlur.MaxSamples;
 
+    /// <summary>
+    /// A comp graph node to look at (Phase 49): the graph that has it shows that node's picture
+    /// instead of its output, so any node can be seen. Null for every graph's output.
+    /// </summary>
+    public string? CompView { get; init; }
+
     /// <summary>What the preview gets at a given quality divisor: 1, 2 or 4.</summary>
     public static RenderOptions ForDivisor(int divisor) => new() { Scale = 1.0f / Math.Max(1, divisor) };
 }
@@ -308,7 +314,7 @@ public static partial class RenderGraphBuilder
 
             Flicks local = time - clip.Start;
 
-            ImmutableArray<EffectNode> effects = PersonMattes(project, clip, time, Effects(clip, track, local, time, sequence, options), frames);
+            ImmutableArray<EffectNode> effects = Composited(project, clip, time, PersonMattes(project, clip, time, Effects(clip, track, local, time, sequence, options), frames), frames, frameSize, (width, height), options.Scale, options, depth, settings.FrameRate);
 
             if (track.Kind == TrackKind.Adjustment)
             {
@@ -384,7 +390,7 @@ public static partial class RenderGraphBuilder
                 return null;
             }
 
-            return Layer(clip, local, source, frameSize, options, Steady(project, clip, shown, source.Size, frames, options)) with { Effects = PersonMattes(project, clip, shown, Effects(clip, track, local, time, sequence, options), frames) };
+            return Layer(clip, local, source, frameSize, options, Steady(project, clip, shown, source.Size, frames, options)) with { Effects = Composited(project, clip, time, PersonMattes(project, clip, shown, Effects(clip, track, local, time, sequence, options), frames), frames, frameSize, output, options.Scale, options, depth, frameRate) };
         }
 
         Transition transition = span.Transition;

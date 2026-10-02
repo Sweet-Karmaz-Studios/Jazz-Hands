@@ -236,13 +236,15 @@ public sealed record Fade(Flicks Duration, Interp Curve = Interp.Linear) : IEqua
 /// <param name="Parameters">Parameter values by name, each of which may be animated.</param>
 /// <param name="Masks">Shapes limiting where the effect applies, in the order they combine; everywhere when none.</param>
 /// <param name="Graph">A <c>color.graph</c> effect's nodes (Phase 44); null for every other effect.</param>
+/// <param name="Comp">A <c>comp.graph</c> effect's nodes (Phase 49); null for every other effect.</param>
 public sealed record Effect(
     string Id,
     string TypeId,
     bool Enabled,
     EquatableArray<EffectParameter> Parameters,
     EquatableArray<Mask> Masks = default,
-    GradeGraph? Graph = null) : IEquatable<Effect>
+    GradeGraph? Graph = null,
+    CompGraph? Comp = null) : IEquatable<Effect>
 {
     /// <summary>Creates an effect with no parameters set, so every parameter takes its default.</summary>
     public static Effect Create(string typeId) =>

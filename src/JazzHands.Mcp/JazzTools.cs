@@ -135,6 +135,11 @@ public sealed class JazzTools
             call["sequence"] = sequence.DeepClone();
         }
 
+        if (args["node"] is { } node)
+        {
+            call["node"] = node.DeepClone();
+        }
+
         JsonNode? frame = await _link.CallAsync("render.frame", call, cancellationToken).ConfigureAwait(false);
         byte[] png = Convert.FromBase64String(frame!["data"]!.GetValue<string>());
         long at = frame["at"]!.GetValue<long>();
@@ -391,7 +396,7 @@ public sealed class JazzTools
                 null, "describe", true),
             new("render_frame", "inspect",
                 "Look at one frame exactly as the editor's preview draws it: a PNG. Use after layout, title, colour or transform changes to check the picture.",
-                Schema($$$"""{"type":"object","properties":{"at":{"type":["string","integer"],"description":"When: {{{Time}}}"},"sequenceId":{"type":"string","description":"Which sequence; the active one when left out"},"width":{"type":"integer","default":960,"minimum":16,"maximum":7680,"description":"Width in pixels; the height follows the sequence"}},"required":["at"],"additionalProperties":false}"""),
+                Schema($$$"""{"type":"object","properties":{"at":{"type":["string","integer"],"description":"When: {{{Time}}}"},"sequenceId":{"type":"string","description":"Which sequence; the active one when left out"},"width":{"type":"integer","default":960,"minimum":16,"maximum":7680,"description":"Width in pixels; the height follows the sequence"},"node":{"type":"string","description":"A comp graph node to look at instead of its graph's output"}},"required":["at"],"additionalProperties":false}"""),
                 null, null, true),
             new("contact_sheet", "inspect",
                 "See a whole edit at once: frames at even steps across a sequence tiled into one labelled PNG. Good for reviewing pacing and shot order.",

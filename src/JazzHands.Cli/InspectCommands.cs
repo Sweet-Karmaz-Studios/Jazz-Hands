@@ -48,10 +48,11 @@ public static class InspectCommands
         var sheet = new Option<bool>("--sheet") { Description = "Draw several frames side by side, labelled with their times: an animated effect or a template judged from one picture." };
         var times = new Option<string>("--times") { Description = "With --sheet: fractions of the way through, 0 the start and 1 the last frame.", DefaultValueFactory = _ => "0,0.25,0.5,0.75,1" };
         var clip = new Option<string?>("--clip") { Description = "With --sheet: through this clip rather than the whole sequence." };
+        var node = new Option<string?>("--node") { Description = "Show this comp graph node's picture in place of its graph's output, to look at any node." };
 
         var command = new Command("frame", "Draw one frame of a sequence to a PNG exactly as the editor's preview shows it, to look at, or with --sheet several across a clip. 'jazz export still' writes the frame an export would.")
         {
-            project, at, output, size, sequence, sheet, times, clip,
+            project, at, output, size, sequence, sheet, times, clip, node,
         };
 
         command.SetAction(parse => ExportCommands.Guard(parse, token =>
@@ -81,7 +82,7 @@ public static class InspectCommands
 
             using RenderDevice device = RenderDevice.Create();
             using var renderer = new StillRenderer(device);
-            (int drawnWidth, int drawnHeight) = Draw(renderer, loaded, chosen, time, width, path, file);
+            (int drawnWidth, int drawnHeight) = Draw(renderer, loaded, chosen, time, width, path, file, parse.GetValue(node));
             return Wrote(parse, file, $"{drawnWidth}x{drawnHeight}, frame {time.ToFrames(rate, RoundingMode.Floor)} at {Timecode.FormatClock(time)}", new { at = time, frame = time.ToFrames(rate, RoundingMode.Floor), width = drawnWidth, height = drawnHeight });
         }));
 
@@ -89,7 +90,7 @@ public static class InspectCommands
     }
 
     /// <summary>One frame as the preview draws it, written as a PNG.</summary>
-    private static (int Width, int Height) Draw(StillRenderer renderer, Project project, Sequence sequence, Flicks time, int width, string projectPath, string file)
+    private static (int Width, int Height) Draw(StillRenderer renderer, Project project, Sequence sequence, Flicks time, int width, string projectPath, string file, string? node = null)
     {
         if (time < Flicks.Zero || time >= sequence.Duration)
         {
@@ -101,7 +102,7 @@ public static class InspectCommands
             throw new CommandException("unsupported-container", $"A frame is written as a PNG; '{file}' is not a .png file.");
         }
 
-        (int drawnWidth, int drawnHeight, byte[] bgra) = renderer.RenderPreview(project, sequence, time, width, projectPath);
+        (int drawnWidth, int drawnHeight, byte[] bgra) = renderer.RenderPreview(project, sequence, time, width, projectPath, node);
         Directory.CreateDirectory(Path.GetDirectoryName(file) ?? ".");
         PngWriter.Write(file, drawnWidth, drawnHeight, bgra);
         return (drawnWidth, drawnHeight);

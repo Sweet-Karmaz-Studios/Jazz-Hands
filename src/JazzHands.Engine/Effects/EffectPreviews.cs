@@ -289,11 +289,35 @@ public sealed class EffectPreviews : IDisposable
         return new Clip(Id.New(), new TimeRange(Flicks.Zero, Length), Flicks.Zero, GeneratorId: typeId, Name: typeId, Effects: EquatableArray.Create(own));
     }
 
-    /// <summary>An effect at its defaults, or at its showcase settings when it has some; a node graph with a grade of two nodes side by side.</summary>
+    /// <summary>
+    /// An effect at its defaults, or at its showcase settings when it has some; a node graph with a
+    /// grade of two nodes side by side, and a comp graph with the picture inset over itself blurred.
+    /// </summary>
     private static Effect Configured(EffectDescriptor descriptor)
     {
         Effect effect = Set(Effect.Create(descriptor.TypeId) with { Id = PreviewEffectId }, descriptor, Showcase.TryGetValue(descriptor.TypeId, out (string, string)[]? settings) ? settings : []);
-        return descriptor.TypeId == GradeGraph.TypeId ? effect with { Graph = DemoGraph() } : effect;
+        return descriptor.TypeId switch
+        {
+            GradeGraph.TypeId => effect with { Graph = DemoGraph() },
+            CompGraph.TypeId => effect with { Comp = DemoComp() },
+            _ => effect,
+        };
+    }
+
+    /// <summary>The picture shrunk and turned, merged over a blurred copy of itself: what a comp graph does at a glance.</summary>
+    private static CompGraph DemoComp()
+    {
+        Effect input = Effect.Create(CompGraph.In) with { Id = "01M3B0000000000000000CMPX1" };
+        Effect blur = Set(Effect.Create("video.blur.gaussian") with { Id = "01M3B0000000000000000CMPX2" }, EffectCatalog.Registry.Require("video.blur.gaussian"), [("radius", "24")]);
+        Effect merge = Set(Effect.Create(CompGraph.Merge) with { Id = "01M3B0000000000000000CMPX3" }, CompNodes.Merge, [("scale", "0.6, 0.6"), ("rotation", "-6")]);
+        Effect output = Effect.Create(CompGraph.Out) with { Id = "01M3B0000000000000000CMPX4" };
+        return new CompGraph(
+        [
+            new CompNode(input),
+            new CompNode(blur, [new CompInput("input", input.Id)]),
+            new CompNode(merge, [new CompInput("background", blur.Id), new CompInput("foreground", input.Id)]),
+            new CompNode(output, [new CompInput("input", merge.Id)]),
+        ]);
     }
 
     /// <summary>A warm node and a cool, flatter one beside it, mixed: what a node graph does at a glance.</summary>

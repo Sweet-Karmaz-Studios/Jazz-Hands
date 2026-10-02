@@ -203,6 +203,7 @@ Draw one frame of a sequence to a PNG exactly as the editor's preview shows it, 
 | `--sheet` | Draw several frames side by side, labelled with their times: an animated effect or a template judged from one picture. |
 | `--times <times>` | With --sheet: fractions of the way through, 0 the start and 1 the last frame. Default: 0,0.25,0.5,0.75,1. |
 | `--clip <clip>` | With --sheet: through this clip rather than the whole sequence. |
+| `--node <node>` | Show this comp graph node's picture in place of its graph's output, to look at any node. |
 
 ### `jazz frames <project>`
 
@@ -1954,6 +1955,121 @@ Turn a colour effect into a node graph.
 | Option | Meaning |
 |---|---|
 | `--id <id>` | The identifier for the graph. |
+| `--no-save` | Do not write the project back. |
+
+## `jazz comp`
+
+Comp graphs: a compositing node graph inside a clip, built node by node and wire by wire.
+
+### `jazz comp create <project> <clip-id>`
+
+Give a clip a compositing node graph.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The clip. |
+
+| Option | Meaning |
+|---|---|
+| `--id <id>` | The identifier for the graph. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz comp describe <project> <target>`
+
+Describe a clip's comp graph in readable text.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<target>` | A comp graph, or a clip whose graph it is. |
+
+### `jazz comp node-add <project> <target> <type>`
+
+Add a node to a comp graph.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<target>` | A comp graph, or a clip whose graph it is. |
+| `<type>` | What it does: merge, transform, matte, media, plane3d, render3d, text3d, out, or any effect or generator type. |
+
+| Option | Meaning |
+|---|---|
+| `--from <from>` | A node to wire into its first port. |
+| `--x <number>` | Its left edge in the node view. |
+| `--y <number>` | Its top edge in the node view. |
+| `--id <id>` | The identifier for the node. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz comp node-connect <project> <node-id> <from>`
+
+Wire one comp node into a port of another.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<node-id>` | The node that reads. |
+| `<from>` | The node it reads. |
+
+| Option | Meaning |
+|---|---|
+| `--port <port>` | Which of its ports: input, background, foreground, mask, matte, or 1 to 8; its first free one when left out. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz comp node-disconnect <project> <node-id>`
+
+Take the wire out of a comp node's port.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<node-id>` | The node. |
+
+| Option | Meaning |
+|---|---|
+| `--port <port>` | Which port; every one when left out. |
+| `--no-save` | Do not write the project back. |
+
+### `jazz comp node-move <project> <node-id> <x> <y>`
+
+Move a node in the comp node view.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<node-id>` | The node. |
+| `<x>` | Its left edge. |
+| `<y>` | Its top edge. |
+
+| Option | Meaning |
+|---|---|
+| `--no-save` | Do not write the project back. |
+
+### `jazz comp node-remove <project> <node-id>`
+
+Take a node out of a comp graph.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<node-id>` | The node. |
+
+| Option | Meaning |
+|---|---|
+| `--no-save` | Do not write the project back. |
+
+### `jazz comp view <project> [node-id]`
+
+Show a comp node's picture in the program monitor.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<node-id>` | The node; the program when left out. Optional. |
+
+| Option | Meaning |
+|---|---|
 | `--no-save` | Do not write the project back. |
 
 ## `jazz diagnostics`

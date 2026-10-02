@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using JazzHands.Core.Effects;
 using JazzHands.Core.Model;
 using JazzHands.Core.Queries;
 using JazzHands.Core.Time;
@@ -293,6 +294,65 @@ public static class Validator
         }
     }
     /// <summary>
+    /// A comp graph (Phase 49) has one output, reads nodes it has through ports its nodes have,
+    /// never goes round in a circle, and holds no graph inside a node. Each is a warning: a graph
+    /// the renderer cannot follow shows its picture unchanged.
+    /// </summary>
+    private static void CheckComp(Effect effect, CompGraph comp, string path, ImmutableArray<ValidationIssue>.Builder issues)
+    {
+        if (effect.TypeId != CompGraph.TypeId)
+        {
+            issues.Add(new ValidationIssue(Severity.Warning, "graph-on-other-effect", path, $"Effect '{effect.Id}' is a '{effect.TypeId}', which does not use nodes; they are ignored."));
+            return;
+        }
+
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+        int outputs = 0;
+        for (int index = 0; index < comp.Nodes.Length; index++)
+        {
+            CompNode node = comp.Nodes[index];
+            string nodePath = $"{path}/nodes/{index}";
+            if (!ids.Add(node.Id))
+            {
+                issues.Add(new ValidationIssue(Severity.Error, "duplicate-id", $"{nodePath}/effect/id", $"Two nodes of comp '{effect.Id}' have the id '{node.Id}'."));
+            }
+
+            if (node.Effect.TypeId == CompGraph.Out && ++outputs == 2)
+            {
+                issues.Add(new ValidationIssue(Severity.Warning, "second-output", nodePath, $"Comp '{effect.Id}' has more than one output; it shows the first."));
+            }
+
+            // Only the graph's own types and the 3D objects are known here; any other is an effect
+            // or a generator, which the registry knows and the commands check.
+            bool known = CompNodes.Find(node.Effect.TypeId) is not null || CompGraph.IsObject3D(node.Effect.TypeId);
+            IReadOnlyList<string> ports = CompGraph.PortsOf(node.Effect.TypeId, isGenerator: false);
+            for (int input = 0; input < node.Inputs.Length; input++)
+            {
+                CompInput wire = node.Inputs[input];
+                if (known && !ports.Contains(wire.Port))
+                {
+                    issues.Add(new ValidationIssue(Severity.Warning, "unknown-port", $"{nodePath}/inputs/{input}/port", $"Node '{node.Id}' has no port '{wire.Port}'; the wire is ignored."));
+                }
+
+                if (comp.Node(wire.From) is null)
+                {
+                    issues.Add(new ValidationIssue(Severity.Warning, "missing-node", $"{nodePath}/inputs/{input}/from", $"Node '{node.Id}' reads '{wire.From}', which the graph does not have."));
+                }
+            }
+
+            if (node.Effect.Graph is not null || node.Effect.Comp is not null)
+            {
+                issues.Add(new ValidationIssue(Severity.Warning, "nested-graph", $"{nodePath}/effect", $"Node '{node.Id}' holds nodes of its own; a graph does not go inside a graph, so they are ignored."));
+            }
+        }
+
+        if (comp.OutputNode is not null && comp.Order() is null)
+        {
+            issues.Add(new ValidationIssue(Severity.Warning, "graph-cycle", path, $"Comp '{effect.Id}' goes round in a circle or reads a node it does not have, so it shows its picture unchanged."));
+        }
+    }
+
+    /// <summary>
     /// A multicam's angles name tracks of its sequence, and its switches name angles it has and
     /// come in time order (Phase 41). Each is a warning: the picture plays the nearest angle and
     /// a missing track is simply not shown.
@@ -518,6 +578,11 @@ public static class Validator
             if (effect.Graph is { } graph)
             {
                 CheckGraph(effect, graph, $"{effectPath}/graph", issues);
+            }
+
+            if (effect.Comp is { } comp)
+            {
+                CheckComp(effect, comp, $"{effectPath}/comp", issues);
             }
         }
 

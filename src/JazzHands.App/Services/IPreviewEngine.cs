@@ -59,6 +59,9 @@ public interface IPreviewEngine
 
     /// <summary>The multicam clip shown as its grid of angles (Phase 41), or null for the program.</summary>
     string? MulticamGrid => null;
+
+    /// <summary>The comp graph node shown in place of its graph's output (Phase 49), or null for the program.</summary>
+    string? CompView => null;
 }
 
 /// <summary>The playback engine, presented to the preview panel.</summary>
@@ -117,6 +120,9 @@ public sealed class EnginePreview(PlaybackEngine engine, RenderDevice device) : 
 
     /// <inheritdoc />
     public string? MulticamGrid => engine.MulticamGrid;
+
+    /// <inheritdoc />
+    public string? CompView => engine.CompView;
 }
 
 /// <summary>Opens and closes the full screen preview.</summary>

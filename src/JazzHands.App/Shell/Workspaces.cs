@@ -9,7 +9,7 @@ namespace JazzHands.App.Shell;
 /// <param name="FormerName">What an earlier version called it, still found and still read from disk.</param>
 public sealed record WorkspaceDefinition(string Name, IReadOnlyList<string> Shown, IReadOnlyList<string> Front, string? FormerName = null)
 {
-    /// <summary>Edit, Colour, Audio, Trim and Export, as Jazz Hands ships them.</summary>
+    /// <summary>Edit, Colour, Comp, Audio, Trim and Export, as Jazz Hands ships them.</summary>
     public static IReadOnlyList<WorkspaceDefinition> BuiltIn { get; } =
     [
         new("Edit",
@@ -19,6 +19,9 @@ public sealed record WorkspaceDefinition(string Name, IReadOnlyList<string> Show
             ["color", "scopes", "media", "inspector", "preview"],
             ["color", "inspector", "preview"],
             "Color"),
+        new("Comp",
+            ["nodes", "media", "effects", "curves", "inspector", "preview"],
+            ["nodes", "inspector", "preview"]),
         new("Audio",
             ["mixer", "meters", "media", "inspector", "preview", "markers"],
             ["mixer", "inspector"]),

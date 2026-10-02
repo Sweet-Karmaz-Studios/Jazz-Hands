@@ -1,0 +1,153 @@
+<UserControl x:Class="JazzHands.App.Views.Comp.CompPanelView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:JazzHands.App.ViewModels.Comp"
+             xmlns:local="clr-namespace:JazzHands.App.Views.Comp"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:CompPanelViewModel}"
+             d:DesignWidth="720"
+             d:DesignHeight="320"
+             Focusable="True"
+             Background="{DynamicResource Brush.Background.Panel}">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="Visible" />
+    </UserControl.Resources>
+    <DockPanel Margin="8">
+        <!-- What is shown, and the graph's commands. -->
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button Style="{StaticResource Button.Text}" Content="Make comp" Command="{Binding CreateCommand, Mode=OneWay}"
+                        Visibility="{Binding HasClip, Mode=OneWay, Converter={StaticResource Visible}}"
+                        IsEnabled="{Binding HasGraph, Mode=OneWay, Converter={x:Static local:Not.Instance}}"
+                        ToolTip="Give the clip a node graph: its picture in, wired to the output" AutomationProperties.Name="Make comp" />
+                <Button x:Name="AddButton" Style="{StaticResource Button.Text}" Content="Add node" Click="OnAddClick"
+                        IsEnabled="{Binding HasGraph, Mode=OneWay}"
+                        ToolTip="Add a node, wired from the selected one where it can be (or right-click the graph)" AutomationProperties.Name="Add node" />
+                <Button Style="{StaticResource Button.Text}" Content="View" Command="{Binding ViewSelectedCommand, Mode=OneWay}"
+                        IsEnabled="{Binding HasGraph, Mode=OneWay}"
+                        ToolTip="Show the selected node's picture in the program monitor, or the program again" AutomationProperties.Name="View node" />
+                <Button Style="{StaticResource Button.Text}" Content="Remove" Command="{Binding RemoveSelectedCommand, Mode=OneWay}"
+                        IsEnabled="{Binding HasGraph, Mode=OneWay}"
+                        ToolTip="Take the selected node out (Delete)" AutomationProperties.Name="Remove node" />
+            </StackPanel>
+            <TextBlock Text="{Binding Heading, Mode=OneWay}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                       Foreground="{DynamicResource Brush.Text.Primary}" />
+        </DockPanel>
+        <TextBlock DockPanel.Dock="Bottom" Text="{Binding Status, Mode=OneWay}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"
+                   FontSize="{DynamicResource Text.Caption}" Foreground="{DynamicResource Brush.Warning}" />
+
+        <!-- The graph: drag a node by its title, drag from its right dot onto another node's port to wire them,
+             right-click a port to take its wire out, right-click the graph to add a node there, Ctrl+wheel to zoom. -->
+        <Border Background="{DynamicResource Brush.Background.Input}" CornerRadius="3">
+            <ScrollViewer x:Name="Scroller" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                          PreviewMouseWheel="OnWheel">
+                <Grid x:Name="Surface"
+                      Width="{Binding SurfaceWidth, Mode=OneWay}"
+                      Height="{Binding SurfaceHeight, Mode=OneWay}"
+                      Background="Transparent"
+                      MouseMove="OnSurfaceMove"
+                      MouseLeftButtonUp="OnSurfaceUp"
+                      MouseRightButtonUp="OnSurfaceRightUp"
+                      LostMouseCapture="OnLostCapture">
+                    <Grid.LayoutTransform>
+                        <ScaleTransform ScaleX="{Binding Zoom, Mode=OneWay}" ScaleY="{Binding Zoom, Mode=OneWay}" />
+                    </Grid.LayoutTransform>
+
+                    <ItemsControl ItemsSource="{Binding Wires, Mode=OneWay}" IsHitTestVisible="False" Focusable="False">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <Canvas />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:CompWireViewModel}">
+                                <Path StrokeThickness="1.5" Stroke="{DynamicResource Brush.Text.Secondary}"
+                                      Data="{Binding Mode=OneWay, Converter={x:Static local:WireGeometry.Instance}}" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <ItemsControl ItemsSource="{Binding Nodes, Mode=OneWay}" Focusable="False">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <Canvas />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemContainerStyle>
+                            <Style TargetType="ContentPresenter">
+                                <Setter Property="Canvas.Left" Value="{Binding X, Mode=OneWay}" />
+                                <Setter Property="Canvas.Top" Value="{Binding Y, Mode=OneWay}" />
+                            </Style>
+                        </ItemsControl.ItemContainerStyle>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:CompNodeViewModel}">
+                                <Grid Width="{x:Static vm:CompNodeViewModel.Width}" Height="{Binding Height, Mode=OneWay}">
+                                    <Border x:Name="Body" CornerRadius="4" BorderThickness="1"
+                                            Background="{DynamicResource Brush.Background.Raised}"
+                                            BorderBrush="{DynamicResource Brush.Border}" />
+                                    <Border x:Name="Title" Height="24" VerticalAlignment="Top"
+                                            CornerRadius="4,4,0,0" Background="Transparent" Cursor="SizeAll"
+                                            MouseLeftButtonDown="OnNodeDown"
+                                            ToolTip="Click to show it in the Inspector; drag to move it">
+                                        <TextBlock x:Name="Caption" Text="{Binding Title, Mode=OneWay}" Margin="8,0,14,0" VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource Brush.Text.Primary}" />
+                                    </Border>
+                                    <!-- Its ports, each a dot on the left edge with its name beside it. -->
+                                    <ItemsControl ItemsSource="{Binding Ports, Mode=OneWay}" Margin="0,24,0,0" Focusable="False" VerticalAlignment="Top">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="{x:Type vm:CompPortViewModel}">
+                                                <Grid Height="18">
+                                                    <Ellipse x:Name="Dot" Width="9" Height="9" HorizontalAlignment="Left" Margin="-4,0,0,0"
+                                                             Fill="{DynamicResource Brush.Background.Input}" Stroke="{DynamicResource Brush.Text.Secondary}"
+                                                             ToolTip="Drop a wire here; right-click to take its wire out" />
+                                                    <TextBlock Text="{Binding Label, Mode=OneWay}" Margin="10,0,0,0" VerticalAlignment="Center"
+                                                               FontSize="{DynamicResource Text.Caption}" Foreground="{DynamicResource Brush.Text.Secondary}" />
+                                                </Grid>
+                                                <DataTemplate.Triggers>
+                                                    <DataTrigger Binding="{Binding IsWired, Mode=OneWay}" Value="True">
+                                                        <Setter TargetName="Dot" Property="Fill" Value="{DynamicResource Brush.Text.Secondary}" />
+                                                    </DataTrigger>
+                                                </DataTemplate.Triggers>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <!-- The output: drag from here onto another node. -->
+                                    <Ellipse x:Name="Output" Width="11" Height="11" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                             Margin="0,27.5,-5,0"
+                                             Fill="{DynamicResource Brush.Accent}" Cursor="Cross"
+                                             MouseLeftButtonDown="OnOutputDown"
+                                             Visibility="{Binding HasOutput, Mode=OneWay, Converter={StaticResource Visible}}"
+                                             ToolTip="Drag onto another node's port to wire them" />
+                                    <!-- The node the monitor shows has a bar along its foot. -->
+                                    <Border x:Name="Viewed" Height="3" VerticalAlignment="Bottom" Margin="4,0,4,1" CornerRadius="1"
+                                            Background="{DynamicResource Brush.Accent}" Visibility="Collapsed" IsHitTestVisible="False" />
+                                </Grid>
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding IsSelected, Mode=OneWay}" Value="True">
+                                        <Setter TargetName="Body" Property="BorderBrush" Value="{DynamicResource Brush.Accent}" />
+                                        <Setter TargetName="Body" Property="BorderThickness" Value="2" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsViewed, Mode=OneWay}" Value="True">
+                                        <Setter TargetName="Viewed" Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsEnabled, Mode=OneWay}" Value="False">
+                                        <Setter TargetName="Caption" Property="Foreground" Value="{DynamicResource Brush.Text.Disabled}" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsOutput, Mode=OneWay}" Value="True">
+                                        <Setter TargetName="Body" Property="Background" Value="{DynamicResource Brush.Background.Selected}" />
+                                    </DataTrigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- The wire being dragged. -->
+                    <Path x:Name="DragLine" StrokeThickness="1.5" Stroke="{DynamicResource Brush.Accent}" IsHitTestVisible="False" />
+                </Grid>
+            </ScrollViewer>
+        </Border>
+    </DockPanel>
+</UserControl>

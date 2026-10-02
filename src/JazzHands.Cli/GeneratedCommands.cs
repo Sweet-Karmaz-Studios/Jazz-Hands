@@ -85,6 +85,7 @@ public static class GeneratedCommands
         "text3d" => "3D text: extruded, bevelled letters as solid geometry in the 3D scene.",
         "shape3d" => "3D shapes: cube, sphere, cylinder, cone, torus and plane, in the 3D scene.",
         "model3d" => "3D models: glTF 2.0 files with their materials and animations, in the 3D scene.",
+        "comp" => "Comp graphs: a compositing node graph inside a clip, built node by node and wire by wire.",
         "vfx" => "Trailer effects: timed presets such as hits and boss intros, and hiding a game's HUD or a watermark.",
         "audio" => "Sound on clips: gain, pan, fades, channel maps, muting a stream, detaching sound; the master volume and limiter; the meters.",
         "cache" => "The thumbnail, waveform and proxy cache: what it holds, its size limit, emptying it.",
@@ -451,13 +452,17 @@ public static class GeneratedCommands
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
-    /// <summary>Calls the session's generic Query from a place that only has a Type.</summary>
+    /// <summary>
+    /// Calls the session's generic Query from a place that only has a Type. A refusal comes out as
+    /// itself, not wrapped by the reflection call, so it is reported as a coded error like a
+    /// command's rather than as a crash.
+    /// </summary>
     private static class QueryReflection
     {
         internal static object? Ask(Session session, object query, Type resultType) =>
             typeof(Session)
                 .GetMethod(nameof(Session.Query))!
                 .MakeGenericMethod(resultType)
-                .Invoke(session, [query]);
+                .Invoke(session, System.Reflection.BindingFlags.DoNotWrapExceptions, binder: null, [query], System.Globalization.CultureInfo.InvariantCulture);
     }
 }

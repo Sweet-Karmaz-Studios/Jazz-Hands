@@ -6,6 +6,7 @@ using JazzHands.Core.Effects;
 using JazzHands.Core.Model;
 using JazzHands.Render.Color;
 using JazzHands.Render.Effects;
+using JazzHands.Render.Effects.Compositing;
 using JazzHands.Render.Effects.Transitions;
 using JazzHands.Render.Frames;
 using JazzHands.Render.Scene;
@@ -484,6 +485,10 @@ public sealed class Compositor : IDisposable
             if (custom is not null)
             {
                 custom.Apply(_effectContext, current, output);
+            }
+            else if (!node.Comp.IsDefaultOrEmpty)
+            {
+                RunComp(graph, layer, node, current, output);
             }
             else if (!node.Grade.IsDefaultOrEmpty)
             {
@@ -986,12 +991,9 @@ public sealed class Compositor : IDisposable
             _effectContext.IsAces = graph.Aces is not null;
             _aces = graph.Aces;
 
-            // An environment light's picture in linear light, the first there is (Phase 48).
-            RenderTarget? environment = null;
-            if (scene.Lights.FirstOrDefault(light => light.Kind == SceneLightKind.Environment && light.Image is not null) is { Image: { } image } surround)
+            RenderTarget? environment = Environment(graph, scene);
+            if (environment is not null)
             {
-                var picture = new LayerNode(image, (int)surround.ImageSize.X, (int)surround.ImageSize.Y, Matrix3x2.Identity, LayerNode.NoCrop, 1.0f, BlendMode.Normal, []);
-                environment = Linear(graph, picture);
                 owned.Add(environment);
             }
 
@@ -1005,6 +1007,145 @@ public sealed class Compositor : IDisposable
                 Pool.Return(canvas);
             }
         }
+    }
+
+    /// <summary>
+    /// A comp graph (Phase 49): each step a frame-sized picture, from the picture coming in through
+    /// merges, transforms, mattes, effects, other media and 3D renders, the last copied into the
+    /// output. A port with nothing wired in reads transparency.
+    /// </summary>
+    private void RunComp(RenderGraph graph, LayerNode layer, EffectNode node, RenderTarget input, RenderTarget output)
+    {
+        ImmutableArray<CompStep> steps = node.Comp;
+        var results = new RenderTarget?[steps.Length];
+        var owned = new List<RenderTarget>();
+        RenderTarget? transparent = null;
+        RenderTarget Read(int at) => at >= 0 && at < results.Length && results[at] is { } result ? result : transparent ??= Empty(graph);
+        RenderTarget Keep(RenderTarget made)
+        {
+            owned.Add(made);
+            return made;
+        }
+
+        // A picture through a matrix from frame pixels, onto transparency.
+        RenderTarget Moved(RenderTarget picture, CompStep step)
+        {
+            if (step.Transform.IsIdentity && step.Frame == new Vector2(graph.Width, graph.Height))
+            {
+                return picture;
+            }
+
+            RenderTarget placed = Keep(Pool.Rent(graph.Width, graph.Height));
+            Clear(placed, Vector4.Zero);
+            var frame = new LayerNode(new SolidLayerSource(Vector4.Zero), (int)step.Frame.X, (int)step.Frame.Y, step.Transform, LayerNode.NoCrop, 1.0f, BlendMode.Normal, []);
+            DrawQuad(graph, frame, picture, placed.View, 1.0f, blend: null);
+            return placed;
+        }
+
+        try
+        {
+            for (int index = 0; index < steps.Length; index++)
+            {
+                CompStep step = steps[index];
+                int first = step.Inputs.IsDefaultOrEmpty ? -1 : step.Inputs[0];
+                switch (step.Kind)
+                {
+                    case CompStepKind.In:
+                        results[index] = input;
+                        break;
+
+                    case CompStepKind.Pass:
+                        results[index] = Read(first);
+                        break;
+
+                    case CompStepKind.Empty:
+                        results[index] = null;
+                        break;
+
+                    case CompStepKind.Picture:
+                        results[index] = step.Picture is { } picture ? Keep(Alone(graph, picture)) : null;
+                        break;
+
+                    case CompStepKind.Effect:
+                    {
+                        RenderTarget before = Read(first);
+                        RenderTarget after = RunEffects(graph, layer with { Effects = [step.Effect!] }, before);
+                        results[index] = ReferenceEquals(after, before) ? before : Keep(after);
+                        break;
+                    }
+
+                    case CompStepKind.Transform:
+                        results[index] = Moved(Read(first), step);
+                        break;
+
+                    case CompStepKind.Merge:
+                    {
+                        RenderTarget foreground = Moved(Read(step.Inputs[1]), step);
+                        if (step.Mask >= 0)
+                        {
+                            RenderTarget masked = Keep(Pool.Rent(graph.Width, graph.Height));
+                            CompGraphEffect.Matte(_effectContext, foreground, Read(step.Mask), 0, masked);
+                            foreground = masked;
+                        }
+
+                        results[index] = Keep(Composite(Read(first), foreground, null, step.Opacity, step.Blend));
+                        break;
+                    }
+
+                    case CompStepKind.Matte:
+                    {
+                        RenderTarget kept = Keep(Pool.Rent(graph.Width, graph.Height));
+                        CompGraphEffect.Matte(_effectContext, Read(first), Read(step.Inputs.Length > 1 ? step.Inputs[1] : -1), step.MatteMode, kept);
+                        results[index] = kept;
+                        break;
+                    }
+
+                    case CompStepKind.Render3D when step.Scene is { } scene:
+                    {
+                        RenderTarget[] canvases = [.. step.Planes.Select(Read)];
+                        RenderTarget? environment = Environment(graph, scene);
+                        if (environment is not null)
+                        {
+                            Keep(environment);
+                        }
+
+                        _scene ??= new Scene3D(_device, Pool, _samplers);
+                        results[index] = Keep(_scene.Draw(scene, canvases, graph.Width, graph.Height, layer.Scale, graph.Bicubic, environment));
+                        break;
+                    }
+
+                    default:
+                        results[index] = null;
+                        break;
+                }
+            }
+
+            _device.ImmediateContext.CopyResource(output.Texture, Read(steps.Length - 1).Texture);
+        }
+        finally
+        {
+            foreach (RenderTarget target in owned)
+            {
+                Pool.Return(target);
+            }
+
+            if (transparent is not null)
+            {
+                Pool.Return(transparent);
+            }
+        }
+    }
+
+    /// <summary>A scene's environment light's picture in linear light, the first there is (Phase 48); the caller returns it.</summary>
+    private RenderTarget? Environment(RenderGraph graph, SceneLayerSource scene)
+    {
+        if (scene.Lights.FirstOrDefault(light => light.Kind == SceneLightKind.Environment && light.Image is not null) is not { Image: { } image } surround)
+        {
+            return null;
+        }
+
+        var picture = new LayerNode(image, (int)surround.ImageSize.X, (int)surround.ImageSize.Y, Matrix3x2.Identity, LayerNode.NoCrop, 1.0f, BlendMode.Normal, []);
+        return Linear(graph, picture);
     }
 
     /// <summary>The scene renderer, once a 3D scene has been drawn; for tests of what it drew.</summary>

@@ -73,6 +73,7 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
     private volatile bool _disposing;
     private volatile bool _suspended;
     private string? _multicamGrid;
+    private string? _compView;
     private bool _released;
     private Session? _session;
 
@@ -280,6 +281,17 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
         set
         {
             Volatile.Write(ref _multicamGrid, value);
+            _wake.Set();
+        }
+    }
+
+    /// <inheritdoc />
+    public string? CompView
+    {
+        get => Volatile.Read(ref _compView);
+        set
+        {
+            Volatile.Write(ref _compView, value);
             _wake.Set();
         }
     }
@@ -1067,6 +1079,11 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
         if (Volatile.Read(ref _multicamGrid) is { } grid)
         {
             options = options with { MulticamGrid = grid };
+        }
+
+        if (Volatile.Read(ref _compView) is { } node)
+        {
+            options = options with { CompView = node };
         }
 
         frames.Motion = new Motion(playing, rate);

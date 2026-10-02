@@ -284,6 +284,11 @@ public static class AppServices
             provider.GetRequiredService<JazzHands.Engine.Caching.TranscriptionService>(),
             provider.GetRequiredService<IPreviewEngine>(),
             provider.GetRequiredService<SelectionService>()));
+        services.AddSingleton(provider => new ViewModels.Comp.CompPanelViewModel(
+            provider.GetRequiredService<ISession>(),
+            provider.GetRequiredService<SelectionService>(),
+            provider.GetRequiredService<IUiDispatcher>(),
+            provider.GetRequiredService<IPreviewEngine>()));
         // The control server: the pipe always, TCP when the settings say so. App starts it once
         // the window is up and disposes it before the session, so clients hear session.closed.
         services.AddSingleton(_ => new ControlSettingsStore());

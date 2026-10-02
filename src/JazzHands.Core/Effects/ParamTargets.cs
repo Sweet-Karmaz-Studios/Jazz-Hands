@@ -227,11 +227,31 @@ public static class ParamTargets
                     ? [sound, Audio]
                     : owner.Clip.IsRemapped ? [Audio, RemapParams] : [Audio],
             ParamOwnerKind.Track when owner.Track.Kind == TrackKind.Audio => [Audio],
+            ParamOwnerKind.Effect when owner.Graph?.Comp is not null => CompSections(owner.Effect!.TypeId, registry),
             ParamOwnerKind.Effect => registry.Find(owner.Effect!.TypeId) is { } descriptor ? [descriptor] : [],
             ParamOwnerKind.Mask => [MaskParams],
             ParamOwnerKind.Transition => registry.Find(owner.Transition!.TypeId) is { } transition ? [transition] : [],
             _ => [],
         };
+    }
+
+    /// <summary>
+    /// A comp graph node's sections (Phase 49): a graph type's own, or the registered effect's
+    /// or generator's; text, a shape or a model also takes its place in a 3D render.
+    /// </summary>
+    private static ImmutableArray<EffectDescriptor> CompSections(string typeId, EffectRegistry registry)
+    {
+        if (CompNodes.Find(typeId) is { } own)
+        {
+            return [own];
+        }
+
+        if (registry.Find(typeId) is not { } descriptor)
+        {
+            return [];
+        }
+
+        return SceneObjects.IsMesh(typeId) ? [descriptor, CompNodes.Placement3D] : [descriptor];
     }
 
     /// <summary>A picture clip's sections: what a generator is, its place, its 3D when it is a 3D layer, opacity, crop and speed.</summary>
@@ -425,6 +445,13 @@ public static class ParamTargets
             return ReplaceEffect(project, owner with { Graph = null }, holder with { Graph = graph.Replace(node with { Effect = effect }) });
         }
 
+        // A node of a comp graph goes back into its graph, and the graph into the chain.
+        if (owner.Graph is { Comp: { } comp } compHolder && !Is(compHolder.Id, effect.Id))
+        {
+            CompNode node = comp.Node(effect.Id) ?? throw new InvalidOperationException($"Node '{effect.Id}' is not in comp '{compHolder.Id}'.");
+            return ReplaceEffect(project, owner with { Graph = null }, compHolder with { Comp = comp.Replace(node with { Effect = effect }) });
+        }
+
         if (owner.Clip is { } clip)
         {
             int index = clip.Effects.IndexOf(item => Is(item.Id, effect.Id));
@@ -573,6 +600,22 @@ public static class ParamTargets
     /// <summary>A node of a colour graph, or a node's mask, with the graph it is in; or null.</summary>
     private static ParamOwner? InGraph(Effect effect, string id, Sequence sequence, Track track, Clip? clip)
     {
+        if (effect.Comp is { } comp)
+        {
+            foreach (CompNode node in comp.Nodes)
+            {
+                if (Is(node.Id, id))
+                {
+                    return new ParamOwner(ParamOwnerKind.Effect, id, sequence, track, clip, node.Effect, Graph: effect);
+                }
+
+                if (MaskOf(node.Effect.Masks, id) is { } mask)
+                {
+                    return new ParamOwner(ParamOwnerKind.Mask, id, sequence, track, clip, node.Effect, mask, Graph: effect);
+                }
+            }
+        }
+
         if (effect.Graph is not { } graph)
         {
             return null;

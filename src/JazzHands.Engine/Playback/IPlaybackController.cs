@@ -49,6 +49,9 @@ public interface IPlaybackController
     /// <summary>A multicam clip drawn as the grid of its angles (Phase 41), or null for the program.</summary>
     string? MulticamGrid { get => null; set { } }
 
+    /// <summary>A comp graph node shown in place of its graph's output (Phase 49), or null for the program.</summary>
+    string? CompView { get => null; set { } }
+
     /// <summary>What playback is doing, for <c>playback.state</c>.</summary>
     PlaybackStateInfo Describe();
 }

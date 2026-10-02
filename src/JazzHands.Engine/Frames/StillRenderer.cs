@@ -54,7 +54,8 @@ public sealed class StillRenderer : IDisposable
     /// <param name="time">The sequence time.</param>
     /// <param name="projectPath">Where the project lives, for its media.</param>
     /// <param name="workingScopes">Measure the scopes on the working space (Phase 44) rather than the output.</param>
-    public StillFrame Render(Project project, Sequence sequence, Flicks time, string projectPath = "", bool workingScopes = false)
+    /// <param name="compView">A comp graph node to look at instead of its graph's output (Phase 49), or null.</param>
+    public StillFrame Render(Project project, Sequence sequence, Flicks time, string projectPath = "", bool workingScopes = false, string? compView = null)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(sequence);
@@ -63,7 +64,7 @@ public sealed class StillRenderer : IDisposable
         {
             _scopes ??= new ScopeRenderer(_device!);
 
-            RenderTarget stack = _frames!.Render(project, sequence, time, new RenderOptions { Bicubic = false }, projectPath);
+            RenderTarget stack = _frames!.Render(project, sequence, time, new RenderOptions { Bicubic = false, CompView = compView }, projectPath);
             RenderTarget display = _frames.Compositor.Pool.Rent(stack.Width, stack.Height, Format.B8G8R8A8_UNorm);
             try
             {
@@ -109,7 +110,7 @@ public sealed class StillRenderer : IDisposable
     /// <param name="time">The sequence time.</param>
     /// <param name="width">The picture's width; the height follows the sequence's shape.</param>
     /// <param name="projectPath">Where the project lives, for its media.</param>
-    public (int Width, int Height, byte[] Bgra) RenderPreview(Project project, Sequence sequence, Flicks time, int width, string projectPath = "")
+    public (int Width, int Height, byte[] Bgra) RenderPreview(Project project, Sequence sequence, Flicks time, int width, string projectPath = "", string? compView = null)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(sequence);
@@ -124,7 +125,7 @@ public sealed class StillRenderer : IDisposable
             try
             {
                 // The preview renders at a fraction of the sequence's size, then fits the panel.
-                var options = new RenderOptions { Scale = Math.Min(1f, (float)width / settings.Width) };
+                var options = new RenderOptions { Scale = Math.Min(1f, (float)width / settings.Width), CompView = compView };
                 _frames.Render(project, sequence, time, options, display.View, width, height, OutputSettings.Preview, projectPath);
                 return (width, height, ReadBytes(display));
             }

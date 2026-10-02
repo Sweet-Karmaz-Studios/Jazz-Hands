@@ -53,6 +53,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
     private string _shape = string.Empty;
     private string? _clipId;
     private string? _transitionId;
+    private string? _nodeId;
     private IReadOnlyList<string> _targets = [];
     private bool _loading;
 
@@ -435,6 +436,21 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
     private void Changed()
     {
         Project project = _session.Project;
+        if (_nodeId is { } nodeId)
+        {
+            // A comp node of another type has other parameters; anything else reloads in place.
+            if (ParamTargets.Find(project, nodeId) is { Kind: ParamOwnerKind.Effect, Effect: { } node, Graph.Comp: not null } && $"node|{node.Id}|{node.TypeId}" == _shape)
+            {
+                RefreshValues();
+            }
+            else
+            {
+                Rebuild();
+            }
+
+            return;
+        }
+
         if (_transitionId is { } transitionId)
         {
             // A new type has other parameters; anything else reloads in place.
@@ -471,9 +487,17 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         _pending.Clear();
 
         _transitionId = null;
+        _nodeId = null;
         if (_targets.Count == 0 && _selection.Ids.Select(id => ParamTargets.Find(project, id)).FirstOrDefault(owner => owner?.Kind == ParamOwnerKind.Transition) is { } transition)
         {
             BuildTransition(transition);
+            return;
+        }
+
+        // A node of a comp graph (Phase 49), selected in the Nodes panel.
+        if (_targets.Count == 0 && _selection.Ids.Select(id => ParamTargets.Find(project, id)).FirstOrDefault(owner => owner is { Kind: ParamOwnerKind.Effect, Graph.Comp: not null }) is { } node)
+        {
+            BuildNode(node);
             return;
         }
 
@@ -717,6 +741,64 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         RefreshValues();
     }
 
+    /// <summary>A comp graph node's parameters (Phase 49): its type's own, and a 3D object's place in its render.</summary>
+    private void BuildNode(ParamOwner owner)
+    {
+        Effect node = owner.Effect!;
+        _clipId = null;
+        _nodeId = node.Id;
+        _shape = $"node|{node.Id}|{node.TypeId}";
+
+        foreach (EffectDescriptor section in ParamTargets.Sections(owner, EffectCatalog.Registry))
+        {
+            var view = Section(section.Name);
+            foreach (ParamDescriptor parameter in section.Params)
+            {
+                view.Rows.Add(new ParamRowViewModel(this, node.Id, parameter, section.Name));
+            }
+
+            Sections.Add(view);
+        }
+
+        HasTarget = true;
+        IsPicture = false;
+        Status = string.Empty;
+        RefreshValues();
+    }
+
+    /// <summary>A selected comp node's values, from the snapshot, at the playhead in its clip's time.</summary>
+    private void RefreshNode(Project project, string nodeId)
+    {
+        if (ParamTargets.Find(project, nodeId) is not { Kind: ParamOwnerKind.Effect, Clip: { } clip, Effect: { } node } owner)
+        {
+            Rebuild();
+            return;
+        }
+
+        Flicks playhead = Playhead;
+        Flicks local = playhead - clip.Start;
+        Flicks tolerance = Tolerance();
+        _loading = true;
+        try
+        {
+            Heading = CompNodes.Find(node.TypeId)?.Name ?? EffectCatalog.Registry.Find(node.TypeId)?.Name ?? node.TypeId;
+            Source = $"A node of the comp graph on '{clip.Name}'";
+            Range = Speed = SelectionNote = string.Empty;
+        }
+        finally
+        {
+            _loading = false;
+        }
+
+        foreach (ParamRowViewModel row in Sections.SelectMany(section => section.Rows))
+        {
+            AnimatedValue? stored = ParamTargets.Get(owner, row.Name);
+            row.Load(ParamEval.Eval(stored, row.Descriptor, local), stored, clip.Start, clip.Duration, playhead, tolerance);
+        }
+
+        UpdateMarkers();
+    }
+
     /// <summary>A selected transition's values, from the snapshot.</summary>
     private void RefreshTransition(Project project, string transitionId)
     {
@@ -918,6 +1000,12 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
     private void RefreshValues()
     {
         Project project = _session.Project;
+        if (_nodeId is { } nodeId)
+        {
+            RefreshNode(project, nodeId);
+            return;
+        }
+
         if (_transitionId is { } transitionId)
         {
             RefreshTransition(project, transitionId);

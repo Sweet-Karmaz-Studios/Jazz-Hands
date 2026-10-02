@@ -129,13 +129,14 @@ public static class RpcCommands
         var output = new Option<string>("--out") { Description = "The .png to write.", Required = true };
         var size = new Option<string?>("--size") { Description = "How wide to draw it, as a size: 960x540; the height follows the sequence's shape." };
         var sequence = new Option<string?>("--sequence") { Description = "Which sequence; the active one when left out." };
-        var command = new Command("frame", "Draw one frame of the editor's project as its preview shows it, to a PNG.") { at, output, size, sequence };
+        var node = new Option<string?>("--node") { Description = "Show this comp graph node's picture in place of its graph's output." };
+        var command = new Command("frame", "Draw one frame of the editor's project as its preview shows it, to a PNG.") { at, output, size, sequence, node };
 
         command.SetAction(parse => Attached(parse.GetValue(JazzCli.JsonOption), async client =>
         {
             Rational rate = await FrameRateAsync(client).ConfigureAwait(false);
             var time = (Flicks)CommandValues.Parse(typeof(Flicks), parse.GetValue(at)!, rate, "at")!;
-            var args = new JsonObject { ["at"] = time.Value, ["sequence"] = parse.GetValue(sequence) };
+            var args = new JsonObject { ["at"] = time.Value, ["sequence"] = parse.GetValue(sequence), ["node"] = parse.GetValue(node) };
             if (parse.GetValue(size) is { Length: > 0 } text && CommandValues.Parse(typeof(FrameSize), text, rate, "size") is FrameSize fit)
             {
                 args["width"] = fit.Width;

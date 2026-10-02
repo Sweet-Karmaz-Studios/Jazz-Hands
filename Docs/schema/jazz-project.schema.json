@@ -511,6 +511,55 @@
         }
       }
     },
+    "compGraph": {
+      "type": "object",
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/compNode"
+          }
+        }
+      }
+    },
+    "compInput": {
+      "type": "object",
+      "properties": {
+        "port": {
+          "type": "string"
+        },
+        "from": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "port",
+        "from"
+      ]
+    },
+    "compNode": {
+      "type": "object",
+      "properties": {
+        "effect": {
+          "$ref": "#/$defs/effect"
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/compInput"
+          }
+        },
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "effect"
+      ]
+    },
     "crop": {
       "type": "object",
       "properties": {
@@ -607,6 +656,16 @@
           "anyOf": [
             {
               "$ref": "#/$defs/gradeGraph"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "comp": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/compGraph"
             },
             {
               "type": "null"

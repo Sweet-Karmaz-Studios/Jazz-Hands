@@ -424,6 +424,16 @@ public partial class MainWindow : Window, Shell.IAppWindow, Shell.ITourHost
             return;
         }
 
+        // The Nodes panel, while the focus is in it: Delete takes the selected node out rather than
+        // the selected timeline clips.
+        if (_model.Nodes is { Selected: not null } nodes && !swallowed && key is Key.Delete or Key.Back && Keyboard.Modifiers == ModifierKeys.None
+            && Within<Views.Comp.CompPanelView>(e.OriginalSource as DependencyObject))
+        {
+            nodes.RemoveSelectedCommand.Execute(null);
+            e.Handled = true;
+            return;
+        }
+
         if (_model.Timelines?.ActiveTimeline is { } timeline && !swallowed && timeline.KeyDown(key, Keyboard.Modifiers))
         {
             e.Handled = true;

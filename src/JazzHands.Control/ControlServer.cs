@@ -577,7 +577,7 @@ public sealed class ControlServer : IAsyncDisposable
         lock (_renderGate)
         {
             _renderer ??= new StillRenderer();
-            frame = _renderer.RenderPreview(project, sequence, at, width, _target.Session.ProjectPath);
+            frame = _renderer.RenderPreview(project, sequence, at, width, _target.Session.ProjectPath, args["node"]?.GetValue<string>());
         }
 
         byte[] png = PngWriter.Encode(frame.drawnWidth, frame.drawnHeight, frame.bgra);
@@ -634,7 +634,7 @@ public sealed class ControlServer : IAsyncDisposable
         ("session.unlock", "Let go of the session"),
         ("session.open", "Open a project: {path, discard}"),
         ("session.save", "Save the project: {path} to save as"),
-        ("render.frame", "A frame as the preview draws it, as a base64 PNG: {at, width, sequence}"),
+        ("render.frame", "A frame as the preview draws it, as a base64 PNG: {at, width, sequence, node}"),
     ];
 
     private static string TypeName(Type type)
