@@ -82,8 +82,9 @@ internal sealed class MaskRasterizer : IDisposable
             }
         }
 
-        _context.EndDraw();
+        SharpGen.Runtime.Result ended = _context.EndDraw();
         _context.Target = null;
+        Drawing2D.Finished(ended, target.Width, target.Height);
     }
 
     public void Dispose()

@@ -74,12 +74,34 @@ public sealed class Drawing2D : IDisposable
         {
             draw(Context);
         }
-        finally
+        catch
         {
-            Context.Transform = Matrix3x2.Identity;
-            Context.EndDraw();
-            Context.Target = null;
+            _ = End();
+            throw;
         }
+
+        Finished(End(), target.Width, target.Height);
+    }
+
+    /// <summary>
+    /// Throws when a batch of drawing did not finish. Direct2D says so only in what EndDraw
+    /// returns: a call that fails part way stops the rest of the batch without a word, and the
+    /// target then holds part of a picture. A frame that fails is better than one that is wrong.
+    /// </summary>
+    internal static void Finished(SharpGen.Runtime.Result ended, int width, int height)
+    {
+        if (ended.Failure)
+        {
+            throw new RenderDeviceException($"Direct2D could not finish drawing a {width}x{height} target (0x{ended.Code:X8}).");
+        }
+    }
+
+    private SharpGen.Runtime.Result End()
+    {
+        Context.Transform = Matrix3x2.Identity;
+        SharpGen.Runtime.Result ended = Context.EndDraw();
+        Context.Target = null;
+        return ended;
     }
 
     /// <summary>A target as a bitmap Direct2D can draw from, which the caller disposes.</summary>

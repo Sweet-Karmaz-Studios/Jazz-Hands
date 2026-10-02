@@ -276,7 +276,11 @@ internal sealed class TitleRenderer : IDisposable
                         cast.SetInput(0, letters, true);
                         cast.BlurStandardDeviation = Math.Max(0.0f, shadow.Sigma);
                         cast.Color = Straight(shadow.Colour);
-                        target.DrawImage(cast.Output, shadow.Offset, null, Vortice.Direct2D1.InterpolationMode.Linear, CompositeMode.SourceOver);
+
+                        // The output is an object of its own: left alive it keeps the effect, the
+                        // letters' bitmap and the rented target under it.
+                        using ID2D1Image shade = cast.Output;
+                        target.DrawImage(shade, shadow.Offset, null, Vortice.Direct2D1.InterpolationMode.Linear, CompositeMode.SourceOver);
                         target.DrawImage(letters, Vector2.Zero, null, Vortice.Direct2D1.InterpolationMode.NearestNeighbor, CompositeMode.SourceOver);
                     });
                 }
@@ -423,7 +427,8 @@ internal sealed class TitleRenderer : IDisposable
                     soften.SetInput(0, source, true);
                     soften.StandardDeviation = blur / 3.0f;
                     soften.BorderMode = BorderMode.Soft;
-                    target.DrawImage(soften.Output, Vector2.Zero, null, Vortice.Direct2D1.InterpolationMode.Linear, CompositeMode.SourceOver);
+                    using ID2D1Image softened = soften.Output;
+                    target.DrawImage(softened, Vector2.Zero, null, Vortice.Direct2D1.InterpolationMode.Linear, CompositeMode.SourceOver);
                 }
                 else
                 {

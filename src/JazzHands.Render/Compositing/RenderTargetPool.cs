@@ -87,6 +87,14 @@ public sealed class RenderTargetPool : IDisposable
     /// </summary>
     public static bool ThrowOnDoubleReturn { get; set; } = AppContext.TryGetSwitch("JazzHands.Render.StrictPools", out bool strict) && strict;
 
+    /// <summary>
+    /// Fills every target handed out with values no picture has (not-a-number in a float target,
+    /// which comes out black and spreads through anything blended with it; magenta in the rest),
+    /// so a pass that reads what it never wrote shows every time rather than when the memory
+    /// behind a new texture happens to hold something. On with the same switch, for the tests.
+    /// </summary>
+    public static bool PoisonOnRent { get; set; } = AppContext.TryGetSwitch("JazzHands.Render.StrictPools", out bool poison) && poison;
+
     /// <summary>Targets given back while they were already in the pool; always zero when all is well.</summary>
     public long DoubleReturns { get; private set; }
 
@@ -109,6 +117,9 @@ public sealed class RenderTargetPool : IDisposable
     /// <summary>Targets waiting to be rented.</summary>
     public int Idle => _idle.Values.Sum(stack => stack.Count);
 
+    /// <summary>The targets waiting to be rented, for tests of what still holds on to them.</summary>
+    internal IEnumerable<RenderTarget> IdleTargets => _idle.Values.SelectMany(stack => stack);
+
     /// <summary>What the idle targets cost in video memory.</summary>
     public long IdleBytes => _idle.Values.Sum(stack => stack.Sum(target => target.Bytes));
 
@@ -124,15 +135,25 @@ public sealed class RenderTargetPool : IDisposable
         Rented++;
         Outstanding++;
 
+        RenderTarget target;
         if (_idle.TryGetValue(key, out Stack<RenderTarget>? spare) && spare.Count > 0)
         {
-            RenderTarget recycled = spare.Pop();
-            recycled.Idle = false;
-            return recycled;
+            target = spare.Pop();
+            target.Idle = false;
+        }
+        else
+        {
+            Created++;
+            target = new RenderTarget(_device, width, height, format);
         }
 
-        Created++;
-        return new RenderTarget(_device, width, height, format);
+        if (PoisonOnRent)
+        {
+            bool floats = format is Format.R16G16B16A16_Float or Format.R32G32B32A32_Float or Format.R16_Float or Format.R32_Float or Format.R16G16_Float or Format.R32G32_Float;
+            _device.ImmediateContext.ClearRenderTargetView(target.View, floats ? new Vortice.Mathematics.Color4(float.NaN, float.NaN, float.NaN, float.NaN) : new Vortice.Mathematics.Color4(1.0f, 0.0f, 1.0f, 1.0f));
+        }
+
+        return target;
     }
 
     /// <summary>Gives a target back.</summary>
