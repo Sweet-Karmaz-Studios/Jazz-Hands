@@ -54,4 +54,7 @@ public static class DiagnosticCodes
 
     /// <summary>A plugin effect in the project names a plugin this computer does not have; it is bypassed.</summary>
     public const string PluginMissing = "plugin-missing";
+
+    /// <summary>A sound effect is on a clip when it goes on a track, or the other way round: a hand edit put it there.</summary>
+    public const string EffectMisplaced = "effect-misplaced";
 }

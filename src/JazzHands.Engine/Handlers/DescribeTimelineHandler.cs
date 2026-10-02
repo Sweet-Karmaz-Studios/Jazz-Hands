@@ -330,7 +330,7 @@ public sealed class DescribeTimelineHandler : IQueryHandler<DescribeTimelineQuer
     {
         ImmutableArray<ValidationIssue> issues =
         [
-            .. Validator.Semantic(project).Concat(Titles.TitleFonts.Missing(project, projectPath))
+            .. Validator.Semantic(project).Concat(Titles.TitleFonts.Missing(project, projectPath)).Concat(Effects.EffectPlacement.Misplaced(project))
                 .Where(issue => issue.Path.Contains($"/sequences/{IndexOf(project, sequence)}/", StringComparison.Ordinal)
                     || issue.Path == "/"),
         ];

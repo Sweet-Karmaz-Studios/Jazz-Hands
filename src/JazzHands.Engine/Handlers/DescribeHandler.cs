@@ -159,6 +159,7 @@ public sealed class DescribeHandler : IQueryHandler<DescribeQuery, ProjectDescri
     [
         .. Validator.Semantic(project)
             .Concat(Titles.TitleFonts.Missing(project, projectPath))
+            .Concat(Effects.EffectPlacement.Misplaced(project))
             .Select(issue => $"{issue.Severity.ToString().ToLowerInvariant()}: {issue.Code}: {issue.Message}"),
         .. media.Where(item => !item.Exists).Select(item => $"error: media-offline: '{item.Name}' is not at {item.FullPath}."),
     ];

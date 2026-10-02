@@ -171,7 +171,7 @@ public static class ProjectCommands
         command.SetAction(parse => WithProject(parse, parse.GetValue(file)!, checkSchema: true, (load, json) =>
         {
             bool strictly = parse.GetValue(strict);
-            ImmutableArray<ValidationIssue> issues = [.. load.Issues, .. JazzHands.Engine.Titles.TitleFonts.Missing(load.Project, load.Path)];
+            ImmutableArray<ValidationIssue> issues = [.. load.Issues, .. JazzHands.Engine.Titles.TitleFonts.Missing(load.Project, load.Path), .. JazzHands.Engine.Effects.EffectPlacement.Misplaced(load.Project)];
 
             if (json)
             {

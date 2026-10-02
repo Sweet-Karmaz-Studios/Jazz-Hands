@@ -392,6 +392,7 @@ public sealed class Session : ISessionState, IAsyncDisposable
         Interlocked.Exchange(ref _savedVersion, _dispatcher.Version);
         AttachRecovery(path);
         ReportMissingPlugins(replacement);
+        ReportMisplacedEffects(replacement);
 
         _log.Information("Session now holds {Project}", path.Length > 0 ? path : replacement.Name);
         return CommandResult.Success(_dispatcher.Version, context.ChangedIds);
@@ -410,6 +411,23 @@ public sealed class Session : ISessionState, IAsyncDisposable
                 pluginId,
                 Core.Diagnostics.DiagnosticCodes.PluginMissing,
                 $"The plugin {pluginId} is not installed here (its file was {library}). Its effect is bypassed and kept; install it and scan for plugins to hear it.",
+                Core.Diagnostics.DiagnosticLevel.Warning);
+        }
+    }
+
+    /// <summary>
+    /// Says which sound effects in a project just opened are on the wrong kind of owner (a noise
+    /// reduction on a track), which only a hand edit does, so somebody hears why it sounds off.
+    /// </summary>
+    private void ReportMisplacedEffects(Project project)
+    {
+        foreach ((string effectId, Core.Validation.ValidationIssue issue) in Effects.EffectPlacement.Find(project))
+        {
+            Notices.Report(
+                effectId,
+                "Sound effect",
+                Core.Diagnostics.DiagnosticCodes.EffectMisplaced,
+                issue.Message,
                 Core.Diagnostics.DiagnosticLevel.Warning);
         }
     }

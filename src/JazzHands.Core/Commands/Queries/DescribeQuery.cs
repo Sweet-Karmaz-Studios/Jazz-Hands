@@ -38,7 +38,7 @@ public sealed record DescribeQuery(
 /// <param name="Tracks">That sequence's tracks.</param>
 /// <param name="Clips">Its clips, in timeline order, inside the range when one was asked for.</param>
 /// <param name="Markers">Its markers, inside the range.</param>
-/// <param name="Problems">What is wrong: validation issues, missing fonts and files.</param>
+/// <param name="Problems">What is wrong: validation issues, missing fonts and files, sound effects on the wrong owner.</param>
 public sealed record ProjectDescription(
     string Text,
     int Tokens,
