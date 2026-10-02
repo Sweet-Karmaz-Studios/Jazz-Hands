@@ -140,24 +140,24 @@ public static class ThreePointOps
         ArgumentNullException.ThrowIfNull(sequence);
         ArgumentNullException.ThrowIfNull(track);
 
-        List<string> targets = [.. TargetedTracks(sequence).Select(candidate => candidate.Id)];
+        List<Track> targets = [.. TargetedTracks(sequence)];
         if (on)
         {
             if (track.Kind == TrackKind.Video)
             {
-                targets.RemoveAll(id => sequence.Track(id) is { Kind: TrackKind.Video });
+                targets.RemoveAll(candidate => candidate.Kind == TrackKind.Video);
             }
 
-            if (!targets.Contains(track.Id))
+            if (!targets.Exists(candidate => candidate.Id == track.Id))
             {
-                targets.Add(track.Id);
+                targets.Add(track);
             }
         }
         else
         {
-            targets.Remove(track.Id);
+            targets.RemoveAll(candidate => candidate.Id == track.Id);
         }
 
-        return sequence with { SourcePatch = new SourcePatch([.. targets]) };
+        return sequence with { SourcePatch = new SourcePatch([.. targets.Select(target => target.Id)]) };
     }
 }
