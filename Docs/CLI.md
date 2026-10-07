@@ -4577,31 +4577,27 @@ Give a sequence its own frame rate, size or audio format.
 
 The editor's settings: list them, change one.
 
-### `jazz settings get <project>`
+### `jazz settings get`
 
 List the editor's settings with their values and defaults.
 
-| Argument | Meaning |
-|---|---|
-| `<project>` | The .jazz file to work on. |
-
 | Option | Meaning |
 |---|---|
+| `--project <project>` | A .jazz file to read alongside, for its fonts folder and relative paths. |
 | `--section <section>` | Only this section. |
 
-### `jazz settings set <project> <key> <value>`
+### `jazz settings set <key> <value>`
 
 Change one of the editor's settings.
 
 | Argument | Meaning |
 |---|---|
-| `<project>` | The .jazz file to work on. |
 | `<key>` | The setting, as section.name (see settings.get). |
 | `<value>` | Its new value: JSON, or plain text. |
 
 | Option | Meaning |
 |---|---|
-| `--no-save` | Do not write the project back. |
+| `--project <project>` | A .jazz file to read alongside, for its fonts folder and relative paths. |
 
 ## `jazz shape3d`
 
@@ -5136,6 +5132,23 @@ Where a title's text sits on the frame, and whether it stays inside title safe.
 | Option | Meaning |
 |---|---|
 | `--at <time>` | When, on the sequence; the clip's middle when left out. |
+
+### `jazz title save-preset <project> <clip-id>`
+
+Save a title's look as a preset of your own.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<clip-id>` | The title clip id. |
+
+| Option | Meaning |
+|---|---|
+| `--name <name>` | Required. The preset's name in kebab case, as --preset takes it. |
+| `--label <label>` | What the editor calls it; the name when left out. |
+| `--description <description>` | One sentence on when to use it. |
+| `--replace` | Write over a preset of your own with that name, or replace a built-in. |
+| `--no-save` | Do not write the project back. |
 
 ### `jazz title set-animation <project> <clip-id>`
 

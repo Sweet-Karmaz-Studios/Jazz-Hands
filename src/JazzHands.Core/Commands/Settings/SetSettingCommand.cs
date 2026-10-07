@@ -12,7 +12,8 @@ namespace JazzHands.Core.Commands;
 [Command("settings.set",
     Description = "Change one of the editor's settings",
     Undoable = false,
-    NotUndoableReason = "Settings belong to the person, not the project; set the old value back instead.")]
+    NotUndoableReason = "Settings belong to the person, not the project; set the old value back instead.",
+    Standalone = true)]
 public sealed record SetSettingCommand(
     [property: Arg(0, "The setting, as section.name (see settings.get)")] string Key,
     [property: Arg(1, "Its new value: JSON, or plain text")] string Value) : ICommand;

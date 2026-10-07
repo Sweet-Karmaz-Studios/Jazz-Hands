@@ -388,6 +388,7 @@ public static class GeneratedCommands
             return ExitCode.Ok;
         }
 
+        Project before = session.Project;
         CommandResult result = await session.ExecuteAsync((ICommand)built, cancellationToken).ConfigureAwait(false);
 
         if (!result.Ok)
@@ -396,6 +397,9 @@ public static class GeneratedCommands
             return ExitCode.CommandError;
         }
 
+        // Only what changed the project is saved: a still, a contact sheet, a queued export or a
+        // preset written leaves the file as it was, byte for byte and with its date.
+        save = save && !ReferenceEquals(session.Project, before);
         if (save)
         {
             ProjectFile.Save(path, session.Project, load.Unknown);

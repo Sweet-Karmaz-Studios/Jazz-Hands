@@ -2,7 +2,7 @@ namespace JazzHands.Core.Commands;
 
 /// <summary>Lists the editor's settings: each key, its value, and its default.</summary>
 /// <param name="Section">Only this section (<c>editor</c>, <c>cache</c>, <c>control</c>, <c>recent</c>).</param>
-[Query("settings.get", Description = "List the editor's settings with their values and defaults")]
+[Query("settings.get", Description = "List the editor's settings with their values and defaults", Standalone = true)]
 public sealed record GetSettingsQuery(
     [property: Option("section", "Only this section")] string? Section = null) : IQuery<SettingInfo[]>;
 
