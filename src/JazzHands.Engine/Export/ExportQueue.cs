@@ -72,8 +72,9 @@ public interface IExportHooks
 /// A job keeps the plan and a copy of the project as they were when it was queued, so editing on
 /// while it waits changes nothing about the file it writes. Both are written to a SQLite file
 /// (<c>%LOCALAPPDATA%\JazzHands\queue.db</c>) as they change state, with the job's options and log,
-/// and a job that was running when the editor stopped is queued again when it starts: a
-/// half-written export was deleted, so the only way to finish it is from the top.
+/// and a job that was running when the editor stopped comes back paused, to be resumed: a
+/// half-written export was deleted, so the only way to finish it is from the top, and that
+/// waits until someone asks rather than taking the encoder at the next start.
 /// </para>
 /// <para>
 /// A job is hardware when its plan encodes with NVENC first, and software otherwise (a copy, an
@@ -549,7 +550,7 @@ public sealed class ExportQueue : IExportService, IDisposable
                 if (_shutdown.IsCancellationRequested)
                 {
                     // Stopped by the editor closing rather than by a person: run it again next time.
-                    job.State = ExportJobState.Queued;
+                    job.State = ExportJobState.Paused;
                     Note(job, "Stopped because Jazz Hands closed; it runs again from the top.");
                 }
                 else if (job.PauseRequested)
@@ -708,10 +709,12 @@ public sealed class ExportQueue : IExportService, IDisposable
 
                 if (job.State == ExportJobState.Running)
                 {
-                    // It was running when the editor stopped. The partial file is gone; start again.
-                    job.State = ExportJobState.Queued;
-                    job.Note = Join(job.Note, "Restarted: Jazz Hands closed while it was exporting.");
-                    Note(job, "Jazz Hands closed while it was exporting; queued again from the top.");
+                    // It was running when the editor stopped. The partial file is gone, so it can only
+                    // start again from the top, and it waits for someone to say so rather than taking
+                    // the encoder at the next start before anyone has looked.
+                    job.State = ExportJobState.Paused;
+                    job.Note = Join(job.Note, "Interrupted: Jazz Hands closed while it was exporting. Resume it to start again from the top.");
+                    Note(job, "Jazz Hands closed while it was exporting; paused until it is resumed.");
                 }
 
                 _jobs.Add(job);
@@ -723,7 +726,7 @@ public sealed class ExportQueue : IExportService, IDisposable
             }
         }
 
-        foreach (Job job in _jobs.Where(job => job.State == ExportJobState.Queued))
+        foreach (Job job in _jobs.Where(job => job.State is ExportJobState.Queued or ExportJobState.Paused))
         {
             Update(job);
         }
