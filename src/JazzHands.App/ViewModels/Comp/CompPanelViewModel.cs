@@ -138,6 +138,7 @@ public sealed partial class CompPanelViewModel : ToolViewModel
     private readonly IUiDispatcher _ui;
     private readonly IPreviewEngine? _preview;
     private readonly INodeViewer? _viewer;
+    private Flicks _shownAt;
 
     /// <summary>Creates the panel.</summary>
     public CompPanelViewModel(ISession session, SelectionService selection, IUiDispatcher ui, IPreviewEngine? preview = null, INodeViewer? viewer = null)
@@ -155,14 +156,17 @@ public sealed partial class CompPanelViewModel : ToolViewModel
         _session.ProjectChanged += (_, _) => _ui.Post(Rebuild);
         _selection.Changed += (_, _) => _ui.Post(Rebuild);
 
-        // The viewer follows the playhead while it is parked; playing, it waits for it to stop.
-        _preview?.PlayheadMoved += (_, moved) =>
+        // The viewer follows the frame on screen. Playing, it draws the next picture once the last
+        // is done, so it plays at the pace WARP draws a small picture and never queues behind.
+        _shownAt = preview?.Position ?? Flicks.Zero;
+        _preview?.PlayheadMoved += (_, moved) => _ui.Post(() =>
         {
-            if (moved.State != TransportState.Playing)
+            _shownAt = moved.Position;
+            if (moved.State != TransportState.Playing || Viewing.IsCompleted)
             {
-                _ui.Post(RefreshViewer);
+                RefreshViewer();
             }
-        };
+        });
         Rebuild();
     }
 
@@ -490,7 +494,7 @@ public sealed partial class CompPanelViewModel : ToolViewModel
         }
 
         Clip clip = found.Clip;
-        Flicks at = _preview?.Position is { } playhead && playhead >= clip.Start && playhead < clip.End ? playhead : clip.Start;
+        Flicks at = _shownAt >= clip.Start && _shownAt < clip.End ? _shownAt : clip.Start;
         string caption = $"{shown.Title} at {Timecode.FormatClock(at)}";
         ImageSource? image = await _viewer.RenderAsync(_session.Project, clipId, shown.Id, at, _session.ProjectPath).ConfigureAwait(true);
 
