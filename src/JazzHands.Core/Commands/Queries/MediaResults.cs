@@ -29,7 +29,7 @@ namespace JazzHands.Core.Commands;
 /// <param name="SizeBytes">File size at probe time.</param>
 /// <param name="Streams">Every stream, in container order.</param>
 /// <param name="UsedByClips">How many clips in the project play it.</param>
-/// <param name="ProxyPath">Its proxy, when one has been made.</param>
+/// <param name="ProxyPath">Its proxy in the cache, when one has been made (found by its content hash).</param>
 /// <param name="Subclip">For a subclip, which item it came from and its stretch of the file.</param>
 /// <param name="Markers">Markers on the file, at source times.</param>
 public sealed record MediaItemInfo(

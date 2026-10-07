@@ -21,6 +21,7 @@ public sealed class ListMediaHandler : IQueryHandler<ListMediaQuery, MediaItemIn
 
         string projectPath = context.Session?.ProjectPath ?? string.Empty;
         Dictionary<string, int> uses = CountUses(project);
+        Caching.ProxyService? proxies = context.Services?.GetService(typeof(Caching.ProxyService)) as Caching.ProxyService;
 
         IEnumerable<MediaItem> items = project.Media;
 
@@ -50,7 +51,7 @@ public sealed class ListMediaHandler : IQueryHandler<ListMediaQuery, MediaItemIn
         return
         [
             .. items
-                .Select(item => Describe(project, item, projectPath, uses))
+                .Select(item => Describe(project, item, projectPath, uses, proxies))
                 .OrderBy(item => item.Folder, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase),
         ];
@@ -94,7 +95,8 @@ public sealed class ListMediaHandler : IQueryHandler<ListMediaQuery, MediaItemIn
         Project project,
         MediaItem item,
         string projectPath,
-        Dictionary<string, int> uses)
+        Dictionary<string, int> uses,
+        Caching.ProxyService? proxies)
     {
         string full = projectPath.Length > 0
             ? ProjectPaths.Resolve(projectPath, item.RelativePath)
@@ -129,7 +131,7 @@ public sealed class ListMediaHandler : IQueryHandler<ListMediaQuery, MediaItemIn
             info.SizeBytes,
             info.Streams,
             uses.GetValueOrDefault(item.Id),
-            item.ProxyPath,
+            proxies?.Find(item.Hash)?.Path,
             item.Subclip,
             item.Markers);
     }
@@ -170,7 +172,8 @@ public sealed class GetMediaHandler : IQueryHandler<GetMediaQuery, MediaItemInfo
             project,
             item,
             context.Session?.ProjectPath ?? string.Empty,
-            ListMediaHandler.CountUses(project));
+            ListMediaHandler.CountUses(project),
+            context.Services?.GetService(typeof(Caching.ProxyService)) as Caching.ProxyService);
     }
 }
 

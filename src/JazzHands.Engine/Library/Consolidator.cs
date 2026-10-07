@@ -325,7 +325,6 @@ public static class Consolidator
                     Hash = piece.Hash,
                     Info = piece.Info,
                     Duration = piece.Duration,
-                    ProxyPath = null,
                 }));
             }
 

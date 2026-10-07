@@ -1363,16 +1363,6 @@
         "hash": {
           "type": "string"
         },
-        "proxyPath": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "tags": {
           "type": "array",
           "items": {

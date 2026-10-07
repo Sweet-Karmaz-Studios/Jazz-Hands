@@ -679,7 +679,6 @@ public sealed record TransitionDefaults(string Video, string Audio, Flicks Durat
 /// <param name="Name">Display name, usually the file name without its extension.</param>
 /// <param name="Duration">How long the file runs.</param>
 /// <param name="Hash">A content hash, used as the cache key and to notice a replaced file.</param>
-/// <param name="ProxyPath">A proxy file, when one has been made.</param>
 /// <param name="Tags">Free-form tags for the media bin.</param>
 /// <param name="Kind">A movie, a still, or a numbered image sequence.</param>
 /// <param name="Folder">Where it sits in the bin, as a slash-separated path. Empty for the root.</param>
@@ -697,7 +696,6 @@ public sealed record MediaItem(
     string Name,
     Flicks Duration,
     string Hash = "",
-    string? ProxyPath = null,
     EquatableArray<string> Tags = default,
     MediaKind Kind = MediaKind.Movie,
     string Folder = "",
