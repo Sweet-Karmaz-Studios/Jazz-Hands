@@ -54,6 +54,7 @@ public sealed class ReframeSequenceHandler : ICommandHandler<ReframeSequenceComm
         Project result = project;
         Clip front;
         Track[] lifted = [];
+        ReframeSource? reframed = null;
         if (command.Mode == ReframeMode.Fit)
         {
             front = new Clip(Id.New(), new TimeRange(Flicks.Zero, length), Flicks.Zero, SequenceId: source.Id, Name: source.Name);
@@ -67,6 +68,7 @@ public sealed class ReframeSequenceHandler : ICommandHandler<ReframeSequenceComm
             background = background with { HiddenTracks = [.. hidden] };
             float across = frame.X / sourceSize.X;
             float down = (frame.X / (float)command.Window) / sourceSize.Y;
+            reframed = new ReframeSource(source.Id, across, down);
             lifted = [.. graphics.Select((track, index) => Lift(track, across, down) with
             {
                 Id = Id.New(),
@@ -125,6 +127,7 @@ public sealed class ReframeSequenceHandler : ICommandHandler<ReframeSequenceComm
             ])
         {
             Settings = settings,
+            Reframed = reframed,
         };
 
         context.Changed(vertical.Id);

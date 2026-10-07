@@ -802,6 +802,7 @@ public sealed record SourcePatch(EquatableArray<string> Targets) : IEquatable<So
 /// <param name="MotionBlur">Motion blur for every animated layer in it, unless a track or clip says otherwise; null for none.</param>
 /// <param name="SourcePatch">Which tracks an edit from the source monitor goes to (Phase 38); null for the defaults.</param>
 /// <param name="Multicam">For a multicam clip's source (Phase 41): its angles and the switches between them; null for an ordinary sequence.</param>
+/// <param name="Reframed">For a vertical version <c>sequence.reframe</c> made with a window: the original and how its graphics are lifted, so a graphics track added there later is lifted too; null for any other sequence.</param>
 public sealed record Sequence(
     string Id,
     string Name,
@@ -814,7 +815,8 @@ public sealed record Sequence(
     MasterBus? Master = null,
     MotionBlur? MotionBlur = null,
     SourcePatch? SourcePatch = null,
-    Multicam? Multicam = null) : IEquatable<Sequence>
+    Multicam? Multicam = null,
+    ReframeSource? Reframed = null) : IEquatable<Sequence>
 {
     /// <summary>The first position after the last clip on any track.</summary>
     public Flicks Duration
@@ -892,6 +894,16 @@ public sealed record EffectPreset(
 /// <param name="Across">How places across, and sizes, are scaled.</param>
 /// <param name="Down">How places down are scaled.</param>
 public sealed record LiftedTrack(string TrackId, double Across, double Down) : IEquatable<LiftedTrack>;
+
+/// <summary>
+/// What a vertical version was reframed from (<c>sequence.reframe</c>, not in fit mode): the
+/// original, and the scales its graphics are lifted with (<see cref="LiftedTrack"/>). A track that
+/// becomes graphics in the original afterwards is hidden in the nests showing it and lifted too.
+/// </summary>
+/// <param name="SequenceId">The original sequence.</param>
+/// <param name="Across">How places across, and sizes, are scaled.</param>
+/// <param name="Down">How places down are scaled.</param>
+public sealed record ReframeSource(string SequenceId, double Across, double Down) : IEquatable<ReframeSource>;
 
 /// <summary>
 /// Everything in a .jazz file.

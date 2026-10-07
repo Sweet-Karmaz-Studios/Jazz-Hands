@@ -1787,6 +1787,25 @@
         }
       }
     },
+    "reframeSource": {
+      "type": "object",
+      "properties": {
+        "sequenceId": {
+          "type": "string"
+        },
+        "across": {
+          "type": "number"
+        },
+        "down": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "sequenceId",
+        "across",
+        "down"
+      ]
+    },
     "role": {
       "type": "object",
       "properties": {
@@ -1903,6 +1922,16 @@
           "anyOf": [
             {
               "$ref": "#/$defs/multicam"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reframed": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/reframeSource"
             },
             {
               "type": "null"

@@ -352,7 +352,7 @@ public sealed class CommandDispatcher : IAsyncDisposable
         Project before = _project;
 
         var context = new HandlerContext(_services, _clock, ProjectPath) { Later = Later, Cancellation = cancellation, Prepared = prepared };
-        Project after = FollowLifted(before, SettleTitles(before, SettleTransitions(before, Magnetize(before, Apply(before, command, context), context), context), context), context);
+        Project after = LiftAdded(before, FollowLifted(before, SettleTitles(before, SettleTransitions(before, Magnetize(before, Apply(before, command, context), context), context), context), context), context);
 
         return Commit(command, metadata, before, after, context.ChangedIds, ChangeOrigin.Command, issuer);
     }
@@ -385,7 +385,7 @@ public sealed class CommandDispatcher : IAsyncDisposable
             };
         }
 
-        working = FollowLifted(before, SettleTitles(before, SettleTransitions(before, Magnetize(before, working, context), context), context), context);
+        working = LiftAdded(before, FollowLifted(before, SettleTitles(before, SettleTransitions(before, Magnetize(before, working, context), context), context), context), context);
         CommandMetadata metadata = CommandRegistry.Describe(batch);
         return Commit(batch, metadata, before, working, context.ChangedIds, ChangeOrigin.Command, issuer);
     }
@@ -567,6 +567,97 @@ public sealed class CommandDispatcher : IAsyncDisposable
                 result = result.ReplaceTrack(followed);
                 context.Changed(track.Id);
                 context.Changed(followed.Clips.Select(clip => clip.Id));
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Lifts a track that an edit made graphics in a reframed sequence's original into the vertical
+    /// version, as reframing would have: left out of the nests showing the original, and copied
+    /// above the picture, following the original from then on.
+    /// </summary>
+    /// <remarks>
+    /// Runs after <see cref="FollowLifted"/>, so the copies it makes are not lifted twice. A track the
+    /// nests already leave out was lifted before, even if its copy has since been edited by hand and
+    /// follows no more, so it is not lifted again. Without a nest of the original the vertical
+    /// version is no longer one, and nothing is lifted.
+    /// </remarks>
+    private static Project LiftAdded(Project before, Project after, HandlerContext context)
+    {
+        if (ReferenceEquals(before, after))
+        {
+            return after;
+        }
+
+        Project result = after;
+        foreach (Sequence made in after.Sequences)
+        {
+            if (made.Reframed is not { } from
+                || after.Sequence(from.SequenceId) is not { } original
+                || ReferenceEquals(before.Sequence(original.Id), original))
+            {
+                continue;
+            }
+
+            Sequence vertical = result.Sequence(made.Id)!;
+            Sequence? originalWas = before.Sequence(original.Id);
+
+            // The clips showing the original: the blurred copy here, and the window's pan in the crop it nests.
+            ImmutableArray<Clip> nests =
+            [
+                .. vertical.Tracks.SelectMany(track => track.Clips).Where(clip => clip.SequenceId == original.Id),
+                .. vertical.Tracks.SelectMany(track => track.Clips)
+                    .Where(clip => clip.SequenceId is { } nested && nested != original.Id)
+                    .Select(clip => result.Sequence(clip.SequenceId!))
+                    .OfType<Sequence>()
+                    .SelectMany(crop => crop.Tracks.SelectMany(track => track.Clips))
+                    .Where(clip => clip.SequenceId == original.Id),
+            ];
+            if (nests.IsEmpty)
+            {
+                continue;
+            }
+
+            Track[] added =
+            [
+                .. original.Tracks.Where(track =>
+                    !ReferenceEquals(originalWas?.Track(track.Id), track)
+                    && Handlers.ReframeSequenceHandler.IsGraphics(track)
+                    && !nests.Any(clip => clip.HiddenTracks.Contains(track.Id))
+                    && !vertical.Tracks.Any(lifted => lifted.Lifted?.TrackId == track.Id)),
+            ];
+
+            foreach (Track track in added)
+            {
+                // Above the picture and the graphics lifted before it, below the sound.
+                Track lift = Handlers.ReframeSequenceHandler.Lift(track, (float)from.Across, (float)from.Down) with
+                {
+                    Id = Id.New(),
+                    Order = vertical.NextTrackOrder(),
+                    Lifted = new LiftedTrack(track.Id, from.Across, from.Down),
+                };
+
+                int above = vertical.Tracks.OrderBy(other => other.Order).ToList().FindLastIndex(other => other.Kind != TrackKind.Audio);
+                vertical = Handlers.TrackOrder.Renumber(vertical.AddTrack(lift), lift.Id, above + 1, context);
+                context.Changed(lift.Id);
+                context.Changed(lift.Clips.Select(clip => clip.Id));
+            }
+
+            if (added.Length == 0)
+            {
+                continue;
+            }
+
+            context.Changed(vertical.Id);
+            result = result.ReplaceSequence(vertical);
+            foreach (Clip nest in nests)
+            {
+                Track holder = result.TrackOf(nest.Id)!;
+                Clip hidden = nest with { HiddenTracks = [.. nest.HiddenTracks, .. added.Select(track => track.Id)] };
+                result = result.ReplaceTrack(holder.ReplaceClip(hidden));
+                context.Changed(nest.Id);
             }
         }
 
