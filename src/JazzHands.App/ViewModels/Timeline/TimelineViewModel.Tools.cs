@@ -481,6 +481,12 @@ public sealed partial class TimelineViewModel
                 PreviewRazor(_downAt);
                 return true;
 
+            case TimelineTool.Ripple when hit.Edge != ClipEdge.None && IsQuickTrim:
+                // Said at the press rather than after a preview the engine would refuse.
+                Status = "A Quick Trim keeps every clip at its place in the file, so nothing ripples: trim with Select (V), or cut with the Razor (C).";
+                _gesture = Gesture.None;
+                return true;
+
             case TimelineTool.Ripple when hit.Edge != ClipEdge.None:
                 _gesture = Gesture.Ripple;
                 _edge = hit.Edge;

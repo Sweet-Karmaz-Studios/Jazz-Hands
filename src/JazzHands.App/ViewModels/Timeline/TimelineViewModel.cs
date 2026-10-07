@@ -157,6 +157,9 @@ public sealed partial class TimelineViewModel : DocumentViewModel
     /// <summary>True when the Quick Trim panel shows.</summary>
     public bool IsQuickTrim => QuickTrim is not null;
 
+    /// <summary>False on a Quick Trim, whose clips keep their places in the file, so nothing can ripple.</summary>
+    public bool CanRipple => !IsQuickTrim;
+
     /// <summary>True while playback runs, which is when the view follows the playhead.</summary>
     public bool IsPlaying { get; private set; }
 
@@ -484,6 +487,7 @@ public sealed partial class TimelineViewModel : DocumentViewModel
         {
             OnPropertyChanged(nameof(QuickTrim));
             OnPropertyChanged(nameof(IsQuickTrim));
+            OnPropertyChanged(nameof(CanRipple));
         }
     }
 
