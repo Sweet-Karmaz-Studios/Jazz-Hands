@@ -35,6 +35,7 @@ public sealed record SmartSegment(Flicks Start, Flicks End, bool Encode, Flicks?
 /// <param name="FastStart">Put an MP4's index at the front.</param>
 /// <param name="Extras">Subtitles and chapters.</param>
 /// <param name="AtOnce">Pieces encoded at once, each with an encoder of its own; 0 for <see cref="SmartCutter.EncodeParallelism"/>. The export queue sets it to the NVENC sessions it gave the job.</param>
+/// <param name="HeldBytes">Encoded bytes held in memory ahead of the writer, over all the pieces; the rest wait in temporary files beside the output.</param>
 public sealed record SmartCutJob(
     string OutputPath,
     string SourcePath,
@@ -47,7 +48,8 @@ public sealed record SmartCutJob(
     string? Container = null,
     bool FastStart = true,
     MuxExtras? Extras = null,
-    int AtOnce = 0);
+    int AtOnce = 0,
+    long HeldBytes = SmartCutter.DefaultHeldBytes);
 
 /// <summary>What a smart cut wrote.</summary>
 /// <param name="Path">The file.</param>
@@ -58,7 +60,8 @@ public sealed record SmartCutJob(
 /// <param name="Encoder">The matched encoder, or null when nothing needed encoding.</param>
 /// <param name="Notes">Encoders skipped, sound re-encoded.</param>
 /// <param name="Elapsed">Wall clock.</param>
-public sealed record SmartCutResult(string Path, long Bytes, Flicks Duration, long CopiedPackets, long EncodedFrames, string? Encoder, IReadOnlyList<string> Notes, TimeSpan Elapsed);
+/// <param name="SpilledBytes">Encoded bytes that waited for the writer in a temporary file rather than in memory.</param>
+public sealed record SmartCutResult(string Path, long Bytes, Flicks Duration, long CopiedPackets, long EncodedFrames, string? Encoder, IReadOnlyList<string> Notes, TimeSpan Elapsed, long SpilledBytes = 0);
 
 /// <summary>
 /// Joins copied groups of pictures and re-encoded frames around the cuts into one file.
@@ -86,14 +89,20 @@ public sealed record SmartCutResult(string Path, long Bytes, Flicks Duration, lo
 /// <para>
 /// The encoded pieces are encoded ahead of the writer, three at a time (or as many as the job's
 /// <see cref="SmartCutJob.AtOnce"/> says), each on a thread of its own with its own demuxer,
-/// decoder and matched encoder, and held in memory until their turn:
-/// a few seconds of pictures around each cut. The writer copies and writes strictly in order.
+/// decoder and matched encoder, and held until their turn: a few seconds of pictures around each
+/// cut. They wait in memory while the job's <see cref="SmartCutJob.HeldBytes"/> lasts and in a
+/// temporary file beside the output after that, so a 4K source with long groups, or many pieces
+/// finished ahead of a long copy, does not grow the process. The writer copies and writes
+/// strictly in order, and lets each piece's memory go as it writes it.
 /// </para>
 /// </remarks>
 public static unsafe class SmartCutter
 {
     /// <summary>Pieces encoded at once unless the job says otherwise: each decoder already uses every core, so more only waits.</summary>
     public const int EncodeParallelism = 3;
+
+    /// <summary>Encoded bytes held in memory unless the job says otherwise: several seconds of 4K at the matched encoders' quality.</summary>
+    public const long DefaultHeldBytes = 128L << 20;
 
     private static readonly ILogger Log = Serilog.Log.ForContext(typeof(SmartCutter));
 
@@ -201,10 +210,11 @@ public static unsafe class SmartCutter
         string? encoderName = null;
         long encodedFrames = 0;
         long copiedPackets = 0;
+        long spilled = 0;
 
         // The encoded pieces start at once, a few at a time, ahead of the writer.
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        (Task[] workers, Dictionary<int, TaskCompletionSource<EncodedPiece>> encoded) = StartEncoding(job, source, stop.Token);
+        (Task[] workers, Dictionary<int, TaskCompletionSource<EncodedPiece>> encoded) = StartEncoding(job, source, new HoldBudget(job.HeldBytes), stop.Token);
 
         try
         {
@@ -247,8 +257,9 @@ public static unsafe class SmartCutter
 
                 if (segment.Encode)
                 {
-                    EncodedPiece piece = encoded[index].Task.GetAwaiter().GetResult();
+                    using EncodedPiece piece = encoded[index].Task.GetAwaiter().GetResult();
                     WritePiece(piece, job.FrameRate, offset, timestamps, codec is "h264" or "hevc" ? configuration.LengthSize : 0, codec == "hevc" && copyFollows, Advance);
+                    spilled += piece.Packets.SpilledBytes;
                     foreach (string note in piece.Skipped.Select(reason => $"Skipped {reason}."))
                     {
                         if (!notes.Contains(note))
@@ -282,16 +293,17 @@ public static unsafe class SmartCutter
             long bytes = new FileInfo(muxer.Path).Length;
             progress?.Report(new CopyProgress(total, total, bytes));
             Log.Information(
-                "Smart cut {Segments} pieces into {Path}: {Copied} packets copied, {Encoded} frames encoded with {Encoder}, {Bytes} bytes in {Elapsed} ms",
+                "Smart cut {Segments} pieces into {Path}: {Copied} packets copied, {Encoded} frames encoded with {Encoder}, {Spilled} encoded bytes waited on disk, {Bytes} bytes in {Elapsed} ms",
                 job.Segments.Count,
                 muxer.Path,
                 copiedPackets,
                 encodedFrames,
                 encoderName ?? "none",
+                spilled,
                 bytes,
                 clock.ElapsedMilliseconds);
 
-            return new SmartCutResult(muxer.Path, bytes, total, copiedPackets, encodedFrames, encoderName, notes, clock.Elapsed);
+            return new SmartCutResult(muxer.Path, bytes, total, copiedPackets, encodedFrames, encoderName, notes, clock.Elapsed, spilled);
         }
         finally
         {
@@ -304,6 +316,15 @@ public static unsafe class SmartCutter
             catch (AggregateException)
             {
                 // Each worker's failure went to the piece it was encoding, which has been seen or does not matter now.
+            }
+
+            // Pieces encoded and never written, when the cut stopped early, let go of their files.
+            foreach (TaskCompletionSource<EncodedPiece> piece in encoded.Values)
+            {
+                if (piece.Task.IsCompletedSuccessfully)
+                {
+                    piece.Task.Result.Dispose();
+                }
             }
 
             string? path = muxer?.Path;
@@ -407,7 +428,7 @@ public static unsafe class SmartCutter
     /// group of pictures before the frames it keeps, and opens an encoder, which costs about a
     /// second at 4K whatever the piece's length; three at once take most of that off the clock.
     /// </summary>
-    private static (Task[] Workers, Dictionary<int, TaskCompletionSource<EncodedPiece>> Pieces) StartEncoding(SmartCutJob job, MatchSource source, CancellationToken cancellationToken)
+    private static (Task[] Workers, Dictionary<int, TaskCompletionSource<EncodedPiece>> Pieces) StartEncoding(SmartCutJob job, MatchSource source, HoldBudget budget, CancellationToken cancellationToken)
     {
         var pieces = new Dictionary<int, TaskCompletionSource<EncodedPiece>>();
         var queue = new System.Collections.Concurrent.ConcurrentQueue<int>();
@@ -427,7 +448,7 @@ public static unsafe class SmartCutter
                 {
                     try
                     {
-                        pieces[index].SetResult(EncodeSegment(job, source, job.Segments[index], cancellationToken));
+                        pieces[index].SetResult(EncodeSegment(job, source, job.Segments[index], budget, cancellationToken));
                     }
                     catch (Exception error)
                     {
@@ -442,8 +463,22 @@ public static unsafe class SmartCutter
         return (workers, pieces);
     }
 
-    /// <summary>Decodes a piece from its keyframe and encodes the frames it keeps; the packets are kept in memory until written.</summary>
-    private static EncodedPiece EncodeSegment(SmartCutJob job, MatchSource source, SmartSegment segment, CancellationToken cancellationToken)
+    /// <summary>Decodes a piece from its keyframe and encodes the frames it keeps; the packets are held until written.</summary>
+    private static EncodedPiece EncodeSegment(SmartCutJob job, MatchSource source, SmartSegment segment, HoldBudget budget, CancellationToken cancellationToken)
+    {
+        var packets = new HeldPackets(budget, Path.GetDirectoryName(Path.GetFullPath(job.OutputPath))!);
+        try
+        {
+            return EncodeSegment(job, source, segment, packets, cancellationToken);
+        }
+        catch
+        {
+            packets.Dispose();
+            throw;
+        }
+    }
+
+    private static EncodedPiece EncodeSegment(SmartCutJob job, MatchSource source, SmartSegment segment, HeldPackets packets, CancellationToken cancellationToken)
     {
         using var demuxer = new Demuxer(job.SourcePath);
         demuxer.Keep(job.VideoStream);
@@ -455,13 +490,12 @@ public static unsafe class SmartCutter
         using MatchedEncoder encoder = MatchedEncoder.Open(source, job.Encoders, globalHeader: false, skipped);
 
         Flicks slack = Flicks.FromFrames(1, job.FrameRate) / 2;
-        var packets = new List<EncodedPacket>();
         long frames = 0;
 
         void Take(nint raw)
         {
             var packet = (AVPacket*)raw;
-            packets.Add(new EncodedPacket(new ReadOnlySpan<byte>(packet->data, packet->size).ToArray(), packet->pts, (packet->flags & ffmpeg.AV_PKT_FLAG_KEY) != 0));
+            packets.Add(new ReadOnlySpan<byte>(packet->data, packet->size), packet->pts, (packet->flags & ffmpeg.AV_PKT_FLAG_KEY) != 0);
         }
 
         while (true)
@@ -510,9 +544,10 @@ public static unsafe class SmartCutter
     {
         long firstFrame = offset.ToFrames(rate, RoundingMode.Nearest);
         using var owned = new AvPacket();
-        for (int index = 0; index < piece.Packets.Count; index++)
+        int index = -1;
+        foreach (EncodedPacket encoded in piece.Packets.Read())
         {
-            EncodedPacket encoded = piece.Packets[index];
+            index++;
             byte[] data = lengthSize > 0 && ParameterSets.IsAnnexB(encoded.Data)
                 ? ParameterSets.AnnexBToLengthPrefixed(encoded.Data, lengthSize)
                 : encoded.Data;
@@ -538,7 +573,108 @@ public static unsafe class SmartCutter
     private sealed record EncodedPacket(byte[] Data, long Frame, bool Key);
 
     /// <summary>An encoded piece, waiting to be written.</summary>
-    private sealed record EncodedPiece(string Encoder, long Frames, IReadOnlyList<EncodedPacket> Packets, IReadOnlyList<string> Skipped);
+    private sealed record EncodedPiece(string Encoder, long Frames, HeldPackets Packets, IReadOnlyList<string> Skipped) : IDisposable
+    {
+        public void Dispose() => Packets.Dispose();
+    }
+
+    /// <summary>The bytes a job's encoded pieces may hold in memory between them.</summary>
+    private sealed class HoldBudget(long bytes)
+    {
+        private long _left = bytes;
+
+        /// <summary>Takes <paramref name="count"/> bytes if they are left.</summary>
+        public bool TryTake(long count)
+        {
+            long left = Volatile.Read(ref _left);
+            while (left >= count)
+            {
+                long seen = Interlocked.CompareExchange(ref _left, left - count, left);
+                if (seen == left)
+                {
+                    return true;
+                }
+
+                left = seen;
+            }
+
+            return false;
+        }
+
+        public void Give(long count) => Interlocked.Add(ref _left, count);
+    }
+
+    /// <summary>
+    /// One piece's packets, in order: in memory while the job's budget lasts, then in a temporary
+    /// file beside the output that is deleted when the piece is let go.
+    /// </summary>
+    private sealed class HeldPackets(HoldBudget budget, string folder) : IDisposable
+    {
+        private readonly List<EncodedPacket> _memory = [];
+        private readonly List<(int Length, long Frame, bool Key)> _spilled = [];
+        private long _held;
+        private FileStream? _file;
+
+        /// <summary>Packets held.</summary>
+        public int Count => _memory.Count + _spilled.Count;
+
+        /// <summary>Bytes that went to the file.</summary>
+        public long SpilledBytes { get; private set; }
+
+        public void Add(ReadOnlySpan<byte> data, long frame, bool key)
+        {
+            // Once one packet has gone to the file the rest follow it, so they read back in order.
+            if (_file is null && budget.TryTake(data.Length))
+            {
+                _memory.Add(new EncodedPacket(data.ToArray(), frame, key));
+                _held += data.Length;
+                return;
+            }
+
+            _file ??= new FileStream(
+                Path.Combine(folder, $".jazz-smart-{Guid.NewGuid():N}.tmp"),
+                FileMode.CreateNew,
+                FileAccess.ReadWrite,
+                FileShare.None,
+                1 << 16,
+                FileOptions.DeleteOnClose | FileOptions.SequentialScan);
+            _file.Write(data);
+            _spilled.Add((data.Length, frame, key));
+            SpilledBytes += data.Length;
+        }
+
+        /// <summary>The packets in the order they were added.</summary>
+        public IEnumerable<EncodedPacket> Read()
+        {
+            foreach (EncodedPacket packet in _memory)
+            {
+                yield return packet;
+            }
+
+            if (_file is null)
+            {
+                yield break;
+            }
+
+            _file.Flush();
+            _file.Position = 0;
+            foreach ((int length, long frame, bool key) in _spilled)
+            {
+                byte[] data = new byte[length];
+                _file.ReadExactly(data);
+                yield return new EncodedPacket(data, frame, key);
+            }
+        }
+
+        public void Dispose()
+        {
+            budget.Give(_held);
+            _held = 0;
+            _memory.Clear();
+            _file?.Dispose();
+            _file = null;
+        }
+    }
 
     private static string SoundEncoderFor(string codec) => codec switch
     {
