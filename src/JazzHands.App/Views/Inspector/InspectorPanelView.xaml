@@ -278,6 +278,50 @@
                         AutomationProperties.Name="Reset" />
             </Grid>
         </DataTemplate>
+
+        <!-- A mask of the clip or of an effect: how it combines, invert, its strength rows. Its
+             shape is drawn and moved on the preview. -->
+        <DataTemplate x:Key="MaskItem" DataType="{x:Type vm:MaskItemViewModel}">
+            <Border Margin="0,6,0,0" Padding="4" CornerRadius="3" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock VerticalAlignment="Center"
+                                   Text="{Binding Name, Mode=OneWay}"
+                                   TextTrimming="CharacterEllipsis"
+                                   Foreground="{DynamicResource Brush.Text.Primary}" />
+                        <ComboBox Grid.Column="1"
+                                  Width="92"
+                                  Style="{StaticResource ComboBox.Compact}"
+                                  ItemsSource="{x:Static vm:MaskItemViewModel.Modes}"
+                                  SelectedItem="{Binding Mode, Mode=TwoWay}"
+                                  ToolTip="How it combines with the masks before it"
+                                  AutomationProperties.Name="Mask mode" />
+                        <CheckBox Grid.Column="2"
+                                  Margin="6,0,0,0"
+                                  Content="Invert"
+                                  IsChecked="{Binding Invert, Mode=TwoWay}"
+                                  ToolTip="Keep the outside instead"
+                                  AutomationProperties.Name="Invert mask" />
+                        <Button Grid.Column="3"
+                                Style="{StaticResource Button.Small}"
+                                Content="&#xE74D;"
+                                Command="{Binding RemoveCommand, Mode=OneWay}"
+                                ToolTip="Remove the mask"
+                                AutomationProperties.Name="Remove mask" />
+                    </Grid>
+                    <ItemsControl Margin="0,4,0,0"
+                                  ItemsSource="{Binding Rows, Mode=OneWay}"
+                                  ItemTemplate="{StaticResource ParamRow}"
+                                  Focusable="False" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
     </UserControl.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
@@ -520,6 +564,22 @@
                               AutomationProperties.Name="Blend mode" />
                 </Grid>
 
+                <!-- The clip's own masks: what of it is seen. Their shapes are drawn on the preview. -->
+                <StackPanel Margin="0,10,0,0" Visibility="{Binding CanMaskClip, Mode=OneWay, Converter={StaticResource Visible}}">
+                    <Grid>
+                        <TextBlock Text="Masks"
+                                   VerticalAlignment="Center"
+                                   FontSize="{DynamicResource Text.Caption}"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource Brush.Text.Primary}" />
+                        <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                            <Button Style="{StaticResource Button.Text}" Content="+ Rectangle" Command="{Binding AddClipMaskCommand, Mode=OneWay}" CommandParameter="rectangle" ToolTip="Show only a rectangle of the clip, to be moved on the preview" AutomationProperties.Name="Add rectangle mask" />
+                            <Button Style="{StaticResource Button.Text}" Content="+ Ellipse" Command="{Binding AddClipMaskCommand, Mode=OneWay}" CommandParameter="ellipse" ToolTip="Show only an ellipse of the clip, to be moved on the preview" AutomationProperties.Name="Add ellipse mask" />
+                        </StackPanel>
+                    </Grid>
+                    <ItemsControl ItemsSource="{Binding ClipMasks, Mode=OneWay}" ItemTemplate="{StaticResource MaskItem}" Focusable="False" />
+                </StackPanel>
+
                 <!-- Effects, in the order they run. Drop one from the effects panel here to add it. -->
                 <Border Margin="0,14,0,0" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,1,0,0" Padding="0,8,0,0">
                     <TextBlock Text="Effects"
@@ -578,6 +638,18 @@
                                                   ItemTemplate="{StaticResource ParamRow}"
                                                   Focusable="False"
                                                   Visibility="{Binding IsExpanded, Mode=OneWay, Converter={StaticResource Visible}}" />
+
+                                    <!-- Masks limit where a picture effect applies; outside them the picture passes through. -->
+                                    <StackPanel Margin="0,4,0,0" Visibility="{Binding CanMask, Mode=OneWay, Converter={StaticResource Visible}}">
+                                        <ItemsControl ItemsSource="{Binding Masks, Mode=OneWay}"
+                                                      ItemTemplate="{StaticResource MaskItem}"
+                                                      Focusable="False"
+                                                      Visibility="{Binding IsExpanded, Mode=OneWay, Converter={StaticResource Visible}}" />
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                            <Button Style="{StaticResource Button.Text}" Content="+ Rectangle mask" Command="{Binding AddMaskCommand, Mode=OneWay}" CommandParameter="rectangle" ToolTip="Apply the effect only inside a rectangle, to be moved on the preview" AutomationProperties.Name="Add rectangle mask to effect" />
+                                            <Button Style="{StaticResource Button.Text}" Content="+ Ellipse mask" Command="{Binding AddMaskCommand, Mode=OneWay}" CommandParameter="ellipse" ToolTip="Apply the effect only inside an ellipse, to be moved on the preview" AutomationProperties.Name="Add ellipse mask to effect" />
+                                        </StackPanel>
+                                    </StackPanel>
                                 </StackPanel>
                             </Border>
                         </DataTemplate>

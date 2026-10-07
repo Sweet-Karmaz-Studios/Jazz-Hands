@@ -716,7 +716,7 @@ public sealed partial class MaskHandlesViewModel : ObservableObject
         ParamEval.Eval(value, ParamTargets.Transform.Param(name)!, local) is ParamValue.Float2 pair ? pair.Value : fallback;
 
     /// <summary>A clip's picture size in its own pixels, and how it is fitted: what the renderer places.</summary>
-    private static (Vector2 Size, ConformPolicy Policy) SourceOf(Project project, Clip clip, Vector2 frame)
+    internal static (Vector2 Size, ConformPolicy Policy) SourceOf(Project project, Clip clip, Vector2 frame)
     {
         if (clip.MediaId is { } mediaId && project.MediaItem(mediaId) is { } item
             && item.Info?.Streams.FirstOrDefault(stream => stream.Index == clip.SourceStreamIndex) is { Width: > 0, Height: > 0 } stream)

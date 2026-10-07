@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using JazzHands.App.Services;
 using JazzHands.App.Shell;
 using JazzHands.Core.Commands;
@@ -62,6 +63,9 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
     private bool _hasTarget;
 
     [ObservableProperty]
+    private bool _canMaskClip;
+
+    [ObservableProperty]
     private string _heading = "Nothing selected";
 
     [ObservableProperty]
@@ -120,6 +124,9 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
 
     /// <summary>The clip's effects, first to last.</summary>
     public ObservableCollection<EffectItemViewModel> Effects { get; } = [];
+
+    /// <summary>The inspected clip's own masks, which limit what of it is seen.</summary>
+    public ObservableCollection<MaskItemViewModel> ClipMasks { get; } = [];
 
     /// <summary>Every blend mode, for the drop-down.</summary>
     public IReadOnlyList<BlendMode> BlendModes { get; } = Enum.GetValues<BlendMode>();
@@ -313,7 +320,8 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
     {
         ArgumentNullException.ThrowIfNull(row);
 
-        if (string.Equals(row.OwnerId, _transitionId, StringComparison.Ordinal) || string.Equals(row.OwnerId, _trackId, StringComparison.Ordinal) || IsFadeRow(row))
+        if (string.Equals(row.OwnerId, _transitionId, StringComparison.Ordinal) || string.Equals(row.OwnerId, _trackId, StringComparison.Ordinal) || IsFadeRow(row)
+            || ParamTargets.Find(_session.Project, row.OwnerId) is { Kind: ParamOwnerKind.Mask })
         {
             Send(row, ParamValues.Format(row.Descriptor.Default));
             return;
@@ -500,6 +508,8 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         Sections.Clear();
         TitleSection = null;
         Effects.Clear();
+        ClipMasks.Clear();
+        CanMaskClip = false;
         _pending.Clear();
 
         _transitionId = null;
@@ -605,7 +615,15 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
             Sections.Add(speed);
         }
 
-        AddEffectItems(EffectChains.Visible(clip, clip.Effects));
+        // A picture on a video or adjustment track can be masked, and so can its picture effects.
+        bool maskable = found.Track.Kind is TrackKind.Video or TrackKind.Adjustment && !SceneObjects.Is(clip);
+        if (maskable)
+        {
+            CanMaskClip = true;
+            AddMaskItems(ClipMasks, clip.Masks);
+        }
+
+        AddEffectItems(EffectChains.Visible(clip, clip.Effects), maskable);
 
         HasTarget = true;
         IsPicture = picture;
@@ -808,20 +826,104 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
     }
 
     /// <summary>An item for each effect, with a row for each of its parameters.</summary>
-    private void AddEffectItems(IEnumerable<Effect> effects)
+    /// <param name="effects">The effects, in order.</param>
+    /// <param name="maskable">True on a picture clip, where a picture effect can be limited by masks.</param>
+    private void AddEffectItems(IEnumerable<Effect> effects, bool maskable = false)
     {
         foreach (Effect effect in effects)
         {
             EffectDescriptor? descriptor = EffectCatalog.Registry.Find(effect.TypeId);
             bool plugin = effect.TypeId == JazzHands.Audio.Effects.PluginEffect.TypeId;
-            var item = new EffectItemViewModel(this, effect.Id, effect.TypeId, plugin ? PluginName(effect) : descriptor?.Name ?? effect.TypeId, descriptor is not null);
+            var item = new EffectItemViewModel(this, effect.Id, effect.TypeId, plugin ? PluginName(effect) : descriptor?.Name ?? effect.TypeId, descriptor is not null)
+            {
+                CanMask = maskable && descriptor is { Kind: EffectKind.Video },
+            };
             IEnumerable<ParamDescriptor> rows = plugin ? PluginRows(effect) : descriptor?.Params ?? [];
             foreach (ParamDescriptor parameter in rows)
             {
                 item.Rows.Add(new ParamRowViewModel(this, effect.Id, parameter, item.Name));
             }
 
+            AddMaskItems(item.Masks, effect.Masks);
             Effects.Add(item);
+        }
+    }
+
+    /// <summary>The parameters a mask's item shows: its shape is the preview's, the rest are rows.</summary>
+    private static IEnumerable<ParamDescriptor> MaskRows =>
+        ParamTargets.MaskParams.Params.Where(parameter => parameter.Name is not ("bounds" or "path"));
+
+    private void AddMaskItems(ObservableCollection<MaskItemViewModel> into, EquatableArray<Mask> masks)
+    {
+        for (int index = 0; index < masks.Length; index++)
+        {
+            Mask mask = masks[index];
+            var item = new MaskItemViewModel(this, mask.Id, $"Mask {index + 1}, {mask.Shape.ToString().ToLowerInvariant()}");
+            foreach (ParamDescriptor parameter in MaskRows)
+            {
+                item.Rows.Add(new ParamRowViewModel(this, mask.Id, parameter, item.Name));
+            }
+
+            into.Add(item);
+        }
+    }
+
+    /// <summary>Loads masks' values at a time in their clip, sending nothing.</summary>
+    private void LoadMasks(Project project, IEnumerable<MaskItemViewModel> items, EquatableArray<Mask> masks, Clip clip, Flicks local, Flicks playhead, Flicks tolerance)
+    {
+        foreach ((MaskItemViewModel item, Mask mask) in items.Zip(masks))
+        {
+            item.Load(mask.Mode, mask.Invert);
+            if (ParamTargets.Find(project, mask.Id) is not { } owner)
+            {
+                continue;
+            }
+
+            foreach (ParamRowViewModel row in item.Rows)
+            {
+                AnimatedValue? stored = ParamTargets.Get(owner, row.Name);
+                row.Load(ParamEval.Eval(stored, row.Descriptor, local), stored, clip.Start, clip.Duration, playhead, tolerance);
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public void AddMask(string ownerId, MaskShape shape)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(ownerId);
+        Project project = _session.Project;
+        if (ParamTargets.Find(project, ownerId) is not { Clip: { } clip } owner)
+        {
+            return;
+        }
+
+        // Over the middle half of the picture, in its own pixels, to be moved on the preview.
+        ProjectSettings settings = project.SettingsFor(owner.Sequence);
+        System.Numerics.Vector2 size = Playback.MaskHandlesViewModel.SourceOf(project, clip, new System.Numerics.Vector2(settings.Width, settings.Height)).Size;
+        _ = RunAsync(new AddMaskCommand(ownerId, shape, X: Math.Round(size.X / 4), Y: Math.Round(size.Y / 4), Width: Math.Round(size.X / 2), Height: Math.Round(size.Y / 2)));
+    }
+
+    /// <inheritdoc />
+    public void RemoveMask(MaskItemViewModel mask)
+    {
+        ArgumentNullException.ThrowIfNull(mask);
+        _ = RunAsync(new RemoveMaskCommand(mask.Id));
+    }
+
+    /// <inheritdoc />
+    public void SetMask(MaskItemViewModel mask, MaskMode? mode, bool? invert)
+    {
+        ArgumentNullException.ThrowIfNull(mask);
+        _ = RunAsync(new SetMaskCommand(mask.Id, Mode: mode, Invert: invert));
+    }
+
+    /// <summary>Adds a mask to the inspected clip itself: a rectangle or an ellipse.</summary>
+    [RelayCommand]
+    private void AddClipMask(string shape)
+    {
+        if (_clipId is { } clipId && Enum.TryParse(shape, ignoreCase: true, out MaskShape parsed))
+        {
+            AddMask(clipId, parsed);
         }
     }
 
@@ -1211,8 +1313,11 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
                 row.Load(ParamEval.Eval(stored, row.Descriptor, local), stored, clip.Start, clip.Duration, playhead, tolerance);
                 row.IsMixed = Matching(project, effect.Id).Any(other => Differs(project, other, row, playhead));
             }
+
+            LoadMasks(project, item.Masks, effect.Masks, clip, local, playhead, tolerance);
         }
 
+        LoadMasks(project, ClipMasks, clip.Masks, clip, local, playhead, tolerance);
         UpdateMarkers();
     }
 
@@ -1354,7 +1459,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
     private static string Shape(ClipLocation found) =>
         string.Join(
             "|",
-            [found.Clip.Id, found.Track.Kind.ToString(), found.Clip.GeneratorId ?? string.Empty, found.Clip.Layer3D is null ? "flat" : "3d", .. EffectChains.Visible(found.Clip, found.Clip.Effects).Select(effect => $"{effect.Id}:{effect.TypeId}")]);
+            [found.Clip.Id, found.Track.Kind.ToString(), found.Clip.GeneratorId ?? string.Empty, found.Clip.Layer3D is null ? "flat" : "3d", .. found.Clip.Masks.Select(mask => $"mask:{mask.Id}:{mask.Shape}"), .. EffectChains.Visible(found.Clip, found.Clip.Effects).Select(effect => $"{effect.Id}:{effect.TypeId}:{string.Join(",", effect.Masks.Select(mask => $"{mask.Id}:{mask.Shape}"))}")]);
 
     private static string SourceOf(Project project, Clip clip)
     {
