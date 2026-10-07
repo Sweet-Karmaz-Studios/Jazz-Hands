@@ -131,7 +131,7 @@ public static unsafe class SubtitleExtractor
             string body = fields.Length == 9 ? fields[8] : line;
             string? name = fields.Length == 9 && fields[3].Trim().Length > 0 ? fields[3].Trim() : null;
             (string markup, SubtitleAlign? align, List<string> dropped) = AssFormat.FromAss(body);
-            foreach (string tag in dropped)
+            foreach (string tag in dropped.Where(kept => !AssOverrides.Drawn.Contains(kept)))
             {
                 Warn(warnings, $"The ASS tag \\{tag} is kept for writing ASS back but not drawn.");
             }

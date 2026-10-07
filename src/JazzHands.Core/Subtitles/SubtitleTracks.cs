@@ -68,13 +68,15 @@ public static class SubtitleTracks
 
     /// <summary>
     /// A document's cues as clips, moved by an offset: cues with no length, or that would start
-    /// before the timeline, are left out.
+    /// before the timeline, are left out. A kept ASS line's places and sizes are moved from the
+    /// script's play resolution to the 1920 by 1080 one a track keeps (<see cref="AssOverrides"/>).
     /// </summary>
     public static ImmutableArray<Clip> Clips(SubtitleDocument document, Flicks offset)
     {
         ArgumentNullException.ThrowIfNull(document);
+        System.Numerics.Vector2 play = AssOverrides.PlayResolution(document.Header);
         return [.. document.Cues
             .Where(cue => cue.End > cue.Start && cue.Start + offset >= Flicks.Zero)
-            .Select(cue => Clip(Id.New(), cue.Start + offset, cue.Duration, new Cue(cue.Text, cue.Align, cue.Name, cue.Raw)))];
+            .Select(cue => Clip(Id.New(), cue.Start + offset, cue.Duration, new Cue(cue.Text, cue.Align, cue.Name, cue.Raw is { } raw ? AssOverrides.Rescale(raw, play) : null)))];
     }
 }

@@ -11,9 +11,10 @@ namespace JazzHands.Core.Subtitles;
 /// <remarks>
 /// <para>
 /// A dialogue line's text carries override tags in braces. <c>\b</c>, <c>\i</c>, <c>\u</c>,
-/// <c>\c</c> (or <c>\1c</c>), <c>\fn</c> and <c>\an</c> become markup and alignment; the rest
-/// (<c>\pos</c>, <c>\fad</c>, <c>\fs</c>, <c>\bord</c>, <c>\shad</c> and so on) are not drawn,
-/// and the line's text is kept as it was so writing ASS back loses nothing. <c>\N</c> is a line
+/// <c>\c</c> (or <c>\1c</c>), <c>\fn</c> and <c>\an</c> become markup and alignment; for any
+/// other the line's text is kept as it was, so writing ASS back loses nothing, and of those
+/// <c>\pos</c>, <c>\fad</c>, <c>\fs</c>, <c>\bord</c> and <c>\shad</c> are drawn from it
+/// (<see cref="AssOverrides"/>); karaoke, drawings, <c>\move</c> and the rest are not. <c>\N</c> is a line
 /// break, <c>\h</c> a space that does not break, and <c>\n</c> a space.
 /// </para>
 /// <para>
@@ -105,7 +106,7 @@ public static class AssFormat
                     string styleName = fields.GetValueOrDefault("Style", "Default").TrimStart('*');
                     string body = fields.GetValueOrDefault("Text", string.Empty);
                     (string markup, SubtitleAlign? tagged, List<string> dropped) = FromAss(body);
-                    foreach (string tag in dropped)
+                    foreach (string tag in dropped.Where(kept => !AssOverrides.Drawn.Contains(kept)))
                     {
                         SrtFormat.Warn(warnings, $"The ASS tag \\{tag} is kept for writing ASS back but not drawn.");
                     }

@@ -40,10 +40,77 @@ public static class SubtitleLook
     {
         ArgumentNullException.ThrowIfNull(track);
         SubtitleStyle style = track.SubtitleStyle ?? SubtitleStyle.Default;
+        ImmutableArray<Clip> showing = CuesAt(track, time);
 
-        return [.. CuesAt(track, time)
-            .GroupBy(clip => clip.Cue!.Align)
-            .Select(group => (group.First(), Title(style, string.Join("\n", group.Select(clip => clip.Cue!.Text)), group.Key, frameWidth, frameHeight)))];
+        // A cue whose ASS line places, fades or sizes it is drawn on its own, as it says.
+        var placed = showing.Select(clip => (Clip: clip, Overrides: AssOverrides.Read(clip.Cue!.Raw))).ToList();
+        return [
+            .. placed.Where(cue => cue.Overrides is null)
+                .Select(cue => cue.Clip)
+                .GroupBy(clip => clip.Cue!.Align)
+                .Select(group => (group.First(), Title(style, string.Join("\n", group.Select(clip => clip.Cue!.Text)), group.Key, frameWidth, frameHeight))),
+            .. placed.Where(cue => cue.Overrides is not null)
+                .Select(cue => (cue.Clip, Title(style, cue.Clip, cue.Overrides!, frameWidth, frameHeight))),
+        ];
+    }
+
+    /// <summary>
+    /// A cue drawn with its ASS overrides: its size, outline and shadow in place of the track's,
+    /// its anchor where <c>\pos</c> puts it, and its opacity fading as <c>\fad</c> says, in the
+    /// cue's own time.
+    /// </summary>
+    public static Effect Title(SubtitleStyle style, Clip cue, AssOverrides overrides, int frameWidth, int frameHeight)
+    {
+        ArgumentNullException.ThrowIfNull(style);
+        ArgumentNullException.ThrowIfNull(cue);
+        ArgumentNullException.ThrowIfNull(overrides);
+
+        double script = AssOverrides.ScriptSize.Y;
+        SubtitleStyle own = style with
+        {
+            Size = overrides.Size is { } size ? size / script : style.Size,
+            OutlineWidth = overrides.Border is { } border ? border / script : style.OutlineWidth,
+            Shadow = overrides.Shadow is 0.0 ? "#00000000" : style.Shadow,
+        };
+
+        Effect title = Title(own, cue.Cue!.Text, cue.Cue.Align, frameWidth, frameHeight);
+        if (overrides.Position is { } at)
+        {
+            // Script pixels from the top left, to the frame's from its middle.
+            var position = new Vector2(
+                (at.X / AssOverrides.ScriptSize.X * frameWidth) - (frameWidth / 2f),
+                (at.Y / AssOverrides.ScriptSize.Y * frameHeight) - (frameHeight / 2f));
+            title = title.WithParameter(TitleParams.Position, AnimatedValue.Constant(new ParamValue.Float2(position)));
+        }
+
+        if (overrides.Shadow is { } offset and > 0)
+        {
+            float pixels = (float)(offset / script * frameHeight);
+            title = title.WithParameter(TitleParams.ShadowOffset, AnimatedValue.Constant(new ParamValue.Float2(new Vector2(pixels))));
+        }
+
+        if (overrides.FadeIn > 0 || overrides.FadeOut > 0)
+        {
+            Flicks length = cue.Duration;
+            Flicks fadeIn = Flicks.Min(Flicks.FromSeconds(overrides.FadeIn / 1000.0), length);
+            Flicks fadeOut = Flicks.Max(fadeIn, length - Flicks.FromSeconds(overrides.FadeOut / 1000.0));
+            var keys = new List<Keyframe>();
+            if (fadeIn > Flicks.Zero)
+            {
+                keys.Add(new Keyframe(Flicks.Zero, new ParamValue.Float(0), Interp.Linear));
+            }
+
+            keys.Add(new Keyframe(fadeIn, new ParamValue.Float(1), Interp.Linear));
+            if (fadeOut < length)
+            {
+                keys.Add(new Keyframe(fadeOut, new ParamValue.Float(1), Interp.Linear));
+                keys.Add(new Keyframe(length, new ParamValue.Float(0), Interp.Linear));
+            }
+
+            title = title.WithParameter(TitleParams.Fade, new KeyframedValue(keys.DistinctBy(key => key.Time).ToList()));
+        }
+
+        return title;
     }
 
     /// <summary>The title generator's parameters that draw text in a subtitle style at a place on a frame.</summary>
