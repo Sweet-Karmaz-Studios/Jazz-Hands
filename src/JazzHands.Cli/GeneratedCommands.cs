@@ -164,7 +164,7 @@ public static class GeneratedCommands
         }
 
         var arguments = new List<Argument<string>>();
-        var options = new Dictionary<string, Option<string>>(StringComparer.Ordinal);
+        var options = new Dictionary<string, Option>(StringComparer.Ordinal);
 
         foreach (ParameterMetadata parameter in metadata.Arguments)
         {
@@ -180,15 +180,23 @@ public static class GeneratedCommands
 
         foreach (ParameterMetadata parameter in metadata.Options)
         {
-            var option = new Option<string>($"--{parameter.CliName}")
-            {
-                Description = WithDefault(parameter),
-                HelpName = IsSwitch(parameter) ? null : Placeholder(parameter),
-                Required = parameter.IsRequired,
-
-                // A switch on its own means true: --auto rather than --auto true, which still works.
-                Arity = IsSwitch(parameter) ? ArgumentArity.ZeroOrOne : ArgumentArity.ExactlyOne,
-            };
+            // A switch on its own means true: --auto rather than --auto true, which still works. As
+            // a true or false option it takes the next word only when that is true or false, so a
+            // positional after it (--ripple <clip-id>) stays a positional.
+            Option option = IsSwitch(parameter)
+                ? new Option<bool>($"--{parameter.CliName}")
+                {
+                    Description = WithDefault(parameter),
+                    Required = parameter.IsRequired,
+                    Arity = ArgumentArity.ZeroOrOne,
+                }
+                : new Option<string>($"--{parameter.CliName}")
+                {
+                    Description = WithDefault(parameter),
+                    HelpName = Placeholder(parameter),
+                    Required = parameter.IsRequired,
+                    Arity = ArgumentArity.ExactlyOne,
+                };
 
             options[parameter.CliName] = option;
             verb.Options.Add(option);
@@ -274,16 +282,21 @@ public static class GeneratedCommands
     private static bool IsSwitch(ParameterMetadata parameter) =>
         (Nullable.GetUnderlyingType(parameter.Type) ?? parameter.Type) == typeof(bool);
 
-    /// <summary>An option's text: what was typed after it, "true" for a switch given alone, or null when it was not given.</summary>
-    internal static string? ValueOf(System.CommandLine.ParseResult parse, Option<string> option) =>
-        parse.GetValue(option) ?? (parse.GetResult(option) is not null && option.Arity.MinimumNumberOfValues == 0 ? "true" : null);
+    /// <summary>An option's text: what was typed after it, "true" or "false" for a switch, or null when it was not given.</summary>
+    internal static string? ValueOf(System.CommandLine.ParseResult parse, Option option) => option switch
+    {
+        _ when parse.GetResult(option) is null => null,
+        Option<bool> flag => parse.GetValue(flag) ? "true" : "false",
+        Option<string> text => parse.GetValue(text),
+        _ => null,
+    };
 
     private static int Run(
         CommandMetadata metadata,
         System.CommandLine.ParseResult parse,
         Argument<string> projectArgument,
         List<Argument<string>> arguments,
-        Dictionary<string, Option<string>> options,
+        Dictionary<string, Option> options,
         Option<bool> noSave,
         Option<string?> optionalProject)
     {

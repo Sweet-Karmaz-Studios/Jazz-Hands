@@ -155,30 +155,24 @@ public sealed class JazzTools
 
     private async Task<CallToolResult> ContactSheetAsync(JsonObject args, CancellationToken cancellationToken)
     {
-        string folder = Path.Combine(Path.GetTempPath(), "jazz-mcp");
-        Directory.CreateDirectory(folder);
-        string output = Path.Combine(folder, $"sheet-{Guid.NewGuid():N}.png");
-        JsonObject call = Pick(args, "columns", "rows", "width", "sequenceId", "start", "end");
-        call["output"] = output;
-        try
+        // Sent as bytes, so it works with an editor on another machine as well as this one.
+        JsonObject call = Pick(args, "columns", "rows", "width", "start", "end");
+        if (args["sequenceId"] is { } sequence)
         {
-            await _link.CallAsync("export.contact-sheet", call, cancellationToken).ConfigureAwait(false);
-            byte[] png = await File.ReadAllBytesAsync(output, cancellationToken).ConfigureAwait(false);
-            int columns = args["columns"]?.GetValue<int>() ?? 4;
-            int rows = args["rows"]?.GetValue<int>() ?? 4;
-            return new CallToolResult
-            {
-                Content =
-                [
-                    ImageContentBlock.FromBytes(png, "image/png"),
-                    new TextContentBlock { Text = string.Create(CultureInfo.InvariantCulture, $"{columns * rows} frames at even steps, left to right then down, each labelled with its time.") },
-                ],
-            };
+            call["sequence"] = sequence.DeepClone();
         }
-        finally
+
+        JsonNode? sheet = await _link.CallAsync("render.contact-sheet", call, cancellationToken).ConfigureAwait(false);
+        byte[] png = Convert.FromBase64String(sheet!["data"]!.GetValue<string>());
+        int frames = (sheet["times"] as JsonArray)?.Count ?? 0;
+        return new CallToolResult
         {
-            File.Delete(output);
-        }
+            Content =
+            [
+                ImageContentBlock.FromBytes(png, "image/png"),
+                new TextContentBlock { Text = string.Create(CultureInfo.InvariantCulture, $"{frames} frames at even steps, left to right then down, each labelled with its time.") },
+            ],
+        };
     }
 
     private async Task<CallToolResult> RenderProofAsync(JsonObject args, ReportProgress progress, CancellationToken cancellationToken)

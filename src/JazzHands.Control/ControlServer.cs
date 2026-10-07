@@ -12,6 +12,7 @@ using JazzHands.Core.Export;
 using JazzHands.Core.Model;
 using JazzHands.Core.Time;
 using JazzHands.Engine.Commands;
+using JazzHands.Engine.Export;
 using JazzHands.Engine.Frames;
 using JazzHands.Engine.Logging;
 using JazzHands.Engine.Playback;
@@ -435,6 +436,8 @@ public sealed class ControlServer : IAsyncDisposable
                 return await RunAsync(connection, new OpenProjectCommand(Text(args, "path"), args["discard"]?.GetValue<bool>() ?? false), counted).ConfigureAwait(false);
             case "session.save":
                 return await RunAsync(connection, new SaveProjectCommand(args["path"]?.GetValue<string>()), counted).ConfigureAwait(false);
+            case "render.contact-sheet":
+                return ContactSheet(args);
             case "render.frame":
                 return Render(args);
         }
@@ -561,12 +564,7 @@ public sealed class ControlServer : IAsyncDisposable
         Sequence sequence = (args["sequence"]?.GetValue<string>() is { } id ? project.Sequence(id) : project.ActiveSequence)
             ?? throw new CommandException("sequence-not-found", "There is no such sequence.");
         Rational rate = project.SettingsFor(sequence).FrameRate;
-        Flicks at = args["at"] switch
-        {
-            JsonValue value when value.TryGetValue(out long flicks) => new Flicks(flicks),
-            JsonValue value when value.TryGetValue(out string? text) => (Flicks)CommandValues.Parse(typeof(Flicks), text, rate, "at")!,
-            _ => throw new JsonRpcException(JsonRpc.InvalidParams, "render.frame needs \"at\": a time as text or flicks."),
-        };
+        Flicks at = TimeOf(args["at"], rate, "at") ?? throw new JsonRpcException(JsonRpc.InvalidParams, "render.frame needs \"at\": a time as text or flicks.");
         int width = Math.Clamp(args["width"]?.GetValue<int>() ?? 960, 16, 7680);
         if (at < Flicks.Zero || at >= sequence.Duration)
         {
@@ -590,6 +588,57 @@ public sealed class ControlServer : IAsyncDisposable
             ["data"] = Convert.ToBase64String(png),
         };
     }
+
+    /// <summary>
+    /// A contact sheet as <c>export.contact-sheet</c> draws it, sent rather than written, so a
+    /// client on another machine gets the picture and not a path on this one.
+    /// </summary>
+    private JsonObject ContactSheet(JsonObject args)
+    {
+        Project project = _target.Session.Project;
+        Sequence sequence = (args["sequence"]?.GetValue<string>() is { } id ? project.Sequence(id) : project.ActiveSequence)
+            ?? throw new CommandException("sequence-not-found", "There is no such sequence.");
+        Rational rate = project.SettingsFor(sequence).FrameRate;
+        Flicks? start = TimeOf(args["start"], rate, "start");
+        Flicks? end = TimeOf(args["end"], rate, "end");
+        double[]? fractions = args["times"] is JsonArray times ? [.. times.Select(time => time?.GetValue<double>() ?? 0)] : null;
+
+        ContactSheetImage sheet;
+        lock (_renderGate)
+        {
+            _renderer ??= new StillRenderer();
+            sheet = StillExport.DrawContactSheet(
+                project,
+                _target.Session.ProjectPath,
+                _renderer,
+                args["columns"]?.GetValue<int>() ?? 4,
+                args["rows"]?.GetValue<int>() ?? 4,
+                args["width"]?.GetValue<int>() ?? 1920,
+                sequence.Id,
+                ExportOverrideText.Range(start, end),
+                fractions: fractions,
+                clipId: args["clip"]?.GetValue<string>());
+        }
+
+        byte[] png = PngWriter.Encode(sheet.Width, sheet.Height, sheet.Bgra);
+        return new JsonObject
+        {
+            ["width"] = sheet.Width,
+            ["height"] = sheet.Height,
+            ["format"] = "png",
+            ["times"] = new JsonArray([.. sheet.Times.Select(time => (JsonNode?)time.Value)]),
+            ["data"] = Convert.ToBase64String(png),
+        };
+    }
+
+    /// <summary>A time given as text (timecode, seconds, frames) or as flicks, or null when it is not given.</summary>
+    private static Flicks? TimeOf(JsonNode? node, Rational rate, string name) => node switch
+    {
+        null => null,
+        JsonValue value when value.TryGetValue(out long flicks) => new Flicks(flicks),
+        JsonValue value when value.TryGetValue(out string? text) => (Flicks)CommandValues.Parse(typeof(Flicks), text, rate, name)!,
+        _ => throw new JsonRpcException(JsonRpc.InvalidParams, $"\"{name}\" is a time as text or flicks."),
+    };
 
     /// <summary>Every method, with what it takes: what <c>jazz rpc list</c> prints.</summary>
     public static JsonArray Catalog()
@@ -635,6 +684,7 @@ public sealed class ControlServer : IAsyncDisposable
         ("session.open", "Open a project: {path, discard}"),
         ("session.save", "Save the project: {path} to save as"),
         ("render.frame", "A frame as the preview draws it, as a base64 PNG: {at, width, sequence, node}"),
+        ("render.contact-sheet", "A contact sheet as export.contact-sheet draws it, as a base64 PNG: {columns, rows, width, sequence, start, end, times, clip}"),
     ];
 
     private static string TypeName(Type type)

@@ -92,6 +92,13 @@ public sealed class Session : ISessionState, IAsyncDisposable
     /// </summary>
     public string DefaultIssuer { get; set; } = "local";
 
+    /// <summary>
+    /// Issuers a lock held by someone else never refuses: in the editor, the person at the window
+    /// and its Command Console, whom a remote client's batch must not shut out of their own work.
+    /// Empty by default, so in a headless session the lock refuses everyone but its owner.
+    /// </summary>
+    public IReadOnlySet<string> NeverLockedOut { get; init; } = new HashSet<string>(StringComparer.Ordinal);
+
     /// <summary>Who holds the session for a batch of their own, or null; see <see cref="TryLock"/>.</summary>
     public SessionLock? Lock
     {
@@ -268,6 +275,11 @@ public sealed class Session : ISessionState, IAsyncDisposable
 
     private SessionLock? HeldByAnother(string issuer)
     {
+        if (NeverLockedOut.Contains(issuer))
+        {
+            return null;
+        }
+
         lock (_lockGate)
         {
             return Held() is { } current && !string.Equals(current.Owner, issuer, StringComparison.Ordinal) ? current : null;

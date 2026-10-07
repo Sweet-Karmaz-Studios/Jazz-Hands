@@ -16,6 +16,13 @@ namespace JazzHands.Engine.Export;
 /// <param name="Times">The sequence time of each tile, left to right and top to bottom.</param>
 public sealed record ContactSheetResult(string Path, int Width, int Height, EquatableArray<Flicks> Times);
 
+/// <summary>A contact sheet drawn and not written.</summary>
+/// <param name="Width">Its width.</param>
+/// <param name="Height">Its height.</param>
+/// <param name="Bgra">Its pixels, top row first.</param>
+/// <param name="Times">The sequence time of each tile, left to right and top to bottom.</param>
+public sealed record ContactSheetImage(int Width, int Height, byte[] Bgra, EquatableArray<Flicks> Times);
+
 /// <summary>
 /// Pictures rather than films: one frame as a PNG, and a contact sheet of frames across a sequence.
 /// </summary>
@@ -119,6 +126,43 @@ public static class StillExport
             throw new CommandException("unsupported-container", $"A contact sheet is written as a PNG; '{output}' is not a .png file.");
         }
 
+        ContactSheetImage sheet = DrawContactSheet(project, projectPath, renderer, columns, rows, width, sequenceId, range, cancellationToken, fractions, clipId);
+        string path = FullPath(output, projectPath);
+        Directory.CreateDirectory(Path.GetDirectoryName(path) ?? ".");
+        PngWriter.Write(path, sheet.Width, sheet.Height, sheet.Bgra);
+        return new ContactSheetResult(path, sheet.Width, sheet.Height, sheet.Times);
+    }
+
+    /// <summary>
+    /// Draws a contact sheet as <see cref="ContactSheet"/> writes it, and keeps it: for sending the
+    /// picture to a client on another machine rather than a path it cannot open.
+    /// </summary>
+    /// <param name="project">The project.</param>
+    /// <param name="projectPath">Where it lives, or empty.</param>
+    /// <param name="renderer">Draws the frames.</param>
+    /// <param name="columns">Tiles across.</param>
+    /// <param name="rows">Tiles down.</param>
+    /// <param name="width">The sheet's width in pixels.</param>
+    /// <param name="sequenceId">The sequence, or null for the active one.</param>
+    /// <param name="range">Only this stretch, or null for all of it.</param>
+    /// <param name="cancellationToken">Stops it between frames.</param>
+    /// <param name="fractions">Frames at these fractions of the way through, 0 to 1, instead of even steps.</param>
+    /// <param name="clipId">Through this clip instead of the sequence or the range.</param>
+    public static ContactSheetImage DrawContactSheet(
+        Project project,
+        string projectPath,
+        StillRenderer renderer,
+        int columns = 4,
+        int rows = 4,
+        int width = 1920,
+        string? sequenceId = null,
+        TimeRange? range = null,
+        CancellationToken cancellationToken = default,
+        IReadOnlyList<double>? fractions = null,
+        string? clipId = null)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(renderer);
         if (columns is < 1 or > 16 || rows is < 1 or > 16)
         {
             throw new CommandException("invalid-value", "A contact sheet has 1 to 16 columns and 1 to 16 rows.");
@@ -174,10 +218,7 @@ public static class StillExport
             PixelFont.Draw(sheet, width, x, y + tileHeight + 3, Timecode.FormatClock(times[index]), LabelScale);
         }
 
-        string path = FullPath(output, projectPath);
-        Directory.CreateDirectory(Path.GetDirectoryName(path) ?? ".");
-        PngWriter.Write(path, width, height, sheet);
-        return new ContactSheetResult(path, width, height, [.. times]);
+        return new ContactSheetImage(width, height, sheet, [.. times]);
     }
 
     /// <summary>

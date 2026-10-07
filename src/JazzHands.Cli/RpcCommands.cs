@@ -34,7 +34,7 @@ public static class RpcCommands
     };
 
     /// <summary>Runs a generated verb against the editor it is attached to.</summary>
-    internal static int RunAttached(CommandMetadata metadata, ParseResult parse, List<Argument<string>> arguments, Dictionary<string, Option<string>> options)
+    internal static int RunAttached(CommandMetadata metadata, ParseResult parse, List<Argument<string>> arguments, Dictionary<string, Option> options)
     {
         bool json = parse.GetValue(JazzCli.JsonOption);
         return Attached(json, async client =>

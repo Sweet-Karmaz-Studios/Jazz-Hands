@@ -43,7 +43,8 @@ public static class AppServices
         // The selection prunes itself after every command, so a deleted clip never stays selected.
         services.AddSingleton(provider =>
         {
-            var session = new Session(project, provider, path, recovery: true) { DefaultIssuer = "gui" };
+            // A remote client's session.lock keeps other clients out, not the person at the window.
+            var session = new Session(project, provider, path, recovery: true) { DefaultIssuer = "gui", NeverLockedOut = new HashSet<string>(["gui", "console"], StringComparer.Ordinal) };
             provider.GetRequiredService<SelectionService>().Attach(session);
             return session;
         });

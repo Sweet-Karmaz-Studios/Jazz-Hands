@@ -76,7 +76,7 @@ public static class ConsoleInput
             metadata = named;
         }
 
-        (List<string> arguments, Dictionary<string, string?> options) = Split(tokens.Skip(used));
+        (List<string> arguments, Dictionary<string, string?> options) = Split(tokens.Skip(used), metadata);
 
         if (metadata is not null)
         {
@@ -100,7 +100,121 @@ public static class ConsoleInput
             return (tokens[0], parameters.Count > 0 ? parameters : null);
         }
 
+        if (Alias(tokens[0], arguments, options, frameRate) is { } alias)
+        {
+            CommandMetadata aliased = CommandRegistry.Require(alias.Method);
+            object built = CommandRegistry.FromCommandLine(aliased.Name, alias.Arguments, alias.Options, frameRate);
+            return (aliased.Name, CommandRegistry.ArgsToJson(built, aliased));
+        }
+
         throw new CommandException("unknown-command", $"There is no '{tokens[0]}'. Type the start of a name and press Tab.");
+    }
+
+    /// <summary>
+    /// jazz.exe's own verbs, which are not registry commands, read as the command each comes down
+    /// to on the open project, so a line that works in a shell works here: <c>frame</c> and
+    /// <c>contact-sheet</c> write through <c>export.still</c> and <c>export.contact-sheet</c>, and
+    /// <c>proof</c> and a foreground <c>export</c> are queued. The verbs that work on files rather
+    /// than the open project say what to type instead; anything else is not one of them.
+    /// </summary>
+    private static (string Method, List<string> Arguments, Dictionary<string, string?> Options)? Alias(
+        string verb,
+        List<string> arguments,
+        Dictionary<string, string?> options,
+        Rational frameRate)
+    {
+        string? Take(string name)
+        {
+            options.Remove(name, out string? value);
+            return value;
+        }
+
+        string Output() => Take("out") ?? throw new CommandException("missing-argument", $"'{verb}' needs --out, the file to write.");
+
+        void Range()
+        {
+            if (Take("range") is { Length: > 0 } text)
+            {
+                var span = (TimeRange)CommandValues.Parse(typeof(TimeRange), text, frameRate, "range")!;
+                options["start"] = $"{span.Start.ToFrames(frameRate, RoundingMode.Floor)}f";
+                options["end"] = $"{span.End.ToFrames(frameRate, RoundingMode.Floor)}f";
+            }
+        }
+
+        (string, List<string>, Dictionary<string, string?>) As(string method, string output) => (method, [output], options);
+
+        if (verb is "frame" or "contact-sheet" or "proof" or "export" && arguments.Count > 0)
+        {
+            throw new CommandException("too-many-arguments", $"In the console '{verb}' works on the open project: leave the project file out.");
+        }
+
+        bool sheet = verb == "frame" && Take("sheet") is { } given && given != "false";
+        switch (verb)
+        {
+            case "frame" when options.ContainsKey("node"):
+                throw new CommandException("not-in-console", "--node draws to a file in jazz.exe only; the Nodes panel's viewer shows any node here.");
+            case "frame" when sheet:
+            {
+                string output = Output();
+                string times = Take("times") ?? "0,0.25,0.5,0.75,1";
+                options["times"] = times;
+                options["columns"] = Math.Min(times.Split(',', StringSplitOptions.RemoveEmptyEntries).Length, 5).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                if (Take("size") is { Length: > 0 } size)
+                {
+                    options["width"] = ((FrameSize)CommandValues.Parse(typeof(FrameSize), size, frameRate, "size")!).Width.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                }
+
+                return As("export.contact-sheet", output);
+            }
+
+            case "frame":
+                return As("export.still", Output());
+            case "contact-sheet":
+            {
+                string output = Output();
+                if (Take("cols") is { } columns)
+                {
+                    options["columns"] = columns;
+                }
+
+                Range();
+                return As("export.contact-sheet", output);
+            }
+
+            case "proof":
+            {
+                string output = Output();
+                options["preset"] = "proof";
+                options["mode"] = "encode";
+                Range();
+                return As("export.enqueue", output);
+            }
+
+            case "export":
+            {
+                if (options.ContainsKey("dry-run"))
+                {
+                    throw new CommandException("not-in-console", "A dry run is jazz.exe's: run jazz export --dry-run in a shell to see the plan.");
+                }
+
+                string output = Output();
+                if (Take("no-chapters") is not null and not "false")
+                {
+                    options["chapters"] = "false";
+                }
+
+                return As("export.enqueue", output);
+            }
+
+            case "apply":
+                throw new CommandException("not-in-console", "A script runs from a shell: jazz --attach apply <script.json> runs it here, step by step. One step at a time works in the console too.");
+            case "frames":
+                throw new CommandException("not-in-console", "frames writes a file per frame, from a shell. Here, contact-sheet --out <file.png> shows a whole sequence at once, and frame --at <time> --out <file.png> one frame.");
+            case "trim" or "new" or "validate" or "fmt" or "repair" or "ids" or "serve" or "mcp" or "perf" or "rpc" or "docs" or "version":
+                throw new CommandException("not-in-console", $"'{verb}' is jazz.exe's own and works on files rather than the open project: run jazz {verb} in a shell.");
+            default:
+                return null;
+        }
     }
 
     /// <summary>The parameters of a method that a line has not given yet, as <c>--options</c>.</summary>
@@ -176,11 +290,17 @@ public static class ConsoleInput
         return tokens;
     }
 
-    private static (List<string> Arguments, Dictionary<string, string?> Options) Split(IEnumerable<string> tokens)
+    private static (List<string> Arguments, Dictionary<string, string?> Options) Split(IEnumerable<string> tokens, CommandMetadata? metadata)
     {
         var arguments = new List<string>();
         var options = new Dictionary<string, string?>(StringComparer.Ordinal);
         List<string> list = [.. tokens];
+
+        // A command's switches take the next word only when it is true or false, as jazz.exe reads
+        // them, so a positional after one (--ripple <clip-id>) stays a positional.
+        HashSet<string> switches = metadata is null
+            ? []
+            : [.. metadata.Options.Where(parameter => (Nullable.GetUnderlyingType(parameter.Type) ?? parameter.Type) == typeof(bool)).Select(parameter => parameter.CliName)];
 
         for (int index = 0; index < list.Count; index++)
         {
@@ -197,7 +317,9 @@ public static class ConsoleInput
             {
                 options[name[..equals]] = name[(equals + 1)..];
             }
-            else if (index + 1 < list.Count && !list[index + 1].StartsWith("--", StringComparison.Ordinal))
+            else if (index + 1 < list.Count
+                && !list[index + 1].StartsWith("--", StringComparison.Ordinal)
+                && (!switches.Contains(name) || bool.TryParse(list[index + 1], out _)))
             {
                 options[name] = list[++index];
             }
