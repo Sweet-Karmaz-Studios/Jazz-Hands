@@ -52,6 +52,9 @@ public interface IDialogService
 
     /// <summary>Shows the scene cuts dialog for a media item, or for a clip of it: find the shot changes, then split, mark or make subclips.</summary>
     Task ShowSceneCutsAsync(string mediaId, string? clipId);
+
+    /// <summary>Asks whether to relink to a file of another length anyway, saying what that does to the cuts: true to relink.</summary>
+    Task<bool> AskToRelinkAnywayAsync(string reason);
 }
 
 /// <summary>What to do with unsaved changes.</summary>
@@ -255,6 +258,19 @@ public sealed class DialogService(
             "Download a model",
             MessageBoxButton.YesNo,
             MessageBoxImage.Question);
+        return Task.FromResult(answer == MessageBoxResult.Yes);
+    }
+
+    /// <inheritdoc />
+    public Task<bool> AskToRelinkAnywayAsync(string reason)
+    {
+        MessageBoxResult answer = MessageBox.Show(
+            Application.Current?.MainWindow!,
+            $"{reason}\n\nRelink to it anyway? Undo takes it back. To use another take of a different length and keep the cuts where they are, use Replace file instead.",
+            "Relink to a file of another length",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No);
         return Task.FromResult(answer == MessageBoxResult.Yes);
     }
 

@@ -55,6 +55,7 @@ public sealed partial class MissingMediaViewModel : ObservableObject
     private readonly ISession _session;
     private readonly IFileDialogService _files;
     private readonly IUiDispatcher _ui;
+    private readonly IDialogService? _dialogs;
 
     [ObservableProperty]
     private string _status = string.Empty;
@@ -70,7 +71,7 @@ public sealed partial class MissingMediaViewModel : ObservableObject
     public const string MissingIntro = "These files are not where the project says. Jazz Hands looked in the project's folder and where they were; add the folder they went to if it is somewhere else.";
 
     /// <summary>A dialog over a session.</summary>
-    public MissingMediaViewModel(ISession session, IFileDialogService files, IUiDispatcher ui)
+    public MissingMediaViewModel(ISession session, IFileDialogService files, IUiDispatcher ui, IDialogService? dialogs = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(files);
@@ -78,6 +79,7 @@ public sealed partial class MissingMediaViewModel : ObservableObject
         _session = session;
         _files = files;
         _ui = ui;
+        _dialogs = dialogs;
     }
 
     /// <summary>Raised when the dialog should close.</summary>
@@ -166,10 +168,10 @@ public sealed partial class MissingMediaViewModel : ObservableObject
             return;
         }
 
-        CommandResult result = await _session.ExecuteAsync(new RelinkMediaCommand(row.Info.MediaId, path)).ConfigureAwait(true);
+        CommandResult result = await Relinking.RelinkAsync(_session, _dialogs, row.Info.MediaId, path).ConfigureAwait(true);
         if (!result.Ok)
         {
-            Status = result.Error ?? "It could not be relinked.";
+            Status = result.Code == Relinking.DifferentLength ? Relinking.Reason(result.Error) : result.Error ?? "It could not be relinked.";
             return;
         }
 

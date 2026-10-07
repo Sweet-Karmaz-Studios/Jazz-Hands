@@ -138,7 +138,8 @@ public sealed partial class MediaPanelViewModel
     {
         if (SelectedItem is { } row && _files.OpenMedia().FirstOrDefault() is { } path)
         {
-            await RunAsync(new RelinkMediaCommand(row.Id, path), $"Relinked {row.Name}.").ConfigureAwait(true);
+            CommandResult result = await Relinking.RelinkAsync(_session, _dialogs, row.Id, path).ConfigureAwait(true);
+            Status = result.Ok ? $"Relinked {row.Name}." : result.Error ?? "It could not be relinked.";
         }
     }
 
