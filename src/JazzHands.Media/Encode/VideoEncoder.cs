@@ -70,9 +70,10 @@ public enum EncoderSpeed
 /// </para>
 /// <para>
 /// GIF is the one encoder with a pass of its own: a GIF has 256 colours, and the best 256 are only
-/// known once every frame has been seen. Frames go through libavfilter's palettegen and paletteuse,
-/// which hold them until the end, so a GIF's frames come out when the encoder is flushed. That
-/// holds every frame in memory, which is fine for the few seconds a GIF is.
+/// known once every frame has been seen. Each frame goes to libavfilter's palettegen as it comes and
+/// is written to a temporary file; when the encoder is flushed the palette is made and the frames
+/// are read back one at a time through paletteuse, so a GIF of minutes holds one frame in memory,
+/// not all of them. The file goes when the encoder does.
 /// </para>
 /// <para>
 /// A frame is reused after it has been sent: <see cref="EncoderFrame.MakeWritable"/> copies it
@@ -815,16 +816,200 @@ public sealed unsafe class VideoEncoder : IDisposable
 
     /// <summary>
     /// libavfilter's two GIF passes: palettegen reads every frame for the 256 colours that suit
-    /// them best, then paletteuse draws each with those colours and error diffusion.
+    /// them best, then paletteuse draws each with those colours and error diffusion. The frames
+    /// wait between the passes in a temporary file rather than in memory.
     /// </summary>
     private sealed class PaletteGraph : IDisposable
     {
-        private AVFilterGraph* _graph;
-        private readonly AVFilterContext* _source;
-        private readonly AVFilterContext* _sink;
+        // stats_mode=full weighs every frame alike, which suits the short loops GIFs are;
+        // sierra2_4a is the dither that looks best without crawling from frame to frame.
+        private const string Gather = "format=rgb24,palettegen=stats_mode=full";
+        private const string Draw = "[in]format=rgb24[rgb];[rgb][palette]paletteuse=dither=sierra2_4a";
+
+        private readonly VideoEncoderSettings _settings;
+        private readonly AVPixelFormat _input;
+        private readonly int _frameBytes;
+        private readonly byte[] _buffer;
+        private readonly FileStream _spill;
         private readonly AvFrame _out = new();
+        private readonly AvFrame _next = new();
+        private AVFilterGraph* _gather;
+        private readonly AVFilterContext* _gatherSource;
+        private readonly AVFilterContext* _gatherSink;
+        private AVFilterGraph* _draw;
+        private AVFilterContext* _drawSource;
+        private AVFilterContext* _drawSink;
+        private long _spilled;
+        private long _replayed;
+        private bool _ended;
 
         public PaletteGraph(VideoEncoderSettings settings, AVPixelFormat input)
+        {
+            _settings = settings;
+            _input = input;
+            _frameBytes = Av.Check(ffmpeg.av_image_get_buffer_size(input, settings.Width, settings.Height, 1), "av_image_get_buffer_size");
+            _buffer = new byte[_frameBytes];
+            _spill = new FileStream(
+                Path.Combine(Path.GetTempPath(), $"jazz-gif-{Guid.NewGuid():N}.frames"),
+                FileMode.CreateNew,
+                FileAccess.ReadWrite,
+                FileShare.None,
+                1 << 20,
+                FileOptions.DeleteOnClose | FileOptions.SequentialScan);
+
+            _gather = Build(Gather, null, out _gatherSource, out _gatherSink, out _);
+        }
+
+        /// <summary>A frame for both passes: into the palette now, and to the file for later.</summary>
+        public void Send(AVFrame* frame)
+        {
+            Av.Check(ffmpeg.av_buffersrc_add_frame_flags(_gatherSource, frame, Av.BufferSrcKeepRef), "av_buffersrc_add_frame_flags");
+
+            var data = default(byte_ptrArray4);
+            var lines = default(int_array4);
+            for (uint plane = 0; plane < 4; plane++)
+            {
+                data[plane] = frame->data[plane];
+                lines[plane] = frame->linesize[plane];
+            }
+
+            fixed (byte* buffer = _buffer)
+            {
+                Av.Check(ffmpeg.av_image_copy_to_buffer(buffer, _frameBytes, data, lines, _input, _settings.Width, _settings.Height, 1), "av_image_copy_to_buffer");
+            }
+
+            _spill.Write(_buffer, 0, _frameBytes);
+            _spilled++;
+        }
+
+        /// <summary>Every frame has been seen: makes the palette, and the pass that draws with it.</summary>
+        public void Finish()
+        {
+            Av.Check(ffmpeg.av_buffersrc_add_frame_flags(_gatherSource, null, 0), "av_buffersrc_add_frame_flags (end)");
+            using var palette = new AvFrame();
+            int got = ffmpeg.av_buffersink_get_frame(_gatherSink, palette.Handle);
+            if (got == Av.EndOfFile || got == Av.Again)
+            {
+                // No frames at all: nothing to draw.
+                _ended = true;
+                return;
+            }
+
+            Av.Check(got, "av_buffersink_get_frame (palette)");
+            AVFrame* made = palette.Handle;
+            made->pts = 0;
+
+            _draw = Build(Draw, made, out _drawSource, out _drawSink, out AVFilterContext* paletteSource);
+            Av.Check(ffmpeg.av_buffersrc_add_frame_flags(paletteSource, made, 0), "av_buffersrc_add_frame_flags (palette)");
+            Av.Check(ffmpeg.av_buffersrc_add_frame_flags(paletteSource, null, 0), "av_buffersrc_add_frame_flags (palette end)");
+
+            _spill.Flush();
+            _spill.Position = 0;
+        }
+
+        /// <summary>The next frame drawn with the palette, valid until the next call, or null when there are no more.</summary>
+        public AVFrame* Receive()
+        {
+            if (_draw is null)
+            {
+                return null;
+            }
+
+            while (true)
+            {
+                ffmpeg.av_frame_unref(_out.Handle);
+                int result = ffmpeg.av_buffersink_get_frame(_drawSink, _out.Handle);
+                if (result >= 0)
+                {
+                    return _out.Handle;
+                }
+
+                if (result == Av.EndOfFile)
+                {
+                    return null;
+                }
+
+                if (result != Av.Again)
+                {
+                    Av.Check(result, "av_buffersink_get_frame");
+                }
+
+                // The pass wants more: the next frame from the file, or the end of them.
+                if (_replayed < _spilled)
+                {
+                    Replay();
+                }
+                else if (!_ended)
+                {
+                    Av.Check(ffmpeg.av_buffersrc_add_frame_flags(_drawSource, null, 0), "av_buffersrc_add_frame_flags (end)");
+                    _ended = true;
+                }
+                else
+                {
+                    return null;
+                }
+            }
+        }
+
+        public void Dispose()
+        {
+            _out.Dispose();
+            _next.Dispose();
+            _spill.Dispose();
+            Free(ref _gather);
+            Free(ref _draw);
+        }
+
+        private static void Free(ref AVFilterGraph* graph)
+        {
+            if (graph is not null)
+            {
+                AVFilterGraph* freed = graph;
+                graph = null;
+                ffmpeg.avfilter_graph_free(&freed);
+            }
+        }
+
+        /// <summary>Reads the next frame back from the file and sends it to the drawing pass.</summary>
+        private void Replay()
+        {
+            _spill.ReadExactly(_buffer, 0, _frameBytes);
+            AVFrame* frame = _next.Handle;
+            ffmpeg.av_frame_unref(frame);
+            frame->format = (int)_input;
+            frame->width = _settings.Width;
+            frame->height = _settings.Height;
+            frame->color_trc = AVColorTransferCharacteristic.AVCOL_TRC_IEC61966_2_1;
+            Av.Check(ffmpeg.av_frame_get_buffer(frame, 0), "av_frame_get_buffer");
+
+            var source = default(byte_ptrArray4);
+            var sourceLines = default(int_array4);
+            fixed (byte* buffer = _buffer)
+            {
+                Av.Check(ffmpeg.av_image_fill_arrays(ref source, ref sourceLines, buffer, _input, _settings.Width, _settings.Height, 1), "av_image_fill_arrays");
+                var data = default(byte_ptrArray4);
+                var lines = default(int_array4);
+                for (uint plane = 0; plane < 4; plane++)
+                {
+                    data[plane] = frame->data[plane];
+                    lines[plane] = frame->linesize[plane];
+                }
+
+                ffmpeg.av_image_copy(ref data, in lines, in source, sourceLines, _input, _settings.Width, _settings.Height);
+            }
+
+            frame->pts = _replayed;
+            _replayed++;
+
+            // Handed over whole: the source takes the buffer and leaves the frame empty for the next.
+            Av.Check(ffmpeg.av_buffersrc_add_frame_flags(_drawSource, frame, 0), "av_buffersrc_add_frame_flags");
+        }
+
+        /// <summary>
+        /// A graph from the frames (and, for drawing, the palette) to a sink, with its source, its sink,
+        /// and the palette's source when there is one.
+        /// </summary>
+        private AVFilterGraph* Build(string chain, AVFrame* palette, out AVFilterContext* frames, out AVFilterContext* drawn, out AVFilterContext* colours)
         {
             AVFilterGraph* graph = Av.CheckAlloc(ffmpeg.avfilter_graph_alloc(), "avfilter_graph_alloc");
             AVFilterInOut* inputs = null;
@@ -834,12 +1019,24 @@ public sealed unsafe class VideoEncoder : IDisposable
             {
                 string arguments = string.Create(
                     CultureInfo.InvariantCulture,
-                    $"video_size={settings.Width}x{settings.Height}:pix_fmt={(int)input}:time_base={settings.FrameRate.Den}/{settings.FrameRate.Num}:pixel_aspect=1/1:colorspace=bt709:range=tv");
+                    $"video_size={_settings.Width}x{_settings.Height}:pix_fmt={(int)_input}:time_base={_settings.FrameRate.Den}/{_settings.FrameRate.Num}:pixel_aspect=1/1:colorspace=bt709:range=tv");
                 AVFilterContext* source = null;
                 Av.Check(
                     ffmpeg.avfilter_graph_create_filter(&source, ffmpeg.avfilter_get_by_name("buffer"), "in", arguments, null, graph),
                     "avfilter_graph_create_filter (buffer)",
                     arguments);
+
+                AVFilterContext* paletteSource = null;
+                if (palette is not null)
+                {
+                    string paletteArguments = string.Create(
+                        CultureInfo.InvariantCulture,
+                        $"video_size={palette->width}x{palette->height}:pix_fmt={palette->format}:time_base={_settings.FrameRate.Den}/{_settings.FrameRate.Num}:pixel_aspect=1/1");
+                    Av.Check(
+                        ffmpeg.avfilter_graph_create_filter(&paletteSource, ffmpeg.avfilter_get_by_name("buffer"), "palette", paletteArguments, null, graph),
+                        "avfilter_graph_create_filter (palette)",
+                        paletteArguments);
+                }
 
                 AVFilterContext* sink = null;
                 Av.Check(
@@ -851,6 +1048,15 @@ public sealed unsafe class VideoEncoder : IDisposable
                 outputs->filter_ctx = source;
                 outputs->pad_idx = 0;
                 outputs->next = null;
+                if (paletteSource is not null)
+                {
+                    AVFilterInOut* second = Av.CheckAlloc(ffmpeg.avfilter_inout_alloc(), "avfilter_inout_alloc");
+                    second->name = ffmpeg.av_strdup("palette");
+                    second->filter_ctx = paletteSource;
+                    second->pad_idx = 0;
+                    second->next = null;
+                    outputs->next = second;
+                }
 
                 inputs = Av.CheckAlloc(ffmpeg.avfilter_inout_alloc(), "avfilter_inout_alloc");
                 inputs->name = ffmpeg.av_strdup("out");
@@ -858,16 +1064,15 @@ public sealed unsafe class VideoEncoder : IDisposable
                 inputs->pad_idx = 0;
                 inputs->next = null;
 
-                // stats_mode=full weighs every frame alike, which suits the short loops GIFs are;
-                // sierra2_4a is the dither that looks best without crawling from frame to frame.
-                const string Chain = "format=rgb24,split[a][b];[a]palettegen=stats_mode=full[p];[b][p]paletteuse=dither=sierra2_4a";
-                Av.Check(ffmpeg.avfilter_graph_parse_ptr(graph, Chain, &inputs, &outputs, null), "avfilter_graph_parse_ptr", Chain);
-                Av.Check(ffmpeg.avfilter_graph_config(graph, null), "avfilter_graph_config", Chain);
+                Av.Check(ffmpeg.avfilter_graph_parse_ptr(graph, chain, &inputs, &outputs, null), "avfilter_graph_parse_ptr", chain);
+                Av.Check(ffmpeg.avfilter_graph_config(graph, null), "avfilter_graph_config", chain);
 
-                _graph = graph;
-                _source = source;
-                _sink = sink;
+                AVFilterGraph* made = graph;
                 graph = null;
+                frames = source;
+                drawn = sink;
+                colours = paletteSource;
+                return made;
             }
             finally
             {
@@ -885,37 +1090,6 @@ public sealed unsafe class VideoEncoder : IDisposable
                 {
                     ffmpeg.avfilter_graph_free(&graph);
                 }
-            }
-        }
-
-        public void Send(AVFrame* frame) =>
-            Av.Check(ffmpeg.av_buffersrc_add_frame_flags(_source, frame, Av.BufferSrcKeepRef), "av_buffersrc_add_frame_flags");
-
-        public void Finish() =>
-            Av.Check(ffmpeg.av_buffersrc_add_frame_flags(_source, null, 0), "av_buffersrc_add_frame_flags (end)");
-
-        /// <summary>The next frame drawn with the palette, valid until the next call, or null when there are no more.</summary>
-        public AVFrame* Receive()
-        {
-            ffmpeg.av_frame_unref(_out.Handle);
-            int result = ffmpeg.av_buffersink_get_frame(_sink, _out.Handle);
-            if (result == Av.Again || result == Av.EndOfFile)
-            {
-                return null;
-            }
-
-            Av.Check(result, "av_buffersink_get_frame");
-            return _out.Handle;
-        }
-
-        public void Dispose()
-        {
-            _out.Dispose();
-            if (_graph is not null)
-            {
-                AVFilterGraph* graph = _graph;
-                _graph = null;
-                ffmpeg.avfilter_graph_free(&graph);
             }
         }
     }
