@@ -9,8 +9,10 @@ namespace JazzHands.Core.Subtitles;
 /// Cue text between the HTML-like tags of SubRip and WebVTT and the title markup cues are kept in.
 /// </summary>
 /// <remarks>
-/// Bold, italic, underline and a font colour cross over both ways. WebVTT's classes, voices,
-/// ruby and inline timestamps, and any tag this does not know, are dropped and their text kept;
+/// Bold, italic, underline and a font colour cross over both ways: in SubRip as a font tag, in
+/// WebVTT as a <c>&lt;c.class&gt;</c> span coloured by the file's style block or by WebVTT's
+/// default colour classes. WebVTT's voices, ruby, inline timestamps and other classes, and any
+/// tag this does not know, are dropped and their text kept;
 /// SubRip, which has no escapes, keeps a bracket it does not know as text.
 /// SubRip files often carry an ASS alignment tag, <c>{\an8}</c>, which is read as where the cue
 /// sits; any other brace block is dropped.
@@ -36,12 +38,37 @@ public static class SubtitleText
         ["orange"] = "#FFA500",
     };
 
+    /// <summary>WebVTT's default colour classes, which colour a <c>&lt;c&gt;</c> span with no style block.</summary>
+    private static readonly Dictionary<string, string> VttDefault = new(StringComparer.Ordinal)
+    {
+        ["white"] = "#FFFFFF",
+        ["lime"] = "#00FF00",
+        ["cyan"] = "#00FFFF",
+        ["red"] = "#FF0000",
+        ["yellow"] = "#FFFF00",
+        ["magenta"] = "#FF00FF",
+        ["blue"] = "#0000FF",
+        ["black"] = "#000000",
+    };
+
+    /// <summary>
+    /// The WebVTT class a colour is written with: one of WebVTT's own names when it is one of
+    /// their colours, otherwise <c>c</c> and the hex value.
+    /// </summary>
+    public static string VttClass(string colour)
+    {
+        ArgumentNullException.ThrowIfNull(colour);
+        string hex = colour.Trim().TrimStart('#').ToUpperInvariant();
+        return VttDefault.FirstOrDefault(pair => pair.Value[1..] == hex).Key ?? "c" + hex;
+    }
+
     /// <summary>
     /// SubRip or WebVTT cue text as title markup, and the alignment an <c>{\anN}</c> tag gave it.
     /// </summary>
+    /// <param name="classes">For WebVTT, the colour of each class the file's style block names.</param>
     /// <param name="text">The cue's lines, joined with line breaks.</param>
     /// <param name="entities">True for WebVTT, whose text escapes <c>&amp;</c>, <c>&lt;</c> and <c>&gt;</c>.</param>
-    public static (string Markup, SubtitleAlign? Align) FromHtml(string text, bool entities)
+    public static (string Markup, SubtitleAlign? Align) FromHtml(string text, bool entities, IReadOnlyDictionary<string, string>? classes = null)
     {
         ArgumentNullException.ThrowIfNull(text);
         var markup = new StringBuilder(text.Length + 8);
@@ -67,7 +94,7 @@ public static class SubtitleText
             if (c == '<' && text.IndexOf('>', at) is int end and > 0)
             {
                 string tag = text[(at + 1)..end].Trim();
-                if (Tag(tag, fonts) is { } written)
+                if (Tag(tag, fonts, classes) is { } written)
                 {
                     markup.Append(written);
                     at = end;
@@ -105,8 +132,9 @@ public static class SubtitleText
 
         foreach ((string text, TitleStyle style) in Runs(parsed))
         {
-            // WebVTT colours text only through a stylesheet's classes, so a colour is SubRip's alone.
-            bool colour = style.Color is not null && !entities;
+            // WebVTT colours text only through classes: a <c> span whose class the file's style
+            // block colours (VttFormat.Write); SubRip has a font tag.
+            bool colour = style.Color is not null;
             if (style.Bold)
             {
                 html.Append("<b>");
@@ -124,7 +152,7 @@ public static class SubtitleText
 
             if (colour)
             {
-                html.Append("<font color=\"").Append(style.Color).Append("\">");
+                html.Append(entities ? $"<c.{VttClass(style.Color!)}>" : $"<font color=\"{style.Color}\">");
             }
 
             foreach (char c in text)
@@ -134,7 +162,7 @@ public static class SubtitleText
 
             if (colour)
             {
-                html.Append("</font>");
+                html.Append(entities ? "</c>" : "</font>");
             }
 
             if (style.Underline)
@@ -234,7 +262,7 @@ public static class SubtitleText
     }
 
     /// <summary>The markup for a tag this knows, or null.</summary>
-    private static string? Tag(string tag, Stack<bool> fonts)
+    private static string? Tag(string tag, Stack<bool> fonts, IReadOnlyDictionary<string, string>? classes)
     {
         string name = tag.Split([' ', '.', '\t'], 2)[0].ToLowerInvariant();
         switch (name)
@@ -252,7 +280,15 @@ public static class SubtitleText
                 fonts.Push(colour is not null);
                 return colour is null ? string.Empty : $"[color={colour}]";
             case "/font":
+            case "/c":
                 return fonts.Count > 0 && fonts.Pop() ? "[/color]" : string.Empty;
+            case "c":
+                // <c.yellow.bg_black>: the first class with a colour, the file's own or WebVTT's.
+                string? classed = tag.Split('.').Skip(1)
+                    .Select(name => classes is not null && classes.TryGetValue(name, out string? own) ? own : VttDefault.GetValueOrDefault(name))
+                    .FirstOrDefault(found => found is not null);
+                fonts.Push(classed is not null);
+                return classed is null ? string.Empty : $"[color={classed}]";
             default:
                 return null;
         }

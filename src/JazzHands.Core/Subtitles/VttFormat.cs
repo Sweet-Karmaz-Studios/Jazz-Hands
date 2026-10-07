@@ -12,9 +12,10 @@ namespace JazzHands.Core.Subtitles;
 /// <remarks>
 /// A cue's settings say where it sits: <c>line</c> (a line number from the top, negative from
 /// the bottom, or a percentage) and <c>align</c> (start, centre, end). They are read into the
-/// cue's alignment and kept as written for writing WebVTT back. A <c>::cue</c> style block's
-/// colour, background and font become the file's style; other style rules, regions and notes are
-/// skipped with a warning.
+/// cue's alignment and kept as written for writing WebVTT back. A <c>::cue</c> style rule's
+/// colour, background and font become the file's style, and a <c>::cue(.name)</c> rule's colour
+/// colours the cues' <c>&lt;c.name&gt;</c> spans; other style rules, regions and notes are skipped
+/// with a warning. Written, each colour the cues use is a class with a rule of its own.
 /// </remarks>
 public static class VttFormat
 {
@@ -26,6 +27,7 @@ public static class VttFormat
         var cues = new List<SubtitleCue>();
         var warnings = new List<string>();
         SubtitleStyle? style = null;
+        var classes = new Dictionary<string, string>(StringComparer.Ordinal);
 
         int at = 0;
         while (at < lines.Length && lines[at].Trim().Length == 0)
@@ -71,7 +73,7 @@ public static class VttFormat
 
             if (first.StartsWith("STYLE", StringComparison.Ordinal))
             {
-                style = Style(string.Join('\n', block[1..]), style ?? SubtitleStyle.Default, warnings);
+                style = Style(string.Join('\n', block[1..]), style ?? SubtitleStyle.Default, classes, warnings);
                 continue;
             }
 
@@ -90,7 +92,7 @@ public static class VttFormat
 
             string? id = timing == 1 ? block[0].Trim() : null;
             Flicks stop = time.End < time.Start ? time.Start : time.End;
-            (string markup, _) = SubtitleText.FromHtml(string.Join('\n', block[(timing + 1)..].Select(line => line.TrimEnd())), entities: true);
+            (string markup, _) = SubtitleText.FromHtml(string.Join('\n', block[(timing + 1)..].Select(line => line.TrimEnd())), entities: true, classes);
             cues.Add(new SubtitleCue(time.Start, stop, markup, Align(time.Settings), Name: id, Raw: time.Settings.Length > 0 ? time.Settings : null));
         }
 
@@ -102,6 +104,25 @@ public static class VttFormat
     {
         ArgumentNullException.ThrowIfNull(document);
         var text = new StringBuilder("WEBVTT\n\n");
+
+        // WebVTT colours text only through classes: a rule for each colour the cues use.
+        string[] colours = [.. document.Cues
+            .SelectMany(cue => SubtitleText.Runs(Titles.TitleMarkup.Parse(cue.Text)))
+            .Select(run => run.Style.Color)
+            .OfType<string>()
+            .Select(colour => colour.ToUpperInvariant())
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)];
+        if (colours.Length > 0)
+        {
+            text.Append("STYLE\n");
+            foreach (string colour in colours)
+            {
+                text.Append("::cue(.").Append(SubtitleText.VttClass(colour)).Append(") { color: ").Append(colour).Append("; }\n");
+            }
+
+            text.Append('\n');
+        }
 
         foreach (SubtitleCue cue in document.Cues)
         {
@@ -206,36 +227,67 @@ public static class VttFormat
             : null;
     }
 
-    /// <summary>A <c>::cue</c> rule's colour, background and font as a style.</summary>
-    private static SubtitleStyle Style(string css, SubtitleStyle style, List<string> warnings)
+    /// <summary>
+    /// A style block's rules: a plain <c>::cue</c> rule's colour, background and font as the
+    /// file's style, and a <c>::cue(.name)</c> rule's colour as that class's, for the cues'
+    /// <c>&lt;c.name&gt;</c> spans.
+    /// </summary>
+    private static SubtitleStyle Style(string css, SubtitleStyle style, Dictionary<string, string> classes, List<string> warnings)
     {
-        int open = css.IndexOf("::cue", StringComparison.Ordinal);
-        int brace = open < 0 ? -1 : css.IndexOf('{', open);
-        int close = brace < 0 ? -1 : css.IndexOf('}', brace);
-        if (brace < 0 || close < 0 || css[(open + 5)..brace].Trim().Length > 0)
+        int at = 0;
+        while (css.IndexOf("::cue", at, StringComparison.Ordinal) is int open and >= 0)
         {
-            SrtFormat.Warn(warnings, "WebVTT style rules other than a plain ::cue are not kept.");
-            return style;
-        }
-
-        foreach (string declaration in css[(brace + 1)..close].Split(';', StringSplitOptions.RemoveEmptyEntries))
-        {
-            string[] pair = declaration.Split(':', 2);
-            if (pair.Length != 2)
+            int brace = css.IndexOf('{', open);
+            int close = brace < 0 ? -1 : css.IndexOf('}', brace);
+            if (close < 0)
             {
-                continue;
+                break;
             }
 
-            string value = pair[1].Trim();
-            style = pair[0].Trim().ToLowerInvariant() switch
+            at = close + 1;
+            string selector = css[(open + 5)..brace].Trim();
+            Dictionary<string, string> declarations = Declarations(css[(brace + 1)..close]);
+            if (selector.Length == 0)
             {
-                "color" when SubtitleText.Colour(value) is { } colour => style with { Color = colour },
-                "background-color" or "background" when SubtitleText.Colour(value) is { } box => style with { Box = box + "FF" },
-                "font-family" => style with { Font = value.Split(',')[0].Trim().Trim('"', '\'') },
-                _ => style,
-            };
+                foreach ((string name, string value) in declarations)
+                {
+                    style = name switch
+                    {
+                        "color" when SubtitleText.Colour(value) is { } colour => style with { Color = colour },
+                        "background-color" or "background" when SubtitleText.Colour(value) is { } box => style with { Box = box + "FF" },
+                        "font-family" => style with { Font = value.Split(',')[0].Trim().Trim('"', '\'') },
+                        _ => style,
+                    };
+                }
+            }
+            else if (selector.StartsWith("(.", StringComparison.Ordinal) && selector.EndsWith(')')
+                && selector[2..^1] is { Length: > 0 } name && name.All(c => char.IsLetterOrDigit(c) || c is '_' or '-')
+                && declarations.TryGetValue("color", out string? value) && SubtitleText.Colour(value) is { } colour)
+            {
+                classes[name] = colour;
+            }
+            else
+            {
+                SrtFormat.Warn(warnings, "WebVTT style rules other than ::cue and a class's colour are not kept.");
+            }
         }
 
         return style;
+    }
+
+    /// <summary>A rule's declarations by property, lower case.</summary>
+    private static Dictionary<string, string> Declarations(string block)
+    {
+        var declarations = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (string declaration in block.Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            string[] pair = declaration.Split(':', 2);
+            if (pair.Length == 2)
+            {
+                declarations[pair[0].Trim().ToLowerInvariant()] = pair[1].Trim();
+            }
+        }
+
+        return declarations;
     }
 }
