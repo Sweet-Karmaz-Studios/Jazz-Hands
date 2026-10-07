@@ -32,7 +32,11 @@ public static class CompNodes
         ]);
 
     /// <summary>The picture coming into the graph.</summary>
-    public static EffectDescriptor In { get; } = Node(CompGraph.In, "In", "The clip's own picture, placed, coming into the graph.");
+    public static EffectDescriptor In { get; } = Node(
+        CompGraph.In,
+        "In",
+        "The clip's own picture, placed, coming into the graph; inside a group, what is wired into the group's port it names.",
+        new ParamDescriptor("port", ParamType.Enum, new ParamValue.Enum("input"), "Port", "Inside a group, which of the group's inputs this is: the clip's own picture when nothing is wired there.", Animatable: false, Choices: new EquatableArray<string>([.. CompGraph.GroupPorts])));
 
     /// <summary>What the graph shows.</summary>
     public static EffectDescriptor Out { get; } = Node(CompGraph.Out, "Out", "What the graph shows: the clip's picture from here on.");

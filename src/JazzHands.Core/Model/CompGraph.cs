@@ -65,11 +65,27 @@ public sealed record CompGraph(EquatableArray<CompNode> Nodes) : IEquatable<Comp
     public const string Render3D = "comp.render3d";
 
     /// <summary>
-    /// A graph of its own inside this one (Phase 49a), held in its effect's <c>Comp</c>: its
-    /// <c>comp.in</c> is the picture wired into the group (the clip's own when nothing is), and what
-    /// reaches its <c>comp.out</c> is what the group gives.
+    /// A graph of its own inside this one (Phase 49a), held in its effect's <c>Comp</c>: each of its
+    /// <c>comp.in</c> nodes is the picture wired into the group's port its <c>port</c> names (one of
+    /// <see cref="GroupPorts"/>; the clip's own when nothing is wired there), and what reaches its
+    /// <c>comp.out</c> is what the group gives.
     /// </summary>
     public const string Group = "comp.group";
+
+    /// <summary>
+    /// A group's input ports: up to four pictures from outside it, each standing in for the
+    /// <c>comp.in</c> nodes inside whose <c>port</c> names it.
+    /// </summary>
+    public static IReadOnlyList<string> GroupPorts { get; } = ["input", "input2", "input3", "input4"];
+
+    /// <summary>Which of a group's ports a <c>comp.in</c> stands for, as an index into <see cref="GroupPorts"/>: 0 when it does not say.</summary>
+    public static int PortOf(Effect input)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        string port = input.Parameter("port") is StaticValue { Value: ParamValue.Enum chosen } ? chosen.Value : "input";
+        int index = Enumerable.Range(0, GroupPorts.Count).FirstOrDefault(at => GroupPorts[at] == port, -1);
+        return index < 0 ? 0 : index;
+    }
 
     /// <summary>How many groups deep a graph may go; deeper ones show their input unchanged.</summary>
     public const int MostDepth = 8;
@@ -88,7 +104,8 @@ public sealed record CompGraph(EquatableArray<CompNode> Nodes) : IEquatable<Comp
     public static IReadOnlyList<string> PortsOf(string typeId, bool isGenerator) => typeId switch
     {
         In or Media => [],
-        Out or Transform or Plane or Group => ["input"],
+        Group => GroupPorts,
+        Out or Transform or Plane => ["input"],
         Merge => ["background", "foreground", "mask"],
         Matte => ["input", "matte"],
         Render3D => [.. Enumerable.Range(1, MostObjects).Select(index => index.ToString(System.Globalization.CultureInfo.InvariantCulture))],

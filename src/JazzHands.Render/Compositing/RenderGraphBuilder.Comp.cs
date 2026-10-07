@@ -71,7 +71,7 @@ public static partial class RenderGraphBuilder
         CompNode? Last(CompGraph graph) => view is not null && graph.Towards(view) is { } towards ? towards : graph.OutputNode;
 
         // A graph's steps added to the list; the index of the last, or -1 when it draws nothing.
-        int Emit(CompGraph graph, int? groupInput, int level)
+        int Emit(CompGraph graph, ImmutableArray<int>? groupInputs, int level)
         {
             if (Last(graph) is not { } last || graph.OrderFrom(last) is not { Count: > 0 } order)
             {
@@ -86,10 +86,10 @@ public static partial class RenderGraphBuilder
                 bool generator = registered is { Kind: EffectKind.Generator };
                 ImmutableArray<int> inputs = [.. CompGraph.PortsOf(type, generator).Select(port => node.Input(port) is { } from && index.TryGetValue(from, out int at) ? at : -1)];
 
-                // A group draws its own graph here, with what is wired into it as its In.
+                // A group draws its own graph here, with what is wired into its ports as its Ins.
                 if (type == CompGraph.Group && node.Effect.Enabled && node.Effect.Comp is { } inner && level + 1 < CompGraph.MostDepth)
                 {
-                    int given = Emit(inner, inputs[0] >= 0 ? inputs[0] : null, level + 1);
+                    int given = Emit(inner, inputs, level + 1);
                     if (given >= 0)
                     {
                         index[node.Id] = given;
@@ -97,7 +97,7 @@ public static partial class RenderGraphBuilder
                     }
                 }
 
-                CompStep step = type == CompGraph.In && groupInput is { } wired
+                CompStep step = type == CompGraph.In && groupInputs is { } ports && ports[CompGraph.PortOf(node.Effect)] is var wired and >= 0
                     ? new CompStep(CompStepKind.Pass, [wired])
                     : node.Effect.Enabled || type is CompGraph.In or CompGraph.Out
                         ? Step(graph, index, node, type, registered, inputs)

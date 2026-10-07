@@ -78,9 +78,9 @@ public sealed class GroupCompNodesHandler : ICommandHandler<GroupCompNodesComman
         }
 
         string[] sources = [.. coming.Select(input => input.From).Distinct(StringComparer.Ordinal)];
-        if (sources.Length > 1)
+        if (sources.Length > CompGraph.GroupPorts.Count)
         {
-            throw new CommandException("group-inputs", $"A group takes one picture in, and these nodes read {sources.Length} from outside it: {string.Join(", ", sources)}. Group fewer nodes, or what they read too.", "nodeIds");
+            throw new CommandException("group-inputs", $"A group takes up to {CompGraph.GroupPorts.Count} pictures in, and these nodes read {sources.Length} from outside it: {string.Join(", ", sources)}. Group fewer nodes, or what they read too.", "nodeIds");
         }
 
         string[] given = [.. going.Select(input => input.From).Distinct(StringComparer.Ordinal)];
@@ -98,16 +98,25 @@ public sealed class GroupCompNodesHandler : ICommandHandler<GroupCompNodesComman
         double left = chosen.Min(node => node.X);
         double right = chosen.Max(node => node.X);
         double middle = Math.Round(chosen.Average(node => node.Y), 1);
-        Effect input = Effect.Create(CompGraph.In);
+        // An In for each picture read from outside, on the group's port of the same place; one
+        // standing for the clip's picture when nothing is read.
+        Effect[] ins = [.. Enumerable.Range(0, Math.Max(1, sources.Length)).Select(port => Effect.Create(CompGraph.In)
+            .WithParameter("port", AnimatedValue.Constant(new ParamValue.Enum(CompGraph.GroupPorts[port]))))];
+        var inFor = new Dictionary<string, string>(StringComparer.Ordinal);
+        for (int port = 0; port < sources.Length; port++)
+        {
+            inFor[sources[port]] = ins[port].Id;
+        }
+
         var inner = new CompGraph(
         [
-            new CompNode(input, X: left - CompHelp.Spacing, Y: middle),
-            .. chosen.Select(node => node with { Inputs = [.. node.Inputs.Select(wire => inside.Contains(wire.From) ? wire : wire with { From = input.Id })] }),
+            .. ins.Select((input, port) => new CompNode(input, X: left - CompHelp.Spacing, Y: middle + (port * CompHelp.Spacing / 2))),
+            .. chosen.Select(node => node with { Inputs = [.. node.Inputs.Select(wire => inside.Contains(wire.From) ? wire : wire with { From = inFor[wire.From] })] }),
             new CompNode(Effect.Create(CompGraph.Out), last is null ? [] : [new CompInput("input", last)], X: right + CompHelp.Spacing, Y: middle),
         ]);
         var group = new CompNode(
             Effect.Create(CompGraph.Group) with { Id = groupId, Comp = inner },
-            sources.Length == 1 ? [new CompInput("input", sources[0])] : [],
+            [.. sources.Select((source, port) => new CompInput(CompGraph.GroupPorts[port], source))],
             Math.Round(chosen.Average(node => node.X), 1),
             middle);
 
@@ -150,16 +159,28 @@ public sealed class UngroupCompNodeHandler : ICommandHandler<UngroupCompNodeComm
         }
 
         CompGraph inner = group.Effect.Comp ?? CompGraph.Empty;
-        string? source = group.Input("input");
-        var ins = new HashSet<string>(inner.Nodes.Where(node => node.Effect.TypeId == CompGraph.In).Select(node => node.Id), StringComparer.Ordinal);
         string? gives = inner.OutputNode?.Input("input");
 
-        // With a picture wired in, the group's Ins become that picture; with none, they stay as the picture coming in.
-        bool keepIns = source is null;
-        string? Mapped(string from) => !keepIns && ins.Contains(from) ? source : from;
+        // Each In becomes the picture wired into its port; an In whose port has nothing wired stays,
+        // as the clip's own picture coming in.
+        var source = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (CompNode node in inner.Nodes.Where(node => node.Effect.TypeId == CompGraph.In))
+        {
+            if (group.Input(CompGraph.GroupPorts[CompGraph.PortOf(node.Effect)]) is { } wired)
+            {
+                source[node.Id] = wired;
+            }
+        }
+
+        string Mapped(string from) => source.GetValueOrDefault(from, from);
         CompNode[] moved = [.. inner.Nodes
-            .Where(node => node.Effect.TypeId != CompGraph.Out && (keepIns || !ins.Contains(node.Id)))
-            .Select(node => node with { Inputs = [.. node.Inputs.Select(wire => wire with { From = Mapped(wire.From)! })] })];
+            .Where(node => node.Effect.TypeId != CompGraph.Out && !source.ContainsKey(node.Id))
+            .Select(node => node with
+            {
+                // Out in the graph an In reads the clip's picture whatever its port said.
+                Effect = node.Effect.TypeId == CompGraph.In ? node.Effect.WithParameter("port", AnimatedValue.Constant(new ParamValue.Enum("input"))) : node.Effect,
+                Inputs = [.. node.Inputs.Select(wire => wire with { From = Mapped(wire.From) })],
+            })];
 
         // Placed where the group was, as they were inside it.
         double dx = moved.Length == 0 ? 0 : group.X - moved.Min(node => node.X);
