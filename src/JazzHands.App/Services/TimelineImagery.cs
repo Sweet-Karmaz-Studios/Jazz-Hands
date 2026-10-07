@@ -29,14 +29,26 @@ public sealed class TimelineImagery : ITimelineImagery
     private readonly CachedThumbnails _media;
     private readonly HashSet<(string Clip, string Hash, long Spacing)> _prefetched = [];
 
+    private bool _decibels;
+    private EventHandler? _scaleChanged;
+
     /// <summary>Imagery over the editor's caches.</summary>
-    public TimelineImagery(ISession session, CachedThumbnails media, IUiDispatcher? ui = null)
+    /// <param name="session">The session whose clips are drawn.</param>
+    /// <param name="media">The thumbnail and waveform caches.</param>
+    /// <param name="ui">Where changes are taken up.</param>
+    /// <param name="editor">The editor's settings, for the waveform scale; null draws them linear.</param>
+    public TimelineImagery(ISession session, CachedThumbnails media, IUiDispatcher? ui = null, Engine.Settings.SettingsSection<EditorSettings>? editor = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(media);
 
         _session = session;
         _media = media;
+        if (editor is not null)
+        {
+            _decibels = editor.Current.WaveformsInDecibels;
+            editor.Saved += (_, saved) => (ui ?? new InlineDispatcher()).Post(() => Decibels = saved.WaveformsInDecibels);
+        }
 
         // A clip named in a change may have been trimmed out over source that was never
         // prefetched: its whole range is asked for again the next time it is drawn.
@@ -55,8 +67,34 @@ public sealed class TimelineImagery : ITimelineImagery
     /// <inheritdoc />
     public event EventHandler? Changed
     {
-        add => _media.Changed += value;
-        remove => _media.Changed -= value;
+        add
+        {
+            _media.Changed += value;
+            _scaleChanged += value;
+        }
+
+        remove
+        {
+            _media.Changed -= value;
+            _scaleChanged -= value;
+        }
+    }
+
+    /// <summary>
+    /// Waveforms on a decibel scale (<see cref="WaveformScale.Decibels"/>) rather than linear; the
+    /// timeline redraws when it changes.
+    /// </summary>
+    public bool Decibels
+    {
+        get => _decibels;
+        set
+        {
+            if (_decibels != value)
+            {
+                _decibels = value;
+                _scaleChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
     }
 
     /// <inheritdoc />
@@ -150,8 +188,8 @@ public sealed class TimelineImagery : ITimelineImagery
 
             if (source.Range(Math.Min(first, last), Math.Max(first, last) + 1, out float low, out float high))
             {
-                minimum[index] = low;
-                maximum[index] = high;
+                minimum[index] = _decibels ? WaveformScale.Decibels(low) : low;
+                maximum[index] = _decibels ? WaveformScale.Decibels(high) : high;
             }
         }
 

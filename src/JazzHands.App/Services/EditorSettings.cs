@@ -19,6 +19,9 @@ public sealed record EditorSettings
     /// <summary>Play short grains of sound while scrubbing.</summary>
     public bool ScrubAudio { get; init; } = true;
 
+    /// <summary>Draw waveforms on a decibel scale, -60 dB at the middle line, so quiet speech shows; off draws them linear.</summary>
+    public bool WaveformsInDecibels { get; init; }
+
     /// <summary>The preview's resolution: auto, full, half or quarter.</summary>
     public string PreviewQuality { get; init; } = "auto";
 

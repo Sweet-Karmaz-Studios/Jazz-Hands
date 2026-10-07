@@ -52,6 +52,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     private bool _scrubAudio;
 
     [ObservableProperty]
+    private bool _waveformsInDecibels;
+
+    [ObservableProperty]
     private SettingsChoice _previewQuality;
 
     [ObservableProperty]
@@ -138,6 +141,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         _audioDevice = Choose(AudioDevices, playback.Device ?? _appliedEditor.AudioDevice ?? string.Empty);
         _scrubAudio = _appliedEditor.ScrubAudio;
+        _waveformsInDecibels = _appliedEditor.WaveformsInDecibels;
         _previewQuality = Choose(Qualities, _appliedEditor.PreviewQuality);
         _cacheLocation = _appliedCache.Location ?? string.Empty;
         _cacheCapGb = Math.Round(_appliedCache.CapBytes / (1024.0 * 1024 * 1024), 1);
@@ -185,6 +189,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             AudioDevice = AudioDevice.Value.Length > 0 ? AudioDevice.Value : null,
             ScrubAudio = ScrubAudio,
+            WaveformsInDecibels = WaveformsInDecibels,
             PreviewQuality = PreviewQuality.Value,
             Gpu = Gpu.Value,
             ExportPreset = ExportPreset.Value,
@@ -216,6 +221,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             AudioDevice = editor.AudioDevice,
             ScrubAudio = editor.ScrubAudio,
+            WaveformsInDecibels = editor.WaveformsInDecibels,
             PreviewQuality = editor.PreviewQuality,
             Gpu = editor.Gpu,
             ExportPreset = editor.ExportPreset,

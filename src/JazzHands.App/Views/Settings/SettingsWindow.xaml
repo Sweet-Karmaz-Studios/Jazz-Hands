@@ -82,6 +82,7 @@
                     <ComboBox Style="{StaticResource ComboBox.Compact}" ItemsSource="{Binding Qualities, Mode=OneTime}" SelectedItem="{Binding PreviewQuality, Mode=TwoWay}" AutomationProperties.Name="Preview resolution" />
                 </DockPanel>
                 <CheckBox Style="{StaticResource CheckBox.Dark}" Margin="170,0,0,8" Content="Play sound while scrubbing" IsChecked="{Binding ScrubAudio, Mode=TwoWay}" />
+                <CheckBox Style="{StaticResource CheckBox.Dark}" Margin="170,0,0,8" Content="Draw waveforms in decibels" ToolTip="Quiet passages show; -60 dB sits on the middle line" IsChecked="{Binding WaveformsInDecibels, Mode=TwoWay}" />
                 <TextBlock Style="{StaticResource Note}" Text="These change at once." />
             </StackPanel>
 

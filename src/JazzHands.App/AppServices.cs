@@ -207,7 +207,8 @@ public static class AppServices
         services.AddSingleton<Controls.Timeline.ITimelineImagery>(provider => new TimelineImagery(
             provider.GetRequiredService<ISession>(),
             provider.GetRequiredService<CachedThumbnails>(),
-            provider.GetRequiredService<IUiDispatcher>()));
+            provider.GetRequiredService<IUiDispatcher>(),
+            provider.GetRequiredService<Engine.Settings.SettingsSection<EditorSettings>>()));
 
         services.AddSingleton(provider => new TimelineDocuments(
             provider.GetRequiredService<ISession>(),
