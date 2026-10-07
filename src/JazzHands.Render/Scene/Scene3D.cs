@@ -691,6 +691,7 @@ public sealed class Scene3D : IDisposable
         AlphaMode = (uint)material.Alpha,
         Maps = maps,
         DoubleSided = material.DoubleSided ? 1u : 0u,
+        UvSets = (uint)material.UvSets,
     };
 
     /// <summary>The material's pictures at t6 to t10, and the flags saying which there are.</summary>
@@ -1108,7 +1109,7 @@ public sealed class Scene3D : IDisposable
         public uint AlphaMode;
         public uint Maps;
         public uint DoubleSided;
-        public float MaterialPad0;
+        public uint UvSets;
         public float MaterialPad1;
     }
 

@@ -724,6 +724,7 @@ public static class Gltf
                 float[] positions = Accessor(positionAccessor.GetInt32(), out int count);
                 float[]? normals = attributes.TryGetProperty("NORMAL", out JsonElement n) ? Accessor(n.GetInt32(), out _) : null;
                 float[]? uvs = attributes.TryGetProperty("TEXCOORD_0", out JsonElement uv) ? Accessor(uv.GetInt32(), out _) : null;
+                float[]? uvs1 = attributes.TryGetProperty("TEXCOORD_1", out JsonElement uv1) ? Accessor(uv1.GetInt32(), out _) : null;
                 float[]? tangents = attributes.TryGetProperty("TANGENT", out JsonElement tangent) ? Accessor(tangent.GetInt32(), out _) : null;
 
                 var corners = new MeshVertex[count];
@@ -736,6 +737,11 @@ public static class Gltf
                     if (tangents is { } tt && tt.Length >= (corner * 4) + 4)
                     {
                         corners[corner].Tangent = new Vector4(tt[corner * 4], tt[(corner * 4) + 1], tt[(corner * 4) + 2], tt[(corner * 4) + 3]);
+                    }
+
+                    if (uvs1 is { } u1 && u1.Length >= (corner * 2) + 2)
+                    {
+                        corners[corner].Uv1 = new Vector2(u1[corner * 2], u1[(corner * 2) + 1]);
                     }
                 }
 
@@ -844,8 +850,16 @@ public static class Gltf
             }
 
             float normalScale = material.TryGetProperty("normalTexture", out JsonElement normal) && normal.TryGetProperty("scale", out JsonElement scale) ? scale.GetSingle() : 1.0f;
+
+            // Which pictures read the second set of texture coordinates, by the shader's map bits.
+            int uvSets = (SecondSet(pbr, "baseColorTexture") ? 1 : 0)
+                | (SecondSet(pbr, "metallicRoughnessTexture") ? 2 : 0)
+                | (SecondSet(material, "normalTexture") ? 4 : 0)
+                | (SecondSet(material, "emissiveTexture") ? 8 : 0)
+                | (SecondSet(material, "occlusionTexture") ? 16 : 0);
             return new PbrMaterial(baseColor, metallic, roughness, emissive)
             {
+                UvSets = uvSets,
                 BaseColorTexture = baseTexture,
                 MetallicRoughnessTexture = metalRough,
                 NormalTexture = Texture(material, "normalTexture", srgb: false),
@@ -863,6 +877,13 @@ public static class Gltf
             };
         }
 
+        /// <summary>True when a material's picture reads texture coordinates other than the first set.</summary>
+        private static bool SecondSet(JsonElement owner, string name) =>
+            owner.ValueKind == JsonValueKind.Object
+            && owner.TryGetProperty(name, out JsonElement info)
+            && info.TryGetProperty("texCoord", out JsonElement set)
+            && set.GetInt32() >= 1;
+
         private MeshTexture? Texture(JsonElement owner, string name, bool srgb)
         {
             if (!owner.TryGetProperty(name, out JsonElement info) || !info.TryGetProperty("index", out JsonElement index))
@@ -870,9 +891,9 @@ public static class Gltf
                 return null;
             }
 
-            if (info.TryGetProperty("texCoord", out JsonElement set) && set.GetInt32() != 0)
+            if (info.TryGetProperty("texCoord", out JsonElement set) && set.GetInt32() > 1)
             {
-                _problems.Add("A material reads a second set of texture coordinates, which is not read; the first is used.");
+                _problems.Add("A material reads a third or later set of texture coordinates; the second is used.");
             }
 
             JsonElement[] textures = [.. Array("textures")];

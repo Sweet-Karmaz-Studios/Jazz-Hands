@@ -20,6 +20,9 @@ public struct MeshVertex
     /// <summary>The tangent (the way u grows across the surface) in xyz, and in w the handedness of the bitangent, 1 or -1.</summary>
     public Vector4 Tangent;
 
+    /// <summary>A second set of texture coordinates (glTF's TEXCOORD_1), for the pictures a material reads by them; the first set when the model has none.</summary>
+    public Vector2 Uv1;
+
     /// <summary>A corner with no texture direction yet.</summary>
     public MeshVertex(Vector3 position, Vector3 normal, Vector2 uv)
     {
@@ -27,6 +30,7 @@ public struct MeshVertex
         Normal = normal;
         Uv = uv;
         Tangent = new Vector4(1.0f, 0.0f, 0.0f, 1.0f);
+        Uv1 = uv;
     }
 }
 
@@ -100,6 +104,9 @@ public sealed record PbrMaterial(Vector4 BaseColor, float Metallic = 0.0f, float
 
     /// <summary>How alpha is used.</summary>
     public AlphaMode Alpha { get; init; } = AlphaMode.Opaque;
+
+    /// <summary>Which pictures read the second set of texture coordinates, by the bits of the shader's map flags: 1 base colour, 2 metal and roughness, 4 normal, 8 emissive, 16 occlusion.</summary>
+    public int UvSets { get; init; }
 
     /// <summary>Under this alpha a masked material is not drawn.</summary>
     public float AlphaCutoff { get; init; } = 0.5f;

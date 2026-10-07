@@ -81,7 +81,8 @@ cbuffer MaterialConstants : register(b4)
     uint AlphaModeValue;                // 0 opaque, 1 mask, 2 blend
     uint Maps;                          // 1 base colour, 2 metal and roughness, 4 normal, 8 emissive, 16 occlusion
     uint DoubleSided;
-    float2 MaterialPad;
+    uint UvSets;                        // the maps (by the bits of Maps) that read the second texture coordinates
+    float MaterialPad;
 };
 
 struct MeshVertexData
@@ -90,6 +91,7 @@ struct MeshVertexData
     float3 Normal;
     float2 Uv;
     float4 Tangent;
+    float2 Uv1;
 };
 
 Texture2D<float4> Canvas : register(t0);        // with its mipmaps, for a layer seen smaller or slantwise
@@ -119,7 +121,14 @@ struct MeshPixel
     float3 WorldPosition : TEXCOORD1;
     float3 Normal : TEXCOORD2;
     float4 Tangent : TEXCOORD3;
+    float2 Uv1 : TEXCOORD4;
 };
+
+// The texture coordinates a map (by its bit in Maps) reads: the second set where the material says.
+float2 MapUv(uint map, MeshPixel input)
+{
+    return (UvSets & map) != 0 ? input.Uv1 : input.Uv;
+}
 
 struct SceneOutput
 {
@@ -164,6 +173,7 @@ MeshPixel VsMesh(uint vertexId : SV_VertexID)
     MeshPixel output;
     output.Position = mul(world, ViewProjection);
     output.Uv = corner.Uv;
+    output.Uv1 = corner.Uv1;
     output.WorldPosition = world.xyz;
     output.Normal = mul(float4(corner.Normal, 0.0), NormalMatrix).xyz;
     output.Tangent = float4(mul(float4(corner.Tangent.xyz, 0.0), World).xyz, corner.Tangent.w);
@@ -424,7 +434,7 @@ float4 MeshBase(float2 uv)
 
 SceneOutput PsMesh(MeshPixel input, bool front : SV_IsFrontFace)
 {
-    float4 base = MeshBase(input.Uv);
+    float4 base = MeshBase(MapUv(1, input));
     if (AlphaModeValue == 1 && base.a < AlphaCutoff)
     {
         discard;
@@ -435,7 +445,7 @@ SceneOutput PsMesh(MeshPixel input, bool front : SV_IsFrontFace)
     float3 emissive = Emissive;
     if ((Maps & 8) != 0)
     {
-        emissive *= EmissiveMap.Sample(AnisotropicWrap, input.Uv).rgb;
+        emissive *= EmissiveMap.Sample(AnisotropicWrap, MapUv(8, input)).rgb;
     }
 
     if (Lit != 0)
@@ -456,7 +466,7 @@ SceneOutput PsMesh(MeshPixel input, bool front : SV_IsFrontFace)
             {
                 t = normalize(t);
                 float3 b = cross(n, t) * (input.Tangent.w < 0.0 ? -1.0 : 1.0);
-                float3 bent = NormalMap.Sample(AnisotropicWrap, input.Uv).xyz * 2.0 - 1.0;
+                float3 bent = NormalMap.Sample(AnisotropicWrap, MapUv(4, input)).xyz * 2.0 - 1.0;
                 bent.xy *= NormalScale;
                 n = normalize(bent.x * t + bent.y * b + bent.z * n);
             }
@@ -466,12 +476,12 @@ SceneOutput PsMesh(MeshPixel input, bool front : SV_IsFrontFace)
         float roughness = MaterialRoughness;
         if ((Maps & 2) != 0)
         {
-            float4 mr = MetalRoughMap.Sample(AnisotropicWrap, input.Uv);
+            float4 mr = MetalRoughMap.Sample(AnisotropicWrap, MapUv(2, input));
             roughness *= mr.g;
             metallic *= mr.b;
         }
 
-        float occlusion = (Maps & 16) != 0 ? OcclusionMap.Sample(AnisotropicWrap, input.Uv).r : 1.0;
+        float occlusion = (Maps & 16) != 0 ? OcclusionMap.Sample(AnisotropicWrap, MapUv(16, input)).r : 1.0;
         float3 f0 = lerp(float3(0.04, 0.04, 0.04), colour, metallic);
         colour = Shade(colour * (1.0 - metallic), f0, 1.0, roughness, 1.0, 1.0, occlusion, n, v, input.WorldPosition);
     }
@@ -508,7 +518,7 @@ ShadowVertex VsMeshShadow(uint vertexId : SV_VertexID)
 
     ShadowVertex output;
     output.Position = mul(world, ViewProjection);
-    output.Uv = corner.Uv;
+    output.Uv = (UvSets & 1) != 0 ? corner.Uv1 : corner.Uv;   // what the base colour reads, for its alpha
     output.WorldPosition = world.xyz;
     return output;
 }
