@@ -205,21 +205,36 @@ public sealed class WatchMediaHandler : ICommandHandler<WatchMediaCommand>
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(context);
 
-        if (context.Later is not { } later || context.Services?.GetService(typeof(MediaWatchService)) is not MediaWatchService watches)
+        string folder = Path.TrimEndingDirectorySeparator(HandlerHelp.Resolve(context, command.Folder));
+        if (!Directory.Exists(folder))
         {
-            throw new CommandException("no-session", "A watch needs a session that stays open: the editor, or jazz serve.");
+            throw new CommandException("folder-not-found", $"'{folder}' is not a folder.", "folder");
         }
 
-        string folder = HandlerHelp.Resolve(context, command.Folder);
-        watches.Watch(folder, [.. command.Tags], MediaServices.CleanFolder(command.Bin), later);
+        // Kept with the project; the session watches what the project names (Session.FollowsWatches).
+        var watch = new MediaWatch(HandlerHelp.Store(context, folder), command.Tags, MediaServices.CleanFolder(command.Bin));
+        MediaWatch[] others = [.. project.Watches.Where(existing => !WatchHelp.Same(context.ProjectPath, existing, folder))];
+        context.Changed(project.Id);
 
-        if (command.Existing)
+        if (command.Existing && context.Later is { } later)
         {
-            _ = later(new AddMediaCommand([folder], Folder: MediaServices.CleanFolder(command.Bin), Tags: command.Tags, Recursive: true), "watch");
+            _ = later(new AddMediaCommand([folder], Folder: watch.Bin, Tags: command.Tags, Recursive: true), "watch");
         }
 
-        return project;
+        return project with { Watches = [.. others, watch] };
     }
+}
+
+/// <summary>Watched folders as the project keeps them.</summary>
+internal static class WatchHelp
+{
+    /// <summary>True when a kept watch is of this folder, however it was written.</summary>
+    internal static bool Same(string projectPath, MediaWatch watch, string folder) =>
+        string.Equals(Full(projectPath, watch), Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>A kept watch's folder on this machine.</summary>
+    internal static string Full(string projectPath, MediaWatch watch) =>
+        Path.TrimEndingDirectorySeparator(HandlerHelp.Resolve(projectPath, watch.Folder));
 }
 
 /// <summary>Stops watching a folder, or every folder.</summary>
@@ -228,27 +243,41 @@ public sealed class UnwatchMediaHandler : ICommandHandler<UnwatchMediaCommand>
     /// <inheritdoc />
     public Project Handle(Project project, UnwatchMediaCommand command, HandlerContext context)
     {
+        ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(context);
 
-        var watches = context.Services?.GetService(typeof(MediaWatchService)) as MediaWatchService;
-        string? folder = command.Folder is { Length: > 0 } given ? HandlerHelp.Resolve(context, given) : null;
-        if ((watches?.Unwatch(folder) ?? 0) == 0)
+        string? folder = command.Folder is { Length: > 0 } given ? Path.TrimEndingDirectorySeparator(HandlerHelp.Resolve(context, given)) : null;
+        MediaWatch[] kept = folder is null ? [] : [.. project.Watches.Where(watch => !WatchHelp.Same(context.ProjectPath, watch, folder))];
+        if (kept.Length == project.Watches.Length)
         {
             throw new CommandException("not-watching", folder is null ? "No folder is being watched." : $"'{folder}' is not being watched.");
         }
 
-        return project;
+        context.Changed(project.Id);
+        return project with { Watches = [.. kept] };
     }
 }
 
-/// <summary>Lists the folders being watched.</summary>
+/// <summary>Lists the folders the project watches, with what each has done in this process.</summary>
 public sealed class ListWatchesHandler : IQueryHandler<ListWatchesQuery, MediaWatchInfo[]>
 {
     /// <inheritdoc />
     public MediaWatchInfo[] Handle(Project project, ListWatchesQuery query, QueryContext context)
     {
+        ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(context);
-        return (context.Services?.GetService(typeof(MediaWatchService)) as MediaWatchService)?.List() ?? [];
+
+        string projectPath = context.Session?.ProjectPath ?? string.Empty;
+        MediaWatchInfo[] running = (context.Services?.GetService(typeof(MediaWatchService)) as MediaWatchService)?.List() ?? [];
+        return
+        [
+            .. project.Watches.Select(watch =>
+            {
+                string folder = WatchHelp.Full(projectPath, watch);
+                return running.FirstOrDefault(info => string.Equals(info.Folder, folder, StringComparison.OrdinalIgnoreCase))
+                    ?? new MediaWatchInfo(folder, watch.Tags, watch.Bin, 0, 0, Watching: false);
+            }),
+        ];
     }
 }

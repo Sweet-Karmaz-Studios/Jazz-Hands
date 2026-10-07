@@ -102,6 +102,13 @@ public sealed class SaveProjectHandler : ICommandHandler<SaveProjectCommand>
                 "This project has never been saved, so it needs a path: jazz project save <file>.");
         }
 
+        // Saved as another file: paths kept relative to the old one become full first, so they are
+        // stored against the new one and still find their files.
+        if (context.ProjectPath.Length > 0 && !string.Equals(Path.GetFullPath(path), Path.GetFullPath(context.ProjectPath), StringComparison.OrdinalIgnoreCase))
+        {
+            project = ProjectFile.WithFullPaths(context.ProjectPath, project);
+        }
+
         try
         {
             return ProjectFile.Save(path, project);

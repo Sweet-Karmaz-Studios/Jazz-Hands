@@ -35,6 +35,9 @@ public sealed class Session : ISessionState, IAsyncDisposable
     private readonly Lock _lockGate = new();
 
     private SessionLock? _lock;
+    private readonly Lock _watchGate = new();
+    private bool _followsWatches;
+    private (EquatableArray<MediaWatch> Watches, string Path)? _followedWatches;
     private long _savedVersion;
     private bool _disposed;
 
@@ -98,6 +101,22 @@ public sealed class Session : ISessionState, IAsyncDisposable
     /// Empty by default, so in a headless session the lock refuses everyone but its owner.
     /// </summary>
     public IReadOnlySet<string> NeverLockedOut { get; init; } = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Whether this session runs the folder watches its project keeps (<see cref="Project.Watches"/>):
+    /// true for one that stays open, the editor, <c>jazz serve</c> or a headless MCP server. A
+    /// one-off <c>jazz</c> process leaves it false, so no import lands in the middle of its command;
+    /// it only records watches.
+    /// </summary>
+    public bool FollowsWatches
+    {
+        get => _followsWatches;
+        init
+        {
+            _followsWatches = value;
+            FollowWatches();
+        }
+    }
 
     /// <summary>Who holds the session for a batch of their own, or null; see <see cref="TryLock"/>.</summary>
     public SessionLock? Lock
@@ -351,6 +370,12 @@ public sealed class Session : ISessionState, IAsyncDisposable
 
         _disposed = true;
         _dispatcher.ProjectChanged -= OnProjectChanged;
+
+        // The watches import through this session, so they end with it.
+        if (_followsWatches && _services.GetService(typeof(Library.MediaWatchService)) is Library.MediaWatchService watches)
+        {
+            watches.Unwatch(null);
+        }
 
         await _dispatcher.DisposeAsync().ConfigureAwait(false);
 
@@ -664,9 +689,41 @@ public sealed class Session : ISessionState, IAsyncDisposable
         return CommandResult.Success(_dispatcher.Version, context.ChangedIds);
     }
 
+    /// <summary>Has the watch service watch what the project names, when it named something else before.</summary>
+    private void FollowWatches()
+    {
+        if (!_followsWatches || _services.GetService(typeof(Library.MediaWatchService)) is not Library.MediaWatchService watches)
+        {
+            return;
+        }
+
+        lock (_watchGate)
+        {
+            Project project = Project;
+            string path = ProjectPath;
+            if (_followedWatches is { } followed && followed.Watches.Equals(project.Watches) && string.Equals(followed.Path, path, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            _followedWatches = (project.Watches, path);
+            try
+            {
+                watches.Follow(
+                    [.. project.Watches.Select(watch => (Handlers.WatchHelp.Full(path, watch), (IReadOnlyList<string>)[.. watch.Tags], watch.Bin))],
+                    (command, issuer) => ExecuteAsync(command, issuer));
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException or ArgumentException or CommandException)
+            {
+                _log.Warning(error, "Could not watch the project's folders");
+            }
+        }
+    }
+
     private void OnProjectChanged(object? sender, ProjectChangedEventArgs args)
     {
         _autosave?.OnCommand();
+        FollowWatches();
 
         // Each subscriber is called on its own. A panel with a bug in its redraw must not stop
         // the other panels hearing about a change that has already happened.

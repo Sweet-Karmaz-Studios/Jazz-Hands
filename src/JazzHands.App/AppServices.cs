@@ -44,7 +44,7 @@ public static class AppServices
         services.AddSingleton(provider =>
         {
             // A remote client's session.lock keeps other clients out, not the person at the window.
-            var session = new Session(project, provider, path, recovery: true) { DefaultIssuer = "gui", NeverLockedOut = new HashSet<string>(["gui", "console"], StringComparer.Ordinal) };
+            var session = new Session(project, provider, path, recovery: true) { DefaultIssuer = "gui", NeverLockedOut = new HashSet<string>(["gui", "console"], StringComparer.Ordinal), FollowsWatches = true };
             provider.GetRequiredService<SelectionService>().Attach(session);
             return session;
         });

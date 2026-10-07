@@ -904,6 +904,16 @@ public sealed record LiftedTrack(string TrackId, double Across, double Down) : I
 public sealed record ReframeSource(string SequenceId, double Across, double Down) : IEquatable<ReframeSource>;
 
 /// <summary>
+/// A folder a project watches for new recordings (<c>media.watch</c>). The editor, <c>jazz serve</c>
+/// or a headless MCP server with the project open brings in each file once it has finished being
+/// written; a one-off <c>jazz</c> process only records the watch.
+/// </summary>
+/// <param name="Folder">The folder, with its subfolders: relative to the project file where it can be, as media paths are.</param>
+/// <param name="Tags">Tags for everything it brings in.</param>
+/// <param name="Bin">The bin folder they go in; empty for the root.</param>
+public sealed record MediaWatch(string Folder, EquatableArray<string> Tags = default, string Bin = "") : IEquatable<MediaWatch>;
+
+/// <summary>
 /// Everything in a .jazz file.
 /// </summary>
 /// <remarks>
@@ -926,6 +936,7 @@ public sealed record ReframeSource(string SequenceId, double Across, double Down
 /// Export presets that travel with the project, in the format of a preset file: they come before a
 /// person's own and the built-in ones of the same name wherever a preset is named.
 /// </param>
+/// <param name="Watches">Folders watched for new recordings (<c>media.watch</c>), kept with the project so opening it in the editor or <c>jazz serve</c> watches them again.</param>
 public sealed record Project(
     string Id,
     string Name,
@@ -938,7 +949,8 @@ public sealed record Project(
     DateTimeOffset Modified = default,
     EquatableArray<EffectPreset> EffectPresets = default,
     EquatableArray<Role> Roles = default,
-    EquatableArray<Export.ExportPreset> ExportPresets = default) : IEquatable<Project>
+    EquatableArray<Export.ExportPreset> ExportPresets = default,
+    EquatableArray<MediaWatch> Watches = default) : IEquatable<Project>
 {
     /// <summary>The schema version this build writes.</summary>
     public const int CurrentSchemaVersion = 2;

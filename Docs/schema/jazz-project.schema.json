@@ -64,6 +64,12 @@
       "items": {
         "$ref": "#/$defs/exportPreset"
       }
+    },
+    "watches": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/mediaWatch"
+      }
     }
   },
   "required": [
@@ -1550,6 +1556,26 @@
         "kind",
         "codec",
         "duration"
+      ]
+    },
+    "mediaWatch": {
+      "type": "object",
+      "properties": {
+        "folder": {
+          "type": "string"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "bin": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "folder"
       ]
     },
     "motionBlur": {

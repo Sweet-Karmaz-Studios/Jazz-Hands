@@ -19,7 +19,9 @@ namespace JazzHands.Engine.Library;
 /// the day it was recorded.
 /// </para>
 /// <para>
-/// A watch lives in this process, keyed by folder; the project does not remember it.
+/// The project keeps its watches (<see cref="Project.Watches"/>); a session that stays open
+/// (<c>Session.FollowsWatches</c>) has this service watch exactly those, keyed by folder, after
+/// every change, so opening the project watches them again and undoing a watch stops it.
 /// </para>
 /// </remarks>
 public sealed class MediaWatchService : IDisposable
@@ -65,6 +67,42 @@ public sealed class MediaWatchService : IDisposable
 
         _watches[full] = new FolderWatch(full, tags, bin, later, _settle, _log);
         _log.Information("Watching {Folder} for new recordings", full);
+    }
+
+    /// <summary>
+    /// Watches exactly these folders: starts the ones not watched yet, changes the tags and bin of
+    /// those that differ, and stops the rest. A folder that is not there is left out, and said.
+    /// </summary>
+    /// <param name="wanted">The folders, full paths, with their tags and bins: the project's watches.</param>
+    /// <param name="later">How to run the imports: the session's queue.</param>
+    public void Follow(IReadOnlyList<(string Folder, IReadOnlyList<string> Tags, string Bin)> wanted, Func<ICommand, string, Task<CommandResult>> later)
+    {
+        ArgumentNullException.ThrowIfNull(wanted);
+        ArgumentNullException.ThrowIfNull(later);
+
+        var keep = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach ((string folder, IReadOnlyList<string> tags, string bin) in wanted)
+        {
+            string full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
+            if (!Directory.Exists(full))
+            {
+                _log.Warning("The project watches {Folder}, which is not there, so it is not watched", full);
+                continue;
+            }
+
+            keep.Add(full);
+            if (_watches.TryGetValue(full, out FolderWatch? running) && running.Describe() is { } now && now.Tags.SequenceEqual(tags) && now.Bin == bin)
+            {
+                continue;
+            }
+
+            Watch(full, tags, bin, later);
+        }
+
+        foreach (string stale in _watches.Keys.Where(key => !keep.Contains(key)).ToArray())
+        {
+            Unwatch(stale);
+        }
     }
 
     /// <summary>Stops watching a folder, or every folder when null; how many stopped.</summary>

@@ -179,7 +179,7 @@ public sealed class HeadlessLink : EditorLink
             .AddJazzHandsControlSettings()
             .AddSingleton<IExportService>(new ForegroundExportService())
             .BuildServiceProvider();
-        var session = new Session(project, services, full, recovery: full.Length > 0) { DefaultIssuer = "mcp" };
+        var session = new Session(project, services, full, recovery: full.Length > 0) { DefaultIssuer = "mcp", FollowsWatches = true };
         var server = new ControlServer(
             new ControlTarget { Session = session, Exports = services.GetRequiredService<IExportService>(), Kind = "mcp" },
             options ?? new ControlServerOptions { Name = "jazz mcp" });

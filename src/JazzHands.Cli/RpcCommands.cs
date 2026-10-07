@@ -396,7 +396,7 @@ public static class RpcCommands
             .AddJazzHandsControlSettings()
             .AddSingleton<IExportService>(new ForegroundExportService())
             .BuildServiceProvider();
-        await using var session = new Session(project, services, File.Exists(path) ? path : string.Empty, recovery: true) { DefaultIssuer = "serve" };
+        await using var session = new Session(project, services, File.Exists(path) ? path : string.Empty, recovery: true) { DefaultIssuer = "serve", FollowsWatches = true };
         await using var server = new ControlServer(
             new ControlTarget { Session = session, Selection = services.GetService<Engine.Selection.SelectionService>(), Exports = services.GetService<IExportService>(), Kind = "serve" },
             options);

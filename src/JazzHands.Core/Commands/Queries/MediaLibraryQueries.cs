@@ -88,10 +88,11 @@ public sealed record MissingMediaInfo(string MediaId, string Name, string Expect
 /// <param name="Bytes">Its size on disk, when known.</param>
 public sealed record MediaUsageInfo(string MediaId, string Name, int Clips, EquatableArray<string> Sequences, Flicks Used, Flicks Duration, long Bytes);
 
-/// <summary>A folder being watched.</summary>
+/// <summary>A folder the project watches.</summary>
 /// <param name="Folder">The folder.</param>
 /// <param name="Tags">The tags it gives what it brings in.</param>
 /// <param name="Bin">The bin folder they go in.</param>
 /// <param name="Imported">How many files it has brought in so far.</param>
 /// <param name="Waiting">Files seen and still being written.</param>
-public sealed record MediaWatchInfo(string Folder, EquatableArray<string> Tags, string Bin, int Imported, int Waiting);
+/// <param name="Watching">True while this process watches it; false for a watch the project keeps that a one-off jazz process, or a missing folder, leaves idle.</param>
+public sealed record MediaWatchInfo(string Folder, EquatableArray<string> Tags, string Bin, int Imported, int Waiting, bool Watching = true);

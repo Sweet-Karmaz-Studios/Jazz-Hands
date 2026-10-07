@@ -286,11 +286,39 @@ public static class ProjectFile
         }
     }
 
-    /// <summary>Rewrites media paths into the form the file stores, relative where it can be.</summary>
+    /// <summary>
+    /// Makes the media paths and watched folders kept relative to <paramref name="projectPath"/>
+    /// full ones, for saving the project somewhere else: stored again against the new file, they
+    /// still find what they found.
+    /// </summary>
+    public static Project WithFullPaths(string projectPath, Project project)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(projectPath);
+        ArgumentNullException.ThrowIfNull(project);
+
+        string Full(string stored) => string.IsNullOrWhiteSpace(stored) || Path.IsPathRooted(stored) ? stored : ProjectPaths.Resolve(projectPath, stored);
+
+        return project with
+        {
+            Media = [.. project.Media.Select(item => item with { RelativePath = Full(item.RelativePath) })],
+            Watches = [.. project.Watches.Select(watch => watch with { Folder = Full(watch.Folder) })],
+        };
+    }
+
+    /// <summary>Rewrites media paths and watched folders into the form the file stores, relative where it can be.</summary>
     public static Project WithStoredPaths(string projectPath, Project project)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(projectPath);
         ArgumentNullException.ThrowIfNull(project);
+
+        if (!project.Watches.IsEmpty)
+        {
+            MediaWatch[] watches = [.. project.Watches.Select(watch => string.IsNullOrWhiteSpace(watch.Folder) ? watch : watch with { Folder = ProjectPaths.Store(projectPath, watch.Folder) })];
+            if (!watches.SequenceEqual(project.Watches))
+            {
+                project = project with { Watches = [.. watches] };
+            }
+        }
 
         if (project.Media.IsEmpty)
         {
