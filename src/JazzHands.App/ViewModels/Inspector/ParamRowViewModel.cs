@@ -79,6 +79,10 @@ public sealed partial class ParamRowViewModel : ObservableObject
     [ObservableProperty]
     private string _colorText = "#000000";
 
+    /// <summary>True while the colour picker under the swatch is open.</summary>
+    [ObservableProperty]
+    private bool _isPickerOpen;
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(PreviousKeyframeCommand), nameof(NextKeyframeCommand))]
     private bool _isAnimated;

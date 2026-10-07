@@ -181,12 +181,45 @@
                     </UniformGrid>
 
                     <StackPanel Orientation="Horizontal" Visibility="{Binding IsColor, Mode=OneWay, Converter={StaticResource Visible}}">
-                        <Border Width="22"
-                                Height="18"
-                                CornerRadius="2"
-                                BorderThickness="1"
-                                BorderBrush="{DynamicResource Brush.Border.Strong}"
-                                Background="{Binding Swatch, Mode=OneWay}" />
+                        <!-- The swatch opens the colour picker; a drag in it sends the colour as it goes. -->
+                        <ToggleButton x:Name="Swatch"
+                                      Width="22"
+                                      Height="18"
+                                      Cursor="Hand"
+                                      IsChecked="{Binding IsPickerOpen, Mode=TwoWay}"
+                                      ToolTip="Pick a colour"
+                                      AutomationProperties.Name="Open the colour picker">
+                            <ToggleButton.Template>
+                                <ControlTemplate TargetType="ToggleButton">
+                                    <Border CornerRadius="2"
+                                            BorderThickness="1"
+                                            BorderBrush="{DynamicResource Brush.Border.Strong}"
+                                            Background="{Binding Swatch, Mode=OneWay}" />
+                                </ControlTemplate>
+                            </ToggleButton.Template>
+                        </ToggleButton>
+                        <Popup IsOpen="{Binding IsPickerOpen, Mode=TwoWay}"
+                               StaysOpen="False"
+                               PlacementTarget="{Binding ElementName=Swatch}"
+                               Placement="Bottom"
+                               VerticalOffset="4"
+                               AllowsTransparency="True">
+                            <Border Padding="10"
+                                    CornerRadius="4"
+                                    Background="{DynamicResource Brush.Background.Raised}"
+                                    BorderBrush="{DynamicResource Brush.Border.Strong}"
+                                    BorderThickness="1">
+                                <StackPanel>
+                                    <controls:ColorPicker Hex="{Binding ColorText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Colour picker" />
+                                    <TextBox Margin="0,8,0,0"
+                                             Style="{StaticResource TextBox.Field}"
+                                             FontFamily="{DynamicResource Font.Mono}"
+                                             Text="{Binding ColorText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                             KeyDown="OnFieldKeyDown"
+                                             AutomationProperties.Name="Colour as hex" />
+                                </StackPanel>
+                            </Border>
+                        </Popup>
                         <TextBox Width="96"
                                  Margin="6,0,0,0"
                                  Style="{StaticResource TextBox.Field}"
