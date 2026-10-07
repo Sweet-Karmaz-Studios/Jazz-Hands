@@ -137,10 +137,12 @@ public sealed unsafe class Prober
             ? new Rational(parameters->sample_aspect_ratio.num, parameters->sample_aspect_ratio.den)
             : Rational.One;
 
+        // What the file says, or unknown: a file that does not say is decoded by its height
+        // (BT.601 up to 576 lines, BT.709 above, as players do), which a guess here would hide.
         var color = new ColorInfo(
-            DescribeOrDefault(ffmpeg.av_color_primaries_name(parameters->color_primaries), "bt709"),
-            DescribeOrDefault(ffmpeg.av_color_transfer_name(parameters->color_trc), "bt709"),
-            DescribeOrDefault(ffmpeg.av_color_space_name(parameters->color_space), "bt709"),
+            DescribeOrDefault(ffmpeg.av_color_primaries_name(parameters->color_primaries), "unknown"),
+            DescribeOrDefault(ffmpeg.av_color_transfer_name(parameters->color_trc), "unknown"),
+            DescribeOrDefault(ffmpeg.av_color_space_name(parameters->color_space), "unknown"),
             parameters->color_range == AVColorRange.AVCOL_RANGE_JPEG,
             DescribeOrDefault(ffmpeg.av_chroma_location_name(parameters->chroma_location), "left"));
 
