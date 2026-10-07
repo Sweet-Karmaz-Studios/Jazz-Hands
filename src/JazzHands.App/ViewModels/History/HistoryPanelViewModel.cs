@@ -13,7 +13,7 @@ namespace JazzHands.App.ViewModels.History;
 /// <param name="Index">Its place, from the oldest; -1 for the project as it was opened.</param>
 /// <param name="Label">What it did.</param>
 /// <param name="Command">The command name.</param>
-/// <param name="Origin">Who did it: gui, console, rpc:mcp and so on.</param>
+/// <param name="Origin">Who did it: gui, console, mcp and so on.</param>
 /// <param name="At">When.</param>
 /// <param name="IsUndone">True when it has been taken back and can be redone.</param>
 /// <param name="IsCurrent">True for the step the project is at now.</param>

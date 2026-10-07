@@ -423,7 +423,7 @@ public sealed class JazzTools
                 Schema("""{"type":"object","properties":{"jobId":{"type":"string","description":"The job, as export_enqueue's changedIds gave it"},"timeoutSeconds":{"type":"number","default":3600}},"required":["jobId"],"additionalProperties":false}"""),
                 null, null, true),
             new("history", "history",
-                "List what has been done, oldest first, with who did each: gui for the person at the editor, rpc:mcp for you, rpc:cli for the jazz command line.",
+                "List what has been done, oldest first, with who did each: gui for the person at the editor, mcp for you, cli for the jazz command line, rpc:<name> for any other client.",
                 Schema("""{"type":"object","properties":{"limit":{"type":"integer","default":50}},"additionalProperties":false}"""),
                 null, "history.list", true),
             new("session_info", "inspect",

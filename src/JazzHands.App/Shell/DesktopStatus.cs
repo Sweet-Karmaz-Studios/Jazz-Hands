@@ -32,7 +32,7 @@ public enum DesktopBadge
 /// Exports and proxies are both jobs on the export queue; a proxy is a job writing into the proxy
 /// folder. A failed export turns the progress red and badges the button until the next job starts
 /// or the person looks at the queue (<see cref="Acknowledge"/>). Claude Code attached through MCP
-/// is the client <c>rpc:mcp</c>.
+/// is the client <c>mcp</c>.
 /// </remarks>
 public sealed partial class DesktopStatus : ObservableObject
 {
@@ -163,7 +163,7 @@ public sealed partial class DesktopStatus : ObservableObject
             : string.Create(CultureInfo.InvariantCulture, $"Exporting {Path.GetFileName(first.OutputPath)}, {first.Progress * 100:0}%");
 
         IReadOnlyList<string> clients = _clients();
-        bool claude = clients.Contains("rpc:mcp", StringComparer.Ordinal);
+        bool claude = clients.Contains("mcp", StringComparer.Ordinal);
         ClientAttached = clients.Count > 0;
         foreach (string arrived in clients.Except(_lastClients, StringComparer.Ordinal))
         {

@@ -33,7 +33,7 @@ public enum ConsoleEntryKind
 
 /// <summary>One line of the Command Console's log.</summary>
 /// <param name="At">When it finished.</param>
-/// <param name="Origin">Who did it: <c>gui</c>, <c>console</c>, <c>rpc:cli</c>, <c>serve</c>.</param>
+/// <param name="Origin">Who did it: <c>gui</c>, <c>console</c>, <c>cli</c>, <c>mcp</c>, <c>serve</c>, <c>rpc:name</c>.</param>
 /// <param name="Kind">What it was.</param>
 /// <param name="Title">The line as a person would type it.</param>
 /// <param name="Method">The method, or empty for a line that was not understood.</param>

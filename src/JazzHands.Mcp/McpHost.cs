@@ -27,7 +27,7 @@ public sealed record McpHostOptions(bool Attach, string? Target = null, string? 
 /// </summary>
 /// <remarks>
 /// Attached, every call goes to the editor the person is looking at, as the client <c>mcp</c>
-/// (history and the Command Console show <c>rpc:mcp</c>), and the timeline outlines what changed.
+/// (history and the Command Console show <c>mcp</c>), and the timeline outlines what changed.
 /// Headless, the project is opened here with a control server of its own on a pipe, so
 /// <c>jazz --attach</c> can look in; history says <c>mcp</c>.
 /// </remarks>

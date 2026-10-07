@@ -62,7 +62,7 @@ public sealed class DesktopNotifications
 
     /// <summary>Says a client attached: off by default (Settings, General).</summary>
     public void ClientAttached(string client) =>
-        Show(Toast("jazzhands:show", client == "rpc:mcp" ? "Claude Code attached" : "A client attached", $"{client} is connected and can edit the project."), "A client attached", client);
+        Show(Toast("jazzhands:show", client == "mcp" ? "Claude Code attached" : "A client attached", $"{client} is connected and can edit the project."), "A client attached", client);
 
     /// <summary>The finished export's notification: Play and Show in folder.</summary>
     public static string ExportDoneXml(string output) =>

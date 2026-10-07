@@ -978,7 +978,13 @@ internal sealed class ControlConnection(LineChannel channel, string transport, b
 
     public string Name { get; set; } = name;
 
-    public string Issuer => FixedIssuer ?? $"rpc:{Name}";
+    /// <summary>
+    /// Who the history and the console say made a change: the editor's own MCP server and command
+    /// line by their names, as they are recorded when they run headless, so Claude Code is `mcp`
+    /// either way; any other client as `rpc:` and the name it gave. Never `gui` or another of
+    /// the editor's own, whatever a client calls itself.
+    /// </summary>
+    public string Issuer => FixedIssuer ?? (Name is "mcp" or "cli" ? Name : $"rpc:{Name}");
 
     /// <summary>An issuer that is not a remote client's, for the editor's own console.</summary>
     public string? FixedIssuer { get; init; }
