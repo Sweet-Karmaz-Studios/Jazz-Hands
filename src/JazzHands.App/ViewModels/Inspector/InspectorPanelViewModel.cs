@@ -1056,7 +1056,8 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
             title.Load(
                 ParameterSet.Evaluate(descriptor, own, Clamp(local, clip.Duration)),
                 own?.Parameter(TitleParams.Text) is KeyframedValue { IsAnimated: true },
-                TitleAnimations.Read(own, clip.Duration));
+                TitleAnimations.Read(own, clip.Duration),
+                clip.Start + Clamp(local, clip.Duration));
         }
 
         foreach (ParamRowViewModel row in Sections.SelectMany(section => section.Rows))

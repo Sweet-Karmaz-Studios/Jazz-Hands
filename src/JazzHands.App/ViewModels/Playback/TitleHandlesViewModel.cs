@@ -248,7 +248,7 @@ public sealed partial class TitleHandlesViewModel : ObservableObject
         Effect? own = clip.Effects.FirstOrDefault(effect => EffectChains.IsOwnParameters(clip, effect));
         if (own?.Parameter(TitleParams.Text) is KeyframedValue { IsAnimated: true })
         {
-            Status = "The text is keyframed: change it in the inspector at a keyframe.";
+            Status = "The text is keyframed: change it in the Inspector, which keys it at the playhead.";
             return;
         }
 

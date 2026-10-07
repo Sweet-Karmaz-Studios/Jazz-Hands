@@ -375,10 +375,9 @@
                                                           CommitCommand="{Binding CommitTextCommand, Mode=OneWay}"
                                                           SelectedStart="{Binding SelectionStart, Mode=OneWayToSource}"
                                                           SelectedLength="{Binding SelectionLength, Mode=OneWayToSource}"
-                                                          IsReadOnly="{Binding IsTextAnimated, Mode=OneWay}"
                                                           ToolTip="What the title says. Enter starts a new line; the text is sent as you pause, Ctrl+Enter sends it now, Esc puts it back."
                                                           AutomationProperties.Name="Title text" />
-                                <TextBlock Text="The text is keyframed: change it with the keyframe at the playhead."
+                                <TextBlock Text="The text is keyframed: what you type here is the keyframe at the playhead."
                                            TextWrapping="Wrap"
                                            FontSize="{DynamicResource Text.Caption}"
                                            Foreground="{DynamicResource Brush.Warning}"

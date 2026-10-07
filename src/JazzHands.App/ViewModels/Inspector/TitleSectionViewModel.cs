@@ -27,7 +27,8 @@ public sealed record FontChoice(string Family, string Note)
 /// buttons restyle the selection with <see cref="TitleMarkup.Restyle"/>), the look is
 /// <c>title.set-style</c>, and the pickers are <c>title.set-animation</c>. The rest of a title's
 /// look (size, colour, outline, box, shadow) is ordinary parameter rows below it, so it can be
-/// keyframed.
+/// keyframed. Text that is keyframed already is changed at the playhead instead, as
+/// <c>param.set text --at</c>: the keyframe there, new or changed.
 /// </remarks>
 public sealed partial class TitleSectionViewModel : ObservableObject
 {
@@ -35,6 +36,7 @@ public sealed partial class TitleSectionViewModel : ObservableObject
     private readonly Func<IReadOnlyList<FontInfo>> _listFonts;
     private IReadOnlyList<FontChoice>? _fonts;
     private bool _loading;
+    private Flicks _keyAt;
 
     [ObservableProperty]
     private string _markup = string.Empty;
@@ -124,10 +126,12 @@ public sealed partial class TitleSectionViewModel : ObservableObject
 
     /// <summary>Shows the title as the project has it at the playhead, sending nothing back.</summary>
     /// <param name="values">Its parameters at the playhead.</param>
-    /// <param name="textAnimated">True when its text has keyframes, which the editor cannot change.</param>
+    /// <param name="textAnimated">True when its text has keyframes, which an edit then changes at <paramref name="keyAt"/>.</param>
     /// <param name="animation">Its animations as they were last chosen.</param>
-    public void Load(ParameterSet values, bool textAnimated, TitleAnimation animation)
+    /// <param name="keyAt">Where on the sequence keyframed text is changed: the playhead, inside the clip.</param>
+    public void Load(ParameterSet values, bool textAnimated, TitleAnimation animation, Flicks keyAt = default)
     {
+        _keyAt = keyAt;
         ArgumentNullException.ThrowIfNull(values);
         ArgumentNullException.ThrowIfNull(animation);
 
@@ -163,13 +167,15 @@ public sealed partial class TitleSectionViewModel : ObservableObject
     public Task CommitTextAsync(string markup)
     {
         ArgumentNullException.ThrowIfNull(markup);
-        if (IsTextAnimated || string.Equals(markup, Markup, StringComparison.Ordinal))
+        if (string.Equals(markup, Markup, StringComparison.Ordinal))
         {
             return Task.CompletedTask;
         }
 
         Markup = markup;
-        return _run(new SetTitleTextCommand(ClipId, markup));
+        return _run(IsTextAnimated
+            ? new SetParamCommand(ClipId, TitleParams.Text, markup, At: _keyAt)
+            : new SetTitleTextCommand(ClipId, markup));
     }
 
     /// <summary>True when every letter of the selection has what <paramref name="has"/> asks.</summary>
@@ -269,7 +275,7 @@ public sealed partial class TitleSectionViewModel : ObservableObject
 
     private Task Restyle(Func<TitleStyle, TitleStyle> change)
     {
-        if (IsTextAnimated || SelectionLength <= 0)
+        if (SelectionLength <= 0)
         {
             return Task.CompletedTask;
         }
