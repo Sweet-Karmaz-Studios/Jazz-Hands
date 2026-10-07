@@ -51,6 +51,8 @@ public sealed unsafe class ThumbnailExtractor : IDisposable
 
     private SwsContext* _scaler;
     private ScalerKey _scalerFor;
+    private SwsContext* _fromRgb;
+    private (int Width, int Height) _fromRgbFor;
     private JpegWriter? _writer;
     private Flicks? _last;
     private Flicks? _keyframe;
@@ -144,6 +146,12 @@ public sealed unsafe class ThumbnailExtractor : IDisposable
             _scaler = null;
         }
 
+        if (_fromRgb is not null)
+        {
+            ffmpeg.sws_freeContext(_fromRgb);
+            _fromRgb = null;
+        }
+
         _seeker.Dispose();
         _decoder.Dispose();
         _demuxer.Dispose();
@@ -232,19 +240,70 @@ public sealed unsafe class ThumbnailExtractor : IDisposable
             _writer = new JpegWriter(width, height);
         }
 
-        SwsContext* scaler = Scaler(frame, width, height);
         AVFrame* target = _writer.Frame;
-
-        Av.Check(
-            ffmpeg.sws_scale(scaler, source->data, source->linesize, 0, frame.Height, target->data, target->linesize),
-            "sws_scale");
+        if (HdrThumbnail.Handles(frame.Color.Transfer))
+        {
+            ToneMapped(frame, source, width, height, target);
+        }
+        else
+        {
+            SwsContext* scaler = Scaler(frame, width, height, AVPixelFormat.AV_PIX_FMT_YUV420P);
+            Av.Check(
+                ffmpeg.sws_scale(scaler, source->data, source->linesize, 0, frame.Height, target->data, target->linesize),
+                "sws_scale");
+        }
 
         return new Thumbnail(frame.Pts, width, height, _writer.Encode());
     }
 
-    private SwsContext* Scaler(VideoFrame frame, int width, int height)
+    /// <summary>
+    /// An HDR frame shrunk to sixteen bit RGB, brought down to SDR (<see cref="HdrThumbnail"/>) and
+    /// written into the JPEG's frame: shown as it was, its code values would look grey and flat.
+    /// </summary>
+    private void ToneMapped(VideoFrame frame, AVFrame* source, int width, int height, AVFrame* target)
     {
-        var wanted = new ScalerKey(frame.Width, frame.Height, frame.PixelFormat, frame.Color.Matrix, frame.Color.IsFullRange, width, height);
+        var codes = new ushort[width * height * 3];
+        var srgb = new byte[width * height * 3];
+        SwsContext* toRgb = Scaler(frame, width, height, AVPixelFormat.AV_PIX_FMT_RGB48LE);
+        fixed (ushort* rgb48 = codes)
+        {
+            byte_ptrArray4 planes = default;
+            planes[0] = (byte*)rgb48;
+            int_array4 strides = default;
+            strides[0] = width * 6;
+            Av.Check(ffmpeg.sws_scale(toRgb, source->data, source->linesize, 0, frame.Height, planes, strides), "sws_scale (HDR thumbnail)");
+        }
+
+        HdrThumbnail.ToneMap(codes, srgb, frame.Color.Transfer);
+
+        if (_fromRgb is null || _fromRgbFor != (width, height))
+        {
+            if (_fromRgb is not null)
+            {
+                ffmpeg.sws_freeContext(_fromRgb);
+            }
+
+            _fromRgb = Av.CheckAlloc(
+                ffmpeg.sws_getContext(width, height, AVPixelFormat.AV_PIX_FMT_RGB24, width, height, AVPixelFormat.AV_PIX_FMT_YUV420P, (int)SwsFlags.SWS_POINT, null, null, null),
+                "sws_getContext (tone mapped thumbnail to JPEG)");
+            int_array4 bt601 = *(int_array4*)ffmpeg.sws_getCoefficients(ffmpeg.SWS_CS_ITU601);
+            ffmpeg.sws_setColorspaceDetails(_fromRgb, in bt601, 1, in bt601, 1, 0, 1 << 16, 1 << 16);
+            _fromRgbFor = (width, height);
+        }
+
+        fixed (byte* rgb24 = srgb)
+        {
+            byte_ptrArray4 planes = default;
+            planes[0] = rgb24;
+            int_array4 strides = default;
+            strides[0] = width * 3;
+            Av.Check(ffmpeg.sws_scale(_fromRgb, planes, strides, 0, height, target->data, target->linesize), "sws_scale (HDR thumbnail to JPEG)");
+        }
+    }
+
+    private SwsContext* Scaler(VideoFrame frame, int width, int height, AVPixelFormat output)
+    {
+        var wanted = new ScalerKey(frame.Width, frame.Height, frame.PixelFormat, frame.Color.Matrix, frame.Color.IsFullRange, width, height, output);
 
         if (_scaler is not null && _scalerFor == wanted)
         {
@@ -266,7 +325,7 @@ public sealed unsafe class ThumbnailExtractor : IDisposable
                 frame.PixelFormat,
                 width,
                 height,
-                AVPixelFormat.AV_PIX_FMT_YUV420P,
+                output,
                 (int)SwsFlags.SWS_AREA,
                 null,
                 null,
@@ -302,5 +361,6 @@ public sealed unsafe class ThumbnailExtractor : IDisposable
         string Matrix,
         bool FullRange,
         int Width,
-        int Height);
+        int Height,
+        AVPixelFormat Output);
 }

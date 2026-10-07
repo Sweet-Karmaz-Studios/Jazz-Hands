@@ -203,9 +203,10 @@ public sealed partial class CacheManager : IDisposable
     /// <summary>The schema this build writes, kept in the database's <c>user_version</c>.</summary>
     /// <remarks>
     /// 1: thumbnails remember the frame they show (<c>frameFlicks</c>). 2: indexes for eviction
-    /// and blob lookups. A database from a newer build is used as it is; its tables are a superset.
+    /// and blob lookups. 3: thumbnails made again, HDR ones now tone mapped. A database from a newer
+    /// build is used as it is; its tables are a superset.
     /// </remarks>
-    public const int SchemaVersion = 2;
+    public const int SchemaVersion = 3;
 
     /// <summary>The schema version of the open database.</summary>
     public int Version

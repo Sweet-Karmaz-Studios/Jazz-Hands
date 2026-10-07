@@ -363,6 +363,13 @@ public sealed partial class CacheManager
                 """);
         }
 
+        if (version < 3)
+        {
+            // Thumbnails of HDR sources were their code values, grey and flat, until they were
+            // tone mapped; none says what it was made from, so all are made again as wanted.
+            DropBlobsOf("thumbs", where: null, transaction: false);
+        }
+
         if (version < SchemaVersion)
         {
             Execute(string.Create(CultureInfo.InvariantCulture, $"PRAGMA user_version = {SchemaVersion}"));
@@ -534,8 +541,8 @@ public sealed partial class CacheManager
         }
     }
 
-    /// <summary>Drops every blob a table's rows point at, optionally only for one hash. Inside the gate.</summary>
-    private void DropBlobsOf(string table, string? where)
+    /// <summary>Drops every blob a table's rows point at, optionally only for one hash. Inside the gate; in a transaction of its own unless already in one (a migration).</summary>
+    private void DropBlobsOf(string table, string? where, bool transaction = true)
     {
         var blobs = new List<string>();
 
@@ -556,13 +563,20 @@ public sealed partial class CacheManager
             }
         }
 
-        Execute("BEGIN");
+        if (transaction)
+        {
+            Execute("BEGIN");
+        }
+
         foreach (string blob in blobs)
         {
             DropBlob(blob);
         }
 
-        Execute("COMMIT");
+        if (transaction)
+        {
+            Execute("COMMIT");
+        }
     }
 
     private long SumBlobBytes()
