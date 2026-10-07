@@ -260,7 +260,8 @@ public static class AppServices
             provider.GetRequiredService<IEffectFavorites>(),
             provider.GetRequiredService<IEffectPreviewImages>(),
             provider.GetRequiredService<IPreviewEngine>(),
-            dialogs: provider.GetRequiredService<IDialogService>()));
+            dialogs: provider.GetRequiredService<IDialogService>(),
+            plugins: provider.GetService<Engine.Plugins.PluginCatalog>()));
 
         services.AddSingleton(provider => new ViewModels.Grading.ColorPanelViewModel(
             provider.GetRequiredService<ISession>(),

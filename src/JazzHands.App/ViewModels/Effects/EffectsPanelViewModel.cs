@@ -189,7 +189,8 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
         IEffectPreviewImages? previews = null,
         IPreviewEngine? playback = null,
         EffectRegistry? registry = null,
-        IDialogService? dialogs = null)
+        IDialogService? dialogs = null,
+        Engine.Plugins.PluginCatalog? plugins = null)
         : base(PanelId, "Effects")
     {
         ArgumentNullException.ThrowIfNull(session);
@@ -207,6 +208,9 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
         _dialogs = dialogs;
 
         _previews?.Ready += OnPreviewReady;
+
+        // A scan in the background (at start-up) that found a plugin lists it here.
+        plugins?.Scanned += (_, _) => _ui.Post(Refilter);
 
         _session.ProjectChanged += (_, _) => _ui.Post(LoadPresets);
         Engine.Titles.TitlePresetLibrary.Saved += (_, _) => _ui.Post(LoadTitlePresets);

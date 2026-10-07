@@ -27,6 +27,7 @@ public partial class App : Application
     /// <summary>The step before uninstalling: remove everything registered with Windows, show nothing, exit.</summary>
     public const string UnregisterSwitch = "--unregister";
     private Mutex? _single;
+    private readonly CancellationTokenSource _stopping = new();
 
     /// <summary>
     /// Starts creating the render device before anything else: the GPU chosen in Settings, unless
@@ -159,6 +160,11 @@ public partial class App : Application
             }
 
             StartControlServer();
+            if (!spike)
+            {
+                ScanPluginsSoon();
+            }
+
             AfterStart(launch);
         }
         catch (Exception ex)
@@ -233,6 +239,39 @@ public partial class App : Application
         Environment.Exit(1);
     }
 
+    /// <summary>
+    /// Looks for new or changed CLAP plugins in the background a few seconds after starting, so
+    /// the Effects panel lists a plugin installed since the last run without a scan by hand. Only
+    /// files that are new or changed are read, so with nothing new it costs a folder listing.
+    /// </summary>
+    private void ScanPluginsSoon()
+    {
+        if (_services?.GetService<Engine.Plugins.PluginCatalog>() is not { } catalog)
+        {
+            return;
+        }
+
+        CancellationToken stopping = _stopping.Token;
+        _ = Task.Run(
+            async () =>
+            {
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(5), stopping).ConfigureAwait(false);
+                    int read = catalog.Scan(cancellationToken: stopping);
+                    Log.ForContext<App>().Information("The plugin scan at start-up read {Read} new or changed files", read);
+                }
+                catch (OperationCanceledException)
+                {
+                }
+                catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+                {
+                    Log.ForContext<App>().Warning(error, "The plugin scan at start-up could not read the plugin folders");
+                }
+            },
+            stopping);
+    }
+
     /// <summary>Logs how long starting took, once the window's first frame is up.</summary>
     private void OnFirstFrame(object? sender, EventArgs e)
     {
@@ -293,6 +332,8 @@ public partial class App : Application
         // The notification area icon goes first, so nothing is left in the taskbar that clicks to
         // nowhere. The control server next, so its clients hear session.closed while the session
         // is still there to describe.
+        // A plugin scan still reading stops between files.
+        _stopping.Cancel();
         _tray?.Dispose();
         _services?.GetService<Control.ControlServer>()?.DisposeAsync().AsTask().GetAwaiter().GetResult();
         _services?.GetService<Session>()?.DisposeAsync().AsTask().GetAwaiter().GetResult();
@@ -300,6 +341,7 @@ public partial class App : Application
         // dispose of the container throws for it.
         _services?.DisposeAsync().AsTask().GetAwaiter().GetResult();
         _single?.Dispose();
+        _stopping.Dispose();
 
         Shell.SafeMode.Clean();
         LogSetup.Shutdown();

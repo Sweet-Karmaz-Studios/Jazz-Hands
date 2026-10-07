@@ -38,6 +38,7 @@ public sealed class PluginCatalog
     private static readonly ILogger Log = Serilog.Log.ForContext<PluginCatalog>();
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
     private readonly Lock _gate = new();
+    private readonly Lock _scanning = new();
     private readonly Dictionary<string, ScannedFile> _files;
 
     /// <summary>Creates the catalog over what was kept.</summary>
@@ -90,6 +91,26 @@ public sealed class PluginCatalog
     /// its own. Returns how many files were read.
     /// </summary>
     public int Scan(IEnumerable<string>? extra = null, bool again = false, CancellationToken cancellationToken = default)
+    {
+        // One scan at a time: the one at start-up and one asked for read the same files.
+        int read;
+        lock (_scanning)
+        {
+            read = ScanFolders(extra, again, cancellationToken);
+        }
+
+        if (read > 0)
+        {
+            Scanned?.Invoke(this, EventArgs.Empty);
+        }
+
+        return read;
+    }
+
+    /// <summary>Raised, on the scanning thread, after a scan that read a new or changed file.</summary>
+    public event EventHandler? Scanned;
+
+    private int ScanFolders(IEnumerable<string>? extra, bool again, CancellationToken cancellationToken)
     {
         string[] files = [.. StandardFolders.Concat(extra ?? [])
             .Where(Directory.Exists)
