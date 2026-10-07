@@ -54,6 +54,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
     private string? _clipId;
     private string? _transitionId;
     private string? _nodeId;
+    private string? _trackId;
     private IReadOnlyList<string> _targets = [];
     private bool _loading;
 
@@ -238,11 +239,11 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
 
     /// <summary>Adds an effect to the inspected clip, for a drop from the effects panel.</summary>
     public Task AddEffectAsync(string typeId, int? index = null) =>
-        _clipId is { } clipId ? RunAsync(new AddEffectCommand(clipId, typeId, index)) : Task.CompletedTask;
+        (_clipId ?? _trackId) is { } ownerId ? RunAsync(new AddEffectCommand(ownerId, typeId, index)) : Task.CompletedTask;
 
     /// <summary>Applies a preset to the inspected clip.</summary>
     public Task ApplyPresetAsync(string presetId) =>
-        _clipId is { } clipId ? RunAsync(new ApplyEffectPresetCommand(clipId, presetId)) : Task.CompletedTask;
+        (_clipId ?? _trackId) is { } ownerId ? RunAsync(new ApplyEffectPresetCommand(ownerId, presetId)) : Task.CompletedTask;
 
     /// <inheritdoc />
     public void Send(ParamRowViewModel row, string text)
@@ -312,7 +313,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
     {
         ArgumentNullException.ThrowIfNull(row);
 
-        if (string.Equals(row.OwnerId, _transitionId, StringComparison.Ordinal) || IsFadeRow(row))
+        if (string.Equals(row.OwnerId, _transitionId, StringComparison.Ordinal) || string.Equals(row.OwnerId, _trackId, StringComparison.Ordinal) || IsFadeRow(row))
         {
             Send(row, ParamValues.Format(row.Descriptor.Default));
             return;
@@ -466,6 +467,21 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
             return;
         }
 
+        if (_trackId is { } trackId)
+        {
+            // Effects added, removed or reordered rebuild the panel; anything else reloads in place.
+            if (ParamTargets.Find(project, trackId) is { Kind: ParamOwnerKind.Track } track && TrackShape(track.Track) == _shape)
+            {
+                RefreshValues();
+            }
+            else
+            {
+                Rebuild();
+            }
+
+            return;
+        }
+
         if (_clipId is null || project.FindClip(_clipId) is not { } found || Shape(found) != _shape)
         {
             Rebuild();
@@ -488,6 +504,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
 
         _transitionId = null;
         _nodeId = null;
+        _trackId = null;
         if (_targets.Count == 0 && _selection.Ids.Select(id => ParamTargets.Find(project, id)).FirstOrDefault(owner => owner?.Kind == ParamOwnerKind.Transition) is { } transition)
         {
             BuildTransition(transition);
@@ -498,6 +515,13 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         if (_targets.Count == 0 && _selection.Ids.Select(id => ParamTargets.Find(project, id)).FirstOrDefault(owner => owner is { Kind: ParamOwnerKind.Effect, Graph.Comp: not null }) is { } node)
         {
             BuildNode(node);
+            return;
+        }
+
+        // A track, selected by its header: its own effects.
+        if (_targets.Count == 0 && _selection.Ids.Select(id => ParamTargets.Find(project, id)).FirstOrDefault(owner => owner?.Kind == ParamOwnerKind.Track) is { } track)
+        {
+            BuildTrack(track);
             return;
         }
 
@@ -581,19 +605,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
             Sections.Add(speed);
         }
 
-        foreach (Effect effect in EffectChains.Visible(clip, clip.Effects))
-        {
-            EffectDescriptor? descriptor = EffectCatalog.Registry.Find(effect.TypeId);
-            bool plugin = effect.TypeId == JazzHands.Audio.Effects.PluginEffect.TypeId;
-            var item = new EffectItemViewModel(this, effect.Id, effect.TypeId, plugin ? PluginName(effect) : descriptor?.Name ?? effect.TypeId, descriptor is not null);
-            IEnumerable<ParamDescriptor> rows = plugin ? PluginRows(effect) : descriptor?.Params ?? [];
-            foreach (ParamDescriptor parameter in rows)
-            {
-                item.Rows.Add(new ParamRowViewModel(this, effect.Id, parameter, item.Name));
-            }
-
-            Effects.Add(item);
-        }
+        AddEffectItems(EffectChains.Visible(clip, clip.Effects));
 
         HasTarget = true;
         IsPicture = picture;
@@ -764,6 +776,109 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         IsPicture = false;
         Status = string.Empty;
         RefreshValues();
+    }
+
+    /// <summary>
+    /// A selected track: a sound track's own volume and pan, and the effects on the whole track,
+    /// picture or sound, which every clip on it goes through. Their times are the sequence's.
+    /// </summary>
+    private void BuildTrack(ParamOwner owner)
+    {
+        Track track = owner.Track;
+        _clipId = null;
+        _trackId = track.Id;
+        _shape = TrackShape(track);
+
+        foreach (EffectDescriptor section in ParamTargets.Sections(owner, EffectCatalog.Registry))
+        {
+            var view = Section(section.Name);
+            foreach (ParamDescriptor parameter in section.Params)
+            {
+                view.Rows.Add(new ParamRowViewModel(this, track.Id, parameter, section.Name));
+            }
+
+            Sections.Add(view);
+        }
+
+        AddEffectItems(track.Effects);
+        HasTarget = true;
+        IsPicture = false;
+        Status = string.Empty;
+        RefreshValues();
+    }
+
+    /// <summary>An item for each effect, with a row for each of its parameters.</summary>
+    private void AddEffectItems(IEnumerable<Effect> effects)
+    {
+        foreach (Effect effect in effects)
+        {
+            EffectDescriptor? descriptor = EffectCatalog.Registry.Find(effect.TypeId);
+            bool plugin = effect.TypeId == JazzHands.Audio.Effects.PluginEffect.TypeId;
+            var item = new EffectItemViewModel(this, effect.Id, effect.TypeId, plugin ? PluginName(effect) : descriptor?.Name ?? effect.TypeId, descriptor is not null);
+            IEnumerable<ParamDescriptor> rows = plugin ? PluginRows(effect) : descriptor?.Params ?? [];
+            foreach (ParamDescriptor parameter in rows)
+            {
+                item.Rows.Add(new ParamRowViewModel(this, effect.Id, parameter, item.Name));
+            }
+
+            Effects.Add(item);
+        }
+    }
+
+    /// <summary>What decides whether a selected track's rows can be reloaded in place: its kind and its effects.</summary>
+    private static string TrackShape(Track track) =>
+        string.Join("|", ["track", track.Id, track.Kind.ToString(), .. track.Effects.Select(effect => $"{effect.Id}:{effect.TypeId}")]);
+
+    /// <summary>A selected track's values, from the snapshot, at the playhead.</summary>
+    private void RefreshTrack(Project project, string trackId)
+    {
+        if (ParamTargets.Find(project, trackId) is not { Kind: ParamOwnerKind.Track } owner)
+        {
+            Rebuild();
+            return;
+        }
+
+        Track track = owner.Track;
+        Flicks playhead = Playhead;
+        Flicks length = owner.Sequence.Duration;
+        Flicks tolerance = Tolerance();
+        _loading = true;
+        try
+        {
+            Heading = track.Name;
+            Source = track.Kind switch
+            {
+                TrackKind.Audio => "A sound track: its volume, pan and effects, for every clip on it",
+                TrackKind.Adjustment => "An adjustment track: its effects, over everything under it",
+                _ => "A picture track: its effects, for every clip on it",
+            };
+            Range = Core.Words.Count(track.Clips.Length, "clip") + (track.Effects.IsEmpty ? ", no effects yet: drop one from the Effects panel on the track" : string.Empty);
+            Speed = SelectionNote = string.Empty;
+        }
+        finally
+        {
+            _loading = false;
+        }
+
+        foreach (ParamRowViewModel row in Sections.SelectMany(section => section.Rows))
+        {
+            AnimatedValue? stored = ParamTargets.Get(owner, row.Name);
+            row.Load(ParamEval.Eval(stored, row.Descriptor, playhead), stored, Flicks.Zero, length, playhead, tolerance);
+        }
+
+        for (int index = 0; index < Effects.Count && index < track.Effects.Length; index++)
+        {
+            EffectItemViewModel item = Effects[index];
+            Effect effect = track.Effects[index];
+            item.Load(effect.Enabled, index, track.Effects.Length);
+            foreach (ParamRowViewModel row in item.Rows)
+            {
+                AnimatedValue? stored = effect.Parameter(row.Name);
+                row.Load(ParamEval.Eval(stored, row.Descriptor, playhead), stored, Flicks.Zero, length, playhead, tolerance);
+            }
+        }
+
+        UpdateMarkers();
     }
 
     /// <summary>A selected comp node's values, from the snapshot, at the playhead in its clip's time.</summary>
@@ -1014,6 +1129,12 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
             return;
         }
 
+        if (_trackId is { } trackId)
+        {
+            RefreshTrack(project, trackId);
+            return;
+        }
+
         if (_clipId is null)
         {
             return;
@@ -1184,6 +1305,9 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         {
             { Clip: { } clip } => Playhead >= clip.Start && Playhead <= clip.End,
             { Kind: ParamOwnerKind.Transition } transition => Playhead >= transition.Origin && Playhead <= transition.Origin + transition.Length,
+
+            // A track and its effects last the whole sequence.
+            { Kind: ParamOwnerKind.Track or ParamOwnerKind.Effect } => true,
             _ => false,
         };
 

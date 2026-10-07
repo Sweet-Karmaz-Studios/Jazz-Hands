@@ -38,7 +38,7 @@ public sealed class SetSelectionHandler : ICommandHandler<SetSelectionCommand>
             {
                 throw new CommandException(
                     "not-found",
-                    $"Nothing in the active sequence has the id {string.Join(", ", missing.Select(id => $"'{id}'"))}. Only its clips, transitions, markers and comp graph nodes can be selected.");
+                    $"Nothing in the active sequence has the id {string.Join(", ", missing.Select(id => $"'{id}'"))}. Only its tracks, clips, transitions, markers and comp graph nodes can be selected.");
             }
         }
 

@@ -25,6 +25,10 @@ public sealed partial class TrackHeaderViewModel : ObservableObject
     [ObservableProperty]
     private string _name = string.Empty;
 
+    /// <summary>True when the track itself is selected, and the Inspector shows its effects.</summary>
+    [ObservableProperty]
+    private bool _isSelected;
+
     [ObservableProperty]
     private string _label = string.Empty;
 
@@ -137,6 +141,10 @@ public sealed partial class TrackHeaderViewModel : ObservableObject
     /// <summary>Gives the track the next of the project's roles.</summary>
     [RelayCommand]
     public Task NextRoleAsync() => _nextRole.Length == 0 ? Task.CompletedTask : _timeline.RunAsync(new SetTrackRoleCommand(TrackId, _nextRole));
+
+    /// <summary>Selects the track alone, for the Inspector to show its volume, pan and effects.</summary>
+    [RelayCommand]
+    public Task SelectAsync() => _timeline.RunAsync(new SetSelectionCommand([TrackId]));
 
     /// <summary>Gives the track a role picked from its role menu.</summary>
     [RelayCommand]

@@ -4455,12 +4455,12 @@ Which clips and markers are selected.
 
 ### `jazz selection set <project> <ids>`
 
-Choose which clips and markers are selected.
+Choose which tracks, clips and markers are selected.
 
 | Argument | Meaning |
 |---|---|
 | `<project>` | The .jazz file to work on. |
-| `<ids>` | Comma-separated clip, marker or comp node ids. |
+| `<ids>` | Comma-separated track, clip, marker or comp node ids. |
 
 | Option | Meaning |
 |---|---|

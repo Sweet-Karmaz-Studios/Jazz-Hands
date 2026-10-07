@@ -18,20 +18,20 @@ public enum SelectMode
     Toggle,
 }
 
-/// <summary>Chooses what is selected: clips, transitions, markers and comp graph nodes in the active sequence, by id.</summary>
+/// <summary>Chooses what is selected: tracks, clips, transitions, markers and comp graph nodes in the active sequence, by id.</summary>
 /// <remarks>
 /// The selection is what the editor is pointing at, shared by the timeline, the inspector and
 /// every remote client, so a script can select and then act the way a person clicks and then
 /// presses a key. It is not part of the project and is never saved or undone. Ids are taken
 /// literally: selecting one clip of a linked pair selects that clip, and it is the timeline that
-/// widens a click to the whole link group.
+/// widens a click to the whole link group. A track alone shows its own effects in the Inspector.
 /// </remarks>
 /// <param name="Ids">What to select.</param>
 /// <param name="Mode">How it combines with what was selected.</param>
 [Command("selection.set",
-    Description = "Choose which clips and markers are selected",
+    Description = "Choose which tracks, clips and markers are selected",
     Undoable = false,
     NotUndoableReason = "The selection is what the editor points at. It is not part of the project.")]
 public sealed record SetSelectionCommand(
-    [property: Arg(0, "Comma-separated clip, marker or comp node ids")] EquatableArray<string> Ids,
+    [property: Arg(0, "Comma-separated track, clip, marker or comp node ids")] EquatableArray<string> Ids,
     [property: Option("mode", "replace, add, remove or toggle")] SelectMode Mode = SelectMode.Replace) : ICommand;

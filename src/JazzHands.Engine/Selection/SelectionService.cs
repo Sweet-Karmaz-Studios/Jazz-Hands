@@ -82,9 +82,9 @@ public sealed class SelectionService
     }
 
     /// <summary>
-    /// The ids a selection may name: clips, transitions and markers of the active sequence, and the
-    /// nodes of its clips' comp graphs, inside groups too (Phase 49a), which the Nodes panel selects
-    /// to show in the Inspector.
+    /// The ids a selection may name: tracks, clips, transitions and markers of the active sequence,
+    /// and the nodes of its clips' comp graphs, inside groups too (Phase 49a), which the Nodes panel
+    /// selects to show in the Inspector.
     /// </summary>
     internal static HashSet<string> Present(Project project)
     {
@@ -97,6 +97,8 @@ public sealed class SelectionService
 
         foreach (Track track in sequence.Tracks)
         {
+            // A track is selected to show its own effects in the Inspector.
+            present.Add(track.Id);
             foreach (Clip clip in track.Clips)
             {
                 present.Add(clip.Id);

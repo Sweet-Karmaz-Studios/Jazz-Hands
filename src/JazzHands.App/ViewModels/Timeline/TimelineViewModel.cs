@@ -448,6 +448,11 @@ public sealed partial class TimelineViewModel : DocumentViewModel
 
     private void ApplySelection()
     {
+        foreach (TrackHeaderViewModel header in Headers)
+        {
+            header.IsSelected = _selection.Ids.Contains(header.TrackId);
+        }
+
         ImmutableHashSet<string> selected = [.. _selection.Ids.Where(id => Content.Clip(id) is not null || Content.Transition(id) is not null || IsMarker(id))];
         selected = selected.WithComparer(StringComparer.Ordinal);
 
@@ -532,6 +537,7 @@ public sealed partial class TimelineViewModel : DocumentViewModel
         {
             TrackView track = Content.Tracks[index];
             TrackHeaderViewModel header = existing.GetValueOrDefault(track.Id) ?? new TrackHeaderViewModel(this, track.Id);
+            header.IsSelected = _selection.Ids.Contains(track.Id);
             header.Update(track.Track, labels.GetValueOrDefault(track.Id, string.Empty), Content.Rows[index].Height, targeted.Contains(track.Track.Id), roles);
             ordered.Add(header);
         }

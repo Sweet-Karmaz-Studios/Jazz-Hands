@@ -161,7 +161,21 @@
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="{x:Type vm:TrackHeaderViewModel}">
                                 <Grid Height="{Binding Height, Mode=OneWay}">
-                                    <Border BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,0,1,1">
+                                    <!-- A click on the header's empty space selects the track, and the Inspector shows its effects. -->
+                                    <Border BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,0,1,1" AutomationProperties.Name="{Binding Name, Mode=OneWay}">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background" Value="Transparent" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsSelected, Mode=OneWay}" Value="True">
+                                                        <Setter Property="Background" Value="{DynamicResource Brush.Background.Selected}" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <Border.InputBindings>
+                                            <MouseBinding Gesture="LeftClick" Command="{Binding SelectCommand, Mode=OneWay}" />
+                                        </Border.InputBindings>
                                         <Grid Margin="0,2,4,2">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="6" />
