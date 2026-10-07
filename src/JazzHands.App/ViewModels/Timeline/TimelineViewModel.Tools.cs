@@ -761,13 +761,16 @@ public sealed partial class TimelineViewModel
 
     private void PreviewSlip(Point point)
     {
-        // Dragging right shows earlier material, as if pulling the film through the gate.
-        Flicks by = Geometry.TimeAt(_downAt.X) - Geometry.TimeAt(point.X);
+        // Dragging right shows earlier material, as if pulling the film through the gate: each
+        // clip's picture moves with the pointer, so a sped-up clip slips that much more source.
+        Flicks shift = Geometry.TimeAt(point.X) - Geometry.TimeAt(_downAt.X);
         Sequence sequence = Content.Sequence;
         string? refused = null;
+        var commands = new List<ICommand>(_trimmed.Length);
 
         foreach (ClipView clip in _trimmed)
         {
+            Flicks by = clip.Clip.SlipToMove(shift);
             EditResult<Track> slipped = EditOps.Slip(sequence.Track(clip.TrackId)!, clip.Id, by, SourceDuration(clip.Clip));
             if (slipped.IsOk)
             {
@@ -777,9 +780,11 @@ public sealed partial class TimelineViewModel
             {
                 refused ??= slipped.Error!.Message;
             }
+
+            commands.Add(new SlipClipCommand(clip.Id, by));
         }
 
-        _pending = [.. _trimmed.Select(clip => (ICommand)new SlipClipCommand(clip.Id, by))];
+        _pending = [.. commands];
         Ghost = new TimelineGhost([.. _trimmed.Select(clip => new GhostClip(clip.TrackId, clip.Start, clip.End))], refused);
 
         if (refused is null && sequence.Track(_trimmed[0].TrackId)?.Clip(_trimmed[0].Id) is { } shown)

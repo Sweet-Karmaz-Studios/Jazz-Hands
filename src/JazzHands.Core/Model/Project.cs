@@ -510,6 +510,29 @@ public sealed record Clip(
     }
 
     /// <summary>
+    /// The slip (a change to <c>SourceIn</c>, in source time) that moves what this clip shows by
+    /// <paramref name="shift"/> along the timeline: a frame shown at t is shown at t + shift
+    /// afterwards, as if the film were pulled through the gate.
+    /// </summary>
+    /// <remarks>
+    /// Scaled by the clip's speed, so a slip dragged on a sped-up clip moves its picture with the
+    /// pointer; the other way when it plays backwards. A remapped clip uses its average rate, and
+    /// a freeze frame moves its held frame by the shift itself.
+    /// </remarks>
+    public Flicks SlipToMove(Flicks shift)
+    {
+        if (IsHold || Range.Duration <= Flicks.Zero)
+        {
+            return -shift;
+        }
+
+        Flicks source = Remap is null
+            ? ScaleBySpeed(shift, EffectiveSpeed)
+            : new Flicks((long)((Int128)shift.Value * SourceDuration.Value / Range.Duration.Value));
+        return Reverse ? source : -source;
+    }
+
+    /// <summary>
     /// How long this clip would occupy the timeline at another rate, showing the same source.
     /// </summary>
     /// <remarks>
