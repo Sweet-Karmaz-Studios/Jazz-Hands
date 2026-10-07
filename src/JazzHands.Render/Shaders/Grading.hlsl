@@ -211,7 +211,8 @@ float3 Tetrahedral(float3 coordinate, float size)
     return (1.0 - w.x - w.y - w.z) * c000 + w.x * c1 + w.y * c2 + w.z * c111;
 }
 
-// color.lut. A: x intensity, y the cube's size, z domain minimum, w domain maximum. Flags: x
+// color.lut. A: x intensity, y the cube's size. B.xyz and C.xyz: the domain minimum and maximum,
+// per channel. Flags: x
 // domain (0 sRGB in and out, 1 linear in and out, 2 LogC in and BT.1886 Rec.709 out), y 1 for
 // tetrahedral.
 float4 PsLut(FullScreenVertex input) : SV_TARGET
@@ -223,7 +224,7 @@ float4 PsLut(FullScreenVertex input) : SV_TARGET
         : Flags.x == 2 ? LinearToLogC(linearLight)
         : LinearToSrgb(linearLight);
 
-    float3 coordinate = saturate((encoded - A.z) / max(A.w - A.z, 1e-6));
+    float3 coordinate = saturate((encoded - B.xyz) / max(C.xyz - B.xyz, 1e-6));
     float size = A.y;
     float3 looked = Flags.y == 1
         ? Tetrahedral(coordinate, size)

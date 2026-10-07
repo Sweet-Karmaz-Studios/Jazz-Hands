@@ -53,7 +53,9 @@ public sealed class LutEffect : GradingEffect
         Loaded lut = Find(context, parameters)!;
         return new GradingValues
         {
-            A = new Vector4(parameters.Float("intensity"), lut.Size, lut.DomainMin, lut.DomainMax),
+            A = new Vector4(parameters.Float("intensity"), lut.Size, 0, 0),
+            B = new Vector4(lut.DomainMin, 0),
+            C = new Vector4(lut.DomainMax, 0),
             FlagX = parameters.Enum("domain") switch
             {
                 "linear" => 1u,
@@ -165,13 +167,11 @@ public sealed class LutEffect : GradingEffect
             uint row = (uint)(size * 4 * sizeof(float));
             ID3D11Texture3D texture = device.Device.CreateTexture3D(description, [new SubresourceData((IntPtr)data, row, row * (uint)size)]);
 
-            // The domain is one range for all three channels in the shader; files with a different
-            // range per channel are rare, and the red one stands for all.
-            return new Loaded(texture, device.Device.CreateShaderResourceView(texture), size, lut.DomainMin.X, lut.DomainMax.X);
+            return new Loaded(texture, device.Device.CreateShaderResourceView(texture), size, lut.DomainMin, lut.DomainMax);
         }
     }
 
-    private sealed record Loaded(ID3D11Texture3D Texture, ID3D11ShaderResourceView View, int Size, float DomainMin, float DomainMax) : IDisposable
+    private sealed record Loaded(ID3D11Texture3D Texture, ID3D11ShaderResourceView View, int Size, Vector3 DomainMin, Vector3 DomainMax) : IDisposable
     {
         public void Dispose()
         {
