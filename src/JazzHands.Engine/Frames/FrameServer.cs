@@ -54,6 +54,8 @@ public sealed class FrameServer : IFrameProvider, IDisposable
     private readonly DiagnosticsLog? _notices;
     private readonly CacheManager? _cacheManager;
     private readonly Dictionary<(string Hash, int Stream), KeyframeIndex?> _keyframes = [];
+    private readonly Dictionary<(string Hash, int Stream), Task<KeyframeIndex?>> _indexing = [];
+    private readonly CancellationTokenSource _stopIndexing = new();
     private readonly Dictionary<string, string> _failed = new(StringComparer.Ordinal);
     private readonly Dictionary<string, bool> _missing = new(StringComparer.Ordinal);
     private string _projectPath = string.Empty;
@@ -458,6 +460,10 @@ public sealed class FrameServer : IFrameProvider, IDisposable
         }
 
         _disposed = true;
+
+        // A scan still reading stops and keeps nothing.
+        _stopIndexing.Cancel();
+        _stopIndexing.Dispose();
         _decodeFence?.Dispose();
         Compositor.Dispose();
         _sources.Dispose();
@@ -531,7 +537,14 @@ public sealed class FrameServer : IFrameProvider, IDisposable
         return _sources.GetSourceFrame(project, clip, time, _projectPath, direction, mode, lane, readAhead: !paced);
     }
 
-    /// <summary>A source's keyframe index, from the cache database or built by a scan.</summary>
+    /// <summary>
+    /// A source's keyframe index, from the cache database, or null while a scan builds it.
+    /// </summary>
+    /// <remarks>
+    /// A scan reads the whole file, about a second a gigabyte, so it runs beside the composition
+    /// thread rather than on it: the first reverse play of a long file starts at once, seeking
+    /// for each frame (slower, but right) until the index arrives, and the preview never stalls.
+    /// </remarks>
     private KeyframeIndex? KeyframesFor(MediaItem item, int streamIndex)
     {
         var key = (item.Hash, streamIndex);
@@ -540,35 +553,67 @@ public sealed class FrameServer : IFrameProvider, IDisposable
             return known;
         }
 
-        KeyframeIndex? index = null;
+        if (_indexing.TryGetValue(key, out Task<KeyframeIndex?>? scanning))
+        {
+            if (!scanning.IsCompleted)
+            {
+                return null;
+            }
+
+            _indexing.Remove(key);
+            _keyframes[key] = scanning.Result;
+            return scanning.Result;
+        }
+
         try
         {
-            index = _cacheManager is null ? null : KeyframeIndex.Load(_cacheManager, item.Hash, streamIndex);
-
-            if (index is null)
+            if (_cacheManager is not null && KeyframeIndex.Load(_cacheManager, item.Hash, streamIndex) is { } cached)
             {
-                string path = _projectPath.Length == 0 ? item.RelativePath : ProjectPaths.Resolve(_projectPath, item.RelativePath);
-                long started = Stopwatch.GetTimestamp();
-                index = KeyframeIndex.Build(path, streamIndex);
-                _log.Information(
-                    "Indexed {Count} keyframes of {Media} for reverse play in {Ms:F0} ms",
-                    index.Count,
-                    item.Name,
-                    Stopwatch.GetElapsedTime(started).TotalMilliseconds);
-
-                if (_cacheManager is not null)
-                {
-                    index.Save(_cacheManager, item.Hash, streamIndex);
-                }
+                _keyframes[key] = cached;
+                return cached;
             }
+        }
+        catch (Exception exception) when (exception is IOException or InvalidOperationException)
+        {
+            _log.Warning(exception, "Could not read the keyframes of {Media} from the cache; they are found again", item.Name);
+        }
+
+        string path = _projectPath.Length == 0 ? item.RelativePath : ProjectPaths.Resolve(_projectPath, item.RelativePath);
+        CancellationToken stop = _stopIndexing.Token;
+        _indexing[key] = Task.Run(() => Scan(item, path, streamIndex, stop), CancellationToken.None);
+        return null;
+    }
+
+    /// <summary>Finds a source's keyframes by reading it, and keeps them in the cache database; null when it cannot be read.</summary>
+    private KeyframeIndex? Scan(MediaItem item, string path, int streamIndex, CancellationToken cancellationToken)
+    {
+        try
+        {
+            long started = Stopwatch.GetTimestamp();
+            KeyframeIndex index = KeyframeIndex.Build(path, streamIndex, cancellationToken);
+            if (!index.IsComplete)
+            {
+                return null;
+            }
+
+            _log.Information(
+                "Indexed {Count} keyframes of {Media} for reverse play in {Ms:F0} ms",
+                index.Count,
+                item.Name,
+                Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+
+            if (_cacheManager is not null)
+            {
+                index.Save(_cacheManager, item.Hash, streamIndex);
+            }
+
+            return index;
         }
         catch (Exception exception) when (exception is IOException or InvalidOperationException or Media.Interop.FfmpegException)
         {
             // Reverse play then seeks for every frame, which is slow but still right.
             _log.Warning(exception, "Could not index the keyframes of {Media}; reverse play will seek for every frame", item.Name);
+            return null;
         }
-
-        _keyframes[key] = index;
-        return index;
     }
 }
