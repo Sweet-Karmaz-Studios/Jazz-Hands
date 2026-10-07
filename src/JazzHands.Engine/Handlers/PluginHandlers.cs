@@ -135,17 +135,8 @@ public sealed class AddPluginHandler : ICommandHandler<AddPluginCommand>
             new EffectParameter("plugin", AnimatedValue.Constant(new ParamValue.Text(plugin.Id))),
             new EffectParameter("library", AnimatedValue.Constant(new ParamValue.Text(plugin.Library)))));
 
-        // The mixer makes up for a clip effect's latency; a track's chain has no room to.
-        if (owner.Clip is null)
-        {
-            using PluginProcess process = PluginHelp.Start(effect);
-            process.Activate(48000, 2, offline: true);
-            if (process.Latency > 0)
-            {
-                throw new CommandException("latent-on-track", $"{plugin.Name} delays its sound by {process.Latency} samples, which only a clip's effects make up for. Put it on the clip instead.");
-            }
-        }
-
+        // A plugin's latency is made up wherever it goes: a clip reads its file ahead, a track
+        // mixes its clips ahead (AudioGraph).
         context.Changed(id);
         context.Changed(owner.Id);
         return EffectHelp.WithChain(project, owner, EffectChains.Insert(owner.Clip, chain, command.Index, [effect]));

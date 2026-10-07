@@ -97,8 +97,9 @@ public sealed class MixSnapshot
                     continue;
                 }
 
-                long from = Math.Max(startSample, clip.PlayStart);
-                long to = Math.Min(end, clip.PlayEnd);
+                // A track with latency mixes its clips that far ahead.
+                long from = Math.Max(startSample + track.Latency, clip.PlayStart);
+                long to = Math.Min(end + track.Latency, clip.PlayEnd);
 
                 if (from < to)
                 {
@@ -139,7 +140,17 @@ public sealed class TrackMix
         ClipArray = [.. clips.OrderBy(clip => clip.Start)];
         EffectArray = effects is null ? [] : [.. effects];
         TailSamples = Math.Max(0, tailSamples);
+        foreach (AudioEffectSlot slot in EffectArray)
+        {
+            Latency += slot.Effect.LatencySamples;
+        }
     }
+
+    /// <summary>
+    /// How many samples its effects delay its sound by (a plugin that looks ahead): the graph mixes
+    /// its clips that far ahead, so what its effects give back lines up with the timeline.
+    /// </summary>
+    public int Latency { get; }
 
     /// <summary>How long its effects go on sounding after its last clip ends: a reverb's decay, a delay's echoes.</summary>
     public long TailSamples { get; }
@@ -513,6 +524,9 @@ internal sealed class StripState(int sampleRate, int channels)
 
     /// <summary>True once <see cref="Last"/> holds a block's end; false after a seek.</summary>
     public bool Valid { get; set; }
+
+    /// <summary>For a track with latency, the timeline sample its effects expect next; anything else means they need priming.</summary>
+    public long NextInput { get; set; } = long.MinValue;
 
     /// <summary>After the track's volume and pan.</summary>
     public Meter Meter { get; } = new(sampleRate, channels);

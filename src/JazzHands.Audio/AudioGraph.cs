@@ -177,6 +177,7 @@ public sealed class AudioGraph
             if (track.Strip is { } strip)
             {
                 strip.Valid = false;
+                strip.NextInput = long.MinValue;
                 if (meters)
                 {
                     strip.Meter.Reset();
@@ -291,42 +292,28 @@ public sealed class AudioGraph
                 continue;
             }
 
-            ClipMix[] clips = track.ClipArray;
-            bool any = false;
-            int first = FirstEndingAfter(clips, start);
-
-            for (int index = first; index < clips.Length; index++)
+            // A track whose effects delay its sound mixes its clips that far ahead, so what they
+            // give back is the timeline's; after a jump they are first given what comes before.
+            int latency = track.Latency;
+            long input = start + latency;
+            if (latency > 0 && strip is not null && strip.NextInput != input)
             {
-                ClipMix clip = clips[index];
-                if (clip.PlayStart >= end)
-                {
-                    break;
-                }
-
-                if (!any)
-                {
-                    _bus.Clear(0, frames);
-                    any = true;
-                }
-
-                long from = Math.Max(start, clip.PlayStart);
-                long to = Math.Min(end, clip.PlayEnd);
-                if (from >= to)
-                {
-                    continue;
-                }
-
-                starved |= !MixClip(clip, from - clip.Start, (int)(from - start), (int)(to - from));
+                starved |= PrimeTrack(track, start, latency);
             }
 
+            ClipMix[] clips = track.ClipArray;
+            bool any = SumClips(clips, input, frames, ref starved, out int first);
+
             // After the last clip, a track's effects go on sounding for their tail: a reverb's
-            // decay, a delay's echoes.
-            if (!any && track.TailSamples > 0 && track.EffectArray.Length > 0 && first > 0
-                && start < clips[first - 1].PlayEnd + track.TailSamples)
+            // decay, a delay's echoes, and what a latent effect still holds.
+            if (!any && (track.TailSamples > 0 || latency > 0) && track.EffectArray.Length > 0 && first > 0
+                && input < clips[first - 1].PlayEnd + track.TailSamples + latency)
             {
                 _bus.Clear(0, frames);
                 any = true;
             }
+
+            strip?.NextInput = any ? input + frames : long.MinValue;
 
             if (any)
             {
@@ -353,6 +340,73 @@ public sealed class AudioGraph
         }
 
         Interlocked.Increment(ref _blocks);
+    }
+
+    /// <summary>
+    /// Sums a track's clips over a stretch of the timeline into the bus; false when none plays
+    /// there (the bus is then left as it was).
+    /// </summary>
+    private bool SumClips(ClipMix[] clips, long start, int frames, ref bool starved, out int first)
+    {
+        long end = start + frames;
+        bool any = false;
+        first = FirstEndingAfter(clips, start);
+
+        for (int index = first; index < clips.Length; index++)
+        {
+            ClipMix clip = clips[index];
+            if (clip.PlayStart >= end)
+            {
+                break;
+            }
+
+            if (!any)
+            {
+                _bus.Clear(0, frames);
+                any = true;
+            }
+
+            long from = Math.Max(start, clip.PlayStart);
+            long to = Math.Min(end, clip.PlayEnd);
+            if (from >= to)
+            {
+                continue;
+            }
+
+            starved |= !MixClip(clip, from - clip.Start, (int)(from - start), (int)(to - from));
+        }
+
+        return any;
+    }
+
+    /// <summary>
+    /// Gives a latent track's effects the stretch before where it is to be heard from, its
+    /// latency long, and throws away what they give back: after a jump their output then starts
+    /// with the timeline rather than with silence. True when a source was not ready.
+    /// </summary>
+    private bool PrimeTrack(TrackMix track, long start, int latency)
+    {
+        bool starved = false;
+        long at = start;
+        int remaining = latency;
+        while (remaining > 0)
+        {
+            int count = Math.Min(BlockSize, remaining);
+            if (!SumClips(track.ClipArray, at, count, ref starved, out _))
+            {
+                _bus.Clear(0, count);
+            }
+
+            foreach (Effects.AudioEffectSlot effect in track.EffectArray)
+            {
+                effect.Process(_bus, 0, count, Channels, SampleRate, at - latency, effect.KeyTrack?.KeyOut);
+            }
+
+            at += count;
+            remaining -= count;
+        }
+
+        return starved;
     }
 
     /// <summary>

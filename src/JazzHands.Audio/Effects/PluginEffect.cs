@@ -52,8 +52,9 @@ public interface IPluginRunner : IDisposable
 /// at the block's first sample.
 /// </para>
 /// <para>
-/// A plugin's latency is compensated as a clip effect's is (the mixer reads ahead), so a latent
-/// plugin belongs on a clip. An export is rendered offline: <see cref="AudioEffectHost.Offline"/>.
+/// A plugin's latency is made up on a clip and on a track alike: a clip's file is read that far
+/// ahead, and a track's clips are mixed that far ahead (<see cref="AudioGraph"/>). An export is
+/// rendered offline: <see cref="AudioEffectHost.Offline"/>.
 /// </para>
 /// </remarks>
 [AudioEffect(TypeId, Name = "Plugin", Category = "Plugins", Description = "A CLAP plugin on this computer, hosted in a process of its own; its parameters are automated like any effect's.")]

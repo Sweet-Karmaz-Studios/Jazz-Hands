@@ -39,15 +39,11 @@ public static class EffectPlacement
                     Effect effect = track.Effects[e];
                     if (Implementation(registry, effect) is { } type && typeof(IClipEffect).IsAssignableFrom(type))
                     {
-                        // The mixer makes up a clip effect's delay by reading the clip's file that
-                        // far ahead; a track is many clips mixed, with nothing to read ahead in.
-                        int latency = Latency(type);
-                        string late = latency > 0 ? FormattableString.Invariant($" It runs {latency * 1000.0 / 48000.0:0} ms late against the other tracks at 48 kHz.") : string.Empty;
                         issues.Add((effect.Id, new ValidationIssue(
                             Severity.Warning,
                             "clip-only-effect",
                             $"{trackPath}/effects/{e}",
-                            $"'{Name(registry, effect)}' ({effect.Id}) is on track '{track.Name}', but it goes on a clip: it reads ahead in the clip's file to stay in time.{late} Put it on the track's clips instead.")));
+                            $"'{Name(registry, effect)}' ({effect.Id}) is on track '{track.Name}', but it goes on a clip. Put it on the track's clips instead.")));
                     }
                 }
 
@@ -78,18 +74,4 @@ public static class EffectPlacement
 
     private static string Name(EffectRegistry registry, Effect effect) =>
         registry.Find(effect.TypeId)?.Name ?? effect.TypeId;
-
-    /// <summary>The effect's delay in samples, from a fresh instance of it; 0 when it cannot be made.</summary>
-    private static int Latency(Type type)
-    {
-        try
-        {
-            var effect = Activator.CreateInstance(type) as AudioEffect;
-            return effect?.LatencySamples ?? 0;
-        }
-        catch (Exception error) when (error is MissingMethodException or System.Reflection.TargetInvocationException)
-        {
-            return 0;
-        }
-    }
 }
