@@ -315,6 +315,7 @@ public sealed record KeyframeSnap(string Edge, Flicks Requested, Flicks Snapped,
 /// <param name="Encoders">The matched encoders to try, in order.</param>
 /// <param name="GopFrames">The source's frames between keyframes, which the matched encoder's groups follow.</param>
 /// <param name="StreamNames">What each sound stream is called, in the same order.</param>
+/// <param name="AtOnce">Pieces encoded at once; 0 for the cutter's own choice. The export queue sets it to the NVENC sessions it gave the job.</param>
 public sealed record ExportSmart(
     string MediaId,
     string SourcePath,
@@ -325,8 +326,15 @@ public sealed record ExportSmart(
     Rational FrameRate,
     EquatableArray<string> Encoders,
     int GopFrames,
-    EquatableArray<string> StreamNames = default) : IEquatable<ExportSmart>
+    EquatableArray<string> StreamNames = default,
+    int AtOnce = 0) : IEquatable<ExportSmart>
 {
+    /// <summary>True when the first encoder it tries is NVENC.</summary>
+    public bool OnNvenc => Encoders.Length > 0 && Encoders[0].Contains("nvenc", StringComparison.Ordinal);
+
+    /// <summary>Pieces encoded again.</summary>
+    public int EncodedPieces => Segments.Count(segment => segment.Encode);
+
     /// <summary>Frames encoded again, over all the pieces.</summary>
     public long EncodedFrames => Segments.Where(segment => segment.Encode).Sum(segment => segment.Duration.ToFrames(FrameRate, RoundingMode.Nearest));
 

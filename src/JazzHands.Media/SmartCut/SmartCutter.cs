@@ -34,6 +34,7 @@ public sealed record SmartSegment(Flicks Start, Flicks End, bool Encode, Flicks?
 /// <param name="Container">The muxer, or null to choose from the extension.</param>
 /// <param name="FastStart">Put an MP4's index at the front.</param>
 /// <param name="Extras">Subtitles and chapters.</param>
+/// <param name="AtOnce">Pieces encoded at once, each with an encoder of its own; 0 for <see cref="SmartCutter.EncodeParallelism"/>. The export queue sets it to the NVENC sessions it gave the job.</param>
 public sealed record SmartCutJob(
     string OutputPath,
     string SourcePath,
@@ -45,7 +46,8 @@ public sealed record SmartCutJob(
     IReadOnlyList<string> Encoders,
     string? Container = null,
     bool FastStart = true,
-    MuxExtras? Extras = null);
+    MuxExtras? Extras = null,
+    int AtOnce = 0);
 
 /// <summary>What a smart cut wrote.</summary>
 /// <param name="Path">The file.</param>
@@ -82,15 +84,16 @@ public sealed record SmartCutResult(string Path, long Bytes, Flicks Duration, lo
 /// muxer never holds more than a moment of either.
 /// </para>
 /// <para>
-/// The encoded pieces are encoded ahead of the writer, three at a time, each on a thread of its
-/// own with its own demuxer, decoder and matched encoder, and held in memory until their turn:
+/// The encoded pieces are encoded ahead of the writer, three at a time (or as many as the job's
+/// <see cref="SmartCutJob.AtOnce"/> says), each on a thread of its own with its own demuxer,
+/// decoder and matched encoder, and held in memory until their turn:
 /// a few seconds of pictures around each cut. The writer copies and writes strictly in order.
 /// </para>
 /// </remarks>
 public static unsafe class SmartCutter
 {
-    /// <summary>Pieces encoded at once: each decoder already uses every core, so more only waits.</summary>
-    private const int EncodeParallelism = 3;
+    /// <summary>Pieces encoded at once unless the job says otherwise: each decoder already uses every core, so more only waits.</summary>
+    public const int EncodeParallelism = 3;
 
     private static readonly ILogger Log = Serilog.Log.ForContext(typeof(SmartCutter));
 
@@ -417,7 +420,7 @@ public static unsafe class SmartCutter
             }
         }
 
-        Task[] workers = [.. Enumerable.Range(0, Math.Min(EncodeParallelism, pieces.Count)).Select(_ => Task.Factory.StartNew(
+        Task[] workers = [.. Enumerable.Range(0, Math.Min(job.AtOnce > 0 ? job.AtOnce : EncodeParallelism, pieces.Count)).Select(_ => Task.Factory.StartNew(
             () =>
             {
                 while (!cancellationToken.IsCancellationRequested && queue.TryDequeue(out int index))

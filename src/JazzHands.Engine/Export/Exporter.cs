@@ -300,7 +300,8 @@ public static class Exporter
             [.. smart.Encoders],
             plan.Container,
             FastStart: plan.Container is "mp4" or "mov",
-            Extras: extras);
+            Extras: extras,
+            AtOnce: smart.AtOnce);
 
         IProgress<CopyProgress>? relay = progress is null
             ? null

@@ -4,6 +4,7 @@ using JazzHands.Core;
 using JazzHands.Core.Export;
 using JazzHands.Core.Model;
 using JazzHands.Core.Serialization;
+using JazzHands.Media.SmartCut;
 using Microsoft.Data.Sqlite;
 using Serilog;
 
@@ -46,7 +47,7 @@ public interface IExportService
 }
 
 /// <summary>How many exports run at once.</summary>
-/// <param name="Hardware">Jobs encoding on NVENC at once. A GeForce allows several sessions; three leaves one for anything else on the machine.</param>
+/// <param name="Hardware">NVENC sessions open at once: an encode holds one, a smart cut one for each piece it encodes at once. A GeForce allows several; three leaves one for anything else on the machine.</param>
 /// <param name="Software">Jobs encoding on the CPU at once, or 0 for one per eight logical processors.</param>
 public sealed record ExportQueueLimits(int Hardware = 3, int Software = 0)
 {
@@ -77,11 +78,13 @@ public interface IExportHooks
 /// waits until someone asks rather than taking the encoder at the next start.
 /// </para>
 /// <para>
-/// A job is hardware when its plan encodes with NVENC first, and software otherwise (a copy, an
-/// encode on the CPU, ffmpeg.exe). Up to <see cref="ExportQueueLimits.Hardware"/> hardware jobs
-/// and <see cref="ExportQueueLimits.SoftwareSlots"/> software ones run at once, each on a thread of
-/// its own. A hardware job with every NVENC slot busy starts on its software encoder if a software
-/// slot is free and its chain has one, and says so, rather than waiting.
+/// A job is hardware when its plan encodes with NVENC first (an encode, or a smart cut whose
+/// matched encoders start with NVENC), and software otherwise (a copy, an encode on the CPU,
+/// ffmpeg.exe). Up to <see cref="ExportQueueLimits.Hardware"/> NVENC sessions and
+/// <see cref="ExportQueueLimits.SoftwareSlots"/> software jobs are in use at once, each job on a
+/// thread of its own. An encode holds one session; a smart cut takes as many as are free, up to
+/// one for each piece it encodes at once. A hardware job with every NVENC slot busy starts on its
+/// software encoder if a software slot is free and its chain has one, and says so, rather than waiting.
 /// </para>
 /// <para>
 /// High priority jobs start before normal ones, normal before low, and jobs of one priority in the
@@ -426,6 +429,16 @@ public sealed class ExportQueue : IExportService, IDisposable
     internal static bool IsHardware(ExportPlan plan) =>
         plan is { Mode: ExportMode.Encode, External: false, Video: { } video } && video.Encoders.Length > 0 && video.Encoders[0].Contains("nvenc", StringComparison.Ordinal);
 
+    /// <summary>
+    /// The NVENC sessions a plan would open at once: one for an encode on NVENC, one for each piece
+    /// a smart cut on NVENC encodes at once (up to <see cref="SmartCutter.EncodeParallelism"/>), and
+    /// none for anything else.
+    /// </summary>
+    internal static int SessionsWanted(ExportPlan plan) =>
+        IsHardware(plan) ? 1
+        : plan is { Mode: ExportMode.Smart, Smart: { OnNvenc: true } smart } ? Math.Min(SmartCutter.EncodeParallelism, smart.EncodedPieces)
+        : 0;
+
     private void Dispatch()
     {
         while (!_shutdown.IsCancellationRequested)
@@ -433,8 +446,8 @@ public sealed class ExportQueue : IExportService, IDisposable
             var started = new List<Job>();
             lock (_gate)
             {
-                int hardware = _jobs.Count(job => job.State == ExportJobState.Running && job.Hardware);
-                int software = _jobs.Count(job => job.State == ExportJobState.Running && !job.Hardware);
+                int hardware = _jobs.Where(job => job.State == ExportJobState.Running).Sum(job => job.Sessions);
+                int software = _jobs.Count(job => job.State == ExportJobState.Running && job.Sessions == 0);
 
                 foreach (Job job in _jobs
                     .Where(job => job.State == ExportJobState.Queued && job.Worker is null)
@@ -443,31 +456,37 @@ public sealed class ExportQueue : IExportService, IDisposable
                     .ToList())
                 {
                     ExportPlan plan = job.Plan;
-                    bool onHardware = IsHardware(plan);
+                    int sessions = SessionsWanted(plan);
 
-                    if (onHardware && hardware >= _limits.Hardware)
+                    if (sessions > 0 && hardware >= _limits.Hardware)
                     {
                         // Every NVENC slot is taken: run it on its software encoder now rather
                         // than wait, if it has one and a software slot is free.
                         if (software < _limits.SoftwareSlots && Software(plan) is { } fallback)
                         {
-                            Note(job, $"Every NVENC slot was busy, so it runs on {fallback.Video!.Encoders[0]}.");
+                            Note(job, $"Every NVENC slot was busy, so it runs on {(fallback.Video?.Encoders ?? fallback.Smart!.Encoders)[0]}.");
                             plan = fallback;
-                            onHardware = false;
+                            sessions = 0;
                         }
                         else
                         {
                             continue;
                         }
                     }
-                    else if (!onHardware && software >= _limits.SoftwareSlots)
+                    else if (sessions == 0 && software >= _limits.SoftwareSlots)
                     {
                         continue;
                     }
-
-                    if (onHardware)
+                    else if (sessions > 1)
                     {
-                        hardware++;
+                        // A smart cut takes the sessions that are free, and encodes that many pieces at once.
+                        sessions = Math.Min(sessions, _limits.Hardware - hardware);
+                        plan = plan with { Smart = plan.Smart! with { AtOnce = sessions } };
+                    }
+
+                    if (sessions > 0)
+                    {
+                        hardware += sessions;
                     }
                     else
                     {
@@ -475,9 +494,9 @@ public sealed class ExportQueue : IExportService, IDisposable
                     }
 
                     job.State = ExportJobState.Running;
-                    job.Hardware = onHardware;
+                    job.Sessions = sessions;
                     job.Progress = default;
-                    Note(job, onHardware ? $"Started on the GPU with {string.Join(" then ", plan.Video!.Encoders)}." : $"Started{(plan.Video is { } video ? $" with {string.Join(" then ", video.Encoders)}" : plan.Mode == ExportMode.Copy ? " as a stream copy" : plan.Smart is { } smart ? $" as a smart cut with {string.Join(" then ", smart.Encoders)}" : string.Empty)}.");
+                    Note(job, Started(plan, sessions));
                     Update(job);
 
                     ExportPlan run = plan;
@@ -506,9 +525,22 @@ public sealed class ExportQueue : IExportService, IDisposable
     /// <summary>A hardware plan moved onto its first software encoder, or null when its chain has none.</summary>
     private static ExportPlan? Software(ExportPlan plan)
     {
-        string[] software = [.. plan.Video!.Encoders.Where(encoder => !encoder.Contains("nvenc", StringComparison.Ordinal))];
-        return software.Length == 0 ? null : plan with { Video = plan.Video with { Encoders = [.. software] } };
+        string[] software = [.. (plan.Video?.Encoders ?? plan.Smart!.Encoders).Where(encoder => !encoder.Contains("nvenc", StringComparison.Ordinal))];
+        return software.Length == 0 ? null
+            : plan.Video is { } video ? plan with { Video = video with { Encoders = [.. software] } }
+            : plan with { Smart = plan.Smart! with { Encoders = [.. software] } };
     }
+
+    /// <summary>The log's line for a job that starts.</summary>
+    private static string Started(ExportPlan plan, int sessions) => plan switch
+    {
+        { Video: { } video } when sessions > 0 => $"Started on the GPU with {string.Join(" then ", video.Encoders)}.",
+        { Video: { } video } => $"Started with {string.Join(" then ", video.Encoders)}.",
+        { Smart: { } smart } when sessions > 0 => $"Started as a smart cut on the GPU with {string.Join(" then ", smart.Encoders)}, {Words.Count(sessions, "piece")} encoded at once.",
+        { Smart: { } smart } => $"Started as a smart cut with {string.Join(" then ", smart.Encoders)}.",
+        { Mode: ExportMode.Copy } => "Started as a stream copy.",
+        _ => "Started.",
+    };
 
     private void RunOne(Job job, ExportPlan plan)
     {
@@ -586,7 +618,7 @@ public sealed class ExportQueue : IExportService, IDisposable
         {
             job.Finished = job.State is ExportJobState.Queued or ExportJobState.Paused ? null : _clock.GetUtcNow();
             job.PauseRequested = false;
-            job.Hardware = false;
+            job.Sessions = 0;
             if (job.Cancellation.IsCancellationRequested && !job.IsFinished)
             {
                 job.Cancellation.Dispose();
@@ -835,7 +867,8 @@ public sealed class ExportQueue : IExportService, IDisposable
 
         public long Bytes { get; set; }
 
-        public bool Hardware { get; set; }
+        /// <summary>The NVENC sessions it holds while it runs; none on the CPU.</summary>
+        public int Sessions { get; set; }
 
         public bool PauseRequested { get; set; }
 
@@ -873,7 +906,7 @@ public sealed class ExportQueue : IExportService, IDisposable
                 Finished,
                 Join(snaps, Note),
                 Options.Priority,
-                Hardware);
+                Sessions > 0);
         }
     }
 }
