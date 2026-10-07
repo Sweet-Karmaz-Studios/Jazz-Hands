@@ -80,39 +80,66 @@
     </Style>
 
     <Style x:Key="CheckBox.Dark" TargetType="CheckBox">
+        <Setter Property="FontFamily" Value="{DynamicResource Font.Ui}" />
+        <Setter Property="FontSize" Value="{DynamicResource Text.Body}" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
         <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="CheckBox">
-                    <StackPanel Orientation="Horizontal" Background="Transparent">
+                    <StackPanel x:Name="Root" Orientation="Horizontal" Background="Transparent">
                         <Border x:Name="Box"
                                 Width="14"
                                 Height="14"
+                                VerticalAlignment="Center"
                                 CornerRadius="2"
                                 BorderThickness="1"
                                 BorderBrush="{DynamicResource Brush.Border.Strong}"
                                 Background="{DynamicResource Brush.Background.Input}">
-                            <Path x:Name="Tick"
-                                  Data="M 2 6 L 5 9 L 11 3"
-                                  Stroke="{DynamicResource Brush.Text.Primary}"
-                                  StrokeThickness="1.6"
-                                  Visibility="Collapsed" />
+                            <Grid>
+                                <Path x:Name="Tick"
+                                      Data="M 2 6 L 5 9 L 11 3"
+                                      Stroke="{DynamicResource Brush.Text.Primary}"
+                                      StrokeThickness="1.6"
+                                      Visibility="Collapsed" />
+                                <Rectangle x:Name="Mixed"
+                                           Width="6"
+                                           Height="2"
+                                           Fill="{DynamicResource Brush.Text.Primary}"
+                                           Visibility="Collapsed" />
+                            </Grid>
                         </Border>
-                        <ContentPresenter Margin="6,0,0,0" VerticalAlignment="Center" />
+                        <ContentPresenter x:Name="Label" Margin="6,0,0,0" VerticalAlignment="Center" RecognizesAccessKey="True" />
                     </StackPanel>
                     <ControlTemplate.Triggers>
+                        <Trigger Property="HasContent" Value="False">
+                            <Setter TargetName="Label" Property="Margin" Value="0" />
+                        </Trigger>
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="Tick" Property="Visibility" Value="Visible" />
                             <Setter TargetName="Box" Property="Background" Value="{DynamicResource Brush.Accent}" />
                             <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource Brush.Accent}" />
                         </Trigger>
+                        <Trigger Property="IsChecked" Value="{x:Null}">
+                            <Setter TargetName="Mixed" Property="Visibility" Value="Visible" />
+                        </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource Brush.Text.Secondary}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource Brush.Text.Primary}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Root" Property="Opacity" Value="0.45" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
     </Style>
+
+    <!-- Every check box is the dark one; the system's white box was left on the export dialog and
+         a few panels that did not ask for this style by name. -->
+    <Style TargetType="CheckBox" BasedOn="{StaticResource CheckBox.Dark}" />
 </ResourceDictionary>
