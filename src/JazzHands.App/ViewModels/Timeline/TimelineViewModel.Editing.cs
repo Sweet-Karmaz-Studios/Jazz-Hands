@@ -179,7 +179,10 @@ public sealed partial class TimelineViewModel
             return new TimelineHit(TimelineRegion.Track, ClipAt(track, time), barEdge, Row: row, Transition: bar);
         }
 
-        ClipView? clip = ClipAt(track, time);
+        // Overlapping cues sit side by side: the one in the lane under the pointer.
+        ClipView? clip = track.Lanes.Count > 1
+            ? CueAt(track, time, track.Lanes.LaneAt(point.Y, Geometry.TopOf(row) + VolumeLine.ClipInset, Math.Max(1, row.Height - (VolumeLine.ClipInset * 2))))
+            : ClipAt(track, time);
 
         if (clip is null)
         {
@@ -726,6 +729,10 @@ public sealed partial class TimelineViewModel
         modifiers.HasFlag(ModifierKeys.Control) ? SelectMode.Toggle
         : modifiers.HasFlag(ModifierKeys.Shift) ? SelectMode.Add
         : SelectMode.Replace;
+
+    /// <summary>The cue showing at a time in one lane of a subtitle track whose cues overlap.</summary>
+    private static ClipView? CueAt(TrackView track, Flicks time, int lane) =>
+        track.Clips.FirstOrDefault(clip => clip.Start <= time && time < clip.End && track.Lanes.LaneOf(clip.Clip.Id) == lane);
 
     private static ClipView? ClipAt(TrackView track, Flicks time)
     {

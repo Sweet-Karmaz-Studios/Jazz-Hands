@@ -821,7 +821,9 @@ public sealed class TimelineControl : FrameworkElement
             // costs the rasterizer.
             double drawnLeft = Math.Max(left, -4.0);
             double drawnRight = Math.Min(right, width + 4.0);
-            var body = new Rect(drawnLeft, clipTop, Math.Max(1.0, drawnRight - drawnLeft - 1.0), clipHeight);
+            // Overlapping cues side by side, each in its lane of the row.
+            (double laneTop, double laneHeight) = track.Lanes.Slice(clip.Clip.Id, clipTop, clipHeight);
+            var body = new Rect(drawnLeft, laneTop, Math.Max(1.0, drawnRight - drawnLeft - 1.0), laneHeight);
 
             Brush bodyBrush = clip.MediaMissing ? palette.Missing : clip.Clip.Enabled ? fill : palette.Disabled;
             dc.DrawRoundedRectangle(bodyBrush, palette.ClipEdge, body, 3.0, 3.0);
@@ -859,11 +861,11 @@ public sealed class TimelineControl : FrameworkElement
                 dc.DrawRectangle(palette.LinkMark, null, new Rect(body.Left + 1, body.Bottom - 3, Math.Min(10.0, body.Width - 2), 2));
             }
 
-            if (body.Width > 16 && clipHeight > ClipFontSize + 2)
+            if (body.Width > 16 && body.Height > ClipFontSize + 2)
             {
                 // A two line caption shows both lines where the clip is tall enough for them, and both
                 // on one line with a slash where it is not (only its first line showed, 2026-09-30).
-                string shown = clip.Label.Contains('\n', StringComparison.Ordinal) && clipHeight < (ClipFontSize * 2.8) + 4
+                string shown = clip.Label.Contains('\n', StringComparison.Ordinal) && body.Height < (ClipFontSize * 2.8) + 4
                     ? clip.Label.Replace("\n", " / ", StringComparison.Ordinal)
                     : clip.Label;
                 TextDrawing label = ClipLabel(shown, palette.ClipText);
@@ -1253,8 +1255,9 @@ public sealed class TimelineControl : FrameworkElement
                 continue;
             }
 
-            double top = geometry.TopOf(row) + ClipInset;
-            dc.DrawRoundedRectangle(null, palette.SelectionPen, new Rect(left + 1, top + 1, Math.Max(1, right - left - 3), Math.Max(1, row.Height - (ClipInset * 2) - 2)), 3, 3);
+            CueLanes lanes = model.Content.Track(clip.TrackId)?.Lanes ?? CueLanes.One;
+            (double top, double tall) = lanes.Slice(clip.Clip.Id, geometry.TopOf(row) + ClipInset, Math.Max(1, row.Height - (ClipInset * 2)));
+            dc.DrawRoundedRectangle(null, palette.SelectionPen, new Rect(left + 1, top + 1, Math.Max(1, right - left - 3), Math.Max(1, tall - 2)), 3, 3);
         }
 
         // An edit point picked with the ripple or roll tool: a bar on the edge the keys trim.

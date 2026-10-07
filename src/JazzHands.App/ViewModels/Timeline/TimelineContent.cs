@@ -68,6 +68,9 @@ public sealed record TrackView(Track Track, ImmutableArray<ClipView> Clips)
 
     /// <summary>The track's id.</summary>
     public string Id => Track.Id;
+
+    /// <summary>Where its clips sit in its row: overlapping cues side by side, one lane on any other track.</summary>
+    public Controls.Timeline.CueLanes Lanes { get; } = Controls.Timeline.CueLanes.Of(Track.Kind, Clips);
 }
 
 /// <summary>
