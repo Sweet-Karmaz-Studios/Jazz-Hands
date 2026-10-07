@@ -106,6 +106,8 @@ public static class ShapeGenerator3D
 [Param("animate", ParamType.Bool, Default = "true", Animatable = false, Description = "Play its animation over the clip.")]
 [Param("speed", ParamType.Float, Default = "1", Min = 0, Max = 100, SliderMax = 4, Description = "How fast its animation plays.")]
 [Param("loop", ParamType.Bool, Default = "true", Animatable = false, Description = "Start its animation again when it ends.")]
+[Param("camera", ParamType.Text, Default = "", Animatable = false, Description = "Look through one of the model's own cameras, by name or number from 0, in place of the scene's; empty for the scene's.")]
+[Param("lights", ParamType.Bool, Default = "false", Animatable = false, Description = "Light the scene with the model's own lights as a glTF viewer does: a point or spot light's candela at a metre, falling as the square of the distance in the model's metres; a directional light's lux as its strength.")]
 public static class ModelGenerator3D
 {
 }

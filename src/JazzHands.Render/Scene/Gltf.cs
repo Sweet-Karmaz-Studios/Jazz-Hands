@@ -22,7 +22,40 @@ public sealed record GltfNode(string Name, Vector3 Translation, Quaternion Rotat
 
     /// <summary>Its mesh's morph target weights in place of the mesh's own, or null.</summary>
     public float[]? Weights { get; init; }
+
+    /// <summary>The camera it carries, or -1.</summary>
+    public int Camera { get; init; } = -1;
+
+    /// <summary>The light it carries (KHR_lights_punctual), or -1.</summary>
+    public int Light { get; init; } = -1;
 }
+
+/// <summary>A glTF perspective camera: it looks down its node's -Z with +Y up.</summary>
+/// <param name="Name">Its name, or empty.</param>
+/// <param name="YFov">Its vertical field of view, in radians.</param>
+public sealed record GltfCamera(string Name, float YFov);
+
+/// <summary>What sort of glTF light.</summary>
+public enum GltfLightKind
+{
+    /// <summary>Every way from a point; intensity in candela.</summary>
+    Point,
+
+    /// <summary>A cone down its node's -Z; intensity in candela.</summary>
+    Spot,
+
+    /// <summary>Parallel light down its node's -Z; intensity in lux.</summary>
+    Directional,
+}
+
+/// <summary>A light of KHR_lights_punctual.</summary>
+/// <param name="Name">Its name, or empty.</param>
+/// <param name="Kind">What sort.</param>
+/// <param name="Color">Its linear colour.</param>
+/// <param name="Intensity">Its intensity: candela for a point or spot, lux for a directional light.</param>
+/// <param name="InnerCone">A spot's inner half angle, in radians.</param>
+/// <param name="OuterCone">A spot's outer half angle, in radians.</param>
+public sealed record GltfLight(string Name, GltfLightKind Kind, Vector3 Color, float Intensity, float InnerCone, float OuterCone);
 
 /// <summary>A skin of a glTF model (Phase 49a): the nodes that are its bones, and each one's inverse bind matrix.</summary>
 /// <param name="Joints">The bone nodes.</param>
@@ -119,6 +152,30 @@ public sealed record GltfModel(
     /// <summary>For each mesh, how it bends, or null for one that does not (Phase 49a).</summary>
     public ImmutableArray<GltfDeform?> Deforms { get; init; } = [];
 
+    /// <summary>Its perspective cameras, which nodes carry.</summary>
+    public ImmutableArray<GltfCamera> Cameras { get; init; } = [];
+
+    /// <summary>Its lights (KHR_lights_punctual), which nodes carry.</summary>
+    public ImmutableArray<GltfLight> Lights { get; init; } = [];
+
+    /// <summary>Every node carrying a camera, with where it is in the model's own space at a time in an animation.</summary>
+    public IReadOnlyList<(int Camera, Matrix4x4 World)> CamerasAt(int animation, float seconds)
+    {
+        Matrix4x4?[] global = NodesAt(animation, seconds, out _, out _);
+        return [.. Enumerable.Range(0, Nodes.Length)
+            .Where(index => Nodes[index].Camera >= 0 && Nodes[index].Camera < Cameras.Length && global[index] is not null)
+            .Select(index => (Nodes[index].Camera, global[index]!.Value))];
+    }
+
+    /// <summary>Every node carrying a light, with where it is in the model's own space at a time in an animation.</summary>
+    public IReadOnlyList<(int Light, Matrix4x4 World)> LightsAt(int animation, float seconds)
+    {
+        Matrix4x4?[] global = NodesAt(animation, seconds, out _, out _);
+        return [.. Enumerable.Range(0, Nodes.Length)
+            .Where(index => Nodes[index].Light >= 0 && Nodes[index].Light < Lights.Length && global[index] is not null)
+            .Select(index => (Nodes[index].Light, global[index]!.Value))];
+    }
+
     /// <summary>
     /// Every mesh the scene draws, with its node's matrix in the model's own space (glTF's: y up,
     /// metres), at a time in an animation; at rest when <paramref name="animation"/> is negative.
@@ -128,8 +185,35 @@ public sealed record GltfModel(
     /// </summary>
     public IReadOnlyList<(int Mesh, Matrix4x4 World, MeshData Drawn)> Pose(int animation, float seconds)
     {
+        Matrix4x4?[] global = NodesAt(animation, seconds, out Dictionary<int, float[]> weighted, out List<int> meshNodes);
+        var drawn = new List<(int, Matrix4x4, MeshData)>(meshNodes.Count);
+        foreach (int index in meshNodes)
+        {
+            GltfNode node = Nodes[index];
+            MeshData rest = Meshes[node.Mesh];
+            if (node.Mesh >= Deforms.Length || Deforms[node.Mesh] is not { } deform)
+            {
+                drawn.Add((node.Mesh, global[index]!.Value, rest));
+                continue;
+            }
+
+            float[] weights = weighted.GetValueOrDefault(index) ?? node.Weights ?? deform.Weights;
+            Matrix4x4[]? bones = deform.Skinned && node.Skin >= 0 && node.Skin < Skins.Length ? Bones(Skins[node.Skin], global) : null;
+            MeshData bent = Gltf.Bend(rest, deform, weights, bones);
+            drawn.Add((node.Mesh, bones is null ? global[index]!.Value : Matrix4x4.Identity, bent));
+        }
+
+        return drawn;
+    }
+
+    /// <summary>
+    /// Every node's matrix in the model's own space at a time in an animation (null for a node the
+    /// scene does not reach), the morph weights the animation gives, and the nodes with a mesh.
+    /// </summary>
+    private Matrix4x4?[] NodesAt(int animation, float seconds, out Dictionary<int, float[]> weighted, out List<int> meshNodes)
+    {
         var moved = new Dictionary<int, (Vector3? T, Quaternion? R, Vector3? S)>();
-        var weighted = new Dictionary<int, float[]>();
+        weighted = [];
         if (animation >= 0 && animation < Animations.Length)
         {
             foreach (GltfChannel channel in Animations[animation].Channels)
@@ -167,7 +251,7 @@ public sealed record GltfModel(
 
         // Every node's place in the model, which bones need wherever they are in the tree.
         var global = new Matrix4x4?[Nodes.Length];
-        var meshNodes = new List<int>();
+        var withMesh = new List<int>();
         var visiting = new HashSet<int>();
         void Visit(int index, Matrix4x4 parent)
         {
@@ -194,7 +278,7 @@ public sealed record GltfModel(
             global[index] = world;
             if (node.Mesh >= 0 && node.Mesh < Meshes.Length)
             {
-                meshNodes.Add(index);
+                withMesh.Add(index);
             }
 
             foreach (int child in node.Children)
@@ -210,24 +294,8 @@ public sealed record GltfModel(
             Visit(root, Matrix4x4.Identity);
         }
 
-        var drawn = new List<(int, Matrix4x4, MeshData)>(meshNodes.Count);
-        foreach (int index in meshNodes)
-        {
-            GltfNode node = Nodes[index];
-            MeshData rest = Meshes[node.Mesh];
-            if (node.Mesh >= Deforms.Length || Deforms[node.Mesh] is not { } deform)
-            {
-                drawn.Add((node.Mesh, global[index]!.Value, rest));
-                continue;
-            }
-
-            float[] weights = weighted.GetValueOrDefault(index) ?? node.Weights ?? deform.Weights;
-            Matrix4x4[]? bones = deform.Skinned && node.Skin >= 0 && node.Skin < Skins.Length ? Bones(Skins[node.Skin], global) : null;
-            MeshData bent = Gltf.Bend(rest, deform, weights, bones);
-            drawn.Add((node.Mesh, bones is null ? global[index]!.Value : Matrix4x4.Identity, bent));
-        }
-
-        return drawn;
+        meshNodes = withMesh;
+        return global;
     }
 
     /// <summary>Each bone's matrix now: the inverse bind matrix, then where the bone is in the model.</summary>
@@ -535,7 +603,7 @@ public static class Gltf
 
     private sealed class Reader(JsonElement root, byte[]? bin, string folder, string key)
     {
-        private static readonly HashSet<string> Understood = new(StringComparer.Ordinal) { "KHR_materials_emissive_strength", "KHR_mesh_quantization" };
+        private static readonly HashSet<string> Understood = new(StringComparer.Ordinal) { "KHR_materials_emissive_strength", "KHR_mesh_quantization", "KHR_lights_punctual" };
 
         private readonly List<string> _problems = [];
         private readonly Dictionary<int, byte[]> _buffers = [];
@@ -581,11 +649,52 @@ public static class Gltf
             ImmutableArray<int> roots = Roots(nodes);
             ImmutableArray<GltfAnimation> animations = [.. Array("animations").Select(Animation)];
 
+            ImmutableArray<GltfCamera> cameras = [.. Array("cameras").Select(Camera)];
+            ImmutableArray<GltfLight> lights = root.TryGetProperty("extensions", out JsonElement extensions)
+                && extensions.TryGetProperty("KHR_lights_punctual", out JsonElement punctual)
+                    ? [.. Items(punctual, "lights").Select(Light)]
+                    : [];
             return new GltfModel(meshes.ToImmutable(), meshMaterials.ToImmutable(), nodes, roots, animations, [.. _problems.Distinct(StringComparer.Ordinal)])
             {
                 Skins = skins,
                 Deforms = deforms.ToImmutable(),
+                Cameras = cameras,
+                Lights = lights,
             };
+        }
+
+        /// <summary>A camera: its vertical field of view; an orthographic one is seen through as a 50 degree lens.</summary>
+        private GltfCamera Camera(JsonElement camera)
+        {
+            if (camera.TryGetProperty("perspective", out JsonElement perspective) && perspective.TryGetProperty("yfov", out JsonElement yfov))
+            {
+                return new GltfCamera(Text(camera, "name"), yfov.GetSingle());
+            }
+
+            _problems.Add("An orthographic camera is looked through as a perspective one.");
+            return new GltfCamera(Text(camera, "name"), 50.0f * MathF.PI / 180.0f);
+        }
+
+        /// <summary>A light of KHR_lights_punctual.</summary>
+        private static GltfLight Light(JsonElement light)
+        {
+            GltfLightKind kind = Text(light, "type") switch
+            {
+                "directional" => GltfLightKind.Directional,
+                "spot" => GltfLightKind.Spot,
+                _ => GltfLightKind.Point,
+            };
+            JsonElement spot = light.TryGetProperty("spot", out JsonElement cone) ? cone : default;
+            float Angle(string name, float fallback) =>
+                spot.ValueKind == JsonValueKind.Object && spot.TryGetProperty(name, out JsonElement value) ? value.GetSingle() : fallback;
+
+            return new GltfLight(
+                Text(light, "name"),
+                kind,
+                light.TryGetProperty("color", out JsonElement color) ? Vector(color, Vector3.One) : Vector3.One,
+                light.TryGetProperty("intensity", out JsonElement intensity) ? intensity.GetSingle() : 1.0f,
+                Angle("innerConeAngle", 0.0f),
+                Angle("outerConeAngle", MathF.PI / 4.0f));
         }
 
         private GltfSkin Skin(JsonElement skin)
@@ -643,6 +752,12 @@ public static class Gltf
             {
                 Skin = node.TryGetProperty("skin", out JsonElement skin) ? skin.GetInt32() : -1,
                 Weights = node.TryGetProperty("weights", out JsonElement weights) ? Floats(weights) : null,
+                Camera = node.TryGetProperty("camera", out JsonElement camera) ? camera.GetInt32() : -1,
+                Light = node.TryGetProperty("extensions", out JsonElement extensions)
+                    && extensions.TryGetProperty("KHR_lights_punctual", out JsonElement punctual)
+                    && punctual.TryGetProperty("light", out JsonElement light)
+                        ? light.GetInt32()
+                        : -1,
             };
         }
 

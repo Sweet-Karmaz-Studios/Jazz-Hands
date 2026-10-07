@@ -31,6 +31,8 @@ public static partial class RenderGraphBuilder
         ArgumentNullException.ThrowIfNull(sequence);
         ArgumentNullException.ThrowIfNull(options);
 
+        // Reading a model's own parameters below moves the drivers' origin; it is put back after.
+        Flicks origin = DriverScope.Origin;
         ProjectSettings settings = project.SettingsFor(sequence);
         var frameSize = new Vector2(settings.Width, settings.Height);
         HashSet<string> mattes = TrackMatte.Sources(sequence);
@@ -57,15 +59,32 @@ public static partial class RenderGraphBuilder
                 case SceneObjects.Light:
                     lights.Add(clip);
                     break;
+
+                // A model may be looked through by one of its own cameras, and light with its own lights.
+                case SceneObjects.Model when OwnParameters(clip, SceneObjects.Model, time, options) is { } model:
+                    if (model.Text("camera").Trim().Length > 0)
+                    {
+                        camera = clip;
+                    }
+
+                    if (model.Bool("lights"))
+                    {
+                        lights.Add(clip);
+                    }
+
+                    break;
             }
         }
 
         lights.Reverse();
-        Flicks origin = DriverScope.Origin;
         try
         {
-            SceneCamera seen = camera is null ? DefaultCamera(frameSize) : CameraOf(camera, time, frameSize, options);
-            return (seen, [.. lights.Select(light => LightOf(project, light, time, options, frames)).OfType<SceneLight>()]);
+            SceneCamera seen = camera is null ? DefaultCamera(frameSize)
+                : camera.GeneratorId == SceneObjects.Model ? ModelCamera(camera, time, frameSize, options) ?? DefaultCamera(frameSize)
+                : CameraOf(camera, time, frameSize, options);
+            return (seen, [.. lights.SelectMany(light => light.GeneratorId == SceneObjects.Model
+                ? ModelLights(light, time, options)
+                : LightOf(project, light, time, options, frames) is { } one ? [one] : Array.Empty<SceneLight>())]);
         }
         finally
         {
@@ -457,46 +476,136 @@ public static partial class RenderGraphBuilder
 
             case SceneObjects.Model:
             {
-                string file = p.Text("file");
-                if (file.Length == 0)
+                if (ModelAt(p, local, options) is not { } at)
                 {
                     return [];
                 }
 
-                string path = System.IO.Path.IsPathRooted(file) || options.ProjectFolder.Length == 0 ? file : System.IO.Path.Combine(options.ProjectFolder, file);
-                if (MeshLibrary.Model(path, out _) is not { } model)
-                {
-                    return [];
-                }
-
-                // glTF is y up and z towards the viewer, in metres; turned half round X into this
-                // space, centred, and sized so its largest side is the size asked for.
-                (Vector3 low, Vector3 high) = model.Bounds();
-                float largest = MathF.Max(high.X - low.X, MathF.Max(high.Y - low.Y, high.Z - low.Z));
-                float scale = p.Float("size") / MathF.Max(largest, 1e-6f);
-                Matrix4x4 intoScene = Matrix4x4.CreateTranslation(-(low + high) / 2.0f) * Matrix4x4.CreateScale(scale, -scale, -scale);
-
-                int animation = AnimationIndex(model, p.Text("animation"));
-                float seconds = 0.0f;
-                if (animation >= 0 && p.Bool("animate"))
-                {
-                    seconds = (float)local.ToSeconds() * p.Float("speed");
-                    float length = model.Animations[animation].Duration;
-                    if (p.Bool("loop") && length > 0.0f)
-                    {
-                        seconds %= length;
-                        if (seconds < 0.0f)
-                        {
-                            seconds += length;
-                        }
-                    }
-                }
-
-                return [.. model.Pose(p.Bool("animate") ? animation : -1, seconds).Select(drawn => Placed(drawn.Drawn, model.MeshMaterials[drawn.Mesh], drawn.World * intoScene))];
+                return [.. at.Model.Pose(at.Animation, at.Seconds).Select(drawn => Placed(drawn.Drawn, at.Model.MeshMaterials[drawn.Mesh], drawn.World * at.IntoScene))];
             }
 
             default:
                 return [];
+        }
+    }
+
+    /// <summary>
+    /// A model clip's model at a moment: the file read, the matrix from its own space into the
+    /// scene's (centred and sized), and which animation is at what time (-1 for at rest); null
+    /// when it names no file that can be read.
+    /// </summary>
+    private static (GltfModel Model, Matrix4x4 IntoScene, int Animation, float Seconds)? ModelAt(ParameterSet p, Flicks local, RenderOptions options)
+    {
+        string file = p.Text("file");
+        if (file.Length == 0)
+        {
+            return null;
+        }
+
+        string path = System.IO.Path.IsPathRooted(file) || options.ProjectFolder.Length == 0 ? file : System.IO.Path.Combine(options.ProjectFolder, file);
+        if (MeshLibrary.Model(path, out _) is not { } model)
+        {
+            return null;
+        }
+
+        // glTF is y up and z towards the viewer, in metres; turned half round X into this
+        // space, centred, and sized so its largest side is the size asked for.
+        (Vector3 low, Vector3 high) = model.Bounds();
+        float largest = MathF.Max(high.X - low.X, MathF.Max(high.Y - low.Y, high.Z - low.Z));
+        float scale = p.Float("size") / MathF.Max(largest, 1e-6f);
+        Matrix4x4 intoScene = Matrix4x4.CreateTranslation(-(low + high) / 2.0f) * Matrix4x4.CreateScale(scale, -scale, -scale);
+
+        int animation = AnimationIndex(model, p.Text("animation"));
+        float seconds = 0.0f;
+        if (animation >= 0 && p.Bool("animate"))
+        {
+            seconds = (float)local.ToSeconds() * p.Float("speed");
+            float length = model.Animations[animation].Duration;
+            if (p.Bool("loop") && length > 0.0f)
+            {
+                seconds %= length;
+                if (seconds < 0.0f)
+                {
+                    seconds += length;
+                }
+            }
+        }
+
+        return (model, intoScene, p.Bool("animate") ? animation : -1, seconds);
+    }
+
+    /// <summary>
+    /// The camera of a model clip that asks to be looked through one of its own: the node's place
+    /// carried into the scene, looking down its -Z with +Y up as glTF has it, and its vertical
+    /// field of view across the frame's height; null when the clip names none it has.
+    /// </summary>
+    private static SceneCamera? ModelCamera(Clip clip, Flicks time, Vector2 frameSize, RenderOptions options)
+    {
+        Flicks local = time - clip.Start;
+        if (OwnParameters(clip, SceneObjects.Model, time, options) is not { } p || p.Text("camera").Trim() is not { Length: > 0 } chosen
+            || ModelAt(p, local, options) is not { } at)
+        {
+            return null;
+        }
+
+        GltfModel model = at.Model;
+        int wanted = int.TryParse(chosen, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int number)
+            ? number
+            : Enumerable.Range(0, model.Cameras.Length).FirstOrDefault(index => string.Equals(model.Cameras[index].Name, chosen, StringComparison.OrdinalIgnoreCase), -1);
+        (int Camera, Matrix4x4 World)? found = model.CamerasAt(at.Animation, at.Seconds)
+            .Where(candidate => candidate.Camera == wanted)
+            .Select(candidate => ((int, Matrix4x4)?)candidate)
+            .FirstOrDefault();
+        if (found is not { } seen)
+        {
+            return null;
+        }
+
+        Matrix4x4 world = seen.World * at.IntoScene * LayerPlacement(clip, local, Vector2.One);
+        Vector3 forward = Vector3.Normalize(Vector3.TransformNormal(-Vector3.UnitZ, world));
+        Vector3 right = Vector3.Normalize(Vector3.TransformNormal(Vector3.UnitX, world));
+        Vector3 down = Vector3.Normalize(Vector3.TransformNormal(-Vector3.UnitY, world));
+        float zoom = frameSize.Y / 2.0f / MathF.Tan(Math.Clamp(model.Cameras[seen.Camera].YFov, 0.01f, 3.1f) / 2.0f);
+        return new SceneCamera(Vector3.Transform(Vector3.Zero, world), right, down, forward, zoom, frameSize);
+    }
+
+    /// <summary>
+    /// The lights of a model clip that lights the scene with its own, as a glTF viewer does: a point
+    /// or spot light's intensity at a metre of the model's, falling as the inverse square beyond,
+    /// and a directional light's as its strength.
+    /// </summary>
+    private static IEnumerable<SceneLight> ModelLights(Clip clip, Flicks time, RenderOptions options)
+    {
+        Flicks local = time - clip.Start;
+        if (OwnParameters(clip, SceneObjects.Model, time, options) is not { } p || !p.Bool("lights") || ModelAt(p, local, options) is not { } at)
+        {
+            yield break;
+        }
+
+        Matrix4x4 placement = at.IntoScene * LayerPlacement(clip, local, Vector2.One);
+        float metre = Vector3.TransformNormal(Vector3.UnitX, placement).Length();
+        foreach ((int index, Matrix4x4 node) in at.Model.LightsAt(at.Animation, at.Seconds))
+        {
+            GltfLight light = at.Model.Lights[index];
+            Matrix4x4 world = node * placement;
+            Vector3 position = Vector3.Transform(Vector3.Zero, world);
+            Vector3 direction = Vector3.TransformNormal(-Vector3.UnitZ, world);
+            direction = direction.LengthSquared() > 1e-12f ? Vector3.Normalize(direction) : Vector3.UnitZ;
+            Vector3 color = light.Color * MathF.Max(light.Intensity, 0.0f);
+            yield return light.Kind switch
+            {
+                GltfLightKind.Directional => new SceneLight(SceneLightKind.Directional, color, position, direction),
+                GltfLightKind.Spot => new SceneLight(
+                    SceneLightKind.Spot,
+                    color,
+                    position,
+                    direction,
+                    light.OuterCone * 2.0f * 180.0f / MathF.PI,
+                    light.OuterCone > 0.0f ? Math.Clamp((light.OuterCone - light.InnerCone) / light.OuterCone, 0.0f, 1.0f) : 0.5f,
+                    SceneFalloff.InverseSquare,
+                    metre),
+                _ => new SceneLight(SceneLightKind.Point, color, position, direction, Falloff: SceneFalloff.InverseSquare, Radius: metre),
+            };
         }
     }
 
