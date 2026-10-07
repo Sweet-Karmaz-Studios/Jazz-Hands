@@ -272,7 +272,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
 
         if (!Within(row))
         {
-            Status = "Put the playhead over the clip to start animating.";
+            Status = $"Put the playhead over {Over(row)} to start animating.";
             return;
         }
 
@@ -286,7 +286,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
 
         if (!Within(row))
         {
-            Status = "Put the playhead over the clip to add a keyframe.";
+            Status = $"Put the playhead over {Over(row)} to add a keyframe.";
             return;
         }
 
@@ -830,6 +830,8 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         }
 
         Flicks tolerance = Tolerance();
+        Flicks origin = owner.Origin;
+        Flicks local = Clamp(Playhead - origin, transition.Duration);
         string alignment = transition.Alignment switch
         {
             TransitionAlignment.EndOfLeft => "end-of-left",
@@ -842,17 +844,17 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
             if (ReferenceEquals(row.Descriptor, TransitionDuration))
             {
                 var seconds = new ParamValue.Float((float)transition.Duration.ToSeconds());
-                row.Load(seconds, AnimatedValue.Constant(seconds), Flicks.Zero, transition.Duration, Playhead, tolerance);
+                row.Load(seconds, AnimatedValue.Constant(seconds), origin, transition.Duration, Playhead, tolerance);
             }
             else if (ReferenceEquals(row.Descriptor, TransitionAlignmentParam))
             {
                 var choice = new ParamValue.Enum(alignment);
-                row.Load(choice, AnimatedValue.Constant(choice), Flicks.Zero, transition.Duration, Playhead, tolerance);
+                row.Load(choice, AnimatedValue.Constant(choice), origin, transition.Duration, Playhead, tolerance);
             }
             else
             {
                 AnimatedValue? stored = transition.Parameter(row.Name);
-                row.Load(ParamEval.Eval(stored, row.Descriptor, Flicks.Zero), stored, Flicks.Zero, transition.Duration, Playhead, tolerance);
+                row.Load(ParamEval.Eval(stored, row.Descriptor, local), stored, origin, transition.Duration, Playhead, tolerance);
             }
         }
 
@@ -860,7 +862,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
     }
 
     /// <summary>What one of a transition's rows sends: its duration and alignment through <c>transition.set</c>, the rest through <c>param.set</c>.</summary>
-    private static ICommand TransitionEdit(ParamRowViewModel row, string text)
+    private ICommand TransitionEdit(ParamRowViewModel row, string text)
     {
         if (ReferenceEquals(row.Descriptor, TransitionDuration))
         {
@@ -879,7 +881,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
             return new SetTransitionCommand(row.OwnerId, Alignment: alignment);
         }
 
-        return new SetParamCommand(row.OwnerId, row.Name, text);
+        return new SetParamCommand(row.OwnerId, row.Name, text, AtFor(row.OwnerId, row));
     }
 
     /// <summary>A fade row's value on a clip: the fade's length in seconds, or its shape.</summary>
@@ -1148,7 +1150,15 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
             : null;
 
     private bool Within(ParamRowViewModel row) =>
-        ParamTargets.Find(_session.Project, row.OwnerId) is { Clip: { } clip } && Playhead >= clip.Start && Playhead <= clip.End;
+        ParamTargets.Find(_session.Project, row.OwnerId) switch
+        {
+            { Clip: { } clip } => Playhead >= clip.Start && Playhead <= clip.End,
+            { Kind: ParamOwnerKind.Transition } transition => Playhead >= transition.Origin && Playhead <= transition.Origin + transition.Length,
+            _ => false,
+        };
+
+    private string Over(ParamRowViewModel row) =>
+        string.Equals(row.OwnerId, _transitionId, StringComparison.Ordinal) ? "the transition" : "the clip";
 
     private bool Differs(Project project, string target, ParamRowViewModel row, Flicks playhead)
     {

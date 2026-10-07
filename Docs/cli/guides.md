@@ -439,7 +439,7 @@ jazz param list trailer.jazz <clip-id>
 | `keyframe set-handles <owner> <param> --at t [--in "x, y"] [--out "x, y"]` | Bezier handles, time and value from 0 to 1 across the segment. |
 
 Times are on the sequence; `--local` reads them from the clip's start. Keyframes are stored
-relative to the clip, so moving it carries its animation. A time outside the clip is refused
+relative to the clip (a transition's from where it starts), so moving it carries its animation. A time outside the clip is refused
 with a hint about `--local`. Interpolation is `hold`, `linear`, `bezier`, `ease-in`, `ease-out`
 or `ease-in-out`; switches, choices, text and paths always hold.
 

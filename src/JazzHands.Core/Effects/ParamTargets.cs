@@ -36,6 +36,7 @@ public enum ParamOwnerKind
 /// <param name="Mask">The mask, for a mask.</param>
 /// <param name="Transition">The transition, for a transition.</param>
 /// <param name="Graph">The <c>color.graph</c> effect holding it, for a node of a colour graph and a node's mask.</param>
+/// <param name="TransitionStart">Where a transition starts playing on the sequence, which its keyframes count from.</param>
 public sealed record ParamOwner(
     ParamOwnerKind Kind,
     string Id,
@@ -45,13 +46,15 @@ public sealed record ParamOwner(
     Effect? Effect = null,
     Mask? Mask = null,
     Transition? Transition = null,
-    Effect? Graph = null)
+    Effect? Graph = null,
+    Flicks? TransitionStart = null)
 {
     /// <summary>
-    /// Where keyframe time zero is on the sequence: a clip's start for anything on a clip, the
-    /// sequence start for a track and its effects. A keyframe moves with its clip.
+    /// Where keyframe time zero is on the sequence: a clip's start for anything on a clip, a
+    /// transition's start for a transition, the sequence start for a track and its effects. A
+    /// keyframe moves with its clip or its transition.
     /// </summary>
-    public Flicks Origin => Clip?.Start ?? Flicks.Zero;
+    public Flicks Origin => TransitionStart ?? Clip?.Start ?? Flicks.Zero;
 
     /// <summary>How long the owner lasts from its origin, which keyframes are expected to stay inside.</summary>
     public Flicks Length => Transition?.Duration ?? Clip?.Duration ?? Sequence.Duration;
@@ -147,7 +150,12 @@ public static class ParamTargets
                 {
                     if (Is(transition.Id, id))
                     {
-                        return new ParamOwner(ParamOwnerKind.Transition, id, sequence, track, Transition: transition);
+                        // Its keyframes count from where it starts playing, as it is drawn; one whose
+                        // clips do not meet counts from its left clip's end.
+                        Flicks start = Queries.TransitionTiming.Span(track, transition, project.SettingsFor(sequence).FrameRate)?.Range.Start
+                            ?? track.Clip(transition.LeftClipId)?.End
+                            ?? Flicks.Zero;
+                        return new ParamOwner(ParamOwnerKind.Transition, id, sequence, track, Transition: transition, TransitionStart: start);
                     }
                 }
 

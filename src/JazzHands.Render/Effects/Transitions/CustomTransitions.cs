@@ -254,7 +254,7 @@ public static class CustomTransitions
                 Unit = param.Unit ?? (type == ParamType.Point ? "px" : string.Empty),
                 Label = param.Label ?? string.Empty,
                 Description = param.Description ?? string.Empty,
-                Animatable = false,
+                Animatable = type is ParamType.Float or ParamType.Float2 or ParamType.Point or ParamType.Color,
                 Choices = param.Choices ?? string.Empty,
             };
             parameters.Add(EffectRegistry.Describe(id, attribute));
