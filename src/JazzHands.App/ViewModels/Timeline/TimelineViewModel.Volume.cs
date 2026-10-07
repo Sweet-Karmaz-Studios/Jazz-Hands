@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Input;
 using JazzHands.App.Controls.Timeline;
@@ -20,12 +21,13 @@ public readonly record struct VolumeHit(ClipView Clip, Rect Body, Flicks? Keyfra
 /// </summary>
 /// <remarks>
 /// With the Select tool, a press on the line of a clip whose volume is one level drags that
-/// level (<c>audio.set-gain</c>). A press on a keyframe drags that keyframe's level
-/// (<c>audio.set-gain --at</c> its time). Ctrl and a press adds a keyframe where the press is,
-/// at the level the line already has there, so the sound does not change until it is dragged.
-/// On a line that already has keyframes, a press between them moves the clip as it always did.
-/// Every step of a drag is a mergeable command sent through a <see cref="CommandPump"/>, so the
-/// sound follows the pointer and the whole drag is one undo step.
+/// level (<c>audio.set-gain</c>). A press on a keyframe drags it: up and down its level, and
+/// sideways its time, between the keyframes either side and inside the clip, each step one
+/// <c>keyframe.move --value</c> from where the last left it. Ctrl and a press adds a keyframe
+/// where the press is, at the level the line already has there, so the sound does not change
+/// until it is dragged. On a line that already has keyframes, a press between them moves the clip
+/// as it always did. Every step of a drag is a mergeable command sent through a
+/// <see cref="CommandPump"/>, so the sound follows the pointer and the whole drag is one undo step.
 /// </remarks>
 public sealed partial class TimelineViewModel
 {
@@ -33,6 +35,13 @@ public sealed partial class TimelineViewModel
     private ClipView? _volumeClip;
     private Flicks? _volumeAt;
     private bool _volumeMoved;
+
+    // A keyframe being dragged: where it was pressed, where the last step left it, and how far it may go.
+    private Flicks? _volumeKey;
+    private Flicks _volumeKeyNow;
+    private Flicks _volumeKeyEarliest;
+    private Flicks _volumeKeyLatest;
+    private bool _volumeTimeMoved;
 
     /// <summary>The volume line under a point, or null.</summary>
     public VolumeHit? VolumeAt(Point point) => VolumeAt(HitAt(point), point);
@@ -86,8 +95,16 @@ public sealed partial class TimelineViewModel
         }
         else if (on.Keyframe is { } key)
         {
+            // It may go as far as a frame short of the keyframes either side, and the clip's ends.
+            Flicks frame = Flicks.FromFrames(1, Content.Settings.FrameRate);
+            Flicks[] keys = [.. VolumeLine.Keyframes(clip)];
+            int index = Array.IndexOf(keys, key);
             _volumeClip = clip;
             _volumeAt = key;
+            _volumeKey = key;
+            _volumeKeyNow = key;
+            _volumeKeyEarliest = index > 0 ? keys[index - 1] + frame : clip.Start;
+            _volumeKeyLatest = index >= 0 && index < keys.Length - 1 ? keys[index + 1] - frame : clip.End;
         }
         else if (clip.Clip.Volume is KeyframedValue { IsAnimated: true })
         {
@@ -100,12 +117,16 @@ public sealed partial class TimelineViewModel
         }
 
         _volumeMoved = false;
+        _volumeTimeMoved = false;
         _gesture = Gesture.Volume;
         SetCursor(TimelineCursor.Volume);
         return true;
     }
 
-    /// <summary>The level follows the pointer once it has moved far enough to mean it.</summary>
+    /// <summary>
+    /// The level follows the pointer once it has moved far enough up or down to mean it, and a
+    /// keyframe's time once it has moved far enough sideways.
+    /// </summary>
     private void VolumeMove(Point point)
     {
         if (_volumeClip is not { } clip || Geometry.Row(clip.TrackId) is not { } row)
@@ -113,13 +134,23 @@ public sealed partial class TimelineViewModel
             return;
         }
 
-        if (!_volumeMoved && Math.Abs(point.Y - _downAt.Y) < DragThreshold)
+        _volumeMoved |= Math.Abs(point.Y - _downAt.Y) >= DragThreshold;
+        _volumeTimeMoved |= _volumeKey is not null && Math.Abs(point.X - _downAt.X) >= DragThreshold;
+        double db = VolumeLine.Db(VolumeLine.Body(Geometry, row, clip), point.Y);
+
+        if (_volumeKey is { } pressed && (_volumeMoved || _volumeTimeMoved))
         {
+            Flicks to = _volumeTimeMoved
+                ? Flicks.Max(_volumeKeyEarliest, Flicks.Min(_volumeKeyLatest, pressed + Geometry.TimeAt(point.X) - Geometry.TimeAt(_downAt.X)))
+                : pressed;
+            SendKeyframe(to, _volumeMoved ? db : null);
             return;
         }
 
-        _volumeMoved = true;
-        SendVolume(VolumeLine.Db(VolumeLine.Body(Geometry, row, clip), point.Y));
+        if (_volumeMoved)
+        {
+            SendVolume(db);
+        }
     }
 
     private void VolumeUp(Point point)
@@ -127,19 +158,37 @@ public sealed partial class TimelineViewModel
         VolumeMove(point);
         _volumeClip = null;
         _volumeAt = null;
+        _volumeKey = null;
     }
 
-    private void SendVolume(double db)
+    private CommandPump VolumePump()
     {
-        string id = _volumeClip!.Id;
-        Flicks? at = _volumeAt;
-
         if (_volumePump is null)
         {
             _volumePump = new CommandPump(_session, _ui);
             _volumePump.Refused += (_, message) => Status = message;
         }
 
-        _volumePump.Send("volume:" + id, () => new SetAudioGainCommand(id, db, at));
+        return _volumePump;
+    }
+
+    private void SendVolume(double db)
+    {
+        string id = _volumeClip!.Id;
+        Flicks? at = _volumeAt;
+        VolumePump().Send("volume:" + id, () => new SetAudioGainCommand(id, db, at));
+    }
+
+    /// <summary>Moves the dragged keyframe, from wherever the last step left it, and sets its level when one is given.</summary>
+    private void SendKeyframe(Flicks to, double? db)
+    {
+        string id = _volumeClip!.Id;
+        string? value = db is { } level ? level.ToString("0.0", CultureInfo.InvariantCulture) : null;
+        VolumePump().Send("volume:" + id, () =>
+        {
+            var command = new MoveKeyframeCommand(id, "volume", _volumeKeyNow, to, Value: value);
+            _volumeKeyNow = to;
+            return command;
+        });
     }
 }

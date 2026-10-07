@@ -2730,6 +2730,7 @@ Move a keyframe to another time.
 | `--at <time>` | Required. The keyframe's time on the sequence. |
 | `--to <time>` | Required. Its new time on the sequence. |
 | `--local` | Read the times from the clip's start rather than the sequence's. |
+| `--value <value>` | Also give it this value; it keeps its own without. |
 | `--no-save` | Do not write the project back. |
 
 ### `jazz keyframe remove <project> <owner-id> <param>`
@@ -6314,11 +6315,11 @@ jazz param list trailer.jazz <clip-id>
 | `param clear-keyframes <owner> <param> [--at t]` | Turns animation off, keeping the value at `--at` (the first keyframe's without it). |
 | `param list <owner>`, `param get <owner> <param> [--at t]` | Parameters with their values and keyframes, times on the sequence. |
 | `keyframe add <owner> <param> --at t [--value v] [--interp i]` | Adds a keyframe, or changes the one at that time. Without `--value` it takes what the parameter is worth there. A new keyframe takes the shape of the one before it. |
-| `keyframe remove`, `keyframe move --to t`, `keyframe set-value --value v`, `keyframe set-interp --interp i` | By `--at`; a keyframe within half a frame of it is found. Removing the last leaves its value as a constant. |
+| `keyframe remove`, `keyframe move --to t [--value v]`, `keyframe set-value --value v`, `keyframe set-interp --interp i` | By `--at`; a keyframe within half a frame of it is found. Removing the last leaves its value as a constant. A move with `--value` sets its value too, and moves of one keyframe one after another, each from where the last left it, undo as one step. |
 | `keyframe set-handles <owner> <param> --at t [--in "x, y"] [--out "x, y"]` | Bezier handles, time and value from 0 to 1 across the segment. |
 
 Times are on the sequence; `--local` reads them from the clip's start. Keyframes are stored
-relative to the clip, so moving it carries its animation. A time outside the clip is refused
+relative to the clip (a transition's from where it starts), so moving it carries its animation. A time outside the clip is refused
 with a hint about `--local`. Interpolation is `hold`, `linear`, `bezier`, `ease-in`, `ease-out`
 or `ease-in-out`; switches, choices, text and paths always hold.
 

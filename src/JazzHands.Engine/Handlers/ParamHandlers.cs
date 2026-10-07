@@ -137,8 +137,13 @@ public sealed class MoveKeyframeHandler : ICommandHandler<MoveKeyframeCommand>
         Flicks tolerance = ParamHelp.Tolerance(project, owner);
         int index = ParamHelp.Find(owner, descriptor, keyed, ParamHelp.Local(owner, command.At, command.Local), tolerance);
         Flicks to = ParamHelp.Local(owner, command.To, command.Local);
+        Keyframe keyframe = keyed.Keyframes[index];
+        if (command.Value is { } text)
+        {
+            keyframe = keyframe with { Value = ParamHelp.Value(descriptor, text) };
+        }
 
-        if (keyed.Keyframes[index].Time == to)
+        if (keyframe.Time == to && keyframe == keyed.Keyframes[index])
         {
             return project;
         }
@@ -151,7 +156,7 @@ public sealed class MoveKeyframeHandler : ICommandHandler<MoveKeyframeCommand>
                 $"'{descriptor.Name}' already has a keyframe at {Timecode.FormatClock(keyed.Keyframes[there].Time + owner.Origin)}. Remove it first, or move this one elsewhere.");
         }
 
-        var moved = new KeyframedValue(keyed.Keyframes.SetItem(index, keyed.Keyframes[index] with { Time = to }));
+        var moved = new KeyframedValue(keyed.Keyframes.SetItem(index, keyframe with { Time = to }));
         return ParamHelp.Store(project, owner, descriptor, moved, context);
     }
 }
