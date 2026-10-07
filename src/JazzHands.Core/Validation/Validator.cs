@@ -170,6 +170,29 @@ public static class Validator
                     $"'{media.RelativePath}' is an absolute path, so the project will not move between machines."));
             }
         }
+
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (int index = 0; index < project.ExportPresets.Length; index++)
+        {
+            Export.ExportPreset preset = project.ExportPresets[index];
+            if (!names.Add(preset.Name))
+            {
+                issues.Add(new ValidationIssue(
+                    Severity.Warning,
+                    "duplicate-preset",
+                    $"/exportPresets/{index}/name",
+                    $"Two of the project's export presets are called '{preset.Name}'; the first is used."));
+            }
+
+            if (Export.ExportPresets.Check(preset) is { } problem)
+            {
+                issues.Add(new ValidationIssue(
+                    Severity.Warning,
+                    "invalid-preset",
+                    $"/exportPresets/{index}",
+                    $"The project's export preset '{preset.Name}' is left out: {problem}"));
+            }
+        }
     }
 
     private static void CheckSequence(

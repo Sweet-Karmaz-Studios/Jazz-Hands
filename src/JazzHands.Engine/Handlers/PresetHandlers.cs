@@ -8,7 +8,7 @@ using JazzHands.Engine.Export;
 
 namespace JazzHands.Engine.Handlers;
 
-/// <summary>Lists the export presets, built in and a person's own.</summary>
+/// <summary>Lists the export presets: the project's own, a person's own and the built-in ones.</summary>
 public sealed class ListPresetsHandler : IQueryHandler<ListPresetsQuery, ExportPresetSummary[]>
 {
     /// <inheritdoc />
@@ -21,7 +21,7 @@ public sealed class ListPresetsHandler : IQueryHandler<ListPresetsQuery, ExportP
             throw new CommandException("invalid-value", $"'{category}' is not a preset category. They are {string.Join(", ", ExportPresets.Categories)}.");
         }
 
-        return [.. ExportPresetLibrary.All
+        return [.. ExportPresetLibrary.For(project)
             .Where(preset => query.Category is null || preset.Category == query.Category)
             .Select(ExportPresets.Summarise)];
     }
@@ -34,7 +34,7 @@ public sealed class GetPresetHandler : IQueryHandler<GetPresetQuery, ExportPrese
     public ExportPreset Handle(Project project, GetPresetQuery query, QueryContext context)
     {
         ArgumentNullException.ThrowIfNull(query);
-        return ExportPresetLibrary.Require(query.Name);
+        return ExportPresetLibrary.Require(query.Name, project);
     }
 }
 
@@ -76,7 +76,7 @@ public sealed class SavePresetHandler : ICommandHandler<SavePresetCommand>
         }
         else
         {
-            ExportPreset basis = ExportPresetLibrary.Require(command.From);
+            ExportPreset basis = ExportPresetLibrary.Require(command.From, project);
             preset = ExportOverrideText.Apply(basis, command.ToOverrides()) with
             {
                 Name = name,
@@ -116,5 +116,69 @@ public sealed class DeletePresetHandler : ICommandHandler<DeletePresetCommand>
         ExportPresetLibrary.Delete(command.Name);
         context.Changed(command.Name.Trim());
         return project;
+    }
+}
+
+/// <summary>Keeps a copy of an export preset in the project.</summary>
+public sealed class AddPresetToProjectHandler : ICommandHandler<AddPresetToProjectCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, AddPresetToProjectCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        ExportPreset source = ExportPresetLibrary.Require(command.Name, project);
+        string name = (command.As ?? source.Name).Trim();
+        if (!System.Text.RegularExpressions.Regex.IsMatch(name, "^[a-z0-9]+(-[a-z0-9]+)*$"))
+        {
+            throw new CommandException("invalid-value", $"A preset's name is lower case words joined by hyphens, as 'client-review', not '{name}'.", "as");
+        }
+
+        int existing = project.ExportPresets.IndexOf(preset => string.Equals(preset.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (existing >= 0 && !command.Replace)
+        {
+            throw new CommandException(
+                "preset-exists",
+                $"The project already keeps a preset called '{name}'. Add --replace to write over it, or --as to keep this one under another name.");
+        }
+
+        ExportPreset kept = source with { Name = name, BuiltIn = false, Source = string.Empty };
+        if (existing >= 0 && project.ExportPresets[existing] == kept)
+        {
+            return project;
+        }
+
+        EquatableArray<ExportPreset> presets = existing >= 0
+            ? project.ExportPresets.SetItem(existing, kept)
+            : new EquatableArray<ExportPreset>([.. project.ExportPresets, kept]);
+        context.Changed(project.Id);
+        return project with { ExportPresets = presets };
+    }
+}
+
+/// <summary>Takes an export preset out of the project.</summary>
+public sealed class RemovePresetFromProjectHandler : ICommandHandler<RemovePresetFromProjectCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, RemovePresetFromProjectCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        string name = command.Name.Trim();
+        if (!project.ExportPresets.Any(preset => string.Equals(preset.Name, name, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new CommandException(
+                "preset-not-found",
+                project.ExportPresets.IsEmpty
+                    ? $"The project keeps no export presets, so there is no '{name}' to take out."
+                    : $"The project keeps no preset called '{name}'. It keeps {string.Join(", ", project.ExportPresets.Select(preset => preset.Name))}.");
+        }
+
+        context.Changed(project.Id);
+        return project with { ExportPresets = new EquatableArray<ExportPreset>(project.ExportPresets.Where(preset => !string.Equals(preset.Name, name, StringComparison.OrdinalIgnoreCase))) };
     }
 }

@@ -341,7 +341,7 @@ public static class ExportPlanner
         bool burn,
         CancellationToken cancellationToken)
     {
-        ExportPreset preset = ExportOverrideText.Apply(ExportPresetLibrary.Require(request.Preset), request.Overrides);
+        ExportPreset preset = ExportOverrideText.Apply(ExportPresetLibrary.Require(request.Preset, project), request.Overrides);
 
         Sequence sequence = (request.SequenceId is { } id ? project.Sequence(id) : project.ActiveSequence)
             ?? throw new CommandException("sequence-not-found", request.SequenceId is null

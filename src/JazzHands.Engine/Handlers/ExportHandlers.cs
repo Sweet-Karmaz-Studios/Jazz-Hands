@@ -263,7 +263,7 @@ public sealed class BatchExportHandler : ICommandHandler<BatchExportCommand>
         IExportService queue = ExportHelp.Queue(context.Services);
         Sequence sequence = (command.SequenceId is { } id ? project.Sequence(id) : project.ActiveSequence)
             ?? throw new CommandException("sequence-not-found", command.SequenceId is null ? "The project has no sequence to export." : $"No sequence with id '{command.SequenceId}'.");
-        ExportPreset preset = ExportPresetLibrary.Require(command.Preset);
+        ExportPreset preset = ExportPresetLibrary.Require(command.Preset, project);
         KeyframeLookup keyframes = ExportHelp.Keyframes(context.Services);
 
         // Every one planned first, so a refusal stops the batch before anything is queued.

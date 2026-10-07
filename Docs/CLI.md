@@ -4023,6 +4023,21 @@ Look for CLAP plugins on this computer.
 
 Export presets, built in and your own. Need no project.
 
+### `jazz presets add-to-project <project> <name>`
+
+Keep an export preset in the project, to travel with it.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<name>` | The preset to keep. |
+
+| Option | Meaning |
+|---|---|
+| `--as <as>` | Keep it under this name instead. |
+| `--replace` | Write over one of the project's with that name. |
+| `--no-save` | Do not write the project back. |
+
 ### `jazz presets delete <name>`
 
 Delete one of your export presets.
@@ -4055,6 +4070,19 @@ List the export presets, built in and your own.
 |---|---|
 | `--project <project>` | A .jazz file to read alongside, for its fonts folder and relative paths. |
 | `--category <category>` | Only this category: youtube, discord, device, archive, web, image, audio or other. |
+
+### `jazz presets remove-from-project <project> <name>`
+
+Take an export preset out of the project.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+| `<name>` | The project's preset. |
+
+| Option | Meaning |
+|---|---|
+| `--no-save` | Do not write the project back. |
 
 ### `jazz presets save <name>`
 

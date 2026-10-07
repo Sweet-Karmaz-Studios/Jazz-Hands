@@ -881,19 +881,6 @@ public sealed record EffectPreset(
     EquatableArray<Effect> Effects = default) : IEquatable<EffectPreset>;
 
 /// <summary>
-/// An export preset kept in the project. A placeholder: presets live in the editor and in
-/// <c>%APPDATA%\JazzHands\export-presets</c> (<see cref="Export.ExportPreset"/>), and this keeps the
-/// file format's room for a project's own should one ever be wanted.
-/// </summary>
-/// <param name="Id">The preset identifier.</param>
-/// <param name="Name">Its display name.</param>
-/// <param name="Settings">Settings by name, kept opaque.</param>
-public sealed record StoredExportPreset(
-    string Id,
-    string Name,
-    EquatableArray<EffectParameter> Settings = default) : IEquatable<StoredExportPreset>;
-
-/// <summary>
 /// Everything in a .jazz file.
 /// </summary>
 /// <remarks>
@@ -908,11 +895,14 @@ public sealed record StoredExportPreset(
 /// <param name="Media">Every file the project references.</param>
 /// <param name="Sequences">Every timeline in the project.</param>
 /// <param name="ActiveSequenceId">Which sequence the editor is showing.</param>
-/// <param name="Presets">Export presets stored with the project.</param>
 /// <param name="Created">When the project was made.</param>
 /// <param name="Modified">When it was last changed.</param>
 /// <param name="EffectPresets">Effect chains saved with the project.</param>
 /// <param name="Roles">The roles tracks can have (Phase 40); empty for the built-in six, <see cref="Model.Role.BuiltIn"/>.</param>
+/// <param name="ExportPresets">
+/// Export presets that travel with the project, in the format of a preset file: they come before a
+/// person's own and the built-in ones of the same name wherever a preset is named.
+/// </param>
 public sealed record Project(
     string Id,
     string Name,
@@ -921,11 +911,11 @@ public sealed record Project(
     EquatableArray<MediaItem> Media = default,
     EquatableArray<Sequence> Sequences = default,
     string? ActiveSequenceId = null,
-    EquatableArray<StoredExportPreset> Presets = default,
     DateTimeOffset Created = default,
     DateTimeOffset Modified = default,
     EquatableArray<EffectPreset> EffectPresets = default,
-    EquatableArray<Role> Roles = default) : IEquatable<Project>
+    EquatableArray<Role> Roles = default,
+    EquatableArray<Export.ExportPreset> ExportPresets = default) : IEquatable<Project>
 {
     /// <summary>The schema version this build writes.</summary>
     public const int CurrentSchemaVersion = 2;
@@ -951,9 +941,8 @@ public sealed record Project(
             EquatableArray<MediaItem>.Empty,
             EquatableArray.Create(sequence),
             sequence.Id,
-            EquatableArray<StoredExportPreset>.Empty,
-            now,
-            now);
+            Created: now,
+            Modified: now);
     }
 
     /// <summary>The sequence the editor is showing, or the first one.</summary>

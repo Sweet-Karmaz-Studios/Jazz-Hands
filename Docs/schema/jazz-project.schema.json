@@ -39,12 +39,6 @@
         }
       ]
     },
-    "presets": {
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/storedExportPreset"
-      }
-    },
     "created": {
       "type": "string",
       "format": "date-time"
@@ -63,6 +57,12 @@
       "type": "array",
       "items": {
         "$ref": "#/$defs/role"
+      }
+    },
+    "exportPresets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/exportPreset"
       }
     }
   },
@@ -713,6 +713,163 @@
       "required": [
         "id",
         "name"
+      ]
+    },
+    "exportPreset": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "container": {
+          "type": "string"
+        },
+        "extension": {
+          "type": "string"
+        },
+        "video": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/exportPresetVideo"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "audio": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/exportPresetAudio"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "targetBytes": {
+          "type": "integer"
+        },
+        "loudness": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "exportPresetAudio": {
+      "type": "object",
+      "properties": {
+        "encoder": {
+          "type": "string"
+        },
+        "bitrate": {
+          "type": "integer"
+        },
+        "channels": {
+          "type": "integer"
+        },
+        "sampleRate": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "encoder"
+      ]
+    },
+    "exportPresetVideo": {
+      "type": "object",
+      "properties": {
+        "codec": {
+          "type": "string"
+        },
+        "encoders": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "maxWidth": {
+          "type": "integer"
+        },
+        "maxHeight": {
+          "type": "integer"
+        },
+        "maxFrameRate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/rational"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "quality": {
+          "type": "integer"
+        },
+        "bitrate": {
+          "type": "integer"
+        },
+        "speed": {
+          "type": "string"
+        },
+        "lossless": {
+          "type": "boolean"
+        },
+        "pixelFormat": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "profile": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "level": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "keyframeSeconds": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "codec"
       ]
     },
     "fade": {
@@ -1749,27 +1906,6 @@
           }
         }
       }
-    },
-    "storedExportPreset": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "settings": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/effectParameter"
-          }
-        }
-      },
-      "required": [
-        "id",
-        "name"
-      ]
     },
     "streamColor": {
       "type": "object",
