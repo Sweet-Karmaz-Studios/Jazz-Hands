@@ -689,7 +689,7 @@ public static class ExportPlanner
         }
 
         // Every stretch has to be covered by the picture, without gaps, to be copied.
-        ImmutableArray<TimeRange> source = SourceStretches(picture, ranges, reasons);
+        (ImmutableArray<TimeRange> source, ImmutableArray<CopyPiece> pieces) = SourceStretches(picture, ranges, reasons);
         if (reasons.Count > before)
         {
             return null;
@@ -734,7 +734,8 @@ public static class ExportPlanner
             video,
             [.. streams.Select(stream => stream.Stream)],
             [.. streams.Select(stream => stream.Name)],
-            source);
+            source,
+            pieces);
     }
 
     private static IEnumerable<Clip> Within(Track track, ImmutableArray<TimeRange> ranges) =>
@@ -777,9 +778,10 @@ public static class ExportPlanner
     }
 
     /// <summary>The source stretches the picture plays for the ranges, joined where they run on.</summary>
-    private static ImmutableArray<TimeRange> SourceStretches(Track picture, ImmutableArray<TimeRange> ranges, List<string> reasons)
+    private static (ImmutableArray<TimeRange> Stretches, ImmutableArray<CopyPiece> Pieces) SourceStretches(Track picture, ImmutableArray<TimeRange> ranges, List<string> reasons)
     {
         var stretches = new List<TimeRange>();
+        var pieces = new List<CopyPiece>();
 
         foreach (TimeRange range in ranges)
         {
@@ -789,11 +791,12 @@ public static class ExportPlanner
                 if (clip.Start > at)
                 {
                     reasons.Add($"There is a gap in the picture at {Timecode.FormatClock(at)}, which would be black.");
-                    return [];
+                    return ([], []);
                 }
 
                 Flicks end = Flicks.Min(clip.End, range.End);
                 TimeRange piece = TimeRange.FromBounds(clip.SourceTimeAt(at), clip.SourceTimeAt(end));
+                pieces.Add(new CopyPiece(at, piece.Start, piece.Duration));
 
                 if (stretches.Count > 0 && stretches[^1].End == piece.Start)
                 {
@@ -810,11 +813,75 @@ public static class ExportPlanner
             if (at < range.End)
             {
                 reasons.Add($"There is a gap in the picture at {Timecode.FormatClock(at)}, which would be black.");
-                return [];
+                return ([], []);
             }
         }
 
-        return [.. stretches];
+        return ([.. stretches], [.. pieces]);
+    }
+
+    /// <summary>
+    /// The stretches of the sequence a copy's file stretches show, once their cuts have moved to
+    /// keyframes, in the order they play: what subtitles and chapters are placed by, so a cue sits
+    /// on the picture it was put on.
+    /// </summary>
+    /// <remarks>
+    /// Each piece of picture is a stretch of the sequence playing a stretch of the file straight.
+    /// A file stretch the copy keeps is shown piece by piece, each at its own place in the
+    /// sequence; what a cut moving earlier adds before the first piece, or later after the last,
+    /// is the sequence either side of it at the same offset. A Quick Trim, at the file's own time,
+    /// comes out as the file stretches themselves.
+    /// </remarks>
+    internal static ImmutableArray<TimeRange> SequenceRangesFor(IReadOnlyList<TimeRange> snapped, IReadOnlyList<CopyPiece> pieces)
+    {
+        var result = new List<TimeRange>();
+        int next = 0;
+        foreach (TimeRange kept in snapped)
+        {
+            // The pieces it shows: those after the last range's whose middle falls inside it.
+            var mine = new List<CopyPiece>();
+            for (int index = next; index < pieces.Count; index++)
+            {
+                Flicks middle = pieces[index].Source + (pieces[index].Length / 2);
+                if (middle >= kept.Start && middle < kept.End)
+                {
+                    mine.Add(pieces[index]);
+                    next = index + 1;
+                }
+                else if (mine.Count > 0)
+                {
+                    break;
+                }
+            }
+
+            if (mine.Count == 0)
+            {
+                continue;
+            }
+
+            for (int index = 0; index < mine.Count; index++)
+            {
+                CopyPiece piece = mine[index];
+                Flicks from = index == 0 ? kept.Start : Flicks.Max(kept.Start, piece.Source);
+                Flicks to = index == mine.Count - 1 ? kept.End : Flicks.Min(kept.End, mine[index + 1].Source);
+                if (to <= from)
+                {
+                    continue;
+                }
+
+                var shown = TimeRange.FromBounds(piece.Sequence + (from - piece.Source), piece.Sequence + (to - piece.Source));
+                if (result.Count > 0 && result[^1].End == shown.Start)
+                {
+                    result[^1] = TimeRange.FromBounds(result[^1].Start, shown.End);
+                }
+                else
+                {
+                    result.Add(shown);
+                }
+            }
+        }
+
+        return [.. result];
     }
 
     /// <summary>The stream a sound lane plays, when it is a plain copy of one of the picture's streams.</summary>
@@ -1198,7 +1265,7 @@ public static class ExportPlanner
             output,
             container,
             duration,
-            new EquatableArray<TimeRange>(ranges),
+            new EquatableArray<TimeRange>(snaps.Count == 0 ? ranges : SequenceRangesFor(snapped, copy.Pieces)),
             Copy: new ExportCopy(
                 copy.Media.Id,
                 copy.Path,
@@ -1446,5 +1513,12 @@ public static class ExportPlanner
         MediaStream Video,
         ImmutableArray<int> AudioStreams,
         ImmutableArray<string> StreamNames,
-        ImmutableArray<TimeRange> Source);
+        ImmutableArray<TimeRange> Source,
+        ImmutableArray<CopyPiece> Pieces);
 }
+
+/// <summary>A stretch of the sequence that plays a stretch of a file straight: where in each, and for how long.</summary>
+/// <param name="Sequence">Where it starts on the sequence.</param>
+/// <param name="Source">Where it starts in the file.</param>
+/// <param name="Length">How long it is.</param>
+internal readonly record struct CopyPiece(Flicks Sequence, Flicks Source, Flicks Length);
