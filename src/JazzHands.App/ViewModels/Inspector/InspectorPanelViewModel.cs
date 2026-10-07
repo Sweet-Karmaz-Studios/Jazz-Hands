@@ -1043,7 +1043,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
             Speed = clip.EffectiveSpeed == Rational.One && !clip.Reverse
                 ? string.Empty
                 : $"{clip.EffectiveSpeed.ToDouble() * 100:0.#}% speed{(clip.Reverse ? ", reversed" : string.Empty)}{(found.Track.Kind == TrackKind.Audio && clip.EffectiveSpeed != Rational.One ? (clip.KeepsPitch ? ", pitch kept" : ", pitch follows the speed") : string.Empty)}";
-            SelectionNote = _targets.Count > 1 ? $"{_targets.Count} clips selected: their own settings change together." : string.Empty;
+            SelectionNote = _targets.Count > 1 ? $"{_targets.Count} clips selected: their own settings change together, and so do the effects they share." : string.Empty;
             Blend = clip.BlendMode;
         }
         finally
@@ -1088,6 +1088,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
             {
                 AnimatedValue? stored = effect.Parameter(row.Name);
                 row.Load(ParamEval.Eval(stored, row.Descriptor, local), stored, clip.Start, clip.Duration, playhead, tolerance);
+                row.IsMixed = Matching(project, effect.Id).Any(other => Differs(project, other, row, playhead));
             }
         }
 
@@ -1141,7 +1142,36 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
 
     /// <summary>A clip's own parameter goes to every selected clip; an effect's to its effect.</summary>
     private IReadOnlyList<string> TargetsFor(ParamRowViewModel row) =>
-        string.Equals(row.OwnerId, _clipId, StringComparison.Ordinal) ? _targets : [row.OwnerId];
+        string.Equals(row.OwnerId, _clipId, StringComparison.Ordinal) ? _targets : [row.OwnerId, .. Matching(_session.Project, row.OwnerId)];
+
+    /// <summary>
+    /// The same effect on the other selected clips: on each that has one, the effect of the same
+    /// type counted the same way (the second blur for the second blur). None for an effect that is
+    /// not the first selected clip's, or with one clip selected.
+    /// </summary>
+    private IEnumerable<string> Matching(Project project, string effectId)
+    {
+        if (_targets.Count < 2 || project.FindClip(_targets[0]) is not { } first)
+        {
+            yield break;
+        }
+
+        int at = first.Clip.Effects.IndexOf(effect => string.Equals(effect.Id, effectId, StringComparison.Ordinal));
+        if (at < 0)
+        {
+            yield break;
+        }
+
+        string type = first.Clip.Effects[at].TypeId;
+        int nth = first.Clip.Effects.Take(at).Count(effect => effect.TypeId == type);
+        foreach (string target in _targets.Skip(1))
+        {
+            if (project.FindClip(target)?.Clip.Effects.Where(effect => effect.TypeId == type).ElementAtOrDefault(nth) is { } same)
+            {
+                yield return same.Id;
+            }
+        }
+    }
 
     /// <summary>The keyframe time for a set: the playhead when that owner's parameter is animated.</summary>
     private Flicks? AtFor(string ownerId, ParamRowViewModel row) =>
