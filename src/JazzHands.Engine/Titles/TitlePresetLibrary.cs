@@ -31,6 +31,16 @@ public static class TitlePresetLibrary
     public static string UserFolder { get; set; } = Path.Combine(
         JazzHands.Core.JazzFolders.Roaming, "titles");
 
+    /// <summary>
+    /// Raised when <c>title.save-preset</c> has written a preset in this process, whoever asked
+    /// (the editor, the CLI attached to it, Claude Code), so a list of them can be read again. A
+    /// file put in the folder by hand is read the next time the list is asked for.
+    /// </summary>
+    public static event EventHandler? Saved;
+
+    /// <summary>Says a preset was written; for <c>title.save-preset</c>.</summary>
+    internal static void RaiseSaved() => Saved?.Invoke(null, EventArgs.Empty);
+
     /// <summary>The presets that ship with the editor.</summary>
     public static ImmutableArray<TitlePreset> BuiltIn => BuiltIns.Value;
 

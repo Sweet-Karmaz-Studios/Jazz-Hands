@@ -409,3 +409,104 @@ public sealed class ListFontsHandler : IQueryHandler<ListFontsQuery, FontInfo[]>
         ];
     }
 }
+
+/// <summary>Writes a title as a preset of one's own, in the titles folder.</summary>
+public sealed class SaveTitlePresetHandler : ICommandHandler<SaveTitlePresetCommand>
+{
+    /// <inheritdoc />
+    public Project Handle(Project project, SaveTitlePresetCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        // Reading a title, so a locked track's will do.
+        ClipLocation location = HandlerHelp.Clip(project, command.ClipId);
+        if (!string.Equals(location.Clip.GeneratorId, TitleParams.GeneratorId, StringComparison.Ordinal))
+        {
+            throw new CommandException("not-a-title", $"'{location.Clip.Name}' ({command.ClipId}) is not a title, so it has no look to save.");
+        }
+
+        string name = (command.Name ?? string.Empty).Trim();
+        if (!System.Text.RegularExpressions.Regex.IsMatch(name, "^[a-z0-9]+(-[a-z0-9]+)*$"))
+        {
+            throw new CommandException("invalid-value", $"A preset's name is lower case words joined by hyphens, as 'my-lower-third', not '{command.Name}'.", "name");
+        }
+
+        if (TitlePresetLibrary.All.FirstOrDefault(preset => string.Equals(preset.Name, name, StringComparison.OrdinalIgnoreCase)) is { } existing && !command.Replace)
+        {
+            throw new CommandException(
+                "preset-exists",
+                existing.BuiltIn
+                    ? $"'{name}' is a built-in preset. Add --replace to put yours in its place; deleting your file brings the built-in back."
+                    : $"You already have a preset called '{name}' ({existing.Source}). Add --replace to write over it, or choose another name.");
+        }
+
+        TitlePreset preset = Preset(project, location, name, command.Label, command.Description);
+        if (TitlePreset.Check(preset, TitleHelp.Descriptor) is { } problem)
+        {
+            throw new InvalidOperationException($"A preset made from a title does not read back: {problem}");
+        }
+
+        string folder = TitlePresetLibrary.UserFolder;
+        string path = Path.Combine(folder, name + ".json");
+        Directory.CreateDirectory(folder);
+        string temporary = path + ".tmp";
+        File.WriteAllText(temporary, preset.ToJson());
+        File.Move(temporary, path, overwrite: true);
+        TitlePresetLibrary.RaiseSaved();
+        return project;
+    }
+
+    /// <summary>
+    /// The title as a preset: its look and place scaled back to a 1080 line frame, every value as
+    /// the command line types it and only those not at their defaults, its text, its length and
+    /// its animations.
+    /// </summary>
+    internal static TitlePreset Preset(Project project, ClipLocation location, string name, string? label, string? description)
+    {
+        Clip clip = location.Clip;
+        Effect own = TitleHelp.Own(clip);
+        EffectDescriptor title = TitleHelp.Descriptor;
+        Vector2 frame = TitleHelp.Frame(project, location.Sequence);
+        float scale = TitlePreset.SizeScale(frame);
+        bool portrait = frame.X < frame.Y;
+
+        var values = System.Collections.Immutable.ImmutableSortedDictionary.CreateBuilder<string, string>(StringComparer.Ordinal);
+        foreach (ParamDescriptor parameter in title.Params)
+        {
+            if (parameter.Name is TitleParams.Text or TitleParams.AnimationIn or TitleParams.AnimationOut || TitleParams.Channels.Contains(parameter.Name)
+                || own.Parameter(parameter.Name) is not { } animated)
+            {
+                continue;
+            }
+
+            ParamValue value = Core.Animation.AnimationEvaluator.Evaluate(animated, Flicks.Zero);
+            if (value == parameter.Default)
+            {
+                continue;
+            }
+
+            // The inverse of TitlePreset.Style: back to the frame presets are written for.
+            value = parameter.Name == TitleParams.Position && portrait && value is ParamValue.Float2 place
+                ? new ParamValue.Float2(place.Value / new Vector2(frame.X / TitlePreset.ReferenceWidth, frame.Y * TitlePreset.PortraitBand / TitlePreset.ReferenceHeight))
+                : TitlePreset.Scale(parameter.Name, value, 1.0f / (parameter.Name == TitleParams.Width && portrait ? frame.X / TitlePreset.ReferenceWidth : scale));
+            values[parameter.Name] = ParamValues.Format(value);
+        }
+
+        string text = own.Parameter(TitleParams.Text) is { } words && Core.Animation.AnimationEvaluator.Evaluate(words, Flicks.Zero) is ParamValue.Text markup
+            ? TitleMarkup.ScaleSizes(markup.Value, 1.0f / scale)
+            : "Title";
+        TitleAnimation animation = TitleAnimations.Read(own, clip.Duration);
+        return new TitlePreset(
+            name,
+            label?.Trim() ?? string.Empty,
+            description?.Trim() ?? string.Empty,
+            text,
+            Seconds(clip.Duration),
+            new TitlePresetAnimation(animation.In, Seconds(animation.InDuration), animation.Out, Seconds(animation.OutDuration)),
+            values.ToImmutable());
+    }
+
+    private static string Seconds(Flicks time) => string.Create(CultureInfo.InvariantCulture, $"{Math.Round(time.ToSeconds(), 3):0.###}s");
+}

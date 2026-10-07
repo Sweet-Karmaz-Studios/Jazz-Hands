@@ -209,6 +209,7 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
         _previews?.Ready += OnPreviewReady;
 
         _session.ProjectChanged += (_, _) => _ui.Post(LoadPresets);
+        Engine.Titles.TitlePresetLibrary.Saved += (_, _) => _ui.Post(LoadTitlePresets);
         Refilter();
         LoadPresets();
         LoadTitlePresets();
