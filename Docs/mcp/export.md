@@ -6,7 +6,7 @@ An export writes a sequence (or a stretch of it) to a file through a preset: `li
 
 Mode: `auto` chooses. A timeline that is one file played untouched can be copied without re-encoding (`copy`, cuts on keyframes) or smart cut (`smart`, exact cuts with only the frames near each cut encoded again); anything with effects, titles or more than one source is encoded (`encode`). `export_plan` shows what would happen, and why, without doing it.
 
-Overrides on `export_enqueue`: `size`, `frameRate`, `quality` or `bitrate`, `encoders`, sound encoder and bitrate, `channels`, `loudness` (for example -14 LUFS), `targetSize` (such as `8MB`), subtitles and chapters, and `start` and `end` or `useInOut` for a stretch.
+Overrides on `export_enqueue`: `size`, `frameRate`, `quality` or `bitrate`, `encoders`, sound encoder and bitrate, `channels`, `loudness` (for example -14 LUFS; the mix is measured, raised or lowered by one gain, and a true peak limiter holds its peaks under -1 dBTP where the gain would push them past; the result's notes say what was done), `targetSize` (such as `8MB`), subtitles and chapters, and `start` and `end` or `useInOut` for a stretch.
 
 Stems: `stems` (`roles` or `tracks`) also writes the sound of each role or sound track, adding up to the mix; `stemFormat` says how: `wav` (24-bit, beside the file), `codec` (the preset's sound codec, beside it) or `in-file` (more sound tracks in the file after the mix, named for their stems; MP4, MOV and Matroska, always encoded).
 

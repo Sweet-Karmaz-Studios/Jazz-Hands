@@ -235,19 +235,21 @@ public static class Exporter
     /// The gain that brings a plan's mix to its loudness target, measured by playing the whole mix
     /// through a meter first, and what was done; 1 and no note for a plan without a target.
     /// </summary>
-    internal static float Loudness(ExportPlan plan, Project project, string projectPath, List<string> notes, CancellationToken cancellationToken)
+    internal static (float Gain, bool Limit) Loudness(ExportPlan plan, Project project, string projectPath, List<string> notes, CancellationToken cancellationToken)
     {
         if (plan.Audio is not { Loudness: { } target } audio)
         {
-            return 1.0f;
+            return (1.0f, false);
         }
 
         Sequence sequence = project.Sequence(plan.SequenceId)!;
-        (float integrated, float peak) = ExportSound.Measure(project, sequence, projectPath, [.. plan.Ranges], audio.SampleRate, audio.Channels, cancellationToken);
-        float gain = ExportSound.GainFor(target, integrated, peak, out string note);
+        (float gain, bool limit) = ExportSound.Normalise(
+            target,
+            (gain, limit) => ExportSound.Measure(project, sequence, projectPath, [.. plan.Ranges], audio.SampleRate, audio.Channels, cancellationToken, gain, limit),
+            out string note);
         notes.Add(note);
         Log.Information("Loudness: {Note}", note);
-        return gain;
+        return (gain, limit);
     }
 
     private static ExportResult Copy(ExportPlan plan, Project project, string temporary, IProgress<ExportProgress>? progress, CancellationToken cancellationToken)
@@ -377,11 +379,11 @@ public static class Exporter
         ExportAudio audio = plan.Audio ?? throw new ArgumentException("A sound-only plan has a sound side.", nameof(plan));
         var clock = Stopwatch.StartNew();
         var notes = new List<string>();
-        float gain = Loudness(plan, project, projectPath, notes, cancellationToken);
+        (float gain, bool limit) = Loudness(plan, project, projectPath, notes, cancellationToken);
 
         using Muxer muxer = Muxer.Create(temporary, plan.Container);
         using AudioEncoder sound = AudioEncoder.Open(new AudioEncoderSettings(audio.Encoder, audio.SampleRate, audio.Channels, audio.Bitrate), muxer.NeedsGlobalHeader);
-        using var mix = new ExportSound(project, project.Sequence(plan.SequenceId)!, projectPath, [.. plan.Ranges], audio.SampleRate, audio.Channels) { Gain = gain };
+        using var mix = new ExportSound(project, project.Sequence(plan.SequenceId)!, projectPath, [.. plan.Ranges], audio.SampleRate, audio.Channels) { Gain = gain, Limit = limit };
         using MuxExtras? extras = Extras(plan, project);
 
         int stream = muxer.AddStream(sound);
@@ -706,8 +708,8 @@ public static class Exporter
                         new AudioEncoderSettings(audio.Encoder, audio.SampleRate, audio.Channels, audio.Bitrate),
                         muxer.NeedsGlobalHeader);
                     Sequence sequence = _project.Sequence(_plan.SequenceId)!;
-                    float gain = Loudness(_plan, _project, _projectPath, _notes, _cancellation.Token);
-                    mix = new ExportSound(_project, sequence, _projectPath, [.. _plan.Ranges], audio.SampleRate, audio.Channels) { Gain = gain };
+                    (float gain, bool limit) = Loudness(_plan, _project, _projectPath, _notes, _cancellation.Token);
+                    mix = new ExportSound(_project, sequence, _projectPath, [.. _plan.Ranges], audio.SampleRate, audio.Channels) { Gain = gain, Limit = limit };
                 }
 
                 int videoStream = muxer.AddStream(encoder);
