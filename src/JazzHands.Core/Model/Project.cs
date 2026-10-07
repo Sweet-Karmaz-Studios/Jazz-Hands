@@ -561,6 +561,7 @@ public sealed record Clip(
 /// <param name="MotionBlur">Motion blur for the animated clips on it, over the sequence's, unless a clip says otherwise; null to follow the sequence.</param>
 /// <param name="Matte">Another track used as the matte of every clip on it, unless a clip has its own; null for none.</param>
 /// <param name="Role">Its role (Phase 40): dialogue, music, effects, game or one of the project's own; null for the one <see cref="Model.Role.Of"/> gives it.</param>
+/// <param name="Lifted">For a graphics track a reframe lifted from another sequence: where from and how, so it follows edits there; null for any other track, and once its own clips are edited.</param>
 public sealed record Track(
     string Id,
     TrackKind Kind,
@@ -581,7 +582,8 @@ public sealed record Track(
     SubtitleStyle? SubtitleStyle = null,
     MotionBlur? MotionBlur = null,
     TrackMatte? Matte = null,
-    string? Role = null) : IEquatable<Track>
+    string? Role = null,
+    LiftedTrack? Lifted = null) : IEquatable<Track>
 {
     /// <summary>The first position after the last clip, or zero for an empty track.</summary>
     public Flicks Duration => Clips.IsEmpty ? Flicks.Zero : Clips[^1].End;
@@ -879,6 +881,17 @@ public sealed record EffectPreset(
     string Id,
     string Name,
     EquatableArray<Effect> Effects = default) : IEquatable<EffectPreset>;
+
+/// <summary>
+/// Where a reframed sequence's graphics track came from (<c>sequence.reframe</c>): the track in the
+/// original it copies, with every place across scaled by <paramref name="Across"/> and down by
+/// <paramref name="Down"/>, and every size by <paramref name="Across"/>. While its clips are as
+/// lifting made them, an edit to the original's track lifts them again.
+/// </summary>
+/// <param name="TrackId">The original's graphics track.</param>
+/// <param name="Across">How places across, and sizes, are scaled.</param>
+/// <param name="Down">How places down are scaled.</param>
+public sealed record LiftedTrack(string TrackId, double Across, double Down) : IEquatable<LiftedTrack>;
 
 /// <summary>
 /// Everything in a .jazz file.

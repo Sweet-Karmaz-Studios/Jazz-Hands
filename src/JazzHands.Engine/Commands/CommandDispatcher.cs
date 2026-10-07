@@ -352,7 +352,7 @@ public sealed class CommandDispatcher : IAsyncDisposable
         Project before = _project;
 
         var context = new HandlerContext(_services, _clock, ProjectPath) { Later = Later, Cancellation = cancellation, Prepared = prepared };
-        Project after = SettleTitles(before, SettleTransitions(before, Magnetize(before, Apply(before, command, context), context), context), context);
+        Project after = FollowLifted(before, SettleTitles(before, SettleTransitions(before, Magnetize(before, Apply(before, command, context), context), context), context), context);
 
         return Commit(command, metadata, before, after, context.ChangedIds, ChangeOrigin.Command, issuer);
     }
@@ -385,7 +385,7 @@ public sealed class CommandDispatcher : IAsyncDisposable
             };
         }
 
-        working = SettleTitles(before, SettleTransitions(before, Magnetize(before, working, context), context), context);
+        working = FollowLifted(before, SettleTitles(before, SettleTransitions(before, Magnetize(before, working, context), context), context), context);
         CommandMetadata metadata = CommandRegistry.Describe(batch);
         return Commit(batch, metadata, before, working, context.ChangedIds, ChangeOrigin.Command, issuer);
     }
@@ -496,6 +496,77 @@ public sealed class CommandDispatcher : IAsyncDisposable
                 {
                     result = result.ReplaceTrack(settled);
                 }
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Lifts a reframed sequence's graphics again when the original's track they came from changed,
+    /// so a title edited in the landscape sequence is edited in the vertical one too.
+    /// </summary>
+    /// <remarks>
+    /// Part of the edit that caused it, like the other settling passes, so one undo takes back both.
+    /// A lifted track whose own clips an edit changed has been made by hand: it stops following
+    /// (<see cref="Track.Lifted"/> cleared) rather than have the next edit to the original undo the
+    /// work. Its other settings (height, lock, mute) do not count. Clips keep their ids where the
+    /// original's do, so a selection in the vertical sequence survives an edit to the landscape.
+    /// </remarks>
+    private static Project FollowLifted(Project before, Project after, HandlerContext context)
+    {
+        if (ReferenceEquals(before, after))
+        {
+            return after;
+        }
+
+        Project result = after;
+        foreach (Sequence sequence in after.Sequences)
+        {
+            foreach (Track track in sequence.Tracks)
+            {
+                if (track.Lifted is not { } lifted)
+                {
+                    continue;
+                }
+
+                Track? was = before.Sequence(sequence.Id)?.Track(track.Id);
+                Track? sourceWas = before.Sequences.Select(other => other.Track(lifted.TrackId)).FirstOrDefault(found => found is not null);
+                Track? source = after.Sequences.Select(other => other.Track(lifted.TrackId)).FirstOrDefault(found => found is not null);
+
+                if (was is not null && was.Clips != track.Clips)
+                {
+                    // Edited by hand in the vertical sequence: it keeps that, and follows no more.
+                    result = result.ReplaceTrack(track with { Lifted = null });
+                    context.Changed(track.Id);
+                    continue;
+                }
+
+                if (source is null || ReferenceEquals(source, sourceWas) || !Handlers.ReframeSequenceHandler.IsGraphics(source))
+                {
+                    continue;
+                }
+
+                // The ids the lifted clips had, by the original's clip they came from.
+                var ids = new Dictionary<string, string>(StringComparer.Ordinal);
+                if (sourceWas is not null && sourceWas.Clips.Length == track.Clips.Length)
+                {
+                    for (int index = 0; index < track.Clips.Length; index++)
+                    {
+                        ids[sourceWas.Clips[index].Id] = track.Clips[index].Id;
+                    }
+                }
+
+                Track lift = Handlers.ReframeSequenceHandler.Lift(source, (float)lifted.Across, (float)lifted.Down, id => ids.GetValueOrDefault(id));
+                Track followed = track with { Clips = lift.Clips, Transitions = lift.Transitions };
+                if (followed == track)
+                {
+                    continue;
+                }
+
+                result = result.ReplaceTrack(followed);
+                context.Changed(track.Id);
+                context.Changed(followed.Clips.Select(clip => clip.Id));
             }
         }
 

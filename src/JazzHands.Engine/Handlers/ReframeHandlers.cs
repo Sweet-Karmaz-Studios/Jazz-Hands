@@ -67,7 +67,12 @@ public sealed class ReframeSequenceHandler : ICommandHandler<ReframeSequenceComm
             background = background with { HiddenTracks = [.. hidden] };
             float across = frame.X / sourceSize.X;
             float down = (frame.X / (float)command.Window) / sourceSize.Y;
-            lifted = [.. graphics.Select((track, index) => Lift(track, 2 + index, across, down))];
+            lifted = [.. graphics.Select((track, index) => Lift(track, across, down) with
+            {
+                Id = Id.New(),
+                Order = 2 + index,
+                Lifted = new LiftedTrack(track.Id, across, down),
+            })];
 
             // The window: a sequence the shape of the window, the original's height, holding the
             // original scaled to cover it; that clip's position is the pan.
@@ -170,7 +175,7 @@ public sealed class ReframeSequenceHandler : ICommandHandler<ReframeSequenceComm
     }
 
     /// <summary>A track that only draws: no file and no nested sequence on it, and something to draw.</summary>
-    private static bool IsGraphics(Track track) =>
+    internal static bool IsGraphics(Track track) =>
         track.Kind is TrackKind.Video or TrackKind.Adjustment
         && !track.Clips.IsEmpty
         && track.Clips.All(clip => clip.MediaId is null && clip.SequenceId is null);
@@ -178,9 +183,11 @@ public sealed class ReframeSequenceHandler : ICommandHandler<ReframeSequenceComm
     /// <summary>
     /// A graphics track copied into the vertical frame: every clip new, its places across fitted
     /// to the width and down spread over the window, and its sizes fitted to the width, so nothing
-    /// is cut off and nothing that sat side by side overlaps.
+    /// is cut off and nothing that sat side by side overlaps. The track keeps the original's id and
+    /// order, for the caller to set; <paramref name="idFor"/> gives a clip's id from the original's,
+    /// a new one when it gives null.
     /// </summary>
-    private static Track Lift(Track track, int order, float across, float down)
+    internal static Track Lift(Track track, float across, float down, Func<string, string?>? idFor = null)
     {
         Vector2 Place(Vector2 point) => new(MathF.Round(point.X * across, 2), MathF.Round(point.Y * down, 2));
 
@@ -203,7 +210,7 @@ public sealed class ReframeSequenceHandler : ICommandHandler<ReframeSequenceComm
 
         Clip Moved(Clip clip)
         {
-            Clip copy = clip with { Id = Id.New(), LinkGroupId = null };
+            Clip copy = clip with { Id = idFor?.Invoke(clip.Id) ?? Id.New(), LinkGroupId = null };
             if (copy.Transform is { } transform)
             {
                 copy = copy with { Transform = transform with { Position = Map(transform.Position, Point)! } };
@@ -230,8 +237,6 @@ public sealed class ReframeSequenceHandler : ICommandHandler<ReframeSequenceComm
 
         return track with
         {
-            Id = Id.New(),
-            Order = order,
             Clips = [.. track.Clips.Select(Moved)],
             Transitions = [],
         };

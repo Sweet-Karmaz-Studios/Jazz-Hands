@@ -1105,6 +1105,25 @@
         }
       }
     },
+    "liftedTrack": {
+      "type": "object",
+      "properties": {
+        "trackId": {
+          "type": "string"
+        },
+        "across": {
+          "type": "number"
+        },
+        "down": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "trackId",
+        "across",
+        "down"
+      ]
+    },
     "marker": {
       "type": "object",
       "properties": {
@@ -2165,6 +2184,16 @@
           "anyOf": [
             {
               "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lifted": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/liftedTrack"
             },
             {
               "type": "null"
