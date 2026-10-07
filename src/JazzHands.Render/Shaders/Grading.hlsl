@@ -106,16 +106,25 @@ float CurveAt(float x, uint row, uint channel)
     return texel[channel];
 }
 
+// A curve carried on past 1 along its slope at 1, so a highlight an earlier effect took above
+// white is shaped like the brightest part of the curve rather than clipped.
+float CurveBeyond(float x, uint row, uint channel)
+{
+    float atOne = CurveAt(1.0, row, channel);
+    float slope = (atOne - CurveAt(1.0 - 1.0 / 1023.0, row, channel)) * 1023.0;
+    return x <= 1.0 ? CurveAt(x, row, channel) : atOne + (x - 1.0) * slope;
+}
+
 // color.curves, on perceptual values: the master curve, then each channel's, then the hue and
 // saturation curves in HSV. Flags.x 1 when any of the hue or saturation curves is not flat, so
 // the common case skips the round trip through HSV.
 float4 PsCurves(FullScreenVertex input) : SV_TARGET
 {
     float4 c = ToPerceptual(Input.Load(int3(input.Position.xy, 0)));
-    float3 v = saturate(c.rgb);
+    float3 v = max(c.rgb, 0.0);
 
-    v = float3(CurveAt(v.r, 0, 0), CurveAt(v.g, 0, 0), CurveAt(v.b, 0, 0));
-    v = float3(CurveAt(v.r, 0, 1), CurveAt(v.g, 0, 2), CurveAt(v.b, 0, 3));
+    v = float3(CurveBeyond(v.r, 0, 0), CurveBeyond(v.g, 0, 0), CurveBeyond(v.b, 0, 0));
+    v = float3(CurveBeyond(v.r, 0, 1), CurveBeyond(v.g, 0, 2), CurveBeyond(v.b, 0, 3));
 
     if (Flags.x == 1)
     {
@@ -133,7 +142,9 @@ float4 PsCurves(FullScreenVertex input) : SV_TARGET
         v = Saturate709(v, factor);
     }
 
-    return FromPerceptual(float4(v, c.a));
+    // Back to linear light without FromPerceptual's hold at white, so what was above 1 stays there.
+    float3 rgb = WorkingSpace == 1 ? AcescctToLinear(clamp(v, 0.0, 1.4679964)) : SrgbToLinear(max(v, 0.0));
+    return Premultiply(float4(rgb, saturate(c.a)));
 }
 
 // The distance round the hue circle, 0 to 0.5.
