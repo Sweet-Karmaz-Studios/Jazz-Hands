@@ -1,6 +1,7 @@
 using System.Numerics;
 using JazzHands.Core.Animation;
 using JazzHands.Core.Commands;
+using JazzHands.Core.Effects;
 using JazzHands.Core.Model;
 using JazzHands.Core.Time;
 using JazzHands.Engine.Commands;
@@ -24,9 +25,9 @@ public sealed class Measure3DHandler : IQueryHandler<Measure3DQuery, Layer3DPlac
 
         ClipLocation location = HandlerHelp.Clip(project, query.ClipId);
         Clip clip = location.Clip;
-        if (location.Track.Kind != TrackKind.Video || (clip.Layer3D is null && !SceneObjects.IsMesh(clip.GeneratorId)))
+        if (location.Track.Kind != TrackKind.Video || (clip.Layer3D is null && !SceneObjects.IsMesh(clip.GeneratorId) && !SceneObjects.Is(clip.GeneratorId)))
         {
-            throw new CommandException("not-3d", $"'{clip.Name}' is not a 3D layer, text, shape or model. Make a picture 3D with 'jazz clip set-3d'.", "clipId");
+            throw new CommandException("not-3d", $"'{clip.Name}' is not a 3D layer, text, shape, model, camera or light. Make a picture 3D with 'jazz clip set-3d'.", "clipId");
         }
 
         Flicks at = query.At ?? clip.Start + new Flicks(clip.Duration.Value / 2);
@@ -39,11 +40,60 @@ public sealed class Measure3DHandler : IQueryHandler<Measure3DQuery, Layer3DPlac
         var frame = new Vector2(settings.Width, settings.Height);
         Flicks local = at - clip.Start;
         (SceneCamera camera, _) = RenderGraphBuilder.SceneAt(project, location.Sequence, at, new RenderOptions { Effects = EffectCatalog.Registry });
-        Vector3 pivot = RenderGraphBuilder.Pivot(project, clip, local, frame);
         float step = (float)(Step * settings.Height / 1080.0);
 
         FramePoint? Seen(Vector3 point) =>
             camera.Project(point) is { } seen ? new FramePoint(Math.Round(seen.X - (frame.X / 2.0f), 2), Math.Round(seen.Y - (frame.Y / 2.0f), 2)) : null;
+
+        Layer3DPlaceInfo Placed(Vector3 point, double x, double y, double z, double turnX, double turnY, double turnZ) => new(
+            clip.Id,
+            at,
+            Seen(point),
+            Seen(point + new Vector3(step, 0.0f, 0.0f)),
+            Seen(point + new Vector3(0.0f, step, 0.0f)),
+            Seen(point + new Vector3(0.0f, 0.0f, step)),
+            Math.Round(step, 4),
+            Math.Round(camera.Depth(point), 2),
+            Math.Round(x, 2),
+            Math.Round(y, 2),
+            Math.Round(z, 2),
+            Math.Round(turnX, 3),
+            Math.Round(turnY, 3),
+            Math.Round(turnZ, 3));
+
+        // A camera is moved by its point of interest, which is in front of it, and turned about it;
+        // a light by where it is. Both are their own parameters, not the clip's transform.
+        if (SceneObjects.Is(clip.GeneratorId) && EffectCatalog.Registry.Find(clip.GeneratorId!) is { } descriptor)
+        {
+            Effect? own = clip.Effects.FirstOrDefault(effect => effect.TypeId == clip.GeneratorId);
+            ParameterSet p = own is null ? ParameterSet.Defaults(descriptor) : ParameterSet.Evaluate(descriptor, own, local);
+            if (clip.GeneratorId == SceneObjects.Camera)
+            {
+                Vector2 target = p.Float2("target");
+                float targetZ = p.Float("target-z");
+                return Placed(new Vector3(target, targetZ + p.Float("dolly")), target.X, target.Y, targetZ, p.Float("tilt"), p.Float("orbit"), p.Float("roll")) with
+                {
+                    PositionParam = "target",
+                    DepthParam = "target-z",
+                    TurnXParam = "tilt",
+                    TurnYParam = "orbit",
+                    TurnZParam = "roll",
+                };
+            }
+
+            Vector2 lamp = p.Float2("position");
+            float lampZ = p.Float("position-z");
+            return Placed(new Vector3(lamp, lampZ), lamp.X, lamp.Y, lampZ, 0, 0, 0) with
+            {
+                PositionParam = "position",
+                DepthParam = "position-z",
+                TurnXParam = null,
+                TurnYParam = null,
+                TurnZParam = null,
+            };
+        }
+
+        Vector3 pivot = RenderGraphBuilder.Pivot(project, clip, local, frame);
 
         Transform transform = clip.Transform ?? Transform.Identity;
         Layer3D space = clip.Layer3D ?? Layer3D.Default;

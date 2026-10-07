@@ -25,6 +25,11 @@ public sealed record FramePoint(double X, double Y);
 /// <param name="RotationX">Its turn about X, <c>transform.rotation-x</c>.</param>
 /// <param name="RotationY">Its turn about Y, <c>transform.rotation-y</c>.</param>
 /// <param name="Rotation">Its turn about Z, <c>transform.rotation</c>.</param>
+/// <param name="PositionParam">What moving it across and down sets: a layer's <c>transform.position</c>, a camera's <c>target</c>, a light's <c>position</c>.</param>
+/// <param name="DepthParam">What moving it away sets: <c>transform.z</c>, <c>target-z</c> or <c>position-z</c>.</param>
+/// <param name="TurnXParam">What turning it about X sets (a camera's <c>tilt</c>); null when it does not turn.</param>
+/// <param name="TurnYParam">What turning it about Y sets (a camera's <c>orbit</c>); null when it does not turn.</param>
+/// <param name="TurnZParam">What turning it about Z sets (a camera's <c>roll</c>); null when it does not turn.</param>
 public sealed record Layer3DPlaceInfo(
     string ClipId,
     Flicks At,
@@ -39,4 +44,9 @@ public sealed record Layer3DPlaceInfo(
     double Z,
     double RotationX,
     double RotationY,
-    double Rotation);
+    double Rotation,
+    string PositionParam = "transform.position",
+    string DepthParam = "transform.z",
+    string? TurnXParam = "transform.rotation-x",
+    string? TurnYParam = "transform.rotation-y",
+    string? TurnZParam = "transform.rotation");

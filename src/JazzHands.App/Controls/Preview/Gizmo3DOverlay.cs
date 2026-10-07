@@ -98,19 +98,22 @@ public sealed class Gizmo3DOverlay : FrameworkElement
         double scale = picture.Width / sequence.Width;
         double grip = TitleHandlesOverlay.Grip;
 
-        // The ring first, under the arrows.
+        // The ring first, under the arrows; none for what only moves (a light).
         // Light over its dark shade, like the knobs, so it shows over blue footage as well as dark.
         Pen ring = FrozenPen(Frozen(Color.FromArgb(0xE0, 0xFF, 0xFF, 0xFF)), 1.25);
         double radius = gizmo.RingRadius * scale;
-        drawingContext.DrawEllipse(null, Shade, pivot, radius, radius);
-        drawingContext.DrawEllipse(null, ring, pivot, radius, radius);
+        if (gizmo.Turns)
+        {
+            drawingContext.DrawEllipse(null, Shade, pivot, radius, radius);
+            drawingContext.DrawEllipse(null, ring, pivot, radius, radius);
+        }
 
         // Z under X and Y, since it is the one that most often points at the viewer.
         Arrow(drawingContext, pivot, Screen(gizmo.ZEnd), ZBrush);
         Arrow(drawingContext, pivot, Screen(gizmo.XEnd), XBrush);
         Arrow(drawingContext, pivot, Screen(gizmo.YEnd), YBrush);
 
-        foreach (Vector2 knob in new[] { gizmo.TurnXKnob, gizmo.TurnYKnob })
+        foreach (Vector2 knob in gizmo.Turns ? new[] { gizmo.TurnXKnob, gizmo.TurnYKnob } : [])
         {
             Point at = Screen(knob);
             drawingContext.DrawEllipse(Brushes.White, FrozenPen(Brush, 1.25), at, grip, grip);

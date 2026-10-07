@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using JazzHands.App.Services;
 using JazzHands.Core.Commands;
 using JazzHands.Core.Model;
+using JazzHands.Core.Time;
 using JazzHands.Engine.Selection;
 using Serilog;
 using ICommand = JazzHands.Core.Commands.ICommand;
@@ -75,6 +76,7 @@ public sealed partial class Gizmo3DViewModel : ObservableObject
     private bool _sending;
     private Task _pump = Task.CompletedTask;
     private Drag? _drag;
+    private Flicks _at;
 
     /// <summary>Where the selected clip is through the camera, or null when there is no handle to show.</summary>
     [ObservableProperty]
@@ -97,7 +99,15 @@ public sealed partial class Gizmo3DViewModel : ObservableObject
         _preview = preview;
         _selection.Changed += (_, _) => ui.Post(Refresh);
         _session.ProjectChanged += (_, _) => ui.Post(Refresh);
-        _preview.PlayheadMoved += (_, _) => ui.Post(Refresh);
+        _at = preview.Position;
+
+        // The frame on screen, which while playing trails the transport's own position: the handle
+        // sits on the picture it is drawn over, every frame the event reports.
+        _preview.PlayheadMoved += (_, moved) => ui.Post(() =>
+        {
+            _at = moved.Position;
+            Refresh();
+        });
         Refresh();
     }
 
@@ -128,6 +138,9 @@ public sealed partial class Gizmo3DViewModel : ObservableObject
 
     /// <summary>The pivot on the frame, in sequence pixels from its centre.</summary>
     public Vector2 Pivot => Point(Place?.Pivot);
+
+    /// <summary>True when it turns, so the ring and knobs are shown: a layer or a camera, not a light, which only moves.</summary>
+    public bool Turns => Place is { TurnZParam: not null };
 
     /// <summary>The tip of the X arrow.</summary>
     public Vector2 XEnd => Pivot + (StepX * Shown);
@@ -190,8 +203,8 @@ public sealed partial class Gizmo3DViewModel : ObservableObject
         Project project = _session.Project;
         string? chosen = _selection.Ids.Length == 1
             && project.FindClip(_selection.Ids[0]) is { Track.Kind: TrackKind.Video } found
-            && (found.Clip.Layer3D is not null || SceneObjects.IsMesh(found.Clip.GeneratorId))
-            && _preview.Position >= found.Clip.Start && _preview.Position < found.Clip.End
+            && (found.Clip.Layer3D is not null || SceneObjects.IsMesh(found.Clip.GeneratorId) || SceneObjects.Is(found.Clip.GeneratorId))
+            && _at >= found.Clip.Start && _at < found.Clip.End
                 ? found.Clip.Id
                 : null;
         if (chosen != ClipId)
@@ -202,7 +215,7 @@ public sealed partial class Gizmo3DViewModel : ObservableObject
         ClipId = chosen;
         try
         {
-            Place = chosen is null ? null : _session.Query(new Measure3DQuery(chosen, _preview.Position));
+            Place = chosen is null ? null : _session.Query(new Measure3DQuery(chosen, _at));
         }
         catch (CommandException)
         {
@@ -221,12 +234,12 @@ public sealed partial class Gizmo3DViewModel : ObservableObject
         }
 
         float reach = tolerance * 1.5f;
-        if (Vector2.Distance(at, TurnXKnob) <= reach)
+        if (Turns && Vector2.Distance(at, TurnXKnob) <= reach)
         {
             return Gizmo3DGrip.TurnX;
         }
 
-        if (Vector2.Distance(at, TurnYKnob) <= reach)
+        if (Turns && Vector2.Distance(at, TurnYKnob) <= reach)
         {
             return Gizmo3DGrip.TurnY;
         }
@@ -244,7 +257,7 @@ public sealed partial class Gizmo3DViewModel : ObservableObject
             }
         }
 
-        return MathF.Abs(Vector2.Distance(at, Pivot) - RingRadius) <= tolerance ? Gizmo3DGrip.TurnZ : Gizmo3DGrip.None;
+        return Turns && MathF.Abs(Vector2.Distance(at, Pivot) - RingRadius) <= tolerance ? Gizmo3DGrip.TurnZ : Gizmo3DGrip.None;
     }
 
     /// <summary>Starts a drag from a point on the picture.</summary>
@@ -288,20 +301,20 @@ public sealed partial class Gizmo3DViewModel : ObservableObject
                 break;
 
             case Gizmo3DGrip.MoveZ:
-                Send(drag, "transform.z", Number(start.Z + (Measure(delta, drag.Z) * step)));
+                Send(drag, start.DepthParam, Number(start.Z + (Measure(delta, drag.Z) * step)));
                 break;
 
-            case Gizmo3DGrip.TurnX:
-                Send(drag, "transform.rotation-x", Number(Snap(start.RotationX - (delta.Y * degrees), snap)));
+            case Gizmo3DGrip.TurnX when start.TurnXParam is { } turnX:
+                Send(drag, turnX, Number(Snap(start.RotationX - (delta.Y * degrees), snap)));
                 break;
 
-            case Gizmo3DGrip.TurnY:
-                Send(drag, "transform.rotation-y", Number(Snap(start.RotationY + (delta.X * degrees), snap)));
+            case Gizmo3DGrip.TurnY when start.TurnYParam is { } turnY:
+                Send(drag, turnY, Number(Snap(start.RotationY + (delta.X * degrees), snap)));
                 break;
 
-            case Gizmo3DGrip.TurnZ:
+            case Gizmo3DGrip.TurnZ when start.TurnZParam is { } turnZ:
                 double turned = Degrees(at - drag.Pivot) - Degrees(drag.From - drag.Pivot);
-                Send(drag, "transform.rotation", Number(Snap(start.Rotation + Unwrapped(turned), snap)));
+                Send(drag, turnZ, Number(Snap(start.Rotation + Unwrapped(turned), snap)));
                 break;
         }
     }
@@ -348,12 +361,12 @@ public sealed partial class Gizmo3DViewModel : ObservableObject
     private static string Number(double value) => Math.Round(value, 2).ToString(CultureInfo.InvariantCulture);
 
     private void SendPosition(Drag drag, double x, double y) =>
-        Send(drag, "transform.position", string.Create(CultureInfo.InvariantCulture, $"{Math.Round(x, 2)}, {Math.Round(y, 2)}"));
+        Send(drag, drag.Place.PositionParam, string.Create(CultureInfo.InvariantCulture, $"{Math.Round(x, 2)}, {Math.Round(y, 2)}"));
 
     /// <summary>Latest wins: while one command is on its way, only the newest waits behind it.</summary>
     private void Send(Drag drag, string param, string value)
     {
-        _pending = new SetParamCommand(drag.ClipId, param, value, At: _preview.Position);
+        _pending = new SetParamCommand(drag.ClipId, param, value, At: _at);
         if (!_sending)
         {
             _pump = PumpAsync();
