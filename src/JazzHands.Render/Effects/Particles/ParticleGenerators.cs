@@ -1,23 +1,34 @@
+using System.Collections.Immutable;
 using System.Numerics;
+using System.Runtime.InteropServices;
 using JazzHands.Core.Effects;
 using JazzHands.Render.Compositing;
-using Vortice.Direct2D1;
-using Vortice.Mathematics;
 
 namespace JazzHands.Render.Effects.Particles;
 
 /// <summary>
-/// A particle field drawn by Direct2D: embers, sparks, dust, snow, rain or sparkles, each a
+/// A particle field drawn on the GPU: embers, sparks, dust, snow, rain or sparkles, each a
 /// generator with its own defaults and the same parameters.
 /// </summary>
 /// <remarks>
 /// The field is <see cref="ParticleField"/>, a function of the clip's time and seed, so a frame
-/// is the same however it is reached. Dots are antialiased ellipses, streaks round capped lines
+/// is the same however it is reached. Dots are antialiased discs, streaks round capped lines
 /// along the particle's velocity; additive fields add light, and each dot gets a faint halo.
-/// Sizes and positions are sequence pixels, scaled to the working resolution.
+/// Sizes and positions are sequence pixels, scaled to the working resolution. Every particle is
+/// one instance of one draw (Particles.hlsl): each used to be a Direct2D ellipse, about a hundred
+/// times slower for a dense field at 4K.
 /// </remarks>
 public abstract class ParticleGenerator : VideoGenerator, ITimedGenerator
 {
+    private static readonly PassDescriptor Pass = new("Particles.hlsl", "PsParticle", "VsParticle", Vertices: 4);
+
+    // Scratch, reused frame to frame; one generator draws every clip of its type on one thread.
+    private readonly List<Particle> _field = [];
+    private ParticleDot[] _dots = new ParticleDot[1024];
+
+    /// <inheritdoc />
+    public override ImmutableArray<PassDescriptor> Passes => [Pass];
+
     /// <summary>The settings a clip's parameters make, with its seed.</summary>
     public static ParticleSettings Settings(ParameterSet parameters, int seed)
     {
@@ -56,59 +67,71 @@ public abstract class ParticleGenerator : VideoGenerator, ITimedGenerator
         ArgumentNullException.ThrowIfNull(parameters);
         ArgumentNullException.ThrowIfNull(output);
 
-        List<Particle> particles = ParticleField.At(Settings(parameters, context.Seed), context.Time.ToSeconds());
+        ParticleField.At(Settings(parameters, context.Seed), context.Time.ToSeconds(), _field);
         float scale = context.QualityScale;
         var centre = new Vector2(output.Width, output.Height) / 2.0f;
         bool additive = parameters.Enum("blend") != "normal";
         float streak = parameters.Float("streak");
 
-        Drawing2D drawing = context.Drawing;
-        drawing.Draw(output, target =>
+        // A halo and a dot each for additive dots, one shape for the rest.
+        int most = _field.Count * (additive && streak <= 0 ? 2 : 1);
+        if (_dots.Length < most)
         {
-            target.PrimitiveBlend = additive ? PrimitiveBlend.Add : PrimitiveBlend.SourceOver;
-            using ID2D1SolidColorBrush brush = drawing.Brush(Vector4.One);
-            using ID2D1StrokeStyle round = drawing.Factory.CreateStrokeStyle(new StrokeStyleProperties { StartCap = CapStyle.Round, EndCap = CapStyle.Round });
-            try
+            _dots = new ParticleDot[(int)System.Numerics.BitOperations.RoundUpToPowerOf2((uint)most)];
+        }
+
+        int count = 0;
+        foreach (Particle particle in _field)
+        {
+            Vector4 colour = particle.Color;
+            if (colour.W <= 0.001f)
             {
-                foreach (Particle particle in particles)
-                {
-                    Vector4 colour = particle.Color;
-                    if (colour.W <= 0.001f)
-                    {
-                        continue;
-                    }
-
-                    Vector2 at = centre + (particle.Position * scale);
-                    float radius = Math.Max(0.25f, particle.Diameter * scale / 2);
-                    brush.Color = Straight(colour);
-
-                    if (streak > 0)
-                    {
-                        target.DrawLine(at - (particle.Velocity * streak * scale), at, brush, radius * 2, round);
-                        continue;
-                    }
-
-                    if (additive)
-                    {
-                        brush.Color = Straight(colour * 0.2f);
-                        target.FillEllipse(new Ellipse(at, radius * 2.5f, radius * 2.5f), brush);
-                        brush.Color = Straight(colour);
-                    }
-
-                    target.FillEllipse(new Ellipse(at, radius, radius), brush);
-                }
+                continue;
             }
-            finally
+
+            Vector2 at = centre + (particle.Position * scale);
+            float radius = Math.Max(0.25f, particle.Diameter * scale / 2);
+            if (streak > 0)
             {
-                target.PrimitiveBlend = PrimitiveBlend.SourceOver;
+                _dots[count++] = ParticleDot.Of(at - (particle.Velocity * streak * scale), at, radius, colour);
+                continue;
             }
-        });
+
+            if (additive)
+            {
+                _dots[count++] = ParticleDot.Of(at, at, radius * 2.5f, colour * 0.2f);
+            }
+
+            _dots[count++] = ParticleDot.Of(at, at, radius, colour);
+        }
+
+        context.Clear(output, Vector4.Zero);
+        context.DrawInstances(Pass, output, Vector4.Zero, _dots.AsSpan(0, count), additive ? InstanceBlend.Add : InstanceBlend.Over);
     }
+}
 
-    /// <summary>A premultiplied colour as the straight one a brush takes.</summary>
-    private static Color4 Straight(Vector4 premultiplied) => premultiplied.W > 0
-        ? new Color4(premultiplied.X / premultiplied.W, premultiplied.Y / premultiplied.W, premultiplied.Z / premultiplied.W, Math.Min(1, premultiplied.W))
-        : new Color4(0, 0, 0, 0);
+/// <summary>One dot or streak as Particles.hlsl reads it: a segment in target texels, a radius, and a premultiplied colour.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct ParticleDot
+{
+    public Vector2 From;
+    public Vector2 To;
+    public float Radius;
+    public float Weight;
+    public Vector2 Padding;
+    public Vector4 Color;
+
+    /// <summary>
+    /// A shape from one point to another. One under half a texel across is drawn half a texel
+    /// across and fainter by the area it lacks, as Direct2D's coverage did, rather than vanishing
+    /// or coming out as bright as a texel.
+    /// </summary>
+    public static ParticleDot Of(Vector2 from, Vector2 to, float radius, Vector4 color)
+    {
+        float drawn = Math.Max(radius, 0.5f);
+        float ratio = radius / drawn;
+        return new ParticleDot { From = from, To = to, Radius = drawn, Weight = ratio * ratio, Color = color };
+    }
 }
 
 /// <summary>Glowing embers drifting up from below.</summary>

@@ -82,11 +82,20 @@ public static class ParticleField
     /// <summary>The particles alive at a moment, from the clip's start, in seconds.</summary>
     public static List<Particle> At(ParticleSettings settings, double seconds)
     {
-        ArgumentNullException.ThrowIfNull(settings);
         var alive = new List<Particle>();
+        At(settings, seconds, alive);
+        return alive;
+    }
+
+    /// <summary>The particles alive at a moment into a list, emptied first, so a field drawn every frame allocates nothing once the list has grown.</summary>
+    public static void At(ParticleSettings settings, double seconds, List<Particle> alive)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(alive);
+        alive.Clear();
         if (settings.Rate <= 0 || settings.Lifetime <= 0)
         {
-            return alive;
+            return;
         }
 
         double longest = settings.Lifetime * (1 + Math.Clamp(settings.LifetimeVariance, 0, 1));
@@ -107,8 +116,6 @@ public static class ParticleField
 
             alive.Add(Make(settings, number, (float)age, life));
         }
-
-        return alive;
     }
 
     /// <summary>A number from 0 to 1 that depends only on the seed, the particle and which choice it is.</summary>

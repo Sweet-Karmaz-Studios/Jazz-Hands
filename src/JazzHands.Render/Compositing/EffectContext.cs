@@ -29,7 +29,10 @@ public sealed class EffectContext : IDisposable
     private readonly Dictionary<(string File, string Entry, string? Source), ID3D11PixelShader> _pixels = [];
     private readonly Dictionary<(string File, string Entry, string? Source), ID3D11VertexShader> _vertices = [];
     private readonly Dictionary<Type, ID3D11Buffer> _buffers = [];
+    private readonly Dictionary<Type, InstanceBuffer> _instances = [];
     private readonly ID3D11Buffer _common;
+    private ID3D11BlendState? _add;
+    private ID3D11BlendState? _over;
     private int _generation = -1;
     private EffectNode? _node;
     private Drawing2D? _drawing;
@@ -198,6 +201,55 @@ public sealed class EffectContext : IDisposable
         Array.Clear(_views);
     }
 
+    /// <summary>
+    /// Draws one shape per instance over what <paramref name="output"/> holds, in order, blended
+    /// as asked: the pass's vertices (a strip of 4 for a quad) for each instance, the instances a
+    /// structured buffer at t0 of the vertex stage, the common constants at b0 and
+    /// <paramref name="constants"/> at b1 of both stages. Particles draw this way.
+    /// </summary>
+    public void DrawInstances<T, TInstance>(PassDescriptor pass, RenderTarget output, in T constants, ReadOnlySpan<TInstance> instances, InstanceBlend blend)
+        where T : unmanaged
+        where TInstance : unmanaged
+    {
+        ArgumentNullException.ThrowIfNull(pass);
+        ArgumentNullException.ThrowIfNull(output);
+        if (instances.IsEmpty)
+        {
+            return;
+        }
+
+        Refresh();
+        ID3D11DeviceContext context = Device.ImmediateContext;
+
+        var common = new CommonConstants
+        {
+            TexelSize = new Vector2(1.0f / output.Width, 1.0f / output.Height),
+            Resolution = new Vector2(output.Width, output.Height),
+            Time = (float)Time.ToSeconds(),
+            QualityScale = QualityScale,
+            WorkingSpace = IsAces ? 1u : 0u,
+        };
+
+        Write(context, _common, in common);
+        ID3D11Buffer buffer = BufferFor<T>();
+        Write(context, buffer, in constants);
+        InstanceBuffer list = InstancesFor(instances);
+
+        context.ClearState();
+        context.IASetPrimitiveTopology(pass.IsStrip ? PrimitiveTopology.TriangleStrip : PrimitiveTopology.TriangleList);
+        context.VSSetShader(VertexShader(pass));
+        context.VSSetConstantBuffers(0, [_common, buffer]);
+        context.VSSetShaderResource(0, list.View);
+        context.PSSetShader(PixelShader(pass));
+        context.PSSetConstantBuffers(0, [_common, buffer]);
+        context.PSSetSamplers(0, _samplers);
+        context.OMSetBlendState(blend == InstanceBlend.Add ? _add ??= BlendState(Blend.One) : _over ??= BlendState(Blend.InverseSourceAlpha));
+        context.OMSetRenderTargets(output.View);
+        context.RSSetViewport(new Viewport(0, 0, output.Width, output.Height, 0.0f, 1.0f));
+        context.DrawInstanced((uint)pass.Vertices, (uint)instances.Length, 0, 0);
+        context.ClearState();
+    }
+
     /// <inheritdoc />
     public void Dispose()
     {
@@ -208,6 +260,15 @@ public sealed class EffectContext : IDisposable
             buffer.Dispose();
         }
 
+        foreach (InstanceBuffer list in _instances.Values)
+        {
+            list.View.Dispose();
+            list.Buffer.Dispose();
+        }
+
+        _instances.Clear();
+        _add?.Dispose();
+        _over?.Dispose();
         _buffers.Clear();
         _common.Dispose();
     }
@@ -317,6 +378,67 @@ public sealed class EffectContext : IDisposable
             CPUAccessFlags = CpuAccessFlags.Write,
         });
 
+    /// <summary>The instances in a dynamic structured buffer of their type, grown to the next power of two when they outgrow it.</summary>
+    private unsafe InstanceBuffer InstancesFor<TInstance>(ReadOnlySpan<TInstance> instances)
+        where TInstance : unmanaged
+    {
+        if (!_instances.TryGetValue(typeof(TInstance), out InstanceBuffer list) || list.Capacity < instances.Length)
+        {
+            list.View?.Dispose();
+            list.Buffer?.Dispose();
+            int capacity = (int)Math.Max(1024, System.Numerics.BitOperations.RoundUpToPowerOf2((uint)instances.Length));
+            ID3D11Buffer buffer = Device.Device.CreateBuffer(new BufferDescription
+            {
+                ByteWidth = (uint)(capacity * sizeof(TInstance)),
+                Usage = ResourceUsage.Dynamic,
+                BindFlags = BindFlags.ShaderResource,
+                CPUAccessFlags = CpuAccessFlags.Write,
+                MiscFlags = ResourceOptionFlags.BufferStructured,
+                StructureByteStride = (uint)sizeof(TInstance),
+            });
+            ID3D11ShaderResourceView view = Device.Device.CreateShaderResourceView(buffer, new ShaderResourceViewDescription
+            {
+                Format = Format.Unknown,
+                ViewDimension = ShaderResourceViewDimension.Buffer,
+                Buffer = new BufferShaderResourceView { FirstElement = 0, NumElements = (uint)capacity },
+            });
+            list = new InstanceBuffer(buffer, view, capacity);
+            _instances[typeof(TInstance)] = list;
+        }
+
+        ID3D11DeviceContext context = Device.ImmediateContext;
+        MappedSubresource mapped = context.Map(list.Buffer, 0, MapMode.WriteDiscard);
+        try
+        {
+            instances.CopyTo(new Span<TInstance>((void*)mapped.DataPointer, instances.Length));
+        }
+        finally
+        {
+            context.Unmap(list.Buffer, 0);
+        }
+
+        return list;
+    }
+
+    /// <summary>Premultiplied blending: the source whole, the destination kept by <paramref name="destination"/> (one to add light, one less the source's alpha to lay over).</summary>
+    private ID3D11BlendState BlendState(Blend destination)
+    {
+        var description = new BlendDescription();
+        description.RenderTarget[0] = new RenderTargetBlendDescription
+        {
+            BlendEnable = true,
+            SourceBlend = Blend.One,
+            DestinationBlend = destination,
+            BlendOperation = BlendOperation.Add,
+            SourceBlendAlpha = Blend.One,
+            DestinationBlendAlpha = destination,
+            BlendOperationAlpha = BlendOperation.Add,
+            RenderTargetWriteMask = ColorWriteEnable.All,
+        };
+
+        return Device.Device.CreateBlendState(description);
+    }
+
     private static void Write<T>(ID3D11DeviceContext context, ID3D11Buffer buffer, in T value)
         where T : unmanaged
     {
@@ -334,6 +456,8 @@ public sealed class EffectContext : IDisposable
         }
     }
 
+    private record struct InstanceBuffer(ID3D11Buffer Buffer, ID3D11ShaderResourceView View, int Capacity);
+
     [StructLayout(LayoutKind.Sequential)]
     private struct CommonConstants
     {
@@ -344,4 +468,14 @@ public sealed class EffectContext : IDisposable
         public uint WorkingSpace;
         public float Padding;
     }
+}
+
+/// <summary>How the shapes of <see cref="EffectContext.DrawInstances{T, TInstance}"/> combine with what is under them.</summary>
+public enum InstanceBlend
+{
+    /// <summary>Laid over, premultiplied: what is under shows through as the shape's alpha lets it.</summary>
+    Over,
+
+    /// <summary>Added: light on light, for fire, sparks and magic.</summary>
+    Add,
 }
