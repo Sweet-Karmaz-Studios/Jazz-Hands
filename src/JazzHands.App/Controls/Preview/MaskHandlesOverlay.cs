@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Windows;
+using System.Windows.Documents;
 using System.Windows.Media;
 using JazzHands.App.ViewModels.Playback;
 
@@ -58,6 +59,13 @@ public sealed class MaskHandlesOverlay : FrameworkElement
         typeof(MaskHandlesOverlay),
         new FrameworkPropertyMetadata(Brushes.Gold, FrameworkPropertyMetadataOptions.AffectsRender));
 
+    /// <summary>The colour of an effect's masks, when not the one being edited.</summary>
+    public static readonly DependencyProperty EffectBrushProperty = DependencyProperty.Register(
+        nameof(EffectBrush),
+        typeof(Brush),
+        typeof(MaskHandlesOverlay),
+        new FrameworkPropertyMetadata(Brushes.SkyBlue, FrameworkPropertyMetadataOptions.AffectsRender));
+
     /// <summary>Half a grip's side, in this element's units.</summary>
     public const double Grip = 4.0;
 
@@ -109,6 +117,13 @@ public sealed class MaskHandlesOverlay : FrameworkElement
         set => SetValue(BrushProperty, value);
     }
 
+    /// <summary>The colour of an effect's masks.</summary>
+    public Brush EffectBrush
+    {
+        get => (Brush)GetValue(EffectBrushProperty);
+        set => SetValue(EffectBrushProperty, value);
+    }
+
     /// <inheritdoc />
     protected override void OnRender(DrawingContext drawingContext)
     {
@@ -125,10 +140,13 @@ public sealed class MaskHandlesOverlay : FrameworkElement
 
         var active = new Pen(Brush, 1.0);
         var quiet = new Pen(new SolidColorBrush(Color.FromArgb(0xB0, 0xFF, 0xFF, 0xFF)), 1.0) { DashStyle = DashStyles.Dash };
+        var effect = new Pen(EffectBrush, 1.0);
         var shade = new Pen(new SolidColorBrush(Color.FromArgb(0x80, 0, 0, 0)), 3.0);
         active.Freeze();
         quiet.Freeze();
+        effect.Freeze();
         shade.Freeze();
+        double pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
 
         foreach (MaskView mask in Masks ?? [])
         {
@@ -148,7 +166,24 @@ public sealed class MaskHandlesOverlay : FrameworkElement
 
                 geometry.Freeze();
                 drawingContext.DrawGeometry(null, shade, geometry);
-                drawingContext.DrawGeometry(null, mask.IsActive ? active : quiet, geometry);
+                drawingContext.DrawGeometry(null, mask.IsActive ? active : mask.EffectId is null ? quiet : effect, geometry);
+            }
+
+            // An effect's mask says whose it is, under its shape, so it is not taken for the clip's.
+            if (mask.Label.Length > 0 && mask.Outlines.SelectMany(outline => outline).ToList() is { Count: > 0 } all)
+            {
+                var label = new FormattedText(
+                    mask.Label,
+                    System.Globalization.CultureInfo.CurrentUICulture,
+                    FlowDirection.LeftToRight,
+                    new Typeface(TextElement.GetFontFamily(this), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal),
+                    11.0,
+                    mask.IsActive ? Brush : EffectBrush,
+                    pixelsPerDip);
+                Point corner = At(new Vector2(all.Min(point => point.X), all.Max(point => point.Y)));
+                var where = new Point(corner.X, corner.Y + Grip + 2);
+                drawingContext.DrawRectangle(new SolidColorBrush(Color.FromArgb(0xA0, 0, 0, 0)), null, new Rect(where.X - 2, where.Y - 1, label.Width + 4, label.Height + 2));
+                drawingContext.DrawText(label, where);
             }
 
             if (!mask.IsActive)

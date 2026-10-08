@@ -59,13 +59,15 @@
             <preview:Gizmo3DOverlay x:Name="GizmoFrame"
                                     Gizmo="{Binding Gizmo, Mode=OneWay}"
                                     Brush="{DynamicResource Brush.Accent}" />
-            <!-- The selected clip's masks: drag a point, a handle (Alt breaks a pair), a corner, the
-                 inside, or the feather knob above; the tools below draw new ones. -->
+            <!-- The selected clip's masks and its effects' (in the accent colour, named): drag a point, a
+                 handle (Alt breaks a pair), a corner, the inside, or the feather knob above; the
+                 tools below draw new ones on the clip. -->
             <preview:MaskHandlesOverlay x:Name="MaskFrame"
                                         Masks="{Binding MaskHandles.Masks, Mode=OneWay}"
                                         Sketch="{Binding MaskHandles.Sketch, Mode=OneWay}"
                                         Tool="{Binding MaskHandles.Tool, Mode=OneWay}"
-                                        Brush="{DynamicResource Brush.Warning}" />
+                                        Brush="{DynamicResource Brush.Warning}"
+                                        EffectBrush="{DynamicResource Brush.Accent}" />
             <Border HorizontalAlignment="Left"
                     VerticalAlignment="Top"
                     Margin="6"

@@ -77,6 +77,8 @@ public readonly record struct MaskGrip(MaskGripKind Kind, string MaskId = "", in
 /// <param name="Handles">Tangent handles, each from its point to its end.</param>
 /// <param name="Feather">Where the feather handle is, for the active mask.</param>
 /// <param name="FeatherBase">Where the feather handle's line starts, on the shape's top.</param>
+/// <param name="EffectId">The effect the mask limits, or null for one of the clip's own.</param>
+/// <param name="Label">What the overlay writes beside an effect's mask: the effect's name. Empty for the clip's own.</param>
 public sealed record MaskView(
     string MaskId,
     bool IsActive,
@@ -84,16 +86,21 @@ public sealed record MaskView(
     IReadOnlyList<Vector2> Points,
     IReadOnlyList<(Vector2 From, Vector2 To)> Handles,
     Vector2? Feather,
-    Vector2? FeatherBase);
+    Vector2? FeatherBase,
+    string? EffectId = null,
+    string Label = "");
 
 /// <summary>
-/// The selected clip's masks on the preview: their outlines, points, tangent handles and feather,
-/// what dragging them does, and drawing new ones.
+/// The selected clip's masks on the preview, its own and its picture effects': their outlines,
+/// points, tangent handles and feather, what dragging them does, and drawing new ones.
 /// </summary>
 /// <remarks>
 /// <para>
-/// A mask is in the clip's source pixels; the handles are where the clip's placement puts them on
-/// the frame, so they sit on the picture whatever the clip's transform. Every change is a command
+/// A mask is in the clip's source pixels, an effect's as much as the clip's own (the renderer
+/// places both by the layer's transform); the handles are where the clip's placement puts them on
+/// the frame, so they sit on the picture whatever the clip's transform. An effect's masks are
+/// drawn in their own colour with the effect's name, and move the same way, by the mask's id. The
+/// drawing tools add to the clip; an effect's masks are added from the Inspector. Every change is a command
 /// the CLI could send: a point, a handle or the whole shape moved is <c>param.set path</c> (or
 /// <c>bounds</c> for a rectangle or ellipse) at the playhead, which keyframes it there when the
 /// shape is animated, and the feather is <c>param.set feather</c>. A drag sends only its newest
@@ -577,8 +584,26 @@ public sealed partial class MaskHandlesViewModel : ObservableObject
 
     private Mask? Mask(string maskId) =>
         ClipId is { } id && _session.Project.FindClip(id) is { } found
-            ? found.Clip.Masks.FirstOrDefault(mask => mask.Id == maskId)
+            ? Owned(found.Clip).FirstOrDefault(owned => owned.Mask.Id == maskId).Mask
             : null;
+
+    /// <summary>Every mask the handles show for a clip: its own, then each picture effect's in chain order, with the effect and its name.</summary>
+    private static IEnumerable<(Mask Mask, string? EffectId, string Label)> Owned(Clip clip)
+    {
+        foreach (Mask mask in clip.Masks)
+        {
+            yield return (mask, null, string.Empty);
+        }
+
+        foreach (Effect effect in EffectChains.Visible(clip, clip.Effects))
+        {
+            string name = EffectCatalog.Registry.Find(effect.TypeId)?.Name ?? effect.TypeId;
+            foreach (Mask mask in effect.Masks)
+            {
+                yield return (mask, effect.Id, name);
+            }
+        }
+    }
 
     private Vector2 ToSequence(Vector2 source) => Vector2.Transform(source, _toSequence);
 
@@ -619,13 +644,14 @@ public sealed partial class MaskHandlesViewModel : ObservableObject
             return;
         }
 
-        if (ActiveMaskId is { } active && clip.Masks.All(mask => mask.Id != active))
+        List<(Mask Mask, string? EffectId, string Label)> owned = [.. Owned(clip)];
+        if (ActiveMaskId is { } active && owned.All(item => item.Mask.Id != active))
         {
             ActiveMaskId = null;
         }
 
         var views = new List<MaskView>();
-        foreach (Mask mask in clip.Masks)
+        foreach ((Mask mask, string? effectId, string label) in owned)
         {
             bool isActive = mask.Id == ActiveMaskId;
             List<List<MaskNode>> figures = mask.Shape switch
@@ -667,7 +693,7 @@ public sealed partial class MaskHandlesViewModel : ObservableObject
                 featherHandle = new Vector2(middle, top - (FeatherReach * Reach) - FeatherOf(mask, local));
             }
 
-            views.Add(new MaskView(mask.Id, isActive, outlines, points, handles, featherHandle, featherBase));
+            views.Add(new MaskView(mask.Id, isActive, outlines, points, handles, featherHandle, featherBase, effectId, label));
         }
 
         Masks = views;
