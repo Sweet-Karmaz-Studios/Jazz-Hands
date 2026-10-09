@@ -88,12 +88,25 @@
                         ToolTip="Animate: keyframe this at the playhead, or stop animating it"
                         AutomationProperties.Name="Animate" />
 
+                <!-- Mixed: the selected clips differ here; the box shows the first's, and a change
+                     sets them all alike. Said by the label, which has no room for more words. -->
                 <TextBlock Grid.Column="1"
                            Text="{Binding Label, Mode=OneWay}"
-                           ToolTip="{Binding Description, Mode=OneWay}"
                            VerticalAlignment="Center"
-                           TextTrimming="CharacterEllipsis"
-                           Foreground="{DynamicResource Brush.Text.Secondary}">
+                           TextTrimming="CharacterEllipsis">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="ToolTip" Value="{Binding Description, Mode=OneWay}" />
+                            <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsMixed, Mode=OneWay}" Value="True">
+                                    <Setter Property="FontStyle" Value="Italic" />
+                                    <Setter Property="Foreground" Value="{DynamicResource Brush.Warning}" />
+                                    <Setter Property="ToolTip" Value="Mixed: the selected clips differ here. The box shows the first one's; a change sets them all alike." />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
                     <TextBlock.ContextMenu>
                         <ContextMenu>
                             <MenuItem Header="Drive with an expression"
