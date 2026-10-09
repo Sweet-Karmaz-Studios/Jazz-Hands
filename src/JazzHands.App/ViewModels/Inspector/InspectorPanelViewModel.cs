@@ -678,7 +678,10 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
     /// </summary>
     private ParamDescriptor[] PluginRows(Effect effect)
     {
-        string key = effect.Id + "|" + (effect.Parameter("plugin") is StaticValue { Value: ParamValue.Text text } ? text.Value : string.Empty);
+        // Whether its file is here is part of the key: rows asked for while it was missing came
+        // back empty, and were kept even once it was installed again.
+        string key = effect.Id + "|" + (effect.Parameter("plugin") is StaticValue { Value: ParamValue.Text text } ? text.Value : string.Empty)
+            + (PluginMissing(effect) ? "|missing" : string.Empty);
         if (_pluginRows.TryGetValue(key, out ParamDescriptor[]? known))
         {
             return known;
@@ -716,10 +719,6 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
     }
 
     /// <summary>
-    /// A section, open or folded as it was the last time one of its name was shown: fold Crop on
-    /// one clip and it stays folded on the next, for as long as the editor runs.
-    /// </summary>
-    /// <summary>
     /// The clip's Speed section: the one its speed curve already made, when it is on one, so the
     /// curve, Between frames and Speed blur sit together; otherwise a new one, added.
     /// </summary>
@@ -735,6 +734,10 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         return speed;
     }
 
+    /// <summary>
+    /// A section, open or folded as it was the last time one of its name was shown: fold Crop on
+    /// one clip and it stays folded on the next, for as long as the editor runs.
+    /// </summary>
     private InspectorSectionViewModel Section(string title, bool open = true)
     {
         var section = new InspectorSectionViewModel(title) { IsExpanded = _folded.TryGetValue(title, out bool folded) ? !folded : open };
