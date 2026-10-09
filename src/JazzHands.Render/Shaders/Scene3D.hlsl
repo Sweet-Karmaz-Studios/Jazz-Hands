@@ -17,7 +17,8 @@
 // Depth of field runs afterwards on the finished scene: a gather by circle of confusion that lets
 // a blurred sample reach a pixel only when its own blur covers it, and a sample behind the pixel
 // only when the pixel is blurred too, so a sharp edge is not smeared by what is out of focus
-// behind it.
+// behind it. Where nothing was drawn there is nothing to blur: surfaces spread over it by how much
+// of it their blur covers. The sample spiral turns by a fixed angle per pixel.
 
 #include "Common.hlsli"
 
@@ -575,6 +576,14 @@ float Coc(float depth)
     return min(Aperture * abs(depth - Focus) / max(depth, 1.0), MaxRadius);
 }
 
+// Where nothing was drawn the depth is still the clear value (Scene3D.Nothing, 1e30). It is not a
+// surface at infinity: it has no blur of its own to spread, and widened by the aperture it once
+// made every tile beside it gather sixty pixels wide and weighed a blurred edge's own fade out.
+bool IsNothing(float depth)
+{
+    return depth >= 1e29;
+}
+
 // The largest blur in each tile of the frame, so a pixel gathers only as wide as anything near it
 // can reach, and its samples are spent where they count.
 float PsCocTiles(FullScreenVertex input) : SV_Target
@@ -587,7 +596,8 @@ float PsCocTiles(FullScreenVertex input) : SV_Target
         for (uint x = 0; x < TileSize; x++)
         {
             uint2 at = min(first + uint2(x, y), FrameSize - 1);
-            largest = max(largest, Coc(SceneDepth.Load(int3(at, 0))));
+            float depth = SceneDepth.Load(int3(at, 0));
+            largest = max(largest, IsNothing(depth) ? 0.0 : Coc(depth));
         }
     }
 
@@ -610,31 +620,49 @@ float4 PsDepthOfField(FullScreenVertex input) : SV_Target
         }
     }
 
-    float centreDepth = SceneDepth.SampleLevel(PointClamp, input.Uv, 0);
-    float4 centre = SceneColor.SampleLevel(PointClamp, input.Uv, 0);
+    int2 pixel = (int2)input.Position.xy;
+    float centreDepth = SceneDepth.Load(int3(pixel, 0));
+    float4 centre = SceneColor.Load(int3(pixel, 0));
     if (reachable < 0.5)
     {
         return centre;
     }
 
-    float centreCoc = Coc(centreDepth);
-    float centreWeight = 1.0 / max(centreCoc * centreCoc, 1.0);
-    float4 sum = centre * centreWeight;
-    float total = centreWeight;
+    bool centreEmpty = IsNothing(centreDepth);
+    float centreCoc = centreEmpty ? 0.0 : Coc(centreDepth);
+    float4 sum = float4(0.0, 0.0, 0.0, 0.0);
+    float total = 0.0;
 
     // Each sample stands for this much of the disc's area, so its weight is that over the area
     // its own blur spreads it across.
     float share = reachable * reachable / DOF_SAMPLES;
 
+    // The spiral turned by an angle of this pixel's own, from an integer hash so it is the same
+    // every frame and on every device: with one pattern for every pixel, a sharp edge in reach of
+    // the outer samples showed as thin copies at the same offsets all round it.
+    float turn = (PcgHash((uint)pixel.x ^ PcgHash((uint)pixel.y)) & 0xFFFF) * (2.0 * PI / 65536.0);
+
     [loop]
     for (uint i = 0; i < DOF_SAMPLES; i++)
     {
-        float r = reachable * sqrt((i + 0.5) / DOF_SAMPLES);
-        float theta = i * 2.39996323;
-        float2 uv = input.Uv + float2(cos(theta), sin(theta)) * r * TexelSize;
+        float theta = i * 2.39996323 + turn;
+        float2 offset = float2(cos(theta), sin(theta)) * (reachable * sqrt((i + 0.5) / DOF_SAMPLES));
 
-        float depth = SceneDepth.SampleLevel(PointClamp, uv, 0);
-        float coc = Coc(depth);
+        // A whole texel, its colour and depth together: a filtered colour beside a point depth
+        // let a sample just off a surface's edge carry part of the surface with the reach of
+        // whatever lay beside it.
+        int2 at = clamp(pixel + (int2)round(offset), int2(0, 0), (int2)FrameSize - 1);
+        float r = length((float2)(at - pixel));
+        float depth = SceneDepth.Load(int3(at, 0));
+        bool empty = IsNothing(depth);
+        if (empty && centreEmpty)
+        {
+            continue;
+        }
+
+        // Nothing behind a surface is spread as wide as the surface is, so a blurred edge fades
+        // into it evenly on both sides.
+        float coc = empty ? centreCoc : Coc(depth);
         float reach = saturate(coc - r + 1.0);
         if (depth > centreDepth)
         {
@@ -642,9 +670,18 @@ float4 PsDepthOfField(FullScreenVertex input) : SV_Target
         }
 
         float w = reach * share / max(coc * coc, 1.0);
-        sum += SceneColor.SampleLevel(LinearClamp, uv, 0) * w;
+        sum += SceneColor.Load(int3(at, 0)) * w;
         total += w;
     }
 
-    return sum / total;
+    // Where nothing was drawn, the surfaces whose blur reaches here cover as much of it as their
+    // weights add up to, and nothing (the cleared picture) shows through the rest.
+    if (centreEmpty)
+    {
+        float uncovered = max(1.0 - total, 0.0);
+        return (sum + centre * uncovered) / (total + uncovered);
+    }
+
+    float centreWeight = 1.0 / max(centreCoc * centreCoc, 1.0);
+    return (sum + centre * centreWeight) / (total + centreWeight);
 }

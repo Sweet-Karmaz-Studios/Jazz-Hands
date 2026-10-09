@@ -36,7 +36,10 @@ public sealed class Scene3D : IDisposable
 
     private const int MaxSlices = 24;
 
-    /// <summary>What a shadow map holds where nothing is: farther than anything.</summary>
+    /// <summary>
+    /// What a shadow map, or the depth the depth of field reads, holds where nothing is: farther
+    /// than anything. Scene3D.hlsl's <c>IsNothing</c> tests for it.
+    /// </summary>
     private const float Nothing = 1e30f;
 
     private readonly RenderDevice _device;

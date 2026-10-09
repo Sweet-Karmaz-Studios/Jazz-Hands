@@ -70,15 +70,6 @@ float2 Rotate(float2 v, float radians)
     return float2(v.x * c - v.y * s, v.x * s + v.y * c);
 }
 
-// PCG's output function: integer arithmetic, so every GPU and WARP give the same bits, which a
-// float hash does not (fused multiply-adds round differently from one device to another).
-uint PcgHash(uint value)
-{
-    uint state = value * 747796405u + 2891336453u;
-    uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
-    return (word >> 22u) ^ word;
-}
-
 // A repeatable pseudo random number from 0 to 1 for a whole-number position and a seed.
 float Random(float2 p, float seed)
 {

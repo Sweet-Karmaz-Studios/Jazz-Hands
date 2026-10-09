@@ -38,6 +38,15 @@ float4 Unpremultiply(float4 premultiplied)
     return premultiplied.a > 1e-6 ? float4(premultiplied.rgb / premultiplied.a, premultiplied.a) : float4(0.0, 0.0, 0.0, 0.0);
 }
 
+// PCG's output function: integer arithmetic, so every GPU and WARP give the same bits, which a
+// float hash does not (fused multiply-adds round differently from one device to another).
+uint PcgHash(uint value)
+{
+    uint state = value * 747796405u + 2891336453u;
+    uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+    return (word >> 22u) ^ word;
+}
+
 // A cheap hash for dithering and noise: the same pixel gives the same value every frame.
 float Hash(float2 p)
 {
