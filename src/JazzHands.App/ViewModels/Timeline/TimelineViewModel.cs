@@ -325,9 +325,23 @@ public sealed partial class TimelineViewModel : DocumentViewModel
 
     private void OnPlayheadMoved(PlayheadMovedEventArgs e)
     {
+        Flicks before = _playhead;
         _playhead = e.Position;
         IsPlaying = e.State == TransportState.Playing;
         OnPropertyChanged(nameof(Timecode));
+
+        // Parked, a jump out of view (Home, End, a marker, a seek from a script) brings the view
+        // with it, the playhead in the middle; playing, Follow turns pages. A scroll of the view
+        // alone does not move the playhead, so it is left where the person put it.
+        if (!IsPlaying && e.Position != before && ViewportWidth > 0)
+        {
+            double x = Geometry.XOf(e.Position);
+            if (x < 0 || x > ViewportWidth)
+            {
+                Flicks half = Flicks.FromSeconds(ViewportWidth / 2.0 / Geometry.PixelsPerSecond);
+                SetGeometry(Geometry with { Scroll = Geometry.Snap(Flicks.Max(Flicks.Zero, e.Position - half)) });
+            }
+        }
     }
 
     /// <summary>
