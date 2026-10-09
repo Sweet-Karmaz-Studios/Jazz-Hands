@@ -901,14 +901,24 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
     {
         if (plugin)
         {
-            string library = effect.Parameter("library") is StaticValue { Value: ParamValue.Text text } ? text.Value : string.Empty;
-            return System.IO.File.Exists(library)
-                ? string.Empty
-                : $"Not installed here, so bypassed and kept as it is ({library}). Install it and scan for plugins to hear it.";
+            return PluginMissing(effect)
+                ? $"Not installed here, so bypassed and kept as it is ({PluginLibrary(effect)}). Install it and scan for plugins to hear it."
+                : string.Empty;
         }
 
         return descriptor is null ? "This version of Jazz Hands does not have this effect; it is kept and not run." : string.Empty;
     }
+
+    /// <summary>The file a plugin effect's plugin was in when it was added.</summary>
+    private static string PluginLibrary(Effect effect) =>
+        effect.Parameter("library") is StaticValue { Value: ParamValue.Text text } ? text.Value : string.Empty;
+
+    /// <summary>
+    /// True for a plugin effect whose plugin's file is not on this computer. Part of the shape, so
+    /// the item is made again (its note with it) when the file goes or comes back.
+    /// </summary>
+    private static bool PluginMissing(Effect effect) =>
+        effect.TypeId == JazzHands.Audio.Effects.PluginEffect.TypeId && !System.IO.File.Exists(PluginLibrary(effect));
 
     /// <summary>The parameters a mask's item shows: its shape is the preview's, the rest are rows.</summary>
     private static IEnumerable<ParamDescriptor> MaskRows =>
@@ -990,7 +1000,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
 
     /// <summary>What decides whether a selected track's rows can be reloaded in place: its kind and its effects.</summary>
     private static string TrackShape(Track track) =>
-        string.Join("|", ["track", track.Id, track.Kind.ToString(), .. track.Effects.Select(effect => $"{effect.Id}:{effect.TypeId}")]);
+        string.Join("|", ["track", track.Id, track.Kind.ToString(), .. track.Effects.Select(effect => $"{effect.Id}:{effect.TypeId}{(PluginMissing(effect) ? ":missing" : string.Empty)}")]);
 
     /// <summary>A selected track's values, from the snapshot, at the playhead.</summary>
     private void RefreshTrack(Project project, string trackId)
@@ -1539,7 +1549,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
     private static string Shape(ClipLocation found) =>
         string.Join(
             "|",
-            [found.Clip.Id, found.Track.Kind.ToString(), found.Clip.GeneratorId ?? string.Empty, found.Clip.Layer3D is null ? "flat" : "3d", .. found.Clip.Masks.Select(mask => $"mask:{mask.Id}:{mask.Shape}"), .. EffectChains.Visible(found.Clip, found.Clip.Effects).Select(effect => $"{effect.Id}:{effect.TypeId}:{string.Join(",", effect.Masks.Select(mask => $"{mask.Id}:{mask.Shape}"))}")]);
+            [found.Clip.Id, found.Track.Kind.ToString(), found.Clip.GeneratorId ?? string.Empty, found.Clip.Layer3D is null ? "flat" : "3d", .. found.Clip.Masks.Select(mask => $"mask:{mask.Id}:{mask.Shape}"), .. EffectChains.Visible(found.Clip, found.Clip.Effects).Select(effect => $"{effect.Id}:{effect.TypeId}:{string.Join(",", effect.Masks.Select(mask => $"{mask.Id}:{mask.Shape}"))}{(PluginMissing(effect) ? ":missing" : string.Empty)}")]);
 
     private static string SourceOf(Project project, Clip clip)
     {
