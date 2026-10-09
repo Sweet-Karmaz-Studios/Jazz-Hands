@@ -173,10 +173,10 @@ public sealed partial class MediaPanelViewModel
         }
 
         EquatableArray<string> list = [.. tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
-        await RunAsync(new WatchMediaCommand(folder, list, Bin: "Captures"), $"Watching {folder}: new recordings come in as they finish.").ConfigureAwait(true);
+        await RunAsync(new WatchMediaCommand(folder, list, Bin: "Captures"), () => WatchStatus(_session.Project.Watches)).ConfigureAwait(true);
     }
 
     /// <summary>Stops every watch.</summary>
     [RelayCommand]
-    private Task StopWatchingAsync() => RunAsync(new UnwatchMediaCommand(), "Stopped watching.");
+    private Task StopWatchingAsync() => RunAsync(new UnwatchMediaCommand(), WatchStatus([]));
 }

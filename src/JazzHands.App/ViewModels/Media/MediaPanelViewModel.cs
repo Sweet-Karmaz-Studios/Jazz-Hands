@@ -46,6 +46,7 @@ public sealed partial class MediaPanelViewModel : ToolViewModel
 
     private List<MediaItemViewModel> _all = [];
     private long _shownVersion = -1;
+    private EquatableArray<MediaWatch> _watches = [];
 
     [ObservableProperty]
     private string _search = string.Empty;
@@ -217,6 +218,7 @@ public sealed partial class MediaPanelViewModel : ToolViewModel
         OnPropertyChanged(nameof(TotalCount));
         OnPropertyChanged(nameof(IsEmpty));
         SuggestProxies();
+        ShowWatches(project.Watches);
 
         foreach (MediaItemViewModel row in rebuilt)
         {
@@ -225,6 +227,14 @@ public sealed partial class MediaPanelViewModel : ToolViewModel
 
         _ = CheckFilesAsync();
     }
+
+    /// <summary>The footer line for a set of folder watches.</summary>
+    internal static string WatchStatus(EquatableArray<MediaWatch> watches) => watches.Length switch
+    {
+        0 => "Stopped watching.",
+        1 => $"Watching {Path.GetFileName(watches[0].Folder.TrimEnd('/', '\\'))}: new recordings come in as they finish.",
+        _ => $"Watching {watches.Length} folders: new recordings come in as they finish.",
+    };
 
     /// <summary>The ids a drag out of the panel should carry.</summary>
     public IReadOnlyList<string> DragIds(IEnumerable<MediaItemViewModel> selection)
@@ -500,18 +510,35 @@ public sealed partial class MediaPanelViewModel : ToolViewModel
 
     private bool HasSelection() => SelectedItem is not null;
 
-    private async Task RunAsync(ICommand command, string done)
+    private Task RunAsync(ICommand command, string done) => RunAsync(command, () => done);
+
+    private async Task RunAsync(ICommand command, Func<string> done)
     {
         try
         {
             CommandResult result = await _session.ExecuteAsync(command).ConfigureAwait(true);
-            Status = result.Ok ? done : result.Error ?? "The command failed.";
+            Status = result.Ok ? done() : result.Error ?? "The command failed.";
         }
         catch (Exception error) when (error is CommandException or InvalidOperationException)
         {
             Status = error.Message;
             _log.Warning(error, "{Command} failed from the media panel", command.GetType().Name);
         }
+    }
+
+    /// <summary>
+    /// Says what the folder watches are now whenever they change, whatever changed them: the menu,
+    /// an undo, the console or another project.
+    /// </summary>
+    private void ShowWatches(EquatableArray<MediaWatch> watches)
+    {
+        if (watches.Equals(_watches))
+        {
+            return;
+        }
+
+        _watches = watches;
+        Status = WatchStatus(watches);
     }
 
     private void OnProjectChanged(object? sender, ProjectChangedEventArgs e)
