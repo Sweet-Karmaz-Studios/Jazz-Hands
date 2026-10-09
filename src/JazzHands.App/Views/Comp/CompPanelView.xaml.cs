@@ -23,9 +23,32 @@ public partial class CompPanelView : UserControl
     private Point _panOffset;
 
     /// <summary>Creates the view.</summary>
-    public CompPanelView() => InitializeComponent();
+    public CompPanelView()
+    {
+        InitializeComponent();
+        Scroller.ScrollChanged += (_, e) =>
+        {
+            if (e.ViewportWidthChange != 0 || e.ViewportHeightChange != 0)
+            {
+                FitSurface();
+            }
+        };
+        Scroller.SizeChanged += (_, _) => FitSurface();
+    }
 
     private CompPanelViewModel? Panel => DataContext as CompPanelViewModel;
+
+    /// <summary>
+    /// The graph is at least as big as the panel shows, at any zoom, so the empty space round the
+    /// nodes is graph too: a drag there pans and a right-click there adds a node. It was only as
+    /// big as its nodes, centred, and the rest took nothing (2026-10-09).
+    /// </summary>
+    private void FitSurface()
+    {
+        double zoom = Panel?.Zoom is > 0 and var value ? value : 1.0;
+        Surface.MinWidth = Math.Max(0, Scroller.ViewportWidth / zoom);
+        Surface.MinHeight = Math.Max(0, Scroller.ViewportHeight / zoom);
+    }
 
     private void OnNodeDown(object sender, MouseButtonEventArgs e)
     {
@@ -241,6 +264,7 @@ public partial class CompPanelView : UserControl
         }
 
         panel.Zoom = Math.Clamp(panel.Zoom * (e.Delta > 0 ? 1.1 : 1 / 1.1), 0.3, 2.5);
+        FitSurface();
         e.Handled = true;
     }
 }
