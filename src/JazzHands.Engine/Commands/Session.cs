@@ -426,6 +426,17 @@ public sealed class Session : ISessionState, IAsyncDisposable
 
         ProjectPath = path;
         _dispatcher.Load(replacement, path, issuer);
+
+        // A project opens at its start, stopped, with nothing of the last one's on view: the
+        // playhead stayed where the old project had it (seen on screen, 2026-10-09).
+        if (_services.GetService(typeof(Playback.IPlaybackController)) is Playback.IPlaybackController playback)
+        {
+            playback.Pause();
+            playback.MulticamGrid = null;
+            playback.CompView = null;
+            playback.Seek(Core.Time.Flicks.Zero);
+        }
+
         Interlocked.Exchange(ref _savedVersion, _dispatcher.Version);
         AttachRecovery(path);
         ReportMissingPlugins(replacement);
