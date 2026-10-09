@@ -618,11 +618,10 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         if (found.Track.Kind == TrackKind.Audio)
         {
             // Keeping the pitch at a speed (Phase 36) is the clip's own too: clip.set-keep-pitch.
-            var speed = Section("Speed");
+            InspectorSectionViewModel speed = SpeedSection();
             AddSpeedRow(speed, clip);
             speed.Rows.Add(new ParamRowViewModel(this, clip.Id, KeepPitchParam, speed.Title));
             speed.Rows.Add(new ParamRowViewModel(this, clip.Id, FastMuteParam, speed.Title));
-            Sections.Add(speed);
 
             // The fades are the clip's own, not parameters: their rows send audio.set-fade-in and -out.
             var fades = Section("Fades");
@@ -636,11 +635,10 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         else if (found.Track.Kind == TrackKind.Video && clip.IsMedia && !clip.IsHold)
         {
             // How a slowed picture shows the moments between its frames (Phase 42): clip.set-retime.
-            var speed = Section("Speed");
+            InspectorSectionViewModel speed = SpeedSection();
             AddSpeedRow(speed, clip);
             speed.Rows.Add(new ParamRowViewModel(this, clip.Id, RetimeParam, speed.Title));
             speed.Rows.Add(new ParamRowViewModel(this, clip.Id, SpeedBlurParam, speed.Title));
-            Sections.Add(speed);
         }
 
         // A picture on a video or adjustment track can be masked, and so can its picture effects.
@@ -721,6 +719,22 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
     /// A section, open or folded as it was the last time one of its name was shown: fold Crop on
     /// one clip and it stays folded on the next, for as long as the editor runs.
     /// </summary>
+    /// <summary>
+    /// The clip's Speed section: the one its speed curve already made, when it is on one, so the
+    /// curve, Between frames and Speed blur sit together; otherwise a new one, added.
+    /// </summary>
+    private InspectorSectionViewModel SpeedSection()
+    {
+        if (Sections.FirstOrDefault(section => section.Title == "Speed") is { } existing)
+        {
+            return existing;
+        }
+
+        InspectorSectionViewModel speed = Section("Speed");
+        Sections.Add(speed);
+        return speed;
+    }
+
     private InspectorSectionViewModel Section(string title, bool open = true)
     {
         var section = new InspectorSectionViewModel(title) { IsExpanded = _folded.TryGetValue(title, out bool folded) ? !folded : open };
