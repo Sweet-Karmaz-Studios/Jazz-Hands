@@ -44,22 +44,45 @@ public static class SubtitleLook
 
         // A cue whose ASS line places, fades or sizes it is drawn on its own, as it says.
         var placed = showing.Select(clip => (Clip: clip, Overrides: AssOverrides.Read(clip.Cue!.Raw))).ToList();
-        return [
-            .. placed.Where(cue => cue.Overrides is null)
-                .Select(cue => cue.Clip)
-                .GroupBy(clip => clip.Cue!.Align)
-                .Select(group => (group.First(), Title(style, string.Join("\n", group.Select(clip => clip.Cue!.Text)), group.Key, frameWidth, frameHeight))),
-            .. placed.Where(cue => cue.Overrides is not null)
-                .Select(cue => (cue.Clip, Title(style, cue.Clip, cue.Overrides!, frameWidth, frameHeight))),
-        ];
+        var titles = ImmutableArray.CreateBuilder<(Clip First, Effect Title)>();
+
+        // How far into the frame each place is taken: a cue drawn on its own at a place another
+        // already uses goes past it, as a player stacks subtitles, rather than over it (a \fad line
+        // drew over a plain line at the bottom, 2026-10-09).
+        var taken = new Dictionary<SubtitleAlign, float>();
+        foreach (IGrouping<SubtitleAlign, Clip> group in placed.Where(cue => cue.Overrides is null).Select(cue => cue.Clip).GroupBy(clip => clip.Cue!.Align))
+        {
+            string text = string.Join("\n", group.Select(clip => clip.Cue!.Text));
+            titles.Add((group.First(), Title(style, text, group.Key, frameWidth, frameHeight)));
+            taken[group.Key] = Height(text, style.Size * frameHeight);
+        }
+
+        foreach ((Clip clip, AssOverrides? overrides) in placed.Where(cue => cue.Overrides is not null))
+        {
+            SubtitleAlign align = clip.Cue!.Align;
+            float push = overrides!.Position is null ? taken.GetValueOrDefault(align) : 0f;
+            titles.Add((clip, Title(style, clip, overrides, frameWidth, frameHeight, push)));
+            if (overrides.Position is null)
+            {
+                double size = overrides.Size is { } own ? own / AssOverrides.ScriptSize.Y : style.Size;
+                taken[align] = push + Height(clip.Cue.Text, size * frameHeight);
+            }
+        }
+
+        return titles.ToImmutable();
     }
+
+    /// <summary>The room some lines of subtitle take, at a size in frame pixels, with the gap below them.</summary>
+    private static float Height(string text, double size) =>
+        (float)(text.Split('\n').Length * size * 1.3);
 
     /// <summary>
     /// A cue drawn with its ASS overrides: its size, outline and shadow in place of the track's,
     /// its anchor where <c>\pos</c> puts it, and its opacity fading as <c>\fad</c> says, in the
-    /// cue's own time.
+    /// cue's own time. <paramref name="push"/> moves it that many frame pixels past its place, away
+    /// from the frame's edge, for room another cue there already takes.
     /// </summary>
-    public static Effect Title(SubtitleStyle style, Clip cue, AssOverrides overrides, int frameWidth, int frameHeight)
+    public static Effect Title(SubtitleStyle style, Clip cue, AssOverrides overrides, int frameWidth, int frameHeight, float push = 0f)
     {
         ArgumentNullException.ThrowIfNull(style);
         ArgumentNullException.ThrowIfNull(cue);
@@ -73,7 +96,7 @@ public static class SubtitleLook
             Shadow = overrides.Shadow is 0.0 ? "#00000000" : style.Shadow,
         };
 
-        Effect title = Title(own, cue.Cue!.Text, cue.Cue.Align, frameWidth, frameHeight);
+        Effect title = Title(own, cue.Cue!.Text, cue.Cue.Align, frameWidth, frameHeight, push);
         if (overrides.Position is { } at)
         {
             // Script pixels from the top left, to the frame's from its middle.
@@ -113,8 +136,12 @@ public static class SubtitleLook
         return title;
     }
 
-    /// <summary>The title generator's parameters that draw text in a subtitle style at a place on a frame.</summary>
-    public static Effect Title(SubtitleStyle style, string text, SubtitleAlign align, int frameWidth, int frameHeight)
+    /// <summary>
+    /// The title generator's parameters that draw text in a subtitle style at a place on a frame,
+    /// moved <paramref name="push"/> frame pixels away from the frame's edge (up from the bottom,
+    /// down from the top and the middle).
+    /// </summary>
+    public static Effect Title(SubtitleStyle style, string text, SubtitleAlign align, int frameWidth, int frameHeight, float push = 0f)
     {
         ArgumentNullException.ThrowIfNull(style);
         ArgumentNullException.ThrowIfNull(text);
@@ -128,7 +155,7 @@ public static class SubtitleLook
 
         var position = new Vector2(
             column switch { 0 => -((frameWidth / 2f) - margin), 2 => (frameWidth / 2f) - margin, _ => 0f },
-            row switch { 0 => (height / 2f) - margin, 2 => -((height / 2f) - margin), _ => 0f });
+            row switch { 0 => (height / 2f) - margin - push, 2 => -((height / 2f) - margin) + push, _ => push });
 
         Effect title = Effect.Create(TitleParams.GeneratorId);
         foreach ((string name, ParamValue value) in new (string, ParamValue)[]
