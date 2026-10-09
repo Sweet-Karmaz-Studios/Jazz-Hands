@@ -172,6 +172,15 @@
                                ToolTip="Frames that were due at normal speed and never shown">
                         <Run Text="{Binding DroppedFrames, Mode=OneWay}" /><Run Text=" dropped" />
                     </TextBlock>
+                    <!-- In the multicam grid, the angle that is live where the playhead is. -->
+                    <TextBlock Text="{Binding MulticamAngle, Mode=OneWay}"
+                               Margin="8,0,0,0"
+                               VerticalAlignment="Center"
+                               FontSize="{DynamicResource Text.Caption}"
+                               Foreground="{DynamicResource Brush.Accent}"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="The live angle, outlined in the grid"
+                               AutomationProperties.Name="Live angle" />
                 </StackPanel>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right" ClipToBounds="True">

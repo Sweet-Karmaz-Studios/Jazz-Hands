@@ -34,7 +34,7 @@ public sealed partial class PreviewPanelViewModel
     [ObservableProperty]
     private Rect _multicamCell = Rect.Empty;
 
-    /// <summary>The live angle's name, for the status line.</summary>
+    /// <summary>The live angle's name, for the preview bar.</summary>
     [ObservableProperty]
     private string _multicamAngle = string.Empty;
 
