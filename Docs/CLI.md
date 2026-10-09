@@ -1818,7 +1818,7 @@ Take clips out of their selection group.
 
 ### `jazz clip unlink <project> <clip-ids>...`
 
-Break the sync lock on clips.
+Unlink clips so each moves on its own.
 
 | Argument | Meaning |
 |---|---|
