@@ -895,7 +895,7 @@ public sealed partial class TimelineViewModel
             delta = Flicks.Zero - earliest;
         }
 
-        int shift = RowShift(grabbed, point, moving);
+        (int shift, int otherShift) = RowShift(grabbed, point, moving);
 
         // On a magnetic sequence a clip dragged along the primary track goes in at a cut.
         if (shift == 0 && Content.Sequence.IsMagnetic && Content.Sequence.PrimaryTrack is { Locked: false } primary
@@ -908,7 +908,7 @@ public sealed partial class TimelineViewModel
         var moves = new List<(ClipView Clip, string TrackId, Flicks To)>(moving.Length);
         foreach (ClipView clip in moving)
         {
-            moves.Add((clip, ShiftedTrack(clip, shift), clip.Start + delta));
+            moves.Add((clip, ShiftedTrack(clip, SameFamily(clip.Kind, grabbed.Kind) ? shift : otherShift), clip.Start + delta));
         }
 
         // Front first in the direction of travel, as clip.nudge does, so a clip never lands on a
@@ -958,33 +958,35 @@ public sealed partial class TimelineViewModel
 
     /// <summary>
     /// How many tracks the grabbed clip has moved, counted the way tracks are numbered: picture
-    /// tracks up from V1, sound tracks down from A1. Every moving clip moves that many tracks
-    /// within its own kind, so dragging a camera clip from V1 to V2 takes its sound from A1 to A2.
-    /// When any of them would run out of tracks, none change track.
+    /// tracks up from V1, sound tracks down from A1, for the clips of the grabbed one's kind and
+    /// for the others. Every moving clip moves that many tracks within its own kind, so dragging
+    /// a camera clip from V1 to V2 takes its sound from A1 to A2. When a clip of the grabbed one's
+    /// kind would run out of tracks, nothing changes track; when one of the other kind would, the
+    /// other kind stays where it is: an OBS capture's Discord on A3 has no A4 to go to, and its
+    /// picture did not move at all (2026-10-09).
     /// </summary>
-    private int RowShift(ClipView grabbed, Point point, ClipView[] moving)
+    private (int Own, int Other) RowShift(ClipView grabbed, Point point, ClipView[] moving)
     {
         if (Geometry.RowAt(point.Y) is not { } target || !SameFamily(target.Kind, grabbed.Kind))
         {
-            return 0;
+            return (0, 0);
         }
 
         int shift = TrackNumber(target.TrackId) - TrackNumber(grabbed.TrackId);
         if (shift == 0)
         {
-            return 0;
+            return (0, 0);
         }
 
-        foreach (ClipView clip in moving)
+        bool Fits(IEnumerable<ClipView> clips) => clips.All(clip =>
+            TrackNumber(clip.TrackId) + shift is var number && number >= 0 && number < Family(clip.Kind).Count);
+
+        if (!Fits(moving.Where(clip => SameFamily(clip.Kind, grabbed.Kind))))
         {
-            int number = TrackNumber(clip.TrackId) + shift;
-            if (number < 0 || number >= Family(clip.Kind).Count)
-            {
-                return 0;
-            }
+            return (0, 0);
         }
 
-        return shift;
+        return (shift, Fits(moving.Where(clip => !SameFamily(clip.Kind, grabbed.Kind))) ? shift : 0);
     }
 
     private static bool SameFamily(TrackKind a, TrackKind b) => a == b || (IsPicture(a) && IsPicture(b));
