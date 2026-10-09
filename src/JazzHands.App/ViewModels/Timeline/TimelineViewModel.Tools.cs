@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Input;
 using JazzHands.App.Services;
+using JazzHands.Core;
 using JazzHands.Core.Commands;
 using JazzHands.Core.Editing;
 using JazzHands.Core.Model;
@@ -979,10 +980,28 @@ public sealed partial class TimelineViewModel
         }
     }
 
-    private void ShowEntry() =>
-        Status = SelectedEdit is null
-            ? $"Nudge by {_entry} frames (seconds.frames), Enter to apply"
-            : $"Trim by {_entry} frames (seconds.frames), Enter to apply";
+    // What was typed and what it comes to: -1.5 is a second and five frames, and "Trim by -1.5
+    // frames" read as a count of frames (seen on screen, 2026-10-09).
+    private void ShowEntry()
+    {
+        string verb = SelectedEdit is null ? "Nudge" : "Trim";
+        Rational fps = Content.Settings.FrameRate;
+        Status = ParseEntry(_entry!, fps) is { } frames
+            ? $"{verb} {Spell(Math.Abs(frames), fps)} {(frames < 0 ? "earlier" : "later")} ({_entry} as seconds.frames), Enter to apply"
+            : $"{verb} by {_entry} (seconds.frames), Enter to apply";
+    }
+
+    /// <summary>Frames as seconds and frames: "1 second 5 frames", "12 frames", "2 seconds".</summary>
+    internal static string Spell(int frames, Rational fps)
+    {
+        long perSecond = (long)Math.Round((double)fps.Num / fps.Den);
+        long seconds = frames / perSecond;
+        long rest = frames % perSecond;
+
+        return seconds == 0 ? Words.Count(rest, "frame")
+            : rest == 0 ? Words.Count(seconds, "second")
+            : $"{Words.Count(seconds, "second")} {Words.Count(rest, "frame")}";
+    }
 
     /// <summary>Frames from what was typed: 12 is twelve frames, 1.12 a second and twelve frames.</summary>
     internal static int? ParseEntry(string typed, Rational fps)
