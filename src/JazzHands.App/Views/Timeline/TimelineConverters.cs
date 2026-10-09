@@ -61,15 +61,20 @@ public sealed class ColorBrushConverter : IValueConverter
 
 /// <summary>
 /// A colour, as the project stores it, to a brush for text on the panels: lightened towards white
-/// just as far as it takes to read (4.5 to 1 against the panel's #222222), so a dark role colour
-/// such as Video's slate still reads as a word under a track's name.
+/// just as far as it takes to read (4.5 to 1 against the panel's #222222, and 3 to 1 against a
+/// selected header's #37485C), so a dark role colour such as Video's slate still reads as a word
+/// under a track's name, picked or not.
 /// </summary>
 public sealed class ReadableColorBrushConverter : IValueConverter
 {
     /// <summary>The contrast text wants against the panel.</summary>
     public const double Contrast = 4.5;
 
+    /// <summary>The contrast it keeps on a selected track's header, lighter than the panel.</summary>
+    public const double SelectedContrast = 3.0;
+
     private static readonly Color Panel = Color.FromRgb(0x22, 0x22, 0x22);
+    private static readonly Color Selected = Color.FromRgb(0x37, 0x48, 0x5C);
     private static readonly Dictionary<string, SolidColorBrush> Brushes = new(StringComparer.OrdinalIgnoreCase);
 
     /// <inheritdoc />
@@ -105,7 +110,7 @@ public sealed class ReadableColorBrushConverter : IValueConverter
     public static Color Readable(Color color)
     {
         Color lighter = color;
-        for (int step = 1; step <= 20 && ContrastOf(lighter, Panel) < Contrast; step++)
+        for (int step = 1; step <= 20 && (ContrastOf(lighter, Panel) < Contrast || ContrastOf(lighter, Selected) < SelectedContrast); step++)
         {
             double mix = step / 20.0;
             lighter = Color.FromRgb(Toward(color.R, mix), Toward(color.G, mix), Toward(color.B, mix));
