@@ -13,14 +13,14 @@ namespace JazzHands.App.Views.Effects;
 /// </summary>
 public partial class EffectsPanelView : UserControl
 {
-    private Point? _pressed;
+    private readonly DragStart _drag = new();
 
     /// <summary>Creates the view.</summary>
     public EffectsPanelView() => InitializeComponent();
 
     private void OnEffectMouseDown(object sender, MouseButtonEventArgs e)
     {
-        _pressed = e.GetPosition(this);
+        _drag.Press(e.GetPosition(this), ((FrameworkElement)sender).DataContext);
 
         if (e.ClickCount == 2 && ((FrameworkElement)sender).DataContext is EffectTypeItemViewModel effect)
         {
@@ -31,7 +31,7 @@ public partial class EffectsPanelView : UserControl
 
     private void OnEffectMouseMove(object sender, MouseEventArgs e)
     {
-        if (StartsDrag(e) && ((FrameworkElement)sender).DataContext is EffectTypeItemViewModel effect)
+        if (Dragged(e) is EffectTypeItemViewModel effect)
         {
             DragDrop.DoDragDrop((DependencyObject)sender, EffectDragData.ForEffect(effect.TypeId), DragDropEffects.Copy);
         }
@@ -39,7 +39,7 @@ public partial class EffectsPanelView : UserControl
 
     private void OnPresetMouseMove(object sender, MouseEventArgs e)
     {
-        if (StartsDrag(e) && ((FrameworkElement)sender).DataContext is EffectPresetItemViewModel preset)
+        if (Dragged(e) is EffectPresetItemViewModel preset)
         {
             DragDrop.DoDragDrop((DependencyObject)sender, EffectDragData.ForPreset(preset.Id), DragDropEffects.Copy);
         }
@@ -47,26 +47,15 @@ public partial class EffectsPanelView : UserControl
 
     private void OnTitlePresetMouseMove(object sender, MouseEventArgs e)
     {
-        if (StartsDrag(e) && ((FrameworkElement)sender).DataContext is TitlePresetItemViewModel preset)
+        if (Dragged(e) is TitlePresetItemViewModel preset)
         {
             DragDrop.DoDragDrop((DependencyObject)sender, EffectDragData.ForTitlePreset(preset.Name), DragDropEffects.Copy);
         }
     }
 
-    private bool StartsDrag(MouseEventArgs e)
-    {
-        if (e.LeftButton != MouseButtonState.Pressed || _pressed is not { } pressed)
-        {
-            return false;
-        }
-
-        Vector moved = e.GetPosition(this) - pressed;
-        if (Math.Abs(moved.X) < SystemParameters.MinimumHorizontalDragDistance && Math.Abs(moved.Y) < SystemParameters.MinimumVerticalDragDistance)
-        {
-            return false;
-        }
-
-        _pressed = null;
-        return true;
-    }
+    /// <summary>The item pressed, once the pointer has moved far enough to drag it; whatever row it is over now.</summary>
+    private object? Dragged(MouseEventArgs e) => _drag.Take(
+        e.GetPosition(this),
+        e.LeftButton == MouseButtonState.Pressed,
+        new Size(SystemParameters.MinimumHorizontalDragDistance, SystemParameters.MinimumVerticalDragDistance));
 }
