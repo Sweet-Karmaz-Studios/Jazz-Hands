@@ -312,7 +312,9 @@ public static class CommandRegistry
                 continue;
             }
 
-            values[index] = CommandValues.Parse(parameter.Type, text, frameRate, parameter.CliName);
+            values[index] = TryRatio(parameter, text, out Rational ratio)
+                ? ratio
+                : CommandValues.Parse(parameter.Type, text, frameRate, parameter.CliName);
         }
 
         if (positional < arguments.Count)
@@ -513,6 +515,11 @@ public static class CommandRegistry
                     return CommandValues.Parse(parameter.Type, text, rate, parameter.JsonName);
                 }
 
+                if (TryRatio(parameter, text, out Rational ratio))
+                {
+                    return ratio;
+                }
+
                 if (bare == typeof(FrameSize) || bare == typeof(Rational))
                 {
                     return CommandValues.Parse(bare, text, frameRate ?? Rational.Fps30, parameter.JsonName);
@@ -540,6 +547,26 @@ public static class CommandRegistry
         bool read = value.TryGetValue(out double real) && double.IsFinite(real);
         number = read ? (decimal)real : 0m;
         return read;
+    }
+
+    /// <summary>
+    /// A speed or other ratio typed as 0.25 or 1.5, taken exactly, as it is in JSON. A frame rate
+    /// keeps to whole numbers and ratios, so 29.97 is still refused for 30000/1001.
+    /// </summary>
+    private static bool TryRatio(ParameterMetadata parameter, string text, out Rational ratio)
+    {
+        ratio = default;
+        Type bare = Nullable.GetUnderlyingType(parameter.Type) ?? parameter.Type;
+        if (bare != typeof(Rational) || parameter.Name is "Fps" or "FrameRate"
+            || CommandValues.TryParseFrameRate(text, out _, out _)
+            || !decimal.TryParse(text, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out decimal typed))
+        {
+            // The frame rate's own reading first: its shorthands (29.97 for 30000/1001) hold.
+            return false;
+        }
+
+        ratio = RationalOf(typed);
+        return true;
     }
 
     private static Rational RationalOf(decimal number)
