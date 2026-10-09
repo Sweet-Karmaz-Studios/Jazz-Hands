@@ -99,6 +99,7 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
     private long _lastEventTicks;
     private long _lastEventFrame = -1;
     private (TransportState State, double Rate) _lastReported = (TransportState.Stopped, 1.0);
+    private (string? Grid, string? Comp) _lastViews;
     private ID3D11Texture2D? _program;
     private ID3D11RenderTargetView? _programView;
     private ID3D11Texture2D? _working;
@@ -1205,7 +1206,10 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
 
     private void Report(Flicks time, long frame, TransportState state, double rate, long now)
     {
-        bool changed = (state, rate) != _lastReported;
+        // Showing a multicam grid or a comp node, from a button or from a remote client, changes
+        // what the preview panel shows, so it is reported like a change of state.
+        (string? Grid, string? Comp) views = (MulticamGrid, CompView);
+        bool changed = (state, rate) != _lastReported || views != _lastViews;
 
         if (!changed && frame == _lastEventFrame)
         {
@@ -1220,6 +1224,7 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
         }
 
         _lastReported = (state, rate);
+        _lastViews = views;
         _lastEventTicks = now;
         _lastEventFrame = frame;
 
