@@ -425,11 +425,8 @@ public partial class App : Application
             lifetime.StartHidden();
         }
 
-        _services.GetRequiredService<Shell.AppHostMethods>().Methods["app.launch"] = args => Dispatcher.InvokeAsync(async () =>
-        {
-            await HandleLaunchAsync(Shell.LaunchRequest.FromJson(args)).ConfigureAwait(true);
-            return (System.Text.Json.Nodes.JsonNode?)new System.Text.Json.Nodes.JsonObject { ["ok"] = true };
-        }).Task.Unwrap();
+        _services.GetRequiredService<Shell.AppHostMethods>().Methods["app.launch"] =
+            Shell.Startup.AnswerAtOnce(HandleLaunchAsync, work => Dispatcher.InvokeAsync(work));
 
         // Windows notifications, with the notification area's balloon when Windows will not.
         var notifications = new Shell.DesktopNotifications(() => editor.Current.WindowsNotifications, _tray.Notify);

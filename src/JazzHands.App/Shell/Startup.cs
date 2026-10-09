@@ -129,6 +129,37 @@ public static partial class Startup
         return false;
     }
 
+    /// <summary>
+    /// The editor's <c>app.launch</c>: takes the launch, posts the work, and answers at once. The
+    /// second launch waits only seconds for the answer before starting an editor of its own, and
+    /// what a launch asks (save the project first? which files to bring in?) can take as long as
+    /// the person likes.
+    /// </summary>
+    /// <param name="handle">Does what the launch asks.</param>
+    /// <param name="post">Runs the work on the UI thread later.</param>
+    public static Func<JsonObject, Task<JsonNode?>> AnswerAtOnce(Func<LaunchRequest, Task> handle, Action<Func<Task>> post)
+    {
+        ArgumentNullException.ThrowIfNull(handle);
+        ArgumentNullException.ThrowIfNull(post);
+        return args =>
+        {
+            LaunchRequest request = LaunchRequest.FromJson(args);
+            post(async () =>
+            {
+                try
+                {
+                    await handle(request).ConfigureAwait(true);
+                }
+                catch (Exception error) when (error is not OutOfMemoryException)
+                {
+                    Log.ForContext(typeof(Startup)).Error(error, "A launch handed over as {Action} failed", request.Action);
+                }
+            });
+
+            return Task.FromResult<JsonNode?>(new JsonObject { ["ok"] = true });
+        };
+    }
+
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool AllowSetForegroundWindow(int processId);
