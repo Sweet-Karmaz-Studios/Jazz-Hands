@@ -117,9 +117,4 @@
         <Setter Property="Padding" Value="10,4" />
     </Style>
 
-    <Style TargetType="ComboBox">
-        <Setter Property="FontFamily" Value="{DynamicResource Font.Ui}" />
-        <Setter Property="FontSize" Value="{DynamicResource Text.Body}" />
-    </Style>
-
 </ResourceDictionary>

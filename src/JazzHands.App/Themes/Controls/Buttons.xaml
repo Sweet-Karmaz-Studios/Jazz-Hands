@@ -200,7 +200,9 @@
                                           VerticalAlignment="Center"
                                           IsHitTestVisible="False"
                                           Content="{TemplateBinding SelectionBoxItem}"
-                                          ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" />
+                                          ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                          ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
+                                          ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}" />
                         <Popup x:Name="PART_Popup"
                                Placement="Bottom"
                                AllowsTransparency="True"
@@ -243,6 +245,12 @@
                 </Style>
             </Setter.Value>
         </Setter>
+    </Style>
+
+    <!-- Every combo box is the dark one, at body size: one left to the system was a white box with
+         pale text on it (the Colour panel's Project, found 2026-10-09). -->
+    <Style TargetType="ComboBox" BasedOn="{StaticResource ComboBox.Compact}">
+        <Setter Property="FontSize" Value="{DynamicResource Text.Body}" />
     </Style>
 
 </ResourceDictionary>
