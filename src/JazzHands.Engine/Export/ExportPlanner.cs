@@ -36,6 +36,8 @@ namespace JazzHands.Engine.Export;
 /// </remarks>
 public static class ExportPlanner
 {
+    private const string AsAsked = "Encoding, as asked.";
+
     /// <summary>Plans an export.</summary>
     /// <param name="project">The project as it is now.</param>
     /// <param name="projectPath">Where it lives, or empty for an unsaved one.</param>
@@ -72,6 +74,13 @@ public static class ExportPlanner
         ExportPlan plan = PlanStreams(project, projectPath, stemsInFile ? request with { Mode = ExportMode.Encode } : request, keyframes, burn, cancellationToken);
         ExportContainer? container = ExportPresets.Container(plan.Container);
         var reasons = new List<string>(plan.Reasons);
+
+        // Nobody asked for an encode when the mode is Auto: the stems in the file are why.
+        if (stemsInFile && request.Mode == ExportMode.Auto && reasons.Count > 0 && reasons[0] == AsAsked)
+        {
+            reasons[0] = "Encoding: stems inside the file are encoded with the mix.";
+        }
+
         ExportSubtitles? subtitles = Subtitles(request, sequence, plan, container, reasons);
         bool chapters = request.Chapters && container is { Chapters: true };
 
@@ -1300,7 +1309,7 @@ public static class ExportPlanner
         {
             // Why a copy would not have worked is beside the point when nobody asked for one.
             reasons.Clear();
-            reasons.Add("Encoding, as asked.");
+            reasons.Add(AsAsked);
         }
         else if (reasons.Count == 0)
         {
