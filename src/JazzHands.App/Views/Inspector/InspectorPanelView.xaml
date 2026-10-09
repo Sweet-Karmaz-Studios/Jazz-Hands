@@ -4,6 +4,7 @@
              xmlns:vm="clr-namespace:JazzHands.App.ViewModels.Inspector"
              xmlns:controls="clr-namespace:JazzHands.App.Controls"
              xmlns:local="clr-namespace:JazzHands.App.Views.Inspector"
+             xmlns:comp="clr-namespace:JazzHands.App.Views.Comp"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
@@ -181,12 +182,15 @@
                     </UniformGrid>
 
                     <StackPanel Orientation="Horizontal" Visibility="{Binding IsColor, Mode=OneWay, Converter={StaticResource Visible}}">
-                        <!-- The swatch opens the colour picker; a drag in it sends the colour as it goes. -->
+                        <!-- The swatch opens the colour picker; a drag in it sends the colour as it goes.
+                             While the picker is open the swatch takes no clicks, so a click on it only
+                             closes the picker (it is outside the popup) rather than opening it again. -->
                         <ToggleButton x:Name="Swatch"
                                       Width="22"
                                       Height="18"
                                       Cursor="Hand"
                                       IsChecked="{Binding IsPickerOpen, Mode=TwoWay}"
+                                      IsHitTestVisible="{Binding IsOpen, ElementName=PickerPopup, Converter={x:Static comp:Not.Instance}}"
                                       ToolTip="Pick a colour"
                                       AutomationProperties.Name="Open the colour picker">
                             <ToggleButton.Template>
@@ -198,7 +202,8 @@
                                 </ControlTemplate>
                             </ToggleButton.Template>
                         </ToggleButton>
-                        <Popup IsOpen="{Binding IsPickerOpen, Mode=TwoWay}"
+                        <Popup x:Name="PickerPopup"
+                               IsOpen="{Binding IsPickerOpen, Mode=TwoWay}"
                                StaysOpen="False"
                                PlacementTarget="{Binding ElementName=Swatch}"
                                Placement="Bottom"
