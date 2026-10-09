@@ -42,7 +42,10 @@ public sealed record LaunchRequest(LaunchAction Action, IReadOnlyList<string> Fi
     public const string Scheme = "jazzhands";
 
     /// <summary>The project to open, for <see cref="LaunchAction.Show"/> and <see cref="LaunchAction.Background"/>.</summary>
-    public string? Project => Action is LaunchAction.Show or LaunchAction.Background ? Files.FirstOrDefault() : null;
+    public string? Project => Action is LaunchAction.Show or LaunchAction.Background ? Files.FirstOrDefault(IsProject) : null;
+
+    /// <summary>True for a <c>.jazz</c> file; anything else on a command line is media to add.</summary>
+    public static bool IsProject(string path) => path.EndsWith(".jazz", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Reads a command line: <c>[project.jazz]</c>, <c>--background</c>, <c>--new-project</c>,
@@ -67,6 +70,7 @@ public sealed record LaunchRequest(LaunchAction Action, IReadOnlyList<string> Fi
             : Has("--new-project") ? LaunchAction.NewProject
             : Has("--export-queue") ? LaunchAction.ExportQueue
             : Has("--background") ? LaunchAction.Background
+            : files.Length > 0 && !files.Any(IsProject) ? LaunchAction.AddMedia
             : LaunchAction.Show;
         return new LaunchRequest(action, files);
     }
