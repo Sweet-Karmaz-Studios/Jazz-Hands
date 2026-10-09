@@ -372,6 +372,36 @@ public sealed class Keymap
     }
 
     /// <summary>
+    /// Where the playhead goes once a bound command has run, or null to leave it. Trimming a shot's
+    /// start to the playhead (Q) pulls the rest back, so the frame that was under the playhead is
+    /// now at the shot's start, and the playhead goes with it, as Premiere and Resolve have it.
+    /// Left where it was it showed a later frame (seen on screen, 2026-10-09). W needs nothing:
+    /// the playhead is already on the new end.
+    /// </summary>
+    /// <param name="command">What the binding resolved to.</param>
+    /// <param name="before">The project before it ran.</param>
+    public static Flicks? PlayheadAfter(ICommand command, Project before)
+    {
+        ArgumentNullException.ThrowIfNull(before);
+
+        if (command is not RippleTrimClipsCommand { Edge: ClipEdge.Start } trim)
+        {
+            return null;
+        }
+
+        Flicks? start = null;
+        foreach (string id in trim.ClipIds)
+        {
+            if (before.FindClip(id)?.Clip is { } clip && (start is null || clip.Range.Start < start))
+            {
+                start = clip.Range.Start;
+            }
+        }
+
+        return start;
+    }
+
+    /// <summary>
     /// Copies of clips that are linked to each other are linked to each other too: each copy is
     /// given its id, and a <c>clip.link</c> joins the copies from each link group. A
     /// shot copied with its sound came out as clips that moved apart (2026-10-09).

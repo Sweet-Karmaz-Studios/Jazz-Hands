@@ -131,15 +131,21 @@ public sealed class KeymapService
             return;
         }
 
-        _ = RunAsync(command);
+        _ = RunAsync(command, Keymap.PlayheadAfter(command, _session.Project));
     }
 
-    private async Task RunAsync(ICommand command)
+    private async Task RunAsync(ICommand command, Flicks? then)
     {
         CommandResult result = await _session.ExecuteAsync(command).ConfigureAwait(true);
         if (!result.Ok)
         {
             Message?.Invoke(this, result.Error ?? result.Code ?? "That did not work.");
+            return;
+        }
+
+        if (then is { } at)
+        {
+            await _session.ExecuteAsync(new SeekCommand(at)).ConfigureAwait(true);
         }
     }
 }
