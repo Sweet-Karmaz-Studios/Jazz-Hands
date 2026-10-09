@@ -1473,6 +1473,11 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
             return $"Sequence {project.Sequence(sequenceId)?.Name ?? sequenceId}";
         }
 
+        if (clip.Cue is not null)
+        {
+            return "Subtitle cue";
+        }
+
         return clip.GeneratorId is { } generator
             ? EffectCatalog.Registry.Find(generator)?.Name ?? generator
             : "Adjustment layer";
