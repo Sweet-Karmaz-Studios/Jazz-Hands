@@ -4,6 +4,7 @@
              xmlns:vm="clr-namespace:JazzHands.App.ViewModels.Audio"
              xmlns:controls="clr-namespace:JazzHands.App.Controls"
              xmlns:timeline="clr-namespace:JazzHands.App.Views.Timeline"
+             xmlns:views="clr-namespace:JazzHands.App.Views"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
@@ -13,6 +14,7 @@
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="Visible" />
         <timeline:ReadableColorBrushConverter x:Key="ReadableColorBrush" />
+        <views:MenuTextConverter x:Key="MenuText" />
 
         <!-- A level bar that fills from the bottom, as the Meters panel draws it. -->
         <Style x:Key="MeterBar" TargetType="{x:Type ProgressBar}">
@@ -379,7 +381,7 @@
                                                     <MenuItem Header="Duck under" ItemsSource="{Binding DuckChoices, Mode=OneWay}">
                                                         <MenuItem.ItemContainerStyle>
                                                             <Style TargetType="{x:Type MenuItem}" BasedOn="{StaticResource {x:Type MenuItem}}">
-                                                                <Setter Property="Header" Value="{Binding Name, Mode=OneWay}" />
+                                                                <Setter Property="Header" Value="{Binding Name, Mode=OneWay, Converter={StaticResource MenuText}}" />
                                                                 <Setter Property="CommandParameter" Value="{Binding TrackId, Mode=OneWay}" />
                                                                 <Setter Property="Command" Value="{Binding PlacementTarget.DataContext.DuckUnderCommand, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}, Mode=OneWay}" />
                                                             </Style>
@@ -425,7 +427,7 @@
                                                 <ContextMenu ItemsSource="{Binding AvailableEffects, Mode=OneWay}">
                                                     <ContextMenu.ItemContainerStyle>
                                                         <Style TargetType="{x:Type MenuItem}" BasedOn="{StaticResource {x:Type MenuItem}}">
-                                                            <Setter Property="Header" Value="{Binding Name, Mode=OneWay}" />
+                                                            <Setter Property="Header" Value="{Binding Name, Mode=OneWay, Converter={StaticResource MenuText}}" />
                                                             <Setter Property="InputGestureText" Value="{Binding Category, Mode=OneWay}" />
                                                             <Setter Property="CommandParameter" Value="{Binding TypeId, Mode=OneWay}" />
                                                             <Setter Property="Command" Value="{Binding PlacementTarget.DataContext.AddEffectCommand, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}, Mode=OneWay}" />

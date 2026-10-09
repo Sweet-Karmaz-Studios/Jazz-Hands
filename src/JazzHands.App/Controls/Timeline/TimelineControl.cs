@@ -271,7 +271,7 @@ public sealed class TimelineControl : FrameworkElement
 
             var entry = new System.Windows.Controls.MenuItem
             {
-                Header = item.Header,
+                Header = Views.MenuText.Escape(item.Header),
                 InputGestureText = item.Shortcut ?? string.Empty,
                 IsEnabled = item.Enabled,
             };

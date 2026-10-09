@@ -33,7 +33,7 @@ public partial class TimelineView : UserControl
         {
             menu.Items.Add(new MenuItem
             {
-                Header = name,
+                Header = MenuText.Escape(name),
                 IsChecked = string.Equals(name, header.RoleName, StringComparison.OrdinalIgnoreCase),
                 Foreground = (System.Windows.Media.Brush)brushes.Convert(color, typeof(System.Windows.Media.Brush), null!, System.Globalization.CultureInfo.InvariantCulture),
                 Command = header.SetRoleCommand,

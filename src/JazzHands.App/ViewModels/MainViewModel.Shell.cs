@@ -380,7 +380,7 @@ public sealed partial class MainViewModel
         MenuItemViewModel recent = new("Open _recent");
         foreach (string path in RecentProjects)
         {
-            recent.Items.Add(new MenuItemViewModel(path.Replace("_", "__", StringComparison.Ordinal), new RelayCommand(() => _ = OpenRecentAsync(path)), toolTip: path));
+            recent.Items.Add(new MenuItemViewModel(Views.MenuText.Escape(path), new RelayCommand(() => _ = OpenRecentAsync(path)), toolTip: path));
         }
 
         if (recent.Items.Count == 0)
@@ -513,7 +513,7 @@ public sealed partial class MainViewModel
 
         foreach (string name in workspaces.Names)
         {
-            menu.Items.Add(new MenuItemViewModel(name, SwitchWorkspaceCommand, isChecked: () => string.Equals(workspaces.Current, name, StringComparison.OrdinalIgnoreCase)) { CommandParameter = name });
+            menu.Items.Add(new MenuItemViewModel(Views.MenuText.Escape(name), SwitchWorkspaceCommand, isChecked: () => string.Equals(workspaces.Current, name, StringComparison.OrdinalIgnoreCase)) { CommandParameter = name });
         }
 
         return menu.With(

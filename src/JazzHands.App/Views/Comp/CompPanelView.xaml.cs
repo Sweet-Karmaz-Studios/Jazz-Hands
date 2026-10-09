@@ -216,10 +216,10 @@ public partial class CompPanelView : UserControl
         var menu = new ContextMenu { PlacementTarget = target };
         foreach (IGrouping<string, CompNodeType> group in panel.NodeTypes.GroupBy(type => type.Group))
         {
-            var parent = new MenuItem { Header = group.Key };
+            var parent = new MenuItem { Header = MenuText.Escape(group.Key) };
             foreach (CompNodeType type in group)
             {
-                var item = new MenuItem { Header = type.Name, Tag = type.TypeId };
+                var item = new MenuItem { Header = MenuText.Escape(type.Name), Tag = type.TypeId };
                 item.Click += (_, _) =>
                 {
                     _ = at is { } place ? panel.AddAsync(type.TypeId, place) : panel.AddTypeCommand.ExecuteAsync(type.TypeId);
