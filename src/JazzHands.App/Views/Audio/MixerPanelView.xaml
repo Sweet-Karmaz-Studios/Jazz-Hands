@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:JazzHands.App.ViewModels.Audio"
              xmlns:controls="clr-namespace:JazzHands.App.Controls"
+             xmlns:timeline="clr-namespace:JazzHands.App.Views.Timeline"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
@@ -11,6 +12,7 @@
 
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="Visible" />
+        <timeline:ReadableColorBrushConverter x:Key="ReadableColorBrush" />
 
         <!-- A level bar that fills from the bottom, as the Meters panel draws it. -->
         <Style x:Key="MeterBar" TargetType="{x:Type ProgressBar}">
@@ -367,7 +369,7 @@
                                                            Foreground="White" FontWeight="SemiBold" ToolTip="{Binding Name, Mode=OneWay}" />
                                                 <Border Margin="0,1,0,1" CornerRadius="2" Background="{DynamicResource Brush.Background.Panel}">
                                                     <TextBlock Text="{Binding RoleName, Mode=OneWay}" HorizontalAlignment="Center"
-                                                               FontSize="{DynamicResource Text.Caption}" Foreground="{Binding RoleColor, Mode=OneWay}"
+                                                               FontSize="{DynamicResource Text.Caption}" Foreground="{Binding RoleColor, Converter={StaticResource ReadableColorBrush}, Mode=OneWay}"
                                                                ToolTip="Its role, for stems and muting by role" />
                                                 </Border>
                                             </StackPanel>

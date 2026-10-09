@@ -16,6 +16,7 @@
     <UserControl.Resources>
         <local:GlyphSwitchConverter x:Key="Glyph" />
         <local:ColorBrushConverter x:Key="ColorBrush" />
+        <local:ReadableColorBrushConverter x:Key="ReadableColorBrush" />
         <BooleanToVisibilityConverter x:Key="Visible" />
         <local:EqualsConverter x:Key="Is" />
 
@@ -243,7 +244,7 @@
                                                             <TextBlock x:Name="Text"
                                                                        Text="{Binding RoleName, Mode=OneWay}"
                                                                        FontSize="{DynamicResource Text.Caption}"
-                                                                       Foreground="{Binding RoleColor, Converter={StaticResource ColorBrush}, Mode=OneWay}" />
+                                                                       Foreground="{Binding RoleColor, Converter={StaticResource ReadableColorBrush}, Mode=OneWay}" />
                                                         </Border>
                                                         <ControlTemplate.Triggers>
                                                             <Trigger Property="IsMouseOver" Value="True">
