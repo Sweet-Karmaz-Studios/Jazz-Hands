@@ -274,35 +274,38 @@
                          ToolTip="Export to here, in sequence time: 00:01:30.000"
                          AutomationProperties.Name="Export to" />
 
-                <DockPanel Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="4" Margin="0,4,0,0">
-                    <Button DockPanel.Dock="Right"
-                            Style="{StaticResource Button.Text}"
-                            Content="Reset"
-                            Command="{Binding ResetOverridesCommand, Mode=OneWay}"
-                            AutomationProperties.Name="Reset the overrides" />
-                    <CheckBox DockPanel.Dock="Left" Margin="0,0,16,0"
-                              VerticalAlignment="Center"
-                              Content="Sound only"
-                              IsChecked="{Binding SoundOnly, Mode=TwoWay}"
-                              ToolTip="Write the mix alone: AAC in .m4a, Opus in .opus, FLAC, WAV or MP3, by the preset's sound"
-                              Foreground="{DynamicResource Brush.Text.Primary}"
-                              AutomationProperties.Name="Sound only" />
-                    <TextBlock DockPanel.Dock="Left" Margin="0,0,6,0" VerticalAlignment="Center" Text="Stems" />
-                    <ComboBox DockPanel.Dock="Left" Margin="0,0,16,0" MinWidth="130"
-                              Style="{StaticResource ComboBox.Compact}"
-                              ItemsSource="{Binding Source={x:Static vm:ExportDialogViewModel.StemChoices}, Mode=OneTime}"
-                              SelectedItem="{Binding Stems, Mode=TwoWay}"
-                              ToolTip="Also write a 24-bit WAV per role (dialogue, music, effects, game) or per sound track beside the file, adding up to the mix"
-                              AutomationProperties.Name="Stems">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding Label, Mode=OneWay}" />
-                            </DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
-                    <TextBlock Text="An empty box keeps the preset's value, shown in it."
+                <StackPanel Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="4" Margin="0,4,0,0">
+                    <DockPanel LastChildFill="False">
+                        <Button DockPanel.Dock="Right"
+                                Style="{StaticResource Button.Text}"
+                                Content="Reset"
+                                Command="{Binding ResetOverridesCommand, Mode=OneWay}"
+                                AutomationProperties.Name="Reset the overrides" />
+                        <CheckBox DockPanel.Dock="Left" Margin="0,0,16,0"
+                                  VerticalAlignment="Center"
+                                  Content="Sound only"
+                                  IsChecked="{Binding SoundOnly, Mode=TwoWay}"
+                                  ToolTip="Write the mix alone: AAC in .m4a, Opus in .opus, FLAC, WAV or MP3, by the preset's sound"
+                                  Foreground="{DynamicResource Brush.Text.Primary}"
+                                  AutomationProperties.Name="Sound only" />
+                        <TextBlock DockPanel.Dock="Left" Margin="0,0,6,0" VerticalAlignment="Center" Text="Stems" />
+                        <ComboBox DockPanel.Dock="Left" Margin="0,0,16,0" MinWidth="130"
+                                  Style="{StaticResource ComboBox.Compact}"
+                                  ItemsSource="{Binding Source={x:Static vm:ExportDialogViewModel.StemChoices}, Mode=OneTime}"
+                                  SelectedItem="{Binding Stems, Mode=TwoWay}"
+                                  ToolTip="Also write the sound per role (dialogue, music, effects, game) or per sound track, adding up to the mix: as 24-bit WAVs or files in the preset's sound codec beside the file, or as more sound tracks inside it"
+                                  AutomationProperties.Name="Stems">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Label, Mode=OneWay}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </DockPanel>
+                    <TextBlock Margin="0,4,0,0" TextWrapping="Wrap"
+                               Text="An empty box keeps the preset's value, shown in it."
                                FontSize="{DynamicResource Text.Caption}" />
-                </DockPanel>
+                </StackPanel>
             </Grid>
         </StackPanel>
 
