@@ -856,7 +856,7 @@ public sealed class TimelineControl : FrameworkElement
                 DrawSpeedLine(dc, clip, lineBody, width);
             }
 
-            if (clip.Clip.LinkGroupId is not null)
+            if (clip.Clip.LinkGroupId is not null && body.Width > 3)
             {
                 dc.DrawRectangle(palette.LinkMark, null, new Rect(body.Left + 1, body.Bottom - 3, Math.Min(10.0, body.Width - 2), 2));
             }
