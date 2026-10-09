@@ -371,7 +371,7 @@
                        Foreground="{DynamicResource Brush.Text.Primary}" />
             <StackPanel Visibility="{Binding HasTarget, Mode=OneWay, Converter={StaticResource Visible}}">
                 <TextBlock Text="{Binding Source, Mode=OneWay}" FontSize="{DynamicResource Text.Caption}" Foreground="{DynamicResource Brush.Text.Secondary}" TextTrimming="CharacterEllipsis" />
-                <TextBlock Text="{Binding Range, Mode=OneWay}" FontSize="{DynamicResource Text.Caption}" FontFamily="{DynamicResource Font.Mono}" Foreground="{DynamicResource Brush.Text.Secondary}" />
+                <TextBlock Text="{Binding Range, Mode=OneWay}" FontSize="{DynamicResource Text.Caption}" FontFamily="{DynamicResource Font.Mono}" Foreground="{DynamicResource Brush.Text.Secondary}" TextWrapping="Wrap" />
                 <TextBlock Text="{Binding Speed, Mode=OneWay}" FontSize="{DynamicResource Text.Caption}" Foreground="{DynamicResource Brush.Text.Secondary}" />
                 <TextBlock Text="{Binding SelectionNote, Mode=OneWay}" FontSize="{DynamicResource Text.Caption}" Foreground="{DynamicResource Brush.Accent}" TextWrapping="Wrap" />
             </StackPanel>
