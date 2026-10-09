@@ -177,6 +177,12 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         "At a speed other than normal the sound keeps its pitch; off, it goes up and down with the speed, like tape.",
         Animatable: false);
 
+    /// <summary>How fast a clip plays, in percent, sent as <c>clip.set-speed</c>: the clip keeps what it shows.</summary>
+    internal static ParamDescriptor SpeedParam { get; } = new(
+        "speed", ParamType.Float, new ParamValue.Float(100), "Speed",
+        "How fast the clip plays, in percent: 200 is twice as fast and half as long, 50 half as fast and twice as long. It keeps what it shows, so its length changes. Speed curve (right click) ramps it instead.",
+        Min: 1, Max: 10000, SliderMax: 400, Unit: "%", Animatable: false);
+
     /// <summary>Whether a picture clip blurs with its speed (Phase 45), sent as <c>clip.set-speed-blur</c>.</summary>
     internal static ParamDescriptor SpeedBlurParam { get; } = new(
         "speed-blur", ParamType.Bool, new ParamValue.Bool(false), "Speed blur",
@@ -239,9 +245,29 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         "Linear; ease-in-out for a smooth start and end; ease-in to start slowly; ease-out to start quickly; bezier for a steeper S.",
         Animatable: false, Choices: new EquatableArray<string>([.. FadeCurves.Select(pair => pair.Name)]));
 
+    /// <summary>
+    /// The speed as a number, unless a curve sets it (Speed curve then). It was only to be had by
+    /// dragging with the rate stretch tool or from jazz (seen on screen, 2026-10-09).
+    /// </summary>
+    private void AddSpeedRow(InspectorSectionViewModel speed, Clip clip)
+    {
+        if (!clip.IsRemapped)
+        {
+            speed.Rows.Add(new ParamRowViewModel(this, clip.Id, SpeedParam, speed.Title));
+        }
+    }
+
+    /// <summary>The other clips in a clip's link group, on its sequence.</summary>
+    private IEnumerable<string> Linked(string clipId) =>
+        _session.Project.FindClip(clipId) is { Clip.LinkGroupId: { } group } found
+            ? found.Sequence.Tracks.SelectMany(track => track.Clips)
+                .Where(other => other.Id != clipId && string.Equals(other.LinkGroupId, group, StringComparison.Ordinal))
+                .Select(other => other.Id)
+            : [];
+
     private static bool IsFadeRow(ParamRowViewModel row) =>
         ReferenceEquals(row.Descriptor, ThreeDParam) || ReferenceEquals(row.Descriptor, LightsParam) || ReferenceEquals(row.Descriptor, CastsShadowsParam) || ReferenceEquals(row.Descriptor, AcceptsShadowsParam)
-        || ReferenceEquals(row.Descriptor, KeepPitchParam) || ReferenceEquals(row.Descriptor, RetimeParam) || ReferenceEquals(row.Descriptor, SpeedBlurParam) || ReferenceEquals(row.Descriptor, FastMuteParam) || ReferenceEquals(row.Descriptor, FadeInLength) || ReferenceEquals(row.Descriptor, FadeInShape)
+        || ReferenceEquals(row.Descriptor, SpeedParam) || ReferenceEquals(row.Descriptor, KeepPitchParam) || ReferenceEquals(row.Descriptor, RetimeParam) || ReferenceEquals(row.Descriptor, SpeedBlurParam) || ReferenceEquals(row.Descriptor, FastMuteParam) || ReferenceEquals(row.Descriptor, FadeInLength) || ReferenceEquals(row.Descriptor, FadeInShape)
         || ReferenceEquals(row.Descriptor, FadeOutLength) || ReferenceEquals(row.Descriptor, FadeOutShape);
 
     /// <summary>Adds an effect to the inspected clip, for a drop from the effects panel.</summary>
@@ -593,6 +619,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         {
             // Keeping the pitch at a speed (Phase 36) is the clip's own too: clip.set-keep-pitch.
             var speed = Section("Speed");
+            AddSpeedRow(speed, clip);
             speed.Rows.Add(new ParamRowViewModel(this, clip.Id, KeepPitchParam, speed.Title));
             speed.Rows.Add(new ParamRowViewModel(this, clip.Id, FastMuteParam, speed.Title));
             Sections.Add(speed);
@@ -610,6 +637,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         {
             // How a slowed picture shows the moments between its frames (Phase 42): clip.set-retime.
             var speed = Section("Speed");
+            AddSpeedRow(speed, clip);
             speed.Rows.Add(new ParamRowViewModel(this, clip.Id, RetimeParam, speed.Title));
             speed.Rows.Add(new ParamRowViewModel(this, clip.Id, SpeedBlurParam, speed.Title));
             Sections.Add(speed);
@@ -1125,6 +1153,11 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
             return new ParamValue.Bool(clip.Layer3D?.AcceptsShadows ?? true);
         }
 
+        if (ReferenceEquals(row, SpeedParam))
+        {
+            return new ParamValue.Float((float)Math.Round(clip.EffectiveSpeed.ToDouble() * 100, 1));
+        }
+
         if (ReferenceEquals(row, KeepPitchParam))
         {
             return new ParamValue.Bool(clip.KeepsPitch);
@@ -1174,6 +1207,20 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         if (ReferenceEquals(row.Descriptor, AcceptsShadowsParam))
         {
             return new SetClip3DCommand(clipId, AcceptsShadows: ((ParamValue.Bool)ParamValues.Parse(AcceptsShadowsParam, text)).Value);
+        }
+
+        if (ReferenceEquals(row.Descriptor, SpeedParam))
+        {
+            // To a tenth of a percent: 33.3 is 333/1000, which a frame rate never needs finer.
+            float percent = ((ParamValue.Float)ParamValues.Parse(SpeedParam, text)).Value;
+            var rate = new Rational((long)Math.Round(percent * 10), 1000);
+
+            // Its linked clips go with it, the sound with the picture, or they would drift apart; the
+            // Inspector's own targets are of one family only.
+            string[] together = [clipId, .. Linked(clipId).Where(other => !_targets.Contains(other))];
+            return together.Length == 1
+                ? new SetClipSpeedCommand(clipId, rate)
+                : new BatchCommand([.. together.Select(id => (ICommand)new SetClipSpeedCommand(id, rate))], "Set Speed");
         }
 
         if (ReferenceEquals(row.Descriptor, KeepPitchParam))
