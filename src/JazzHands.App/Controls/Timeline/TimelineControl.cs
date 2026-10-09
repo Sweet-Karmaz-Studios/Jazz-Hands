@@ -1047,6 +1047,7 @@ public sealed class TimelineControl : FrameworkElement
         }
 
         line.Freeze();
+        dc.DrawGeometry(null, palette.SpeedEdge, line);
         dc.DrawGeometry(null, palette.SpeedPen, line);
 
         foreach (double x in points)
@@ -1397,6 +1398,7 @@ public sealed class TimelineControl : FrameworkElement
             Warning = Find("Brush.Warning", Color.FromRgb(0xF2, 0xC1, 0x4E));
             VolumePen = Frozen(new Pen(Find("Brush.Label.Yellow", Color.FromRgb(0xE8, 0xC5, 0x47)), 1.25));
             SpeedPen = Frozen(new Pen(Find("Brush.Accent", Color.FromRgb(0x4C, 0x8D, 0xFF)), 1.5));
+            SpeedEdge = Frozen(new Pen(Faded(Find("Brush.Background.Base", Color.FromRgb(0x1B, 0x1B, 0x1B)), 0.8), 5.5) { LineJoin = PenLineJoin.Round, StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round });
             VolumeHandle = Find("Brush.Label.Yellow", Color.FromRgb(0xE8, 0xC5, 0x47));
             FadeShade = Frozen(new SolidColorBrush(Color.FromArgb(0x70, 0x00, 0x00, 0x00)));
             FadePen = Frozen(new Pen(Frozen(new SolidColorBrush(Color.FromArgb(0xC0, 0xFF, 0xFF, 0xFF))), 1.0));
@@ -1455,6 +1457,9 @@ public sealed class TimelineControl : FrameworkElement
 
         /// <summary>The speed lane's line (Phase 45).</summary>
         public Pen SpeedPen { get; }
+
+        /// <summary>A dark edge under the speed line, so it shows over any picture.</summary>
+        public Pen SpeedEdge { get; }
 
         public Brush VolumeHandle { get; }
 
