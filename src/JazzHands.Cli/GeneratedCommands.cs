@@ -163,16 +163,25 @@ public static class GeneratedCommands
             verb.Options.Add(optionalProject);
         }
 
-        var arguments = new List<Argument<string>>();
+        var arguments = new List<Argument>();
         var options = new Dictionary<string, Option>(StringComparer.Ordinal);
 
-        foreach (ParameterMetadata parameter in metadata.Arguments)
+        ParameterMetadata[] positionals = [.. metadata.Arguments];
+        foreach (ParameterMetadata parameter in positionals)
         {
-            var argument = new Argument<string>(parameter.CliName)
-            {
-                Description = parameter.Description,
-                Arity = parameter.IsRequired ? ArgumentArity.ExactlyOne : ArgumentArity.ZeroOrOne,
-            };
+            // A list at the end takes every word left, as if they were comma separated: a shell's
+            // *.mp4, or several files dropped into a terminal.
+            Argument argument = parameter == positionals[^1] && IsList(parameter.Type)
+                ? new Argument<string[]>(parameter.CliName)
+                {
+                    Description = parameter.Description,
+                    Arity = parameter.IsRequired ? ArgumentArity.OneOrMore : ArgumentArity.ZeroOrMore,
+                }
+                : new Argument<string>(parameter.CliName)
+                {
+                    Description = parameter.Description,
+                    Arity = parameter.IsRequired ? ArgumentArity.ExactlyOne : ArgumentArity.ZeroOrOne,
+                };
 
             arguments.Add(argument);
             verb.Arguments.Add(argument);
@@ -219,6 +228,17 @@ public static class GeneratedCommands
     /// against the current folder when that is where it is. Anything else, and a path that is only
     /// there relative to the project, is left for the command to resolve as it always does.
     /// </summary>
+    /// <summary>True for a parameter that holds a list of words.</summary>
+    private static bool IsList(Type type) => type == typeof(EquatableArray<string>) || type == typeof(string[]);
+
+    /// <summary>What was given for a positional argument, a list's words joined with commas; null when nothing was.</summary>
+    public static string? TextOf(System.CommandLine.ParseResult parse, Argument argument) => argument switch
+    {
+        Argument<string[]> many => parse.GetValue(many) is { Length: > 0 } words ? string.Join(",", words) : null,
+        Argument<string> one => parse.GetValue(one),
+        _ => null,
+    };
+
     internal static string? InputPath(ParameterMetadata parameter, string? text)
     {
         if (text is null || parameter.Name is not ("Path" or "Paths" or "File"))
@@ -300,7 +320,7 @@ public static class GeneratedCommands
         CommandMetadata metadata,
         System.CommandLine.ParseResult parse,
         Argument<string> projectArgument,
-        List<Argument<string>> arguments,
+        List<Argument> arguments,
         Dictionary<string, Option> options,
         Option<bool> noSave,
         Option<string?> optionalProject)
@@ -331,7 +351,7 @@ public static class GeneratedCommands
             ParameterMetadata[] positional = [.. metadata.Arguments];
             object built = CommandRegistry.FromCommandLine(
                 metadata.Name,
-                [.. arguments.Select((argument, index) => InputPath(positional[index], parse.GetValue(argument))).Where(value => value is not null)!],
+                [.. arguments.Select((argument, index) => InputPath(positional[index], TextOf(parse, argument))).Where(value => value is not null)!],
                 options.ToDictionary(pair => pair.Key, pair => ValueOf(parse, pair.Value), StringComparer.Ordinal),
                 frameRate);
 

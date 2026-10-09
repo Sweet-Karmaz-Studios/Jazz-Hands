@@ -34,7 +34,7 @@ public static class RpcCommands
     };
 
     /// <summary>Runs a generated verb against the editor it is attached to.</summary>
-    internal static int RunAttached(CommandMetadata metadata, ParseResult parse, List<Argument<string>> arguments, Dictionary<string, Option> options)
+    internal static int RunAttached(CommandMetadata metadata, ParseResult parse, List<Argument> arguments, Dictionary<string, Option> options)
     {
         bool json = parse.GetValue(JazzCli.JsonOption);
         return Attached(json, async client =>
@@ -43,7 +43,7 @@ public static class RpcCommands
             ParameterMetadata[] positional = [.. metadata.Arguments];
             object built = CommandRegistry.FromCommandLine(
                 metadata.Name,
-                [.. arguments.Select((argument, index) => GeneratedCommands.InputPath(positional[index], parse.GetValue(argument))).Where(value => value is not null)!],
+                [.. arguments.Select((argument, index) => GeneratedCommands.InputPath(positional[index], GeneratedCommands.TextOf(parse, argument))).Where(value => value is not null)!],
                 options.ToDictionary(pair => pair.Key, pair => GeneratedCommands.ValueOf(parse, pair.Value), StringComparer.Ordinal),
                 rate);
 

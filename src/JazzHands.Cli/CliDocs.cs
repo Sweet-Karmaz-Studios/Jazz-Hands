@@ -111,7 +111,7 @@ public static class CliDocs
     {
         Command command = path[^1];
         string name = string.Join(' ', path.Select(part => part.Name));
-        string arguments = string.Concat(command.Arguments.Select(argument => argument.Arity.MinimumNumberOfValues > 0 ? $" <{argument.Name}>" : $" [{argument.Name}]"));
+        string arguments = string.Concat(command.Arguments.Select(argument => (argument.Arity.MinimumNumberOfValues > 0 ? $" <{argument.Name}>" : $" [{argument.Name}]") + (argument.Arity.MaximumNumberOfValues > 1 ? "..." : string.Empty)));
         Option[] options = [.. command.Options.Where(option => !option.Recursive && option is not HelpOption and not VersionOption)];
 
         text.Append(System.Globalization.CultureInfo.InvariantCulture, $"### `jazz {name}{arguments}`\n\n");

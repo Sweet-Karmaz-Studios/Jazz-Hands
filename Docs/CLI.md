@@ -982,7 +982,7 @@ Describe one clip.
 | `<project>` | The .jazz file to work on. |
 | `<clip-id>` | The clip id. |
 
-### `jazz clip group <project> <clip-ids>`
+### `jazz clip group <project> <clip-ids>...`
 
 Group clips so that selecting one selects them all.
 
@@ -1052,7 +1052,7 @@ Remove a range, leaving a gap.
 | `--sequence <id>` | Which sequence. |
 | `--no-save` | Do not write the project back. |
 
-### `jazz clip link <project> <clip-ids>`
+### `jazz clip link <project> <clip-ids>...`
 
 Link clips so that moving one moves them all.
 
@@ -1135,7 +1135,7 @@ Move clips into a new sequence and leave a compound clip behind.
 | `--id <id>` | The identifier for the compound clip. |
 | `--no-save` | Do not write the project back. |
 
-### `jazz clip nudge <project> <clip-ids>`
+### `jazz clip nudge <project> <clip-ids>...`
 
 Move clips earlier or later by whole frames.
 
@@ -1374,7 +1374,7 @@ Cut words out of a clip, closing the gap.
 | `--to <n>` | The last word's index; the first when left out. |
 | `--no-save` | Do not write the project back. |
 
-### `jazz clip ripple-delete <project> <clip-ids>`
+### `jazz clip ripple-delete <project> <clip-ids>...`
 
 Remove clips and close the gap on every sync-locked track.
 
@@ -1387,7 +1387,7 @@ Remove clips and close the gap on every sync-locked track.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
-### `jazz clip ripple-trim <project> <clip-ids>`
+### `jazz clip ripple-trim <project> <clip-ids>...`
 
 Trim a clip edge and ripple everything after it.
 
@@ -1773,7 +1773,7 @@ Steady a shaky clip (analyses its motion the first time).
 | `--off` | Remove the stabilization instead. |
 | `--no-save` | Do not write the project back. |
 
-### `jazz clip storyline-move <project> <clip-ids>`
+### `jazz clip storyline-move <project> <clip-ids>...`
 
 Move clips along the primary track, closing up behind them.
 
@@ -1803,7 +1803,7 @@ Move a clip start or end.
 | `--ripple` | Move everything after it too. |
 | `--no-save` | Do not write the project back. |
 
-### `jazz clip ungroup <project> <clip-ids>`
+### `jazz clip ungroup <project> <clip-ids>...`
 
 Take clips out of their selection group.
 
@@ -1816,7 +1816,7 @@ Take clips out of their selection group.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
-### `jazz clip unlink <project> <clip-ids>`
+### `jazz clip unlink <project> <clip-ids>...`
 
 Break the sync lock on clips.
 
@@ -1846,7 +1846,7 @@ Replace a compound clip with the clips inside it.
 
 Clips as JSON, to paste with 'clip paste' here or in another project.
 
-### `jazz clipboard copy <project> <clip-ids>`
+### `jazz clipboard copy <project> <clip-ids>...`
 
 Copy clips as JSON for clip.paste.
 
@@ -1998,7 +1998,7 @@ Describe a clip's comp graph in readable text.
 | `<project>` | The .jazz file to work on. |
 | `<target>` | A comp graph, or a clip whose graph it is. |
 
-### `jazz comp group <project> <node-ids>`
+### `jazz comp group <project> <node-ids>...`
 
 Put nodes of a comp graph into a group.
 
@@ -2189,7 +2189,7 @@ Apply an effect preset to a clip or a track.
 | `--index <n>` | Where in the chain, from 0; the end when not given. |
 | `--no-save` | Do not write the project back. |
 
-### `jazz effect copy <project> <ids>`
+### `jazz effect copy <project> <ids>...`
 
 Copy effects as JSON for effect.paste.
 
@@ -2317,7 +2317,7 @@ Put an effect's parameters back to their defaults.
 | `--param <param>` | Only this parameter; all of them when not given. |
 | `--no-save` | Do not write the project back. |
 
-### `jazz effect save-preset <project> <ids>`
+### `jazz effect save-preset <project> <ids>...`
 
 Save an effect chain as a preset.
 
@@ -3027,14 +3027,14 @@ Change a mask.
 
 Media files: import, probe, relink, reprobe, set conform options, remove.
 
-### `jazz media add <project> <paths>`
+### `jazz media add <project> <paths>...`
 
 Import files, folders or globs into the project.
 
 | Argument | Meaning |
 |---|---|
 | `<project>` | The .jazz file to work on. |
-| `<paths>` | Comma-separated files, folders or globs. |
+| `<paths>` | Files, folders or globs: several, or one with commas between. |
 
 | Option | Meaning |
 |---|---|
@@ -3376,7 +3376,7 @@ Say what is in a glTF model: meshes, materials, animations and anything left out
 
 Recordings of the same moment synced into one clip, and cut between by angle.
 
-### `jazz multicam create <project> <media-ids>`
+### `jazz multicam create <project> <media-ids>...`
 
 Make a multicam clip from recordings of the same moment.
 
@@ -3440,7 +3440,7 @@ Cut a multicam clip to another angle.
 | `--audio-only` | Switch the sound and keep the picture. |
 | `--no-save` | Do not write the project back. |
 
-### `jazz multicam sync <project> <media-ids>`
+### `jazz multicam sync <project> <media-ids>...`
 
 Line up recordings of the same moment.
 
@@ -4453,7 +4453,7 @@ Which clips and markers are selected.
 |---|---|
 | `<project>` | The .jazz file to work on. |
 
-### `jazz selection set <project> <ids>`
+### `jazz selection set <project> <ids>...`
 
 Choose which tracks, clips and markers are selected.
 

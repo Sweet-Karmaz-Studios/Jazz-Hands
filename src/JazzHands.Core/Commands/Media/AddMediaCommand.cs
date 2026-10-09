@@ -20,7 +20,7 @@ namespace JazzHands.Core.Commands;
 /// <param name="Fps">The rate an image sequence plays at.</param>
 [Command("media.add", Description = "Import files, folders or globs into the project")]
 public sealed record AddMediaCommand(
-    [property: Arg(0, "Comma-separated files, folders or globs")] EquatableArray<string> Paths,
+    [property: Arg(0, "Files, folders or globs: several, or one with commas between")] EquatableArray<string> Paths,
     [property: Option("folder", "Where they go in the bin")] string Folder = "",
     [property: Option("tags", "Comma-separated tags")] EquatableArray<string> Tags = default,
     [property: Option("color", "A colour label, for example blue")] string Color = "",
