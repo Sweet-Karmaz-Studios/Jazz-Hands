@@ -1166,7 +1166,31 @@ public sealed partial class TimelineViewModel
             at += length;
         }
 
-        return adds.ToImmutable();
+        return SnappedDrop(adds.ToImmutable());
+    }
+
+    /// <summary>
+    /// Snaps what is being dropped as a clip move snaps: whichever edge of the run comes nearest
+    /// something takes it there, and the guide is drawn.
+    /// </summary>
+    private ImmutableArray<AddClipCommand> SnappedDrop(ImmutableArray<AddClipCommand> adds)
+    {
+        if (adds.IsEmpty
+            || Snapper(null).FindFor(adds.SelectMany(add => new[] { add.At, add.At + (add.Duration ?? Flicks.Zero) }), Geometry) is not { } snap)
+        {
+            SetGuide(null);
+            return adds;
+        }
+
+        Flicks correction = snap.Correction;
+        Flicks earliest = adds.Min(add => add.At);
+        if ((earliest + correction).IsNegative)
+        {
+            correction = Flicks.Zero - earliest;
+        }
+
+        SetGuide(snap.Target.Time);
+        return [.. adds.Select(add => add with { At = add.At + correction })];
     }
 
     private static bool HasPicture(MediaItem item) =>
