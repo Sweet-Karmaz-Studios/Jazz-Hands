@@ -28,6 +28,7 @@ public sealed partial class PreviewPanelViewModel
     /// <summary>The multicam clip shown as its grid, or null for the program.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsMulticamView))]
+    [NotifyPropertyChangedFor(nameof(CanShowMulticam))]
     private string? _multicamClipId;
 
     /// <summary>The live angle's cell as fractions of the picture, for the outline; empty outside the grid.</summary>
@@ -59,7 +60,15 @@ public sealed partial class PreviewPanelViewModel
             .Where(track => track.Kind == TrackKind.Video)
             .SelectMany(track => track.Clips)
             .FirstOrDefault(clip => clip.Start <= at && at < clip.End && clip.SequenceId is { } id && project.Sequence(id)?.Multicam is not null)?.Id;
-        MulticamClipId = _engine.MulticamGrid;
+        // A grid whose clip was flattened, deleted or undone away is no grid: the program shows,
+        // and the engine forgets it, so an undo that brings the clip back does not bring the grid.
+        MulticamClipId = _engine.MulticamGrid is { } grid && project.FindClip(grid)?.Clip.SequenceId is { } shownId && project.Sequence(shownId)?.Multicam is not null
+            ? grid
+            : null;
+        if (MulticamClipId is null && _engine.MulticamGrid is not null)
+        {
+            Send(new ViewMulticamCommand(null));
+        }
 
         if (MulticamClipId is { } clipId && project.FindClip(clipId) is { } found
             && found.Clip.SequenceId is { } nestedId && project.Sequence(nestedId)?.Multicam is { } multicam)
