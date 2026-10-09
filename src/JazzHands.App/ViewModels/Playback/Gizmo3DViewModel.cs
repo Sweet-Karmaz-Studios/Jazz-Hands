@@ -201,8 +201,7 @@ public sealed partial class Gizmo3DViewModel : ObservableObject
     public void Refresh()
     {
         Project project = _session.Project;
-        string? chosen = _selection.Ids.Length == 1
-            && project.FindClip(_selection.Ids[0]) is { Track.Kind: TrackKind.Video } found
+        string? chosen = SelectedPicture.Of(project, _selection.Ids) is { Track.Kind: TrackKind.Video } found
             && (found.Clip.Layer3D is not null || SceneObjects.IsMesh(found.Clip.GeneratorId) || SceneObjects.Is(found.Clip.GeneratorId))
             && _at >= found.Clip.Start && _at < found.Clip.End
                 ? found.Clip.Id

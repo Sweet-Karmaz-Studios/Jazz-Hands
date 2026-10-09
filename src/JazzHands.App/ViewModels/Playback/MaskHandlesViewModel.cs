@@ -269,7 +269,7 @@ public sealed partial class MaskHandlesViewModel : ObservableObject
     {
         Project project = _session.Project;
         string? chosen = null;
-        if (_selection.Ids.Length == 1 && project.FindClip(_selection.Ids[0]) is { } found
+        if (SelectedPicture.Of(project, _selection.Ids) is { } found
             && found.Track.Kind is TrackKind.Video or TrackKind.Adjustment
             && _preview.Position >= found.Clip.Start && _preview.Position < found.Clip.End
 

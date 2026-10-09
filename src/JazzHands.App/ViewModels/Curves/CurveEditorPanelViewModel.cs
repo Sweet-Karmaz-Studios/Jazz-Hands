@@ -322,7 +322,7 @@ public sealed partial class CurveEditorPanelViewModel : ToolViewModel
     {
         Project project = _session.Project;
         HashSet<(string, string, int)> hidden = [.. Channels.Where(channel => !channel.IsShown).Select(channel => (channel.OwnerId, channel.Param, channel.Component))];
-        string? clipId = _selection.Ids.Length == 1 && project.FindClip(_selection.Ids[0]) is { } found ? found.Clip.Id : null;
+        string? clipId = Playback.SelectedPicture.Of(project, _selection.Ids)?.Clip.Id;
         if (clipId != ClipId)
         {
             _selected.Clear();
