@@ -345,7 +345,9 @@ public sealed class Transport : IAudioRenderCallback, IDisposable
     /// <summary>Moves the playhead. Playing carries on from there; paused stays paused there.</summary>
     public void Seek(Flicks time)
     {
-        long sample = Math.Max(0, time.ToSamples(_output.SampleRate, RoundingMode.Floor));
+        // The first sample at or after it: at 30000/1001 a frame does not start on a sample, and
+        // the sample before its start is still in the frame before.
+        long sample = Math.Max(0, time.ToSamples(_output.SampleRate, RoundingMode.Ceiling));
 
         lock (_post)
         {
