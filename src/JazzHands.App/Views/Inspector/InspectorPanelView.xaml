@@ -684,6 +684,13 @@
                                             <Button Style="{StaticResource Button.Small}" Content="&#xE74D;" Command="{Binding RemoveCommand, Mode=OneWay}" ToolTip="Remove the effect" AutomationProperties.Name="Remove effect" />
                                         </StackPanel>
                                     </Grid>
+                                    <!-- On but not running: a plugin not installed here, a type this build lacks. -->
+                                    <TextBlock Margin="22,4,0,0"
+                                               Text="{Binding Note, Mode=OneWay}"
+                                               TextWrapping="Wrap"
+                                               FontSize="{DynamicResource Text.Caption}"
+                                               Foreground="{DynamicResource Brush.Warning}"
+                                               Visibility="{Binding HasNote, Mode=OneWay, Converter={StaticResource Visible}}" />
                                     <ItemsControl Margin="0,4,0,0"
                                                   ItemsSource="{Binding Rows, Mode=OneWay}"
                                                   ItemTemplate="{StaticResource ParamRow}"

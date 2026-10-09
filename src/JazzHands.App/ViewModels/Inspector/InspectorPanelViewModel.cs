@@ -879,6 +879,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
             var item = new EffectItemViewModel(this, effect.Id, effect.TypeId, plugin ? PluginName(effect) : descriptor?.Name ?? effect.TypeId, descriptor is not null)
             {
                 CanMask = maskable && descriptor is { Kind: EffectKind.Video },
+                Note = NoteFor(effect, plugin, descriptor),
             };
             IEnumerable<ParamDescriptor> rows = plugin ? PluginRows(effect) : descriptor?.Params ?? [];
             foreach (ParamDescriptor parameter in rows)
@@ -889,6 +890,24 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
             AddMaskItems(item.Masks, effect.Masks);
             Effects.Add(item);
         }
+    }
+
+    /// <summary>
+    /// What an effect that is on but not running says under its name: a plugin whose file is not
+    /// on this computer is bypassed and kept (Phase 46), and a type this build lacks is kept and
+    /// not run. Its tick alone looked as if it were working.
+    /// </summary>
+    private static string NoteFor(Effect effect, bool plugin, EffectDescriptor? descriptor)
+    {
+        if (plugin)
+        {
+            string library = effect.Parameter("library") is StaticValue { Value: ParamValue.Text text } ? text.Value : string.Empty;
+            return System.IO.File.Exists(library)
+                ? string.Empty
+                : $"Not installed here, so bypassed and kept as it is ({library}). Install it and scan for plugins to hear it.";
+        }
+
+        return descriptor is null ? "This version of Jazz Hands does not have this effect; it is kept and not run." : string.Empty;
     }
 
     /// <summary>The parameters a mask's item shows: its shape is the preview's, the rest are rows.</summary>

@@ -161,6 +161,12 @@ public sealed partial class EffectItemViewModel : ObservableObject
     /// <summary>Its parameters, in order.</summary>
     public ObservableCollection<ParamRowViewModel> Rows { get; } = [];
 
+    /// <summary>Why it is not heard or seen though it is on: a plugin not installed here, a type this build lacks.</summary>
+    public string Note { get; init; } = string.Empty;
+
+    /// <summary>True when there is a <see cref="Note"/> to show under the header.</summary>
+    public bool HasNote => Note.Length > 0;
+
     /// <summary>True for a picture effect on a clip, which a mask can limit to part of the frame.</summary>
     public bool CanMask { get; init; }
 
