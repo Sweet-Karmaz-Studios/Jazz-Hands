@@ -84,8 +84,10 @@ public sealed partial class QuickTrimViewModel : ObservableObject
                 CultureInfo.InvariantCulture,
                 $"{segments.Length} stretch{(segments.Length == 1 ? string.Empty : "es")} kept: {Timecode.FormatClock(kept)} of {Timecode.FormatClock(QuickTrimOps.Length(media))}");
 
+        // The out point reads as the last frame kept, the one O was pressed on, as the Preview's
+        // readout has it; the range itself ends after that frame.
         InOut = sequence.InOut is { } marked
-            ? $"In {Timecode.Format(marked.Start, rate)}, out {Timecode.Format(marked.End, rate)}"
+            ? $"In {Timecode.Format(marked.Start, rate)}, out {Timecode.Format(marked.End - project.SettingsFor(sequence).FrameDuration, rate)}"
             : "Mark an in and an out with I and O, then keep or cut between them.";
 
         KeepInOutCommand.NotifyCanExecuteChanged();
