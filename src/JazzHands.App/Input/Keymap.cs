@@ -363,7 +363,30 @@ public sealed class Keymap
             }),
         ];
 
+        if (binding.Command == "clip.duplicate")
+        {
+            commands = LinkedCopies(context.Project, [.. commands.Cast<DuplicateClipCommand>()]);
+        }
+
         return commands.Length == 1 ? commands[0] : new BatchCommand(commands, metadata.Description);
+    }
+
+    /// <summary>
+    /// Copies of clips that are linked to each other are linked to each other too: each copy is
+    /// given its id, and a <c>clip.link</c> joins the copies from each link group. A
+    /// shot copied with its sound came out as clips that moved apart (2026-10-09).
+    /// </summary>
+    private static ICommand[] LinkedCopies(Project project, DuplicateClipCommand[] copies)
+    {
+        DuplicateClipCommand[] named = [.. copies.Select(copy => copy with { NewClipId = copy.NewClipId ?? Id.New() })];
+        var links = named
+            .Select(copy => (Copy: copy, Group: project.FindClip(copy.ClipId)?.Clip.LinkGroupId))
+            .Where(entry => entry.Group is not null)
+            .GroupBy(entry => entry.Group!, StringComparer.Ordinal)
+            .Where(group => group.Count() > 1)
+            .Select(group => (ICommand)new LinkClipsCommand([.. group.Select(entry => entry.Copy.NewClipId!)]));
+
+        return [.. named, .. links];
     }
 
     private static ImmutableArray<string> Ids(string word, KeymapContext context)
