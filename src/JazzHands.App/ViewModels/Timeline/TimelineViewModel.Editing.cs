@@ -621,7 +621,10 @@ public sealed partial class TimelineViewModel
             return (null, "Drop a title on a video track.");
         }
 
-        return (row.TrackId, $"Add a {preset} title to {Content.Track(row.TrackId)?.Track.Name ?? string.Empty} here.");
+        string track = Content.Track(row.TrackId)?.Track.Name ?? string.Empty;
+        return hit.Clip is { } there
+            ? (null, $"'{there.Clip.Name}' is there: drop the title where {track} is empty.")
+            : (row.TrackId, $"Add a {preset} title to {track} here.");
     }
 
     /// <summary>The transition type being dragged, or null for anything else.</summary>
@@ -659,14 +662,16 @@ public sealed partial class TimelineViewModel
         }
 
         // A generator is a clip of its own: it goes on the video track under the pointer, at the
-        // pointer, whatever clip is there (the command refuses an overlap).
+        // pointer, where that track is empty (the command refuses an overlap, so the hint does too).
         if (descriptor.Kind is Core.Effects.EffectKind.Generator or Core.Effects.EffectKind.AudioGenerator)
         {
             string track = Content.Track(row.TrackId)?.Track.Name ?? string.Empty;
             bool sound = descriptor.Kind == Core.Effects.EffectKind.AudioGenerator;
-            return row.Kind == (sound ? TrackKind.Audio : TrackKind.Video)
-                ? (row.TrackId, $"Add a {descriptor.Name} clip to {track} here.")
-                : (null, sound ? $"{descriptor.Name} makes sound of its own; drop it on a sound track." : $"{descriptor.Name} makes a picture of its own; drop it on a video track.");
+            return row.Kind != (sound ? TrackKind.Audio : TrackKind.Video)
+                ? (null, sound ? $"{descriptor.Name} makes sound of its own; drop it on a sound track." : $"{descriptor.Name} makes a picture of its own; drop it on a video track.")
+                : hit.Clip is { } there
+                ? (null, $"'{there.Clip.Name}' is there: drop {descriptor.Name} where {track} is empty.")
+                : (row.TrackId, $"Add a {descriptor.Name} clip to {track} here.");
         }
 
         bool picture = row.Kind is TrackKind.Video or TrackKind.Adjustment;
