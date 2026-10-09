@@ -283,9 +283,14 @@ public static class GeneratedCommands
         (Nullable.GetUnderlyingType(parameter.Type) ?? parameter.Type) == typeof(bool);
 
     /// <summary>An option's text: what was typed after it, "true" or "false" for a switch, or null when it was not given.</summary>
-    internal static string? ValueOf(System.CommandLine.ParseResult parse, Option option) => option switch
+    /// <remarks>
+    /// A true or false option has a result even when it was left out, made up from its default
+    /// (false); that is not given either, or a command's "leave it as it is" became "switch it off"
+    /// (color.node-set --output switched the node off, 2026-10-09).
+    /// </remarks>
+    public static string? ValueOf(System.CommandLine.ParseResult parse, Option option) => option switch
     {
-        _ when parse.GetResult(option) is null => null,
+        _ when parse.GetResult(option) is not { Implicit: false } => null,
         Option<bool> flag => parse.GetValue(flag) ? "true" : "false",
         Option<string> text => parse.GetValue(text),
         _ => null,
