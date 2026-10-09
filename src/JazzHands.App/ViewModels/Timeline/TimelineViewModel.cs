@@ -430,6 +430,7 @@ public sealed partial class TimelineViewModel : DocumentViewModel
 
         OnPropertyChanged(nameof(Content));
         OnPropertyChanged(nameof(IsEmpty));
+        OnPropertyChanged(nameof(ShowsEmptyHint));
         OnPropertyChanged(nameof(Magnetic));
         OnPropertyChanged(nameof(ScrollMaximum));
         OnPropertyChanged(nameof(VerticalMaximum));

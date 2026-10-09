@@ -134,7 +134,22 @@ public sealed partial class TimelineViewModel
     }
 
     /// <summary>What a gesture in progress would do, or null.</summary>
-    public TimelineGhost? Ghost { get; private set; }
+    public TimelineGhost? Ghost
+    {
+        get;
+        private set
+        {
+            bool had = field is not null;
+            field = value;
+            if (had != (value is not null))
+            {
+                OnPropertyChanged(nameof(ShowsEmptyHint));
+            }
+        }
+    }
+
+    /// <summary>True when the empty timeline's hint shows: no clips, and nothing being dragged on, whose ghost it would cover.</summary>
+    public bool ShowsEmptyHint => IsEmpty && Ghost is null;
 
     /// <summary>The selection rectangle being dragged out, or null.</summary>
     public Rect? Box { get; private set; }

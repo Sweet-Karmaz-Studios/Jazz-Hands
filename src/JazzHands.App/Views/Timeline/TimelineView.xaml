@@ -312,7 +312,7 @@
                         Margin="24,64,24,0"
                         HorizontalAlignment="Center"
                         VerticalAlignment="Top"
-                        Visibility="{Binding IsEmpty, Mode=OneWay, Converter={StaticResource Visible}}">
+                        Visibility="{Binding ShowsEmptyHint, Mode=OneWay, Converter={StaticResource Visible}}">
                 <TextBlock TextAlignment="Center"
                            TextWrapping="Wrap"
                            IsHitTestVisible="False"
