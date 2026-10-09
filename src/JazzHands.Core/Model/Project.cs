@@ -761,7 +761,21 @@ public sealed record MediaItem(
     public Flicks DefaultIn => Subclip?.In ?? Flicks.Zero;
 
     /// <summary>Where a clip of this item ends in the file by default: a subclip's out, or the end.</summary>
-    public Flicks DefaultOut => Subclip is { } subclip ? Flicks.Min(subclip.Out, Duration) : Duration;
+    public Flicks DefaultOut => Subclip is { } subclip ? Flicks.Min(subclip.Out, PlayLength) : PlayLength;
+
+    /// <summary>
+    /// How much of the file a clip plays: a movie's picture, to its last frame, where the sound
+    /// runs on past it; anything else, the whole of it.
+    /// </summary>
+    /// <remarks>
+    /// AAC pads its last block, so a recording's container is a little longer than its picture:
+    /// OBS's 300 frames at 60 came to 5.021 seconds. A clip that long ran 1.28 frames past the
+    /// picture, and every clip put after it sat that far off the frame grid (2026-10-09).
+    /// </remarks>
+    public Flicks PlayLength =>
+        Kind == MediaKind.Movie && Info?.VideoStreams.FirstOrDefault() is { } picture && picture.Duration > Flicks.Zero && picture.Duration < Duration
+            ? picture.Duration
+            : Duration;
 }
 
 /// <summary>
