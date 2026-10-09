@@ -4,6 +4,7 @@
              xmlns:vm="clr-namespace:JazzHands.App.ViewModels.Grading"
              xmlns:controls="clr-namespace:JazzHands.App.Controls"
              xmlns:local="clr-namespace:JazzHands.App.Views.Grading"
+             xmlns:views="clr-namespace:JazzHands.App.Views"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
@@ -14,6 +15,7 @@
 
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="Visible" />
+        <views:MenuTextConverter x:Key="MenuText" />
 
         <Style x:Key="Button.Small" TargetType="ButtonBase" BasedOn="{StaticResource Button.Icon}">
             <Setter Property="Width" Value="20" />
@@ -122,7 +124,7 @@
                                 <ContextMenu ItemsSource="{Binding NodeChoices, Mode=OneWay}">
                                     <ContextMenu.ItemContainerStyle>
                                         <Style TargetType="{x:Type MenuItem}" BasedOn="{StaticResource {x:Type MenuItem}}">
-                                            <Setter Property="Header" Value="{Binding Label, Mode=OneWay}" />
+                                            <Setter Property="Header" Value="{Binding Label, Mode=OneWay, Converter={StaticResource MenuText}}" />
                                             <Setter Property="CommandParameter" Value="{Binding Mode=OneWay}" />
                                             <Setter Property="Command" Value="{Binding PlacementTarget.DataContext.AddNodeCommand, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}, Mode=OneWay}" />
                                         </Style>
@@ -136,7 +138,7 @@
                                 <ContextMenu ItemsSource="{Binding NodeChoices, Mode=OneWay}">
                                     <ContextMenu.ItemContainerStyle>
                                         <Style TargetType="{x:Type MenuItem}" BasedOn="{StaticResource {x:Type MenuItem}}">
-                                            <Setter Property="Header" Value="{Binding Label, Mode=OneWay}" />
+                                            <Setter Property="Header" Value="{Binding Label, Mode=OneWay, Converter={StaticResource MenuText}}" />
                                             <Setter Property="CommandParameter" Value="{Binding Mode=OneWay}" />
                                             <Setter Property="Command" Value="{Binding PlacementTarget.DataContext.AddParallelNodeCommand, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}, Mode=OneWay}" />
                                         </Style>
@@ -170,7 +172,7 @@
                             <ContextMenu ItemsSource="{Binding MatchChoices, Mode=OneWay}">
                                 <ContextMenu.ItemContainerStyle>
                                     <Style TargetType="{x:Type MenuItem}" BasedOn="{StaticResource {x:Type MenuItem}}">
-                                        <Setter Property="Header" Value="{Binding Label, Mode=OneWay}" />
+                                        <Setter Property="Header" Value="{Binding Label, Mode=OneWay, Converter={StaticResource MenuText}}" />
                                         <Setter Property="CommandParameter" Value="{Binding Mode=OneWay}" />
                                         <Setter Property="Command" Value="{Binding PlacementTarget.DataContext.MatchToCommand, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}, Mode=OneWay}" />
                                     </Style>
