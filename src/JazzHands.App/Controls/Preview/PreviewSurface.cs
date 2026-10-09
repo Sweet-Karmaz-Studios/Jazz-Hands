@@ -35,6 +35,8 @@ public sealed class PreviewSurface : IDisposable
     private D9.IDirect3DTexture9? _texture9;
     private D9.IDirect3DSurface9? _surface9;
     private ID3D11Texture2D? _texture11;
+    private ID3D11Texture2D? _staging;
+    private D9.IDirect3DSurface9? _system9;
     private ID3D11Query? _flushQuery;
     private IntPtr _focusWindow;
     private bool _disposed;
@@ -66,6 +68,13 @@ public sealed class PreviewSurface : IDisposable
 
     /// <summary>The current back buffer height in pixels.</summary>
     public int PixelHeight { get; private set; }
+
+    /// <summary>
+    /// True when each frame is copied through system memory instead of shared: the render device
+    /// is WARP (safe mode, or a machine with no graphics card), whose textures D3D9 cannot open.
+    /// The deliberate exception to frames staying on the GPU; it costs a copy per present.
+    /// </summary>
+    public bool IsCopying { get; private set; }
 
     /// <summary>True when WPF's front buffer is gone, for example during a GPU reset or a locked session.</summary>
     public bool IsFrontBufferLost => _frontBufferLost;
@@ -119,7 +128,10 @@ public sealed class PreviewSurface : IDisposable
 
         EnsureD3D9Device();
 
-        // D3D11 side: BGRA to match D3DFMT_A8R8G8B8, shared so D3D9 can open it.
+        // D3D11 side: BGRA to match D3DFMT_A8R8G8B8, shared so D3D9 can open it. A WARP texture
+        // cannot be opened from D3D9 on a graphics card ("The parameter is incorrect"), so on WARP
+        // it is copied through system memory instead.
+        IsCopying = _device.Kind == RenderDeviceKind.Warp;
         var description = new Texture2DDescription
         {
             Width = (uint)pixelWidth,
@@ -131,13 +143,27 @@ public sealed class PreviewSurface : IDisposable
             Usage = ResourceUsage.Default,
             BindFlags = BindFlags.RenderTarget | BindFlags.ShaderResource,
             CPUAccessFlags = CpuAccessFlags.None,
-            MiscFlags = ResourceOptionFlags.Shared,
+            MiscFlags = IsCopying ? ResourceOptionFlags.None : ResourceOptionFlags.Shared,
         };
 
         _texture11 = _device.Device.CreateTexture2D(description);
 
-        using (IDXGIResource resource = _texture11.QueryInterface<IDXGIResource>())
+        if (IsCopying)
         {
+            _staging = _device.Device.CreateTexture2D(description with
+            {
+                Usage = ResourceUsage.Staging,
+                BindFlags = BindFlags.None,
+                CPUAccessFlags = CpuAccessFlags.Read,
+                MiscFlags = ResourceOptionFlags.None,
+            });
+
+            _texture9 = _device9!.CreateTexture((uint)pixelWidth, (uint)pixelHeight, 1, D9.Usage.RenderTarget, D9.Format.A8R8G8B8, D9.Pool.Default);
+            _system9 = _device9.CreateOffscreenPlainSurface((uint)pixelWidth, (uint)pixelHeight, D9.Format.A8R8G8B8, D9.Pool.SystemMemory);
+        }
+        else
+        {
+            using IDXGIResource resource = _texture11.QueryInterface<IDXGIResource>();
             IntPtr sharedHandle = resource.SharedHandle;
 
             // Passing the D3D11 handle in opens that allocation rather than creating a new one.
@@ -225,6 +251,11 @@ public sealed class PreviewSurface : IDisposable
             return false;
         }
 
+        if (IsCopying)
+        {
+            CopyThroughSystemMemory();
+        }
+
         long start = System.Diagnostics.Stopwatch.GetTimestamp();
         long stallThreshold = System.Diagnostics.Stopwatch.Frequency / 50;
 
@@ -254,6 +285,59 @@ public sealed class PreviewSurface : IDisposable
 
         static double Elapsed(long from) =>
             (System.Diagnostics.Stopwatch.GetTimestamp() - from) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+    }
+
+    /// <summary>A pixel of the last frame copied through system memory, as BGRA in a uint; for tests.</summary>
+    internal unsafe uint CopiedPixel(int x, int y)
+    {
+        D9.LockedRectangle locked = _system9!.LockRect(D9.LockFlags.ReadOnly);
+        try
+        {
+            return *(uint*)((byte*)locked.DataPointer + (y * locked.Pitch) + (x * 4));
+        }
+        finally
+        {
+            _system9.UnlockRect();
+        }
+    }
+
+    /// <summary>
+    /// The WARP path: the frame read back from D3D11 and written into the D3D9 surface WPF shows,
+    /// row by row. The presenter holds its own lock across this, as it does across drawing into
+    /// <see cref="Texture"/>, so a frame being drawn is not read half done; the device's frame
+    /// gate is not taken here, as the render thread holds it while it waits for the presenter.
+    /// </summary>
+    private unsafe void CopyThroughSystemMemory()
+    {
+        ID3D11DeviceContext context = _device.ImmediateContext;
+        context.CopyResource(_staging!, _texture11!);
+        MappedSubresource mapped = context.Map(_staging!, 0, MapMode.Read);
+        try
+        {
+            D9.LockedRectangle locked = _system9!.LockRect(D9.LockFlags.None);
+            try
+            {
+                int row = PixelWidth * 4;
+                for (int y = 0; y < PixelHeight; y++)
+                {
+                    Buffer.MemoryCopy(
+                        (byte*)mapped.DataPointer + (y * mapped.RowPitch),
+                        (byte*)locked.DataPointer + (y * locked.Pitch),
+                        locked.Pitch,
+                        row);
+                }
+            }
+            finally
+            {
+                _system9.UnlockRect();
+            }
+        }
+        finally
+        {
+            context.Unmap(_staging!, 0);
+        }
+
+        _device9!.UpdateSurface(_system9, new D9.Rect(0, 0, PixelWidth, PixelHeight), _surface9!, new Vortice.Mathematics.Int2(0, 0));
     }
 
     /// <inheritdoc />
@@ -414,6 +498,10 @@ public sealed class PreviewSurface : IDisposable
         _texture9 = null;
         _texture11?.Dispose();
         _texture11 = null;
+        _staging?.Dispose();
+        _staging = null;
+        _system9?.Dispose();
+        _system9 = null;
         PixelWidth = 0;
         PixelHeight = 0;
     }
