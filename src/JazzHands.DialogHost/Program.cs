@@ -1,6 +1,4 @@
-using System.Runtime.InteropServices;
 using System.Windows;
-using System.Windows.Interop;
 
 namespace JazzHands.DialogHost;
 
@@ -15,7 +13,7 @@ namespace JazzHands.DialogHost;
 /// sees the exit code and carries on. Arguments: the request (<see cref="FilePick.ToArgument"/>),
 /// and the editor window to sit over, as a handle.
 /// </remarks>
-internal static partial class Program
+internal static class Program
 {
     [STAThread]
     private static int Main(string[] args)
@@ -26,7 +24,7 @@ internal static partial class Program
         }
 
         IntPtr editor = args.Length > 1 && long.TryParse(args[1], out long handle) ? new IntPtr(handle) : IntPtr.Zero;
-        Window? owner = editor == IntPtr.Zero ? null : Stand(editor);
+        Window? owner = editor == IntPtr.Zero ? null : DialogStand.Create(editor);
         IReadOnlyList<string>? chosen = pick.Show(owner);
         owner?.Close();
 
@@ -39,49 +37,4 @@ internal static partial class Program
         Console.Out.Flush();
         return FilePick.Chosen;
     }
-
-    /// <summary>
-    /// An invisible window owned by the editor's, over the middle of it, for the dialog to belong
-    /// to: so it opens over the editor and stays in front of it.
-    /// </summary>
-    private static Window Stand(IntPtr editor)
-    {
-        var stand = new Window
-        {
-            WindowStyle = WindowStyle.None,
-            ShowInTaskbar = false,
-            ShowActivated = false,
-            Width = 1,
-            Height = 1,
-            Opacity = 0,
-            AllowsTransparency = true,
-        };
-
-        if (GetWindowRect(editor, out Rect32 rect))
-        {
-            // Pixels, and the stand's position is in device independent units: near enough for a
-            // dialog that centres itself on its owner anyway.
-            stand.WindowStartupLocation = WindowStartupLocation.Manual;
-            stand.Left = (rect.Left + rect.Right) / 2.0;
-            stand.Top = (rect.Top + rect.Bottom) / 2.0;
-        }
-
-        var interop = new WindowInteropHelper(stand) { Owner = editor };
-        interop.EnsureHandle();
-        stand.Show();
-        return stand;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct Rect32
-    {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
-    }
-
-    [LibraryImport("user32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool GetWindowRect(IntPtr window, out Rect32 rect);
 }
