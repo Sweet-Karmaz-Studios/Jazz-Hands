@@ -80,6 +80,28 @@ public sealed partial class StatusBarViewModel : ObservableObject
     /// <summary>The GPU rendering, as Windows names it.</summary>
     public string Gpu { get; }
 
+    /// <summary>
+    /// The exports in a few words: how many run and how far they are, how many wait their turn, and
+    /// how many are paused, which wait for someone and are counted apart as the queue counts them.
+    /// </summary>
+    internal static string ExportsSummary(IReadOnlyList<ExportJobInfo> jobs)
+    {
+        int running = jobs.Count(job => job.State == ExportJobState.Running);
+        int waiting = jobs.Count(job => job.State == ExportJobState.Queued);
+        int paused = jobs.Count(job => job.State == ExportJobState.Paused);
+        string rest = string.Join(", ", new[] { waiting > 0 ? $"{waiting} waiting" : null, paused > 0 ? $"{paused} paused" : null }.OfType<string>());
+
+        if (running > 0)
+        {
+            double progress = jobs.Where(job => job.State == ExportJobState.Running).Average(job => job.Progress);
+            return string.Create(CultureInfo.InvariantCulture, $"Exporting {running}, {(rest.Length > 0 ? rest + ", " : string.Empty)}{progress * 100:0}%");
+        }
+
+        return waiting + paused == 0 ? string.Empty
+            : waiting > 0 ? $"{Words.Count(waiting, "export")} waiting{(paused > 0 ? $", {paused} paused" : string.Empty)}"
+            : $"{Words.Count(paused, "export")} paused";
+    }
+
     /// <summary>Reads everything again.</summary>
     public void Refresh()
     {
@@ -95,14 +117,7 @@ public sealed partial class StatusBarViewModel : ObservableObject
 
         if (_exports is not null)
         {
-            ExportJobInfo[] jobs = _exports.List();
-            int running = jobs.Count(job => job.State == ExportJobState.Running);
-            int waiting = jobs.Count(job => job.State is ExportJobState.Queued or ExportJobState.Paused);
-            ExportsText = running + waiting == 0
-                ? string.Empty
-                : running > 0
-                    ? string.Create(CultureInfo.InvariantCulture, $"Exporting {running}{(waiting > 0 ? $", {waiting} waiting" : string.Empty)}, {jobs.Where(job => job.State == ExportJobState.Running).Average(job => job.Progress) * 100:0}%")
-                    : string.Create(CultureInfo.InvariantCulture, $"{Words.Count(waiting, "export")} waiting");
+            ExportsText = ExportsSummary(_exports.List());
         }
 
         if (_server is not null)
