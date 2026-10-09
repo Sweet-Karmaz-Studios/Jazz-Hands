@@ -469,7 +469,20 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
     {
         lock (_controlGate)
         {
+            if (_transport.State != TransportState.Playing)
+            {
+                return;
+            }
+
             _transport.Pause();
+
+            // It stops on the start of the frame on screen, not part way into it, so the playhead,
+            // its timecode and anything that reads the time all agree.
+            if (_snapshot.Project.ActiveSequence is { } sequence)
+            {
+                _transport.Seek(_transport.Playhead.SnapToFrame(_snapshot.Project.SettingsFor(sequence).FrameRate));
+                Interlocked.Increment(ref _seekGeneration);
+            }
         }
 
         _wake.Set();
