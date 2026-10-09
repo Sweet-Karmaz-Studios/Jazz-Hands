@@ -547,6 +547,12 @@ public sealed partial class ExportDialogViewModel : ObservableObject
 
     private static string? Blank(string text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
 
+    /// <summary>The sound streams a copy keeps, by name when the plan has them, so a muted lane is seen to be gone.</summary>
+    private static string Sound(int count, EquatableArray<string> names) =>
+        count == 0 ? "no sound"
+            : names.Length == count ? $"{Words.Count(count, "sound stream")} ({string.Join(", ", names)})"
+            : Words.Count(count, "sound stream");
+
     private void Show(ExportPlan? plan, string error)
     {
         IsPlanning = false;
@@ -574,9 +580,9 @@ public sealed partial class ExportDialogViewModel : ObservableObject
         }
 
         string what = plan.Mode == ExportMode.Copy
-            ? $"Copy, {(plan.Copy!.AudioStreams.IsEmpty ? "no sound" : Words.Count(plan.Copy.AudioStreams.Length, "sound stream"))}"
+            ? $"Copy, {Sound(plan.Copy!.AudioStreams.Length, plan.Copy.StreamNames)}"
             : plan.Smart is { } smart
-                ? string.Create(CultureInfo.InvariantCulture, $"Smart cut, {Words.Count(smart.EncodedFrames, "frame")} encoded again with {smart.Encoders[0]}, {(smart.AudioStreams.IsEmpty ? "no sound" : Words.Count(smart.AudioStreams.Length, "sound stream"))}")
+                ? string.Create(CultureInfo.InvariantCulture, $"Smart cut, {Words.Count(smart.EncodedFrames, "frame")} encoded again with {smart.Encoders[0]}, {Sound(smart.AudioStreams.Length, smart.StreamNames)}")
             : plan.Video is { } video
                 ? string.Create(CultureInfo.InvariantCulture, $"Encode {video.Width}x{video.Height} {video.Codec} at {video.FrameRate.ToDouble():0.###} fps{(plan.Audio is null ? string.Empty : $" with {plan.Audio.Encoder}")}")
                 : $"Sound only, {plan.Audio!.Encoder}";
