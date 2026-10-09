@@ -34,6 +34,10 @@ namespace JazzHands.App.Controls.Timeline;
 public sealed class TimelineControl : FrameworkElement
 {
     private const double ClipInset = VolumeLine.ClipInset;
+
+    /// <summary>How strongly a muted track's clips are drawn.</summary>
+    internal const double MutedOpacity = 0.4;
+
     private const double LabelPadding = 4.0;
     private const double ClipFontSize = 11.0;
 
@@ -812,6 +816,14 @@ public sealed class TimelineControl : FrameworkElement
         double clipTop = top + ClipInset;
         double clipHeight = Math.Max(1.0, row.Height - (ClipInset * 2));
 
+        // A muted track's clips are drawn faint: they play no part, and only the header's small
+        // glyph said so (2026-10-09).
+        bool muted = track.Track.Muted;
+        if (muted)
+        {
+            dc.PushOpacity(MutedOpacity);
+        }
+
         foreach (ClipView clip in Visible(track, visibleStart, visibleEnd))
         {
             double left = geometry.XOf(clip.Start);
@@ -896,6 +908,11 @@ public sealed class TimelineControl : FrameworkElement
             {
                 DrawTransition(dc, geometry.TransitionBand(row, bar.Start, bar.End), bar);
             }
+        }
+
+        if (muted)
+        {
+            dc.Pop();
         }
     }
 
