@@ -34,7 +34,7 @@ public enum QuitChoice
     /// <summary>Let them finish, hidden, then quit.</summary>
     Wait,
 
-    /// <summary>Pause them, to carry on at the next start, and quit now.</summary>
+    /// <summary>Pause them and quit now; they wait in the queue until someone resumes them.</summary>
     PauseForNextTime,
 
     /// <summary>Cancel them and quit now.</summary>

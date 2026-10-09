@@ -13,7 +13,7 @@ public partial class QuitWindow : Window
         InitializeComponent();
         Message.Text = string.Create(
             CultureInfo.InvariantCulture,
-            $"{(running == 1 ? "An export is" : $"{running} exports are")} still running. Jazz Hands can finish {(running == 1 ? "it" : "them")} out of sight and then quit, pause {(running == 1 ? "it" : "them")} until next time, or cancel {(running == 1 ? "it" : "them")} and quit now.");
+            $"{(running == 1 ? "An export is" : $"{running} exports are")} still running. Jazz Hands can finish {(running == 1 ? "it" : "them")} out of sight and then quit, pause {(running == 1 ? "it" : "them")} to resume from the Export Queue next time, or cancel {(running == 1 ? "it" : "them")} and quit now.");
     }
 
     /// <summary>What was chosen.</summary>

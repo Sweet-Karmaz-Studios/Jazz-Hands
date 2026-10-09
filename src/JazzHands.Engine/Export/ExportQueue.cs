@@ -300,6 +300,7 @@ public sealed class ExportQueue : IExportService, IDisposable
             foreach (Job job in Select(jobId).Where(job => job.State == ExportJobState.Paused))
             {
                 job.State = ExportJobState.Queued;
+                job.Note = WithoutPauseNotes(job.Note);
                 Note(job, "Resumed.");
                 Update(job);
                 changed.Add(job);
@@ -588,6 +589,7 @@ public sealed class ExportQueue : IExportService, IDisposable
                 else if (job.PauseRequested)
                 {
                     job.State = ExportJobState.Paused;
+                    job.Note = Join(WithoutPauseNotes(job.Note), PausedNote);
                     Note(job, "Paused while running; the partial file was deleted, and it starts again from the top when resumed.");
                 }
                 else
@@ -745,7 +747,7 @@ public sealed class ExportQueue : IExportService, IDisposable
                     // start again from the top, and it waits for someone to say so rather than taking
                     // the encoder at the next start before anyone has looked.
                     job.State = ExportJobState.Paused;
-                    job.Note = Join(job.Note, "Interrupted: Jazz Hands closed while it was exporting. Resume it to start again from the top.");
+                    job.Note = Join(WithoutPauseNotes(job.Note), InterruptedNote);
                     Note(job, "Jazz Hands closed while it was exporting; paused until it is resumed.");
                 }
 
@@ -835,6 +837,26 @@ public sealed class ExportQueue : IExportService, IDisposable
 
     private static string? Join(string? first, string? second) =>
         first is null ? second : second is null ? first : $"{first} {second}";
+
+    /// <summary>The note on a job that was running when the editor stopped.</summary>
+    private const string InterruptedNote = "Interrupted: Jazz Hands closed while it was exporting. Resume it to start again from the top.";
+
+    /// <summary>The note on a job paused while it was running, its partial file gone.</summary>
+    private const string PausedNote = "Paused while it was exporting. Resume it to start again from the top.";
+
+    /// <summary>A job's note without the line that says why it waits, for once it runs again.</summary>
+    private static string? WithoutPauseNotes(string? note)
+    {
+        if (note is null)
+        {
+            return null;
+        }
+
+        string rest = note.Replace(InterruptedNote, string.Empty, StringComparison.Ordinal)
+            .Replace(PausedNote, string.Empty, StringComparison.Ordinal)
+            .Trim();
+        return rest.Length == 0 ? null : rest.Replace("  ", " ", StringComparison.Ordinal);
+    }
 
     /// <summary>One job and everything the queue knows about it.</summary>
     private sealed class Job(string id, ExportPlan plan, Project project, string projectPath, DateTimeOffset created, ExportJobOptions options)
