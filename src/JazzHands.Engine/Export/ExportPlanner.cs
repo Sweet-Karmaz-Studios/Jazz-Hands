@@ -661,8 +661,9 @@ public static class ExportPlanner
 
         foreach (Clip clip in clips)
         {
+            // A reason that names no clip ("more than one file") is said once, not once a clip.
             string? why = PictureProblem(clip, mediaId);
-            if (why is not null)
+            if (why is not null && !reasons.Contains(why))
             {
                 reasons.Add(why);
             }
