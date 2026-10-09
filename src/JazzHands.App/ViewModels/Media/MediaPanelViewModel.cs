@@ -47,6 +47,7 @@ public sealed partial class MediaPanelViewModel : ToolViewModel
     private List<MediaItemViewModel> _all = [];
     private long _shownVersion = -1;
     private EquatableArray<MediaWatch> _watches = [];
+    private string? _watchesOf;
 
     [ObservableProperty]
     private string _search = string.Empty;
@@ -218,7 +219,7 @@ public sealed partial class MediaPanelViewModel : ToolViewModel
         OnPropertyChanged(nameof(TotalCount));
         OnPropertyChanged(nameof(IsEmpty));
         SuggestProxies();
-        ShowWatches(project.Watches);
+        ShowWatches(project);
 
         foreach (MediaItemViewModel row in rebuilt)
         {
@@ -530,15 +531,28 @@ public sealed partial class MediaPanelViewModel : ToolViewModel
     /// Says what the folder watches are now whenever they change, whatever changed them: the menu,
     /// an undo, the console or another project.
     /// </summary>
-    private void ShowWatches(EquatableArray<MediaWatch> watches)
+    private void ShowWatches(Project project)
     {
-        if (watches.Equals(_watches))
+        bool another = !string.Equals(project.Id, _watchesOf, StringComparison.Ordinal);
+        if (!another && project.Watches.Equals(_watches))
         {
             return;
         }
 
-        _watches = watches;
-        Status = WatchStatus(watches);
+        _watchesOf = project.Id;
+        _watches = project.Watches;
+        if (another && project.Watches.Length == 0)
+        {
+            // Another project with no watches stopped nothing; the last one's watch line goes.
+            if (Status.StartsWith("Watching ", StringComparison.Ordinal) || Status == WatchStatus([]))
+            {
+                Status = string.Empty;
+            }
+
+            return;
+        }
+
+        Status = WatchStatus(project.Watches);
     }
 
     private void OnProjectChanged(object? sender, ProjectChangedEventArgs e)
