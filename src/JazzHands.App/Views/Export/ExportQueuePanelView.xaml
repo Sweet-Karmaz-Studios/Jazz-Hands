@@ -48,7 +48,8 @@
                     AutomationProperties.Name="Clear finished exports" />
         </Grid>
 
-        <ListBox Grid.Row="1"
+        <ListBox x:Name="JobList"
+                 Grid.Row="1"
                  ItemsSource="{Binding Jobs, Mode=OneWay}"
                  SelectedItem="{Binding SelectedJob, Mode=TwoWay}"
                  Background="{DynamicResource Brush.Background.Base}"
