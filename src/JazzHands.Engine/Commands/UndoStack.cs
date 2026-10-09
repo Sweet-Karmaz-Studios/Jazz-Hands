@@ -219,7 +219,8 @@ public sealed class UndoStack
                 index,
                 metadata.Name,
                 CommandRegistry.ArgsToJson(entry.Command, metadata),
-                metadata.Description.Length > 0 ? metadata.Description : metadata.Name,
+                entry.Command is BatchCommand { Label.Length: > 0 } batch ? batch.Label
+                    : metadata.Description.Length > 0 ? metadata.Description : metadata.Name,
                 index >= undoCount,
                 entry.At,
                 entry.Issuer));
