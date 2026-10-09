@@ -182,7 +182,9 @@ public sealed class ConnectColorNodeHandler : ICommandHandler<ConnectColorNodeCo
 
         if (from is not null && (from.Id == node.Id || graph.Reads(from.Id, node.Id)))
         {
-            throw new CommandException("would-cycle", $"Node '{from.Id}' already reads '{node.Id}', so '{node.Id}' reading it would go round in a circle.");
+            throw new CommandException("would-cycle", command.Key && from.Id != node.Id
+                ? "The qualifier comes after this node, so keying the node from it would go round in a circle. Have the qualifier read the picture coming in first (drag Input onto it, or color.node-connect with no --from), then make it the key."
+                : $"Node '{from.Id}' already reads '{node.Id}', so '{node.Id}' reading it would go round in a circle.");
         }
 
         GradeNode connected;
@@ -227,8 +229,29 @@ public sealed class ConnectColorNodeHandler : ICommandHandler<ConnectColorNodeCo
             return project;
         }
 
+        GradeGraph updated = graph.Replace(connected);
+
+        // A qualifier that was the node the graph shows, made a key, would show its own picture and
+        // leave the grade out: what shows moves on to the end of the keyed node's chain instead.
+        if (command.Key && graph.OutputNode?.Id == from!.Id)
+        {
+            updated = updated with { Output = Downstream(updated, connected).Id };
+        }
+
         context.Changed(node.Id);
-        return GraphHelp.Store(project, owner, holder, graph.Replace(connected), context);
+        return GraphHelp.Store(project, owner, holder, updated, context);
+    }
+
+    /// <summary>The end of the chain a node feeds: its reader, that reader's, and so on, as inputs.</summary>
+    private static GradeNode Downstream(GradeGraph graph, GradeNode node)
+    {
+        GradeNode at = node;
+        for (int steps = 0; steps < graph.Nodes.Length && graph.Nodes.FirstOrDefault(reader => reader.Inputs.Contains(at.Id)) is { } next; steps++)
+        {
+            at = next;
+        }
+
+        return at;
     }
 }
 
