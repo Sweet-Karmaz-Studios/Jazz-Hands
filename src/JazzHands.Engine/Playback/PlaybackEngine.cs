@@ -76,6 +76,7 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
     private string? _compView;
     private bool _released;
     private Session? _session;
+    private readonly Dictionary<string, Flicks> _playheads = new(StringComparer.Ordinal);
 
     // What to play. Written by any thread, read by the composition thread.
     private volatile ProjectSnapshot _snapshot = new(Project.CreateNew("Untitled"), string.Empty, 0);
@@ -329,7 +330,50 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
 
         ProjectSnapshot previous = _snapshot;
         _snapshot = new ProjectSnapshot(project, projectPath, previous.Version + 1);
+        FollowSequence(previous.Project, project);
         _wake.Set();
+    }
+
+    /// <summary>
+    /// Gives each sequence a playhead of its own. Bringing another sequence to the front, from a
+    /// tab, the CLI or an undo, stops and goes to where that one was left, or to its start.
+    /// </summary>
+    /// <remarks>
+    /// One playhead for every sequence put a new sequence at the time the last one was parked,
+    /// past its end on a black frame (seen on screen, 2026-10-09). Another project forgets them all.
+    /// </remarks>
+    private void FollowSequence(Project before, Project after)
+    {
+        if (!string.Equals(before.Id, after.Id, StringComparison.Ordinal))
+        {
+            lock (_controlGate)
+            {
+                _playheads.Clear();
+            }
+
+            return;
+        }
+
+        string? from = before.ActiveSequence?.Id;
+        string? to = after.ActiveSequence?.Id;
+        if (string.Equals(from, to, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        Pause();
+
+        lock (_controlGate)
+        {
+            if (from is not null)
+            {
+                _playheads[from] = _transport.Playhead;
+            }
+
+            Flicks resume = to is not null && _playheads.TryGetValue(to, out Flicks left) ? left : Flicks.Zero;
+            _transport.Seek(resume);
+            Interlocked.Increment(ref _seekGeneration);
+        }
     }
 
     /// <summary>Follows a session: plays its project now and again after every command.</summary>
