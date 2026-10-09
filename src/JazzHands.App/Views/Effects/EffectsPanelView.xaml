@@ -172,6 +172,7 @@
                 </ItemsControl>
 
                 <!-- Title presets: + adds one at the playhead, a drag puts one on a track. -->
+                <StackPanel Visibility="{Binding ShowsTitlePresets, Mode=OneWay, Converter={StaticResource Visible}}">
                 <Border Margin="0,8,0,4" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,1,0,0" Padding="0,8,0,0">
                     <TextBlock Style="{StaticResource Heading}" Text="Title presets" />
                 </Border>
@@ -200,7 +201,10 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
+                </StackPanel>
+
                 <!-- Presets saved in the project. -->
+                <StackPanel Visibility="{Binding ShowsPresets, Mode=OneWay, Converter={StaticResource Visible}}">
                 <Border Margin="0,8,0,4" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,1,0,0" Padding="0,8,0,0">
                     <TextBlock Style="{StaticResource Heading}" Text="Presets" />
                 </Border>
@@ -230,6 +234,7 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
+                </StackPanel>
             </StackPanel>
         </ScrollViewer>
 

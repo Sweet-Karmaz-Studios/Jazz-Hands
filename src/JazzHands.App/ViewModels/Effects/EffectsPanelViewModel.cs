@@ -163,6 +163,14 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
     private readonly IPreviewEngine? _playback;
     private readonly IDialogService? _dialogs;
     private readonly EffectRegistry _registry;
+    private readonly List<EffectPresetItemViewModel> _allPresets = [];
+    private readonly List<TitlePresetItemViewModel> _allTitlePresets = [];
+
+    [ObservableProperty]
+    private bool _showsPresets = true;
+
+    [ObservableProperty]
+    private bool _showsTitlePresets = true;
 
     [ObservableProperty]
     private string _search = string.Empty;
@@ -402,7 +410,11 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
     internal static bool Suits(EffectDescriptor descriptor, TrackKind track) =>
         descriptor.Kind == EffectKind.Audio ? track == TrackKind.Audio : track is TrackKind.Video or TrackKind.Adjustment;
 
-    partial void OnSearchChanged(string value) => Refilter();
+    partial void OnSearchChanged(string value)
+    {
+        Refilter();
+        ShowPresets();
+    }
 
     /// <summary>Saves the first selected clip's effects as a preset.</summary>
     [RelayCommand]
@@ -536,27 +548,29 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
 
     private void LoadPresets()
     {
-        Presets.Clear();
+        _allPresets.Clear();
         foreach (EffectPreset preset in _session.Project.EffectPresets)
         {
-            Presets.Add(new EffectPresetItemViewModel(this, preset));
+            _allPresets.Add(new EffectPresetItemViewModel(this, preset));
         }
 
         // The looks every project has, after its own; one of its own with the same name wins.
         foreach (EffectPreset look in Looks.All.Where(look => !_session.Project.EffectPresets.Any(preset => string.Equals(preset.Name, look.Name, StringComparison.OrdinalIgnoreCase))))
         {
-            Presets.Add(new EffectPresetItemViewModel(this, look, builtIn: true));
+            _allPresets.Add(new EffectPresetItemViewModel(this, look, builtIn: true));
         }
+
+        ShowPresets();
     }
 
     private void LoadTitlePresets()
     {
-        TitlePresets.Clear();
+        _allTitlePresets.Clear();
         try
         {
             foreach (TitlePresetInfo preset in _session.Query(new ListTitlePresetsQuery()))
             {
-                TitlePresets.Add(new TitlePresetItemViewModel(this, preset));
+                _allTitlePresets.Add(new TitlePresetItemViewModel(this, preset));
             }
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
@@ -564,6 +578,33 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
             // The browser still works without them; the log says why.
             _log.Warning(exception, "The title presets could not be listed");
         }
+
+        ShowPresets();
+    }
+
+    /// <summary>
+    /// The presets and title presets the search finds, as the effects are: a search for a plugin
+    /// listed every title preset and look under it. A heading with nothing under it goes.
+    /// </summary>
+    private void ShowPresets()
+    {
+        string search = Search.Trim();
+        bool Finds(params string[] texts) => search.Length == 0 || texts.Any(text => text.Contains(search, StringComparison.OrdinalIgnoreCase));
+
+        Presets.Clear();
+        foreach (EffectPresetItemViewModel preset in _allPresets.Where(preset => Finds(preset.Name, preset.Summary)))
+        {
+            Presets.Add(preset);
+        }
+
+        TitlePresets.Clear();
+        foreach (TitlePresetItemViewModel preset in _allTitlePresets.Where(preset => Finds(preset.Name, preset.Label, preset.Description)))
+        {
+            TitlePresets.Add(preset);
+        }
+
+        ShowsPresets = search.Length == 0 || Presets.Count > 0;
+        ShowsTitlePresets = search.Length == 0 || TitlePresets.Count > 0;
     }
 
     private async Task RunAsync(ICommand command)
