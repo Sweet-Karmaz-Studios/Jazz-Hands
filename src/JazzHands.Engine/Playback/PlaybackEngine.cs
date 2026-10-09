@@ -112,6 +112,9 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
     private long _deviceResets;
     private volatile bool _scopesWanted;
     private volatile bool _scopesStale;
+
+    // A target dropped the frame last presented; the composition thread offers it again.
+    private bool _droppedOnScreen;
     private long _scopesAt;
 
     private long _presented;
@@ -891,7 +894,7 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
         Volatile.Write(ref _effectiveQuality, (int)effective);
 
         var key = new RenderKey(snapshot.Version, frame, effective, Volatile.Read(ref _multicamGrid), _scopesWanted && _scopesWorking);
-        bool refresh = _refresh;
+        bool refresh = _refresh || (_droppedOnScreen && !playing);
         _refresh = false;
 
         bool rendered = false;
@@ -1202,11 +1205,12 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
             targets = _targets;
         }
 
+        bool dropped = false;
         foreach (IPreviewTarget target in targets)
         {
             try
             {
-                target.Present(frame);
+                dropped |= !target.Present(frame);
             }
             catch (Exception exception) when (exception is not OutOfMemoryException)
             {
@@ -1214,6 +1218,11 @@ public sealed partial class PlaybackEngine : IPlaybackController, IDisposable
             }
         }
 
+        // A target still busy with the last frame drops this one. Playing, the next frame follows
+        // anyway; parked, nothing would, and it would keep showing the frame before (a project
+        // opened while the UI thread was busy kept the last one's picture). It is offered again
+        // on the next turn.
+        _droppedOnScreen = dropped;
         Interlocked.Increment(ref _presented);
     }
 
