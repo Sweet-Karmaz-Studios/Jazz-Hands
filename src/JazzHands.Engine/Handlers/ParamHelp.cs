@@ -97,7 +97,7 @@ internal static class ParamHelp
             }
 
             string where = owner.Clip is { } clip
-                ? $"clip '{clip.Name}', which runs from {Timecode.FormatClock(clip.Start)} to {Timecode.FormatClock(clip.End)} on the sequence. Use --local for a time from the clip's start"
+                ? $"clip '{clip.Name}', which runs from {Timecode.FormatClock(clip.Start)} to {Timecode.FormatClock(clip.End)} on the sequence: put the playhead over it (or, from the command line, pass --local for a time from its start)"
                 : "the sequence, which starts at 00:00:00.000";
             throw new CommandException("time-out-of-range", $"{Timecode.FormatClock(at)} is outside {where}.");
         }
