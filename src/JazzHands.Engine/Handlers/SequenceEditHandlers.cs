@@ -47,7 +47,7 @@ internal static class SequenceEdit
         {
             throw new CommandException(
                 "quick-trim",
-                $"'{sequence.Name}' is a Quick Trim, which keeps every clip at its place in the file. Cut it with trim.remove-range, or nest it in another sequence to edit it freely.");
+                $"'{sequence.Name}' is a Quick Trim, which keeps every clip at its place in the file. Take stretches out with Cut in to out (Backspace; trim.remove-range from the CLI), or nest it in another sequence to edit it freely.");
         }
     }
 
