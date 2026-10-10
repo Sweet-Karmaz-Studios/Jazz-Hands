@@ -266,7 +266,12 @@ public sealed partial class TimelineViewModel
 
         Flicks playhead = Playhead;
         string[] underPlayhead = [.. ids.Select(Content.Clip).OfType<ClipView>().Where(view => view.Start < playhead && playhead < view.End).Select(view => view.Id)];
-        bool linked = ids.Select(Content.Clip).OfType<ClipView>().Any(view => view.Clip.LinkGroupId is not null);
+        // Link is offered unless the selection is already one link, and Unlink while any of it is
+        // linked: a clip picked with linked ones offered only Unlink, so a nested clip could not
+        // be linked to the sound under it (seen on screen, 2026-10-09).
+        string?[] links = [.. ids.Select(Content.Clip).OfType<ClipView>().Select(view => view.Clip.LinkGroupId)];
+        bool linked = links.Any(link => link is not null);
+        bool oneLink = linked && links.All(link => link is not null && string.Equals(link, links[0], StringComparison.Ordinal));
         bool grouped = ids.Select(Content.Clip).OfType<ClipView>().Any(view => view.Clip.GroupId is not null);
         bool enabled = clip.Clip.Enabled;
 
@@ -287,7 +292,7 @@ public sealed partial class TimelineViewModel
             new("Ripple delete", "Shift+Delete", () => RunAsync(new RippleDeleteClipsCommand([.. ids]))),
             new("Delete", "Delete", () => RunAsync(Batch([.. ids.Select(id => (ICommand)new RemoveClipCommand(id))], "Delete"))),
             TimelineMenuItem.Separator,
-            linked
+            oneLink
                 ? new TimelineMenuItem("Unlink", null, () => RunAsync(new UnlinkClipsCommand([.. ids])))
                 : new TimelineMenuItem("Link", null, () => RunAsync(new LinkClipsCommand([.. ids])), ids.Length > 1),
             grouped
@@ -295,6 +300,12 @@ public sealed partial class TimelineViewModel
                 : new TimelineMenuItem("Group", null, () => RunAsync(new GroupClipsCommand([.. ids])), ids.Length > 1),
             new("Nest", null, () => RunAsync(new NestClipsCommand([.. ids], NestName()))),
         };
+
+        if (linked && !oneLink)
+        {
+            int link = menu.FindIndex(item => item.Header == "Link");
+            menu.Insert(link + 1, new TimelineMenuItem("Unlink", null, () => RunAsync(new UnlinkClipsCommand([.. ids]))));
+        }
 
         if (clip.Clip.SequenceId is { } nested)
         {
