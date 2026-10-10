@@ -63,6 +63,7 @@ public sealed record ExportJobOptions(
 /// <param name="Note">Anything worth knowing that is not an error: a fallback encoder, keyframe snaps.</param>
 /// <param name="Priority">Which queued job starts first.</param>
 /// <param name="Hardware">True when it encodes on the GPU and so counts against the NVENC session limit.</param>
+/// <param name="Label">What a person calls it, from its plan, or null for the file name.</param>
 public sealed record ExportJobInfo(
     string Id,
     ExportJobState State,
@@ -81,7 +82,8 @@ public sealed record ExportJobInfo(
     DateTimeOffset? Finished,
     string? Note = null,
     ExportPriority Priority = ExportPriority.Normal,
-    bool Hardware = false)
+    bool Hardware = false,
+    string? Label = null)
 {
     /// <summary>True for a job that will not change again.</summary>
     public bool IsFinished => State is ExportJobState.Done or ExportJobState.Failed or ExportJobState.Cancelled;

@@ -166,6 +166,7 @@ public sealed record ExportChapter(Flicks Start, Flicks End, string Title) : IEq
 /// <param name="Estimate">About how big the file is and how long it takes, for the dialog and the dry run.</param>
 /// <param name="Smart">What to copy and what to encode again, for a smart cut.</param>
 /// <param name="Stems">The stems: files beside it (24-bit WAV or the preset's sound codec), or sound tracks in it.</param>
+/// <param name="Label">What a person calls the job when its file name says nothing, as a proxy's does; null for the file name.</param>
 public sealed record ExportPlan(
     string SequenceId,
     string Preset,
@@ -185,7 +186,8 @@ public sealed record ExportPlan(
     long TargetBytes = 0,
     ExportEstimate? Estimate = null,
     ExportSmart? Smart = null,
-    EquatableArray<ExportStem> Stems = default) : IEquatable<ExportPlan>;
+    EquatableArray<ExportStem> Stems = default,
+    string? Label = null) : IEquatable<ExportPlan>;
 
 /// <summary>Which stems an export writes beside the mix (Phase 40).</summary>
 public enum StemMode

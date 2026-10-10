@@ -928,7 +928,8 @@ public sealed class ExportQueue : IExportService, IDisposable
                 Finished,
                 Join(snaps, Note),
                 Options.Priority,
-                Sessions > 0);
+                Sessions > 0,
+                Plan.Label);
         }
     }
 }

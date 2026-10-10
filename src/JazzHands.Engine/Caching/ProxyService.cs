@@ -233,7 +233,8 @@ public sealed class ProxyService
                 BFrames: 0,
                 Lossless: false),
             Reasons: EquatableArray.Create(
-                $"A {Percent(scale)}% proxy of '{item.Name}' ({video.Width}x{video.Height} {video.Codec}), every frame a keyframe."));
+                $"A {Percent(scale)}% proxy of '{item.Name}' ({video.Width}x{video.Height} {video.Codec}), every frame a keyframe."),
+            Label: $"Proxy of {item.Name}");
 
         return (plan, project);
     }

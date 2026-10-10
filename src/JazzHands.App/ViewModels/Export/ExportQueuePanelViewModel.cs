@@ -262,6 +262,7 @@ public sealed partial class ExportJobViewModel : ObservableObject
         _panel = panel;
         Id = job.Id;
         OutputPath = job.OutputPath;
+        Label = job.Label;
         Update(job);
     }
 
@@ -271,8 +272,11 @@ public sealed partial class ExportJobViewModel : ObservableObject
     /// <summary>The file it writes.</summary>
     public string OutputPath { get; }
 
-    /// <summary>The file's name, which is what the row shows.</summary>
-    public string Name => Path.GetFileName(OutputPath);
+    /// <summary>What the job is called, when its file name says nothing: "Proxy of" a file.</summary>
+    public string? Label { get; }
+
+    /// <summary>What the row shows: the label, or the file's name.</summary>
+    public string Name => Label ?? Path.GetFileName(OutputPath);
 
     /// <summary>True once it will not change again.</summary>
     public bool IsFinished => State is ExportJobState.Done or ExportJobState.Failed or ExportJobState.Cancelled;
