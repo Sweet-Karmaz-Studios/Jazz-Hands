@@ -453,7 +453,10 @@ public static partial class EditOps
     /// left closes up, and they go back in at the nearest cut to where they were dropped.
     /// </summary>
     /// <param name="sequence">The sequence, magnetic or not.</param>
-    /// <param name="clipIds">The clips to move, all on the primary track.</param>
+    /// <param name="clipIds">
+    /// The clips to move, at least one on the primary track, or pictures from another track to
+    /// put on it.
+    /// </param>
     /// <param name="to">Where the first of them was dropped.</param>
     public static EditResult<Sequence> MoveOnStoryline(Sequence sequence, IReadOnlyList<string> clipIds, Flicks to)
     {
@@ -474,6 +477,15 @@ public static partial class EditOps
         Clip[] moving = [.. found.Value.Where(entry => IsOn(entry.Track, primary)).Select(entry => entry.Clip).OrderBy(clip => clip.Start)];
         if (moving.Length == 0)
         {
+            // A picture dragged onto the storyline from another track joins it at the nearest
+            // cut; refused as an overlap, a title dragged down onto a magnetic V1 could not go in
+            // (seen on screen, 2026-10-09).
+            moving = [.. found.Value.Where(entry => entry.Track.Kind == primary.Kind).Select(entry => entry.Clip).OrderBy(clip => clip.Start)];
+        }
+
+        bool joining = !found.Value.Any(entry => IsOn(entry.Track, primary));
+        if (moving.Length == 0)
+        {
             return EditError.NotAligned($"Only clips on {primary.Name} move along the storyline; pick at least one.");
         }
 
@@ -482,7 +494,7 @@ public static partial class EditOps
         var riders = new List<(Track Track, Clip Clip, Clip Carrier)>();
         foreach ((Track track, Clip clip) in found.Value)
         {
-            if (IsOn(track, primary))
+            if (moving.Contains(clip))
             {
                 continue;
             }
@@ -500,7 +512,8 @@ public static partial class EditOps
             riders.Add((track, clip, carrier));
         }
 
-        EditResult<Sequence> removed = RippleDelete(sequence, [.. found.Value.Select(entry => entry.Clip.Id)]);
+        // Clips joining from another track leave a gap there, as only the primary track closes up.
+        EditResult<Sequence> removed = joining ? Lift(sequence, found.Value) : RippleDelete(sequence, [.. found.Value.Select(entry => entry.Clip.Id)]);
         if (!removed.IsOk)
         {
             return removed;
@@ -570,6 +583,23 @@ public static partial class EditOps
         }
 
         return [.. changed.Distinct(StringComparer.Ordinal)];
+    }
+
+    /// <summary>Takes clips off their tracks and leaves the gaps.</summary>
+    private static EditResult<Sequence> Lift(Sequence sequence, List<(Track Track, Clip Clip)> found)
+    {
+        Sequence result = sequence;
+        foreach ((Track track, Clip clip) in found)
+        {
+            if (track.Locked)
+            {
+                return EditError.TrackLocked(track.Name);
+            }
+
+            result = result.ReplaceTrack(result.Track(track.Id)!.RemoveClip(clip.Id));
+        }
+
+        return result;
     }
 
     private static Flicks Distance(Flicks a, Flicks b) => a > b ? a - b : b - a;

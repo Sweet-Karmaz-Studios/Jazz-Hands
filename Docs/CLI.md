@@ -6209,7 +6209,7 @@ jazz clip paste other.jazz --data "$(cat clips.json)" --at 00:00:30:00 --insert
 | `clip insert <track-id> --at <t> ...` | `clip add`'s options; cuts what is there and pushes it on. A movie brings its sound. |
 | `clip overwrite <track-id> --at <t> ...` | `clip add`'s options; over what is there, on its sound tracks too. Nothing moves. |
 | `clip freeze-frame <id> --at <t> [--dur d] [--id new]` | Holds the frame at a time (two seconds unless told), pushing the rest on. The hold plays no sound and trimming it never changes its frame. |
-| `clip storyline-move <ids> --to <t>` | Moves clips on the lowest picture track to the nearest cut, closing up behind them; clips on other tracks that start over them ride along. |
+| `clip storyline-move <ids> --to <t>` | Moves clips on the lowest picture track to the nearest cut, closing up behind them; clips on other tracks that start over them ride along. Pictures from another track, with none on the lowest, join it there. |
 | `clip paste --data <json> --at <t> [--track id] [--insert] [--sequence id]` | Pastes what `clipboard copy` returned: same track numbers (or from `--track`), new ids, links and groups kept, media reused by hash or path or added. |
 | `clipboard copy <ids>` | The clips and their media as JSON, full paths, for `clip paste`. Changes nothing. |
 | `clip match-frame <id> --at <t>` | `{"clipId", "mediaId", "sequenceId", "sourceTime", "path"}`: which frame of which source the clip shows there. |

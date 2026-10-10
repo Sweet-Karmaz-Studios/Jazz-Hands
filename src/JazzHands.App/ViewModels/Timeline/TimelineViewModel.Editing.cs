@@ -897,9 +897,11 @@ public sealed partial class TimelineViewModel
 
         (int shift, int otherShift) = RowShift(grabbed, point, moving);
 
-        // On a magnetic sequence a clip dragged along the primary track goes in at a cut.
-        if (shift == 0 && Content.Sequence.IsMagnetic && Content.Sequence.PrimaryTrack is { Locked: false } primary
-            && string.Equals(grabbed.TrackId, primary.Id, StringComparison.Ordinal))
+        // On a magnetic sequence a clip dragged along the primary track goes in at a cut, and so
+        // does a picture dragged onto it from another track.
+        if (Content.Sequence.IsMagnetic && Content.Sequence.PrimaryTrack is { Locked: false } primary
+            && (shift == 0 ? string.Equals(grabbed.TrackId, primary.Id, StringComparison.Ordinal)
+                : grabbed.Kind == primary.Kind && string.Equals(ShiftedTrack(grabbed, shift), primary.Id, StringComparison.Ordinal)))
         {
             PreviewStoryline(moving, primary, delta);
             return;
@@ -949,7 +951,8 @@ public sealed partial class TimelineViewModel
 
     private void PreviewStoryline(ClipView[] moving, Track primary, Flicks delta)
     {
-        Flicks to = moving.Where(clip => clip.TrackId == primary.Id).Min(clip => clip.Start) + delta;
+        ClipView[] lead = [.. moving.Where(clip => clip.TrackId == primary.Id)];
+        Flicks to = (lead.Length > 0 ? lead : moving.Where(clip => clip.Kind == primary.Kind)).Min(clip => clip.Start) + delta;
         string[] ids = [.. moving.Select(clip => clip.Id)];
 
         _pending = [new StorylineMoveClipsCommand([.. ids], to)];
