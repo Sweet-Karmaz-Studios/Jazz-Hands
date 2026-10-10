@@ -174,6 +174,15 @@ public sealed class SetClipSpeedHandler : ICommandHandler<SetClipSpeedCommand>
                 return project;
             }
 
+            // What it shows has to be in the file: a whole fifteen second clip of a fifteen second
+            // file, kept at double speed, read on to thirty seconds (seen on screen, 2026-10-10).
+            if (SlipClipHandler.SourceDuration(project, kept) is { } length && kept.SourceOut > length)
+            {
+                throw new CommandException(
+                    "past-source-end",
+                    $"At that speed '{clip.Name}' would need its source up to {Timecode.FormatClock(kept.SourceOut)}, and it ends at {Timecode.FormatClock(length)}. Shorten the clip first, or leave out --keep-duration.");
+            }
+
             context.Changed(command.ClipId);
             return project.ReplaceTrack(found.Track.ReplaceClip(kept));
         }
