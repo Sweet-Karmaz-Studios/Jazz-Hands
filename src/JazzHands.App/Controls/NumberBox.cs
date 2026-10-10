@@ -8,7 +8,8 @@ namespace JazzHands.App.Controls;
 /// <summary>
 /// A number that is typed or dragged: drag sideways to scrub it, Shift for ten times the step,
 /// Alt for a tenth, click without dragging to type, Enter to take what was typed, Escape to put it
-/// back, the arrow keys to step. The unit is shown after the number and ignored when typed.
+/// back (both let go of the keyboard), the arrow keys to step. The unit is shown after the number
+/// and ignored when typed.
 /// </summary>
 /// <remarks>
 /// Every value it takes goes to <see cref="Value"/>, which a view model turns into a command; a
@@ -209,12 +210,12 @@ public sealed class NumberBox : TextBox
         {
             case Key.Enter:
                 Commit();
-                SelectAll();
+                LetGo();
                 e.Handled = true;
                 return;
             case Key.Escape:
                 ShowValue(force: true);
-                SelectAll();
+                LetGo();
                 e.Handled = true;
                 return;
             case Key.Up:
@@ -239,6 +240,19 @@ public sealed class NumberBox : TextBox
         Commit();
         Cursor = Cursors.SizeWE;
         ShowValue(force: true);
+    }
+
+    /// <summary>
+    /// Done typing: the box lets go of the keyboard, so Ctrl+Z is the editor's undo again and
+    /// not the text box's own, which put back what Escape had just thrown away, for leaving the
+    /// box to take (seen on screen, 2026-10-10).
+    /// </summary>
+    private void LetGo()
+    {
+        if (IsKeyboardFocusWithin)
+        {
+            Keyboard.ClearFocus();
+        }
     }
 
     private void Commit()
