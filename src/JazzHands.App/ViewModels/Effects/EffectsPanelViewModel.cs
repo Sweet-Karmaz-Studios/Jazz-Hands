@@ -385,10 +385,18 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
     public Task ApplyPresetAsync(string presetId)
     {
         Project project = _session.Project;
-        string[] clips = [.. _selection.Ids.Where(id => project.FindClip(id) is not null)];
+
+        // Only the selected clips its effects suit, as one effect's + does: a shot is picked with
+        // its sound, and a picture preset refused the lot over the sound (seen on screen, 2026-10-10).
+        EffectPreset? preset = project.EffectPresets.FirstOrDefault(candidate => candidate.Id == presetId)
+            ?? Looks.All.FirstOrDefault(candidate => candidate.Id == presetId);
+        string[] clips = [.. _selection.Ids.Where(id => project.FindClip(id) is { } found && (preset is null || SuitsAll(preset, found.Track.Kind)))];
         if (clips.Length == 0)
         {
-            Status = "Select a clip to apply the preset to, or drag it onto one.";
+            bool sound = preset?.Effects.Any(effect => EffectCatalog.Registry.Find(effect.TypeId) is { Kind: EffectKind.Audio }) == true;
+            Status = _selection.Ids.IsEmpty || preset is null
+                ? "Select a clip to apply the preset to, or drag it onto one."
+                : $"{preset.Name} works on {(sound ? "sound" : "pictures")}, and nothing selected is one.";
             return Task.CompletedTask;
         }
 
@@ -409,6 +417,10 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
     /// <summary>True when an effect of this kind can go on a track of that kind.</summary>
     internal static bool Suits(EffectDescriptor descriptor, TrackKind track) =>
         descriptor.Kind == EffectKind.Audio ? track == TrackKind.Audio : track is TrackKind.Video or TrackKind.Adjustment;
+
+    /// <summary>True when every effect of a preset can go on a track of this kind; one this version does not know is no bar.</summary>
+    internal static bool SuitsAll(EffectPreset preset, TrackKind track) =>
+        preset.Effects.All(effect => EffectCatalog.Registry.Find(effect.TypeId) is not { } descriptor || Suits(descriptor, track));
 
     partial void OnSearchChanged(string value)
     {
