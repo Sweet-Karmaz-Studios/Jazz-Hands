@@ -17,6 +17,36 @@
         <views:ColorLabelConverter x:Key="ColorLabel" />
         <views:EnumMatchConverter x:Key="EnumMatch" />
         <BooleanToVisibilityConverter x:Key="BoolToVisible" />
+        <!-- One menu for both views, the list and the tiles: each gets its own copy. -->
+        <ContextMenu x:Key="MediaMenu" x:Shared="False">
+            <MenuItem Header="Quick Trim" Command="{Binding QuickTrimCommand, Mode=OneWay}" ToolTip="Keep and cut stretches of this recording in a sequence of its own" />
+            <Separator />
+            <MenuItem Header="Open in source monitor" Command="{Binding OpenInSourceCommand, Mode=OneWay}" InputGestureText="Double-click" ToolTip="Mark in and out on it, then insert or overwrite into the sequence" />
+            <MenuItem Header="Make multicam" Command="{Binding MakeMulticamCommand, Mode=OneWay}" CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" ToolTip="Sync the selected recordings of the same moment by their sound and make a multicam clip of them" />
+            <MenuItem Header="Find scene cuts..." Command="{Binding FindSceneCutsCommand, Mode=OneWay}" ToolTip="Find where the shots change in an edited video, then mark them or make a subclip of each" />
+            <MenuItem Header="Reveal in Explorer" Command="{Binding RevealCommand, Mode=OneWay}" />
+            <MenuItem Header="Re-read from disk" Command="{Binding ReprobeCommand, Mode=OneWay}" />
+            <MenuItem Header="Generate proxy" Command="{Binding GenerateProxyCommand, Mode=OneWay}" />
+            <MenuItem Header="Relink to a file..." Command="{Binding RelinkSelectedCommand, Mode=OneWay}" ToolTip="The file moved: point this item at where it is now" />
+            <MenuItem Header="Replace file..." Command="{Binding ReplaceSelectedCommand, Mode=OneWay}" ToolTip="Swap in another file, keeping every clip made from this one" />
+            <Separator />
+            <MenuItem Header="Find missing media..." Command="{Binding FindMissingCommand, Mode=OneWay}" />
+            <MenuItem Header="Remove unused media" Command="{Binding RemoveUnusedCommand, Mode=OneWay}" ToolTip="Take out every item no clip uses (undoable)" />
+            <MenuItem Header="Watch a folder..." Command="{Binding WatchFolderCommand, Mode=OneWay}" ToolTip="Bring in new recordings from a captures folder as they finish" />
+            <MenuItem Header="Stop watching folders" Command="{Binding StopWatchingCommand, Mode=OneWay}" />
+            <Separator />
+            <MenuItem Header="Colour label">
+                <MenuItem Header="None" Command="{Binding SetColorCommand, Mode=OneWay}" CommandParameter="" />
+                <MenuItem Header="Red" Command="{Binding SetColorCommand, Mode=OneWay}" CommandParameter="red" />
+                <MenuItem Header="Orange" Command="{Binding SetColorCommand, Mode=OneWay}" CommandParameter="orange" />
+                <MenuItem Header="Yellow" Command="{Binding SetColorCommand, Mode=OneWay}" CommandParameter="yellow" />
+                <MenuItem Header="Green" Command="{Binding SetColorCommand, Mode=OneWay}" CommandParameter="green" />
+                <MenuItem Header="Blue" Command="{Binding SetColorCommand, Mode=OneWay}" CommandParameter="blue" />
+                <MenuItem Header="Purple" Command="{Binding SetColorCommand, Mode=OneWay}" CommandParameter="purple" />
+            </MenuItem>
+            <Separator />
+            <MenuItem Header="Remove from project" Command="{Binding RemoveCommand, Mode=OneWay}" />
+        </ContextMenu>
     </UserControl.Resources>
 
     <Grid>
@@ -173,38 +203,8 @@
                       PreviewMouseLeftButtonDown="OnListMouseDown"
                       MouseMove="OnListMouseMove"
                       MouseDoubleClick="OnItemDoubleClick"
+                      ContextMenu="{StaticResource MediaMenu}"
                       Visibility="{Binding IsListMode, Mode=OneWay, Converter={StaticResource BoolToVisible}}">
-                <ListView.ContextMenu>
-                    <ContextMenu>
-                        <MenuItem Header="Quick Trim" Command="{Binding QuickTrimCommand, Mode=OneWay}" ToolTip="Keep and cut stretches of this recording in a sequence of its own" />
-                        <Separator />
-                        <MenuItem Header="Open in source monitor" Command="{Binding OpenInSourceCommand, Mode=OneWay}" InputGestureText="Double-click" ToolTip="Mark in and out on it, then insert or overwrite into the sequence" />
-                        <MenuItem Header="Make multicam" Command="{Binding MakeMulticamCommand, Mode=OneWay}" CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" ToolTip="Sync the selected recordings of the same moment by their sound and make a multicam clip of them" />
-                        <MenuItem Header="Find scene cuts..." Command="{Binding FindSceneCutsCommand, Mode=OneWay}" ToolTip="Find where the shots change in an edited video, then mark them or make a subclip of each" />
-                        <MenuItem Header="Reveal in Explorer" Command="{Binding RevealCommand, Mode=OneWay}" />
-                        <MenuItem Header="Re-read from disk" Command="{Binding ReprobeCommand, Mode=OneWay}" />
-                        <MenuItem Header="Generate proxy" Command="{Binding GenerateProxyCommand, Mode=OneWay}" />
-                        <MenuItem Header="Relink to a file..." Command="{Binding RelinkSelectedCommand, Mode=OneWay}" ToolTip="The file moved: point this item at where it is now" />
-                        <MenuItem Header="Replace file..." Command="{Binding ReplaceSelectedCommand, Mode=OneWay}" ToolTip="Swap in another file, keeping every clip made from this one" />
-                        <Separator />
-                        <MenuItem Header="Find missing media..." Command="{Binding FindMissingCommand, Mode=OneWay}" />
-                        <MenuItem Header="Remove unused media" Command="{Binding RemoveUnusedCommand, Mode=OneWay}" ToolTip="Take out every item no clip uses (undoable)" />
-                        <MenuItem Header="Watch a folder..." Command="{Binding WatchFolderCommand, Mode=OneWay}" ToolTip="Bring in new recordings from a captures folder as they finish" />
-                        <MenuItem Header="Stop watching folders" Command="{Binding StopWatchingCommand, Mode=OneWay}" />
-                        <Separator />
-                        <MenuItem Header="Colour label">
-                            <MenuItem Header="None" Command="{Binding SetColorCommand, Mode=OneWay}" CommandParameter="" />
-                            <MenuItem Header="Red" Command="{Binding SetColorCommand, Mode=OneWay}" CommandParameter="red" />
-                            <MenuItem Header="Orange" Command="{Binding SetColorCommand, Mode=OneWay}" CommandParameter="orange" />
-                            <MenuItem Header="Yellow" Command="{Binding SetColorCommand, Mode=OneWay}" CommandParameter="yellow" />
-                            <MenuItem Header="Green" Command="{Binding SetColorCommand, Mode=OneWay}" CommandParameter="green" />
-                            <MenuItem Header="Blue" Command="{Binding SetColorCommand, Mode=OneWay}" CommandParameter="blue" />
-                            <MenuItem Header="Purple" Command="{Binding SetColorCommand, Mode=OneWay}" CommandParameter="purple" />
-                        </MenuItem>
-                        <Separator />
-                        <MenuItem Header="Remove from project" Command="{Binding RemoveCommand, Mode=OneWay}" />
-                    </ContextMenu>
-                </ListView.ContextMenu>
 
                 <ListView.View>
                     <GridView>
@@ -275,6 +275,7 @@
 
             <!-- Grid mode: tiles with a thumbnail, which scrubs through the file under the mouse. -->
             <ListBox Grid.Column="2"
+                     x:Name="TileList"
                      AutomationProperties.Name="Media tiles"
                      Background="{DynamicResource Brush.Background.Base}"
                      BorderBrush="{DynamicResource Brush.Border}"
@@ -286,6 +287,7 @@
                      PreviewMouseLeftButtonDown="OnListMouseDown"
                      MouseMove="OnListMouseMove"
                      MouseDoubleClick="OnItemDoubleClick"
+                     ContextMenu="{StaticResource MediaMenu}"
                      Visibility="{Binding IsGridMode, Mode=OneWay, Converter={StaticResource BoolToVisible}}">
                 <ListBox.ItemsPanel>
                     <ItemsPanelTemplate>
