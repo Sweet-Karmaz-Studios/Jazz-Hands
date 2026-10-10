@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using JazzHands.App.Services;
 using JazzHands.App.Shell;
+using JazzHands.Core;
 using JazzHands.Core.Commands;
 using JazzHands.Core.Model;
 using JazzHands.Core.Serialization;
@@ -405,7 +406,27 @@ public sealed partial class MediaPanelViewModel : ToolViewModel
             return;
         }
 
-        await RunAsync(new GenerateProxyCommand(row.Id), $"Making a proxy of {row.Name} on the export queue.").ConfigureAwait(true);
+        // One there already, or on its way, is said to be: the command leaves it alone, and the
+        // line read "Making a proxy" with nothing queued (seen on screen, 2026-10-10).
+        ProxyInfo? proxy = null;
+        try
+        {
+            proxy = _session.Query(new ListProxiesQuery()).FirstOrDefault(info => string.Equals(info.MediaId, row.Id, StringComparison.Ordinal));
+        }
+        catch (Exception error) when (error is CommandException or InvalidOperationException)
+        {
+            _log.Debug(error, "Could not ask whether {Media} has a proxy", row.Name);
+        }
+
+        if (proxy is { State: ProxyState.Ready or ProxyState.Queued or ProxyState.Running })
+        {
+            Status = proxy.State == ProxyState.Ready
+                ? $"{row.Name} already has a proxy ({proxy.Width}x{proxy.Height}), played when Proxy is on."
+                : $"{row.Name}'s proxy is already on the export queue.";
+            return;
+        }
+
+        await RunAsync(new GenerateProxyCommand(row.Id), $"Queued a proxy of {row.Name} on the export queue.").ConfigureAwait(true);
     }
 
     /// <summary>
@@ -458,7 +479,7 @@ public sealed partial class MediaPanelViewModel : ToolViewModel
 
         foreach (string id in ids)
         {
-            await RunAsync(new GenerateProxyCommand(id), $"Making {ids.Count} {(ids.Count == 1 ? "proxy" : "proxies")} on the export queue.").ConfigureAwait(true);
+            await RunAsync(new GenerateProxyCommand(id), $"Queued {Words.Count(ids.Count, "proxy", "proxies")} on the export queue.").ConfigureAwait(true);
         }
     }
 
