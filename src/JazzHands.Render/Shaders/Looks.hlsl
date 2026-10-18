@@ -67,6 +67,14 @@ float4 PsGlitch(FullScreenVertex input) : SV_TARGET
     return float4(min(float3(left.r, middle.g, right.b), alpha), alpha);
 }
 
+// How much of a repeating pattern can be drawn at a period of this many texels: all of it from
+// three, none at one and a half or less, where it would only alias. About what shrinking it from
+// a larger frame leaves of it.
+float Drawable(float period)
+{
+    return saturate((period - 1.5) / 1.5);
+}
+
 // Values: x curvature, y scanline strength, z scanlines down the frame, w the mask's strength.
 // More: x bloom, y vignette, z the mask's column width in texels.
 float4 PsCrt(FullScreenVertex input) : SV_TARGET
@@ -90,13 +98,18 @@ float4 PsCrt(FullScreenVertex input) : SV_TARGET
     glow += Input.SampleLevel(LinearClamp, uv - float2(0.0, reach.y), 0);
     c.rgb += glow.rgb * 0.25 * More.x;
 
-    // Scanlines, keeping the average brightness.
+    // Scanlines, keeping the average brightness. Too fine for the target they can only alias
+    // into rings, so they fade to that average: at Quarter quality 240 lines on a 1080 line
+    // frame are a texel each (seen in QA, 2026-10-18).
+    float strength = Values.y * Drawable(Resolution.y / max(Values.z, 1.0));
     float scan = 0.5 - (0.5 * cos(uv.y * Values.z * 2.0 * Pi));
-    c.rgb *= (1.0 - (Values.y * scan)) / max(1.0 - (Values.y * 0.5), 1e-3);
+    c.rgb *= (1.0 - (strength * scan)) / max(1.0 - (strength * 0.5), 1e-3);
 
-    // An aperture grille: columns of red, green and blue.
+    // An aperture grille: columns of red, green and blue, fading as a column narrows to under a
+    // texel, where it could only be drawn too wide: gone at three quarters, whole from one and a
+    // half.
     uint column = (uint)floor(input.Position.x / max(More.z, 1.0)) % 3u;
-    float dim = 1.0 - Values.w;
+    float dim = 1.0 - (Values.w * Drawable(More.z * 2.0));
     float3 mask = column == 0u ? float3(1.0, dim, dim) : column == 1u ? float3(dim, 1.0, dim) : float3(dim, dim, 1.0);
     c.rgb *= mask * (3.0 / (1.0 + (2.0 * dim)));
 
