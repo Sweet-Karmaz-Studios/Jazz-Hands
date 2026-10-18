@@ -69,6 +69,19 @@ public sealed class EffectPreviews : IDisposable
         ["video.chromatic-aberration"] = [("amount", "24")],
         ["video.deband"] = [("dither", "8")],
         ["video.echo"] = [("spacing", "3")],
+
+        // The time is drawn large and centred: at its default size it is a speck at 160 pixels.
+        ["gen.timecode"] = [("size", "150"), ("corner", "centre")],
+
+        // Particles five times their size, the dust three times as thick: at their own, a few
+        // pixels on a 720p frame, they were under a pixel here and the previews looked empty
+        // (seen on screen, 2026-10-18).
+        ["gen.particles.embers"] = [("size-start", "30"), ("size-end", "10")],
+        ["gen.particles.sparks"] = [("size-start", "15"), ("size-end", "5")],
+        ["gen.particles.dust"] = [("size-start", "15"), ("size-end", "15"), ("rate", "60")],
+        ["gen.particles.snow"] = [("size-start", "25"), ("size-end", "25")],
+        ["gen.particles.rain"] = [("size-start", "7.5"), ("size-end", "7.5")],
+        ["gen.particles.magic"] = [("size-start", "25"), ("size-end", "0")],
     };
 
     private readonly Lock _gate = new();
@@ -274,9 +287,7 @@ public sealed class EffectPreviews : IDisposable
     private static List<Clip> GeneratorLayers(EffectDescriptor descriptor) =>
     [
         Generated("gen.solid", ("color", "#1E1E1E")),
-
-        // The time is drawn large and centred: at its default size it is a speck at 160 pixels.
-        descriptor.TypeId == "gen.timecode" ? Generated(descriptor.TypeId, ("size", "150"), ("corner", "centre")) : Generated(descriptor.TypeId),
+        Generated(descriptor.TypeId, Showcase.TryGetValue(descriptor.TypeId, out (string, string)[]? settings) ? settings : []),
     ];
 
     /// <summary>A generator clip running the whole scene, with some of its settings given.</summary>
