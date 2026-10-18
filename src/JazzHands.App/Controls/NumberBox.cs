@@ -93,10 +93,15 @@ public sealed class NumberBox : TextBox
         set => SetValue(UnitProperty, value);
     }
 
-    /// <summary>A number as the box shows it: trailing zeros dropped, the unit after a space.</summary>
+    /// <summary>
+    /// A number as the box shows it: trailing zeros dropped, the unit after a space. A tiny
+    /// negative that rounds to nothing is 0, not "-0" (a colour wheel's brightness after a push
+    /// that keeps it, seen in QA, 2026-10-18).
+    /// </summary>
     public static string Format(double value, int decimals, string unit)
     {
-        string number = Math.Round(value, Math.Clamp(decimals, 0, 6)).ToString("0." + new string('#', Math.Clamp(decimals, 0, 6)), CultureInfo.InvariantCulture);
+        double rounded = Math.Round(value, Math.Clamp(decimals, 0, 6));
+        string number = (rounded == 0 ? 0 : rounded).ToString("0." + new string('#', Math.Clamp(decimals, 0, 6)), CultureInfo.InvariantCulture);
         return string.IsNullOrEmpty(unit) ? number : $"{number} {unit}";
     }
 
