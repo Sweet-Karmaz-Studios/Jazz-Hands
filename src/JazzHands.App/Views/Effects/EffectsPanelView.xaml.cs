@@ -9,7 +9,7 @@ namespace JazzHands.App.Views.Effects;
 /// <summary>
 /// The effects browser. Dragging is view logic: an effect or a preset dragged out carries its id
 /// to the timeline or the inspector, which turn the drop into a command. A double click applies
-/// an effect to the selection.
+/// an effect or a preset to the selection.
 /// </summary>
 public partial class EffectsPanelView : UserControl
 {
@@ -22,9 +22,8 @@ public partial class EffectsPanelView : UserControl
     {
         _drag.Press(e.GetPosition(this), ((FrameworkElement)sender).DataContext);
 
-        if (e.ClickCount == 2 && ((FrameworkElement)sender).DataContext is EffectTypeItemViewModel effect)
+        if (e.ClickCount == 2 && DoubleClick(((FrameworkElement)sender).DataContext))
         {
-            effect.ApplyCommand.Execute(null);
             e.Handled = true;
         }
     }
@@ -51,6 +50,23 @@ public partial class EffectsPanelView : UserControl
         {
             DragDrop.DoDragDrop((DependencyObject)sender, EffectDragData.ForTitlePreset(preset.Name), DragDropEffects.Copy);
         }
+    }
+
+    /// <summary>
+    /// What a double click on a row does, as its + does: an effect or a preset goes on the selected
+    /// clips, a title preset adds a title. A preset did nothing (seen on screen, 2026-10-18).
+    /// </summary>
+    internal static bool DoubleClick(object? item)
+    {
+        ICommand? command = item switch
+        {
+            EffectTypeItemViewModel effect => effect.ApplyCommand,
+            EffectPresetItemViewModel preset => preset.ApplyCommand,
+            TitlePresetItemViewModel title => title.AddCommand,
+            _ => null,
+        };
+        command?.Execute(null);
+        return command is not null;
     }
 
     /// <summary>The item pressed, once the pointer has moved far enough to drag it; whatever row it is over now.</summary>
