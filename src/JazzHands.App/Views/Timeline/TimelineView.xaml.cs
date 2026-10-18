@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using JazzHands.App.Controls;
 using JazzHands.App.ViewModels.Timeline;
 
 namespace JazzHands.App.Views.Timeline;
@@ -55,7 +56,7 @@ public partial class TimelineView : UserControl
         if (e.Key == Key.Enter)
         {
             header.CommitNameCommand.Execute(null);
-            Keyboard.ClearFocus();
+            LetGo.Keyboard(box);
             e.Handled = true;
         }
         else if (e.Key == Key.Escape)
@@ -63,7 +64,7 @@ public partial class TimelineView : UserControl
             // Put the name back by committing an unchanged one, which the header restores.
             box.Text = string.Empty;
             header.CommitNameCommand.Execute(null);
-            Keyboard.ClearFocus();
+            LetGo.Keyboard(box);
             e.Handled = true;
         }
     }

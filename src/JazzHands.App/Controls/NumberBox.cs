@@ -243,31 +243,11 @@ public sealed class NumberBox : TextBox
     }
 
     /// <summary>
-    /// Done typing: the box lets go of the keyboard, so Ctrl+Z is the editor's undo again and
-    /// not the text box's own, which put back what Escape had just thrown away, for leaving the
-    /// box to take (seen on screen, 2026-10-10). The keyboard goes to the window, not to nothing:
-    /// with nothing focused no key reached the window, and Space or Ctrl+Z after Enter did nothing
-    /// (seen on screen, 2026-10-18).
+    /// Done typing: the box lets go of the keyboard to its window, so Ctrl+Z is the editor's undo
+    /// again and not the text box's own, which put back what Escape had just thrown away, for
+    /// leaving the box to take (seen on screen, 2026-10-10).
     /// </summary>
-    private void LetGo()
-    {
-        if (!IsKeyboardFocusWithin)
-        {
-            return;
-        }
-
-        // The window is a focus scope, and focused it hands the keyboard back to the box it remembers.
-        Window? window = Window.GetWindow(this);
-        if (window is not null)
-        {
-            FocusManager.SetFocusedElement(window, null);
-        }
-
-        if (window is null || !ReferenceEquals(Keyboard.Focus(window), window))
-        {
-            Keyboard.ClearFocus();
-        }
-    }
+    private void LetGo() => Controls.LetGo.Keyboard(this);
 
     private void Commit()
     {
