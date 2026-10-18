@@ -478,6 +478,13 @@ public partial class MainWindow : Window, Shell.IAppWindow, Shell.ITourHost
                 return true;
             }
 
+            // A colour wheel, a curve or the keyframe graph answers its own Delete, Backspace and
+            // the rest: Delete in the Curves editor removed the selected clip (2026-10-18).
+            if (node is Controls.IKeepsKeys keeper && keeper.Keeps(key))
+            {
+                return true;
+            }
+
             // A list or tree keeps its arrows, but not a tab control: every panel sits in one of
             // AvalonDock's panes, which are tab controls, and taking them as lists swallowed the
             // arrows everywhere (the source monitor could not step a frame, 2026-09-28).

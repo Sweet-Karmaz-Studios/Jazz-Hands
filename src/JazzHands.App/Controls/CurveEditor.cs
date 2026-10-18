@@ -17,7 +17,7 @@ namespace JazzHands.App.Controls;
 /// hue curve wraps and has no ends. Backspace or Delete with no point held puts the curve back to
 /// <see cref="Neutral"/>. <see cref="IsDragging"/> is true while a point is held.
 /// </remarks>
-public sealed class CurveEditor : FrameworkElement
+public sealed class CurveEditor : FrameworkElement, IKeepsKeys
 {
     /// <summary>The curve as text.</summary>
     public static readonly DependencyProperty PointsProperty = DependencyProperty.Register(
@@ -256,6 +256,9 @@ public sealed class CurveEditor : FrameworkElement
         IsDragging = false;
         InvalidateVisual();
     }
+
+    /// <inheritdoc />
+    bool IKeepsKeys.Keeps(Key key) => key is Key.Back or Key.Delete;
 
     /// <inheritdoc />
     protected override void OnKeyDown(KeyEventArgs e)

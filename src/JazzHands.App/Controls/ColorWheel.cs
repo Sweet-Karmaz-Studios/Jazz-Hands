@@ -16,7 +16,7 @@ namespace JazzHands.App.Controls;
 /// <see cref="IsDragging"/> is true while the mouse is down, so a panel can hold off reloading
 /// under the pointer.
 /// </remarks>
-public sealed class ColorWheel : FrameworkElement
+public sealed class ColorWheel : FrameworkElement, IKeepsKeys
 {
     /// <summary>The puck, in the unit disc: X across, Y up.</summary>
     public static readonly DependencyProperty PuckProperty = DependencyProperty.Register(
@@ -155,6 +155,9 @@ public sealed class ColorWheel : FrameworkElement
         base.OnLostMouseCapture(e);
         IsDragging = false;
     }
+
+    /// <inheritdoc />
+    bool IKeepsKeys.Keeps(Key key) => key is Key.Back or Key.Delete or Key.Left or Key.Right or Key.Up or Key.Down;
 
     /// <inheritdoc />
     protected override void OnKeyDown(KeyEventArgs e)

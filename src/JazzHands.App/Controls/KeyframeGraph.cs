@@ -19,7 +19,7 @@ namespace JazzHands.App.Controls;
 /// to shape a bezier. Delete removes, Ctrl+C and Ctrl+V copy and paste at the playhead, Esc lets
 /// go. What any of it changes goes through <see cref="CurveEditorPanelViewModel"/>.
 /// </remarks>
-public sealed class KeyframeGraph : FrameworkElement
+public sealed class KeyframeGraph : FrameworkElement, IKeepsKeys
 {
     /// <summary>The panel whose curves it draws.</summary>
     public static readonly DependencyProperty ModelProperty = DependencyProperty.Register(
@@ -260,6 +260,10 @@ public sealed class KeyframeGraph : FrameworkElement
         InvalidateVisual();
         e.Handled = true;
     }
+
+    /// <inheritdoc />
+    bool IKeepsKeys.Keeps(Key key) =>
+        key is Key.Delete or Key.Back or Key.Escape || (key is Key.C or Key.V && Keyboard.Modifiers.HasFlag(ModifierKeys.Control));
 
     /// <inheritdoc />
     protected override void OnKeyDown(KeyEventArgs e)
