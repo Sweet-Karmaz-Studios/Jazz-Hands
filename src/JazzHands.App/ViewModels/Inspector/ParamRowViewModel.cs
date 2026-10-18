@@ -234,7 +234,7 @@ public sealed partial class ParamRowViewModel : ObservableObject
         ParamType.Int => Invariant(Math.Round(Number)),
         ParamType.Float2 or ParamType.Point => $"{Invariant(X)}, {Invariant(Y)}",
         ParamType.Float4 => $"{Invariant(X)}, {Invariant(Y)}, {Invariant(Z)}, {Invariant(W)}",
-        ParamType.Color => ColorText,
+        ParamType.Color => Colour(ColorText),
         ParamType.Bool => Flag ? "true" : "false",
         ParamType.Enum => Choice,
         _ => Text,
@@ -351,6 +351,18 @@ public sealed partial class ParamRowViewModel : ObservableObject
                 _ => "#00000000",
             };
         }
+    }
+
+    /// <summary>
+    /// A colour as typed, with one '#' before six or eight hex digits however many it was typed
+    /// with, or none: a double click on the hex picks the digits alone, and a colour typed over
+    /// them made '##FF3030', which was refused (seen in QA, 2026-10-18). Anything else goes as typed.
+    /// </summary>
+    internal static string Colour(string typed)
+    {
+        ArgumentNullException.ThrowIfNull(typed);
+        string hex = typed.Trim().TrimStart('#');
+        return hex.Length is 6 or 8 && hex.All(Uri.IsHexDigit) ? $"#{hex}" : typed.Trim();
     }
 
     [RelayCommand]
