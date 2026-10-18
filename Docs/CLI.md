@@ -6319,6 +6319,7 @@ jazz param list trailer.jazz <clip-id>
 |---|---|
 | `effect list [--kind video\|audio\|generator] [--search s]` | Every type with its parameters, types, defaults, limits and choices. |
 | `effect add <owner> <type> [--index n] [--id]` | Adds an effect to a clip or a track. Picture effects go on video and adjustment clips and tracks, sound effects on audio ones. |
+| `clip add-adjustment --at t [--dur 5s]` | Puts an adjustment layer over everything (on the topmost adjustment track with room, or a new one): its effects change every picture under it. Timeline > Add an adjustment layer in the editor. |
 | `effect remove <effect>`, `effect move <effect> --index n` | Takes it off; moves it in its chain (effects run first to last). |
 | `effect set-enabled <effect> false` | Bypasses it without removing it. |
 | `effect set-param <effect> <param> <value> [--at]` | The same as `param set`, for an effect. |
