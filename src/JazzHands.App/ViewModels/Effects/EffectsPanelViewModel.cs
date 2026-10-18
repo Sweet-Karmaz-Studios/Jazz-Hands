@@ -61,8 +61,8 @@ public sealed partial class EffectTypeItemViewModel : ObservableObject
     /// <summary>True for a generator, which makes a clip rather than changing one.</summary>
     public bool IsGenerator => Descriptor.Kind is EffectKind.Generator or EffectKind.AudioGenerator;
 
-    /// <summary>True for the types with a preview: everything but sound.</summary>
-    public bool HasPicture => !IsAudio;
+    /// <summary>True for the types with a preview: picture effects and generators, but those with nothing to show by themselves.</summary>
+    public bool HasPicture => EffectPreviews.HasPreview(Descriptor);
 
     partial void OnIsFavoriteChanged(bool value)
     {

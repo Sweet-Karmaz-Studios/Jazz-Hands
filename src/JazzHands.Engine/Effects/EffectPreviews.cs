@@ -90,14 +90,16 @@ public sealed class EffectPreviews : IDisposable
     /// <summary>
     /// True for the types that have a preview: picture effects, generators and picture transitions.
     /// Not Stabilize, which only does anything to a shaking camera, nor Remove background, which
-    /// needs a matte made ahead from a file.
+    /// needs a matte made ahead from a file, nor a 3D camera, light or model, which draw nothing
+    /// by themselves (a model needs its file); the panel showed an empty frame for each.
     /// </summary>
     public static bool HasPreview(EffectDescriptor descriptor)
     {
         ArgumentNullException.ThrowIfNull(descriptor);
         return descriptor.Kind is EffectKind.Video or EffectKind.Generator or EffectKind.Transition
             && !string.Equals(descriptor.TypeId, JazzHands.Render.Effects.Stabilize.StabilizeEffect.TypeId, StringComparison.Ordinal)
-            && !string.Equals(descriptor.TypeId, JazzHands.Render.Effects.Keying.PersonMatteEffect.TypeId, StringComparison.Ordinal);
+            && !string.Equals(descriptor.TypeId, JazzHands.Render.Effects.Keying.PersonMatteEffect.TypeId, StringComparison.Ordinal)
+            && descriptor.TypeId is not (SceneObjects.Camera or SceneObjects.Light or SceneObjects.Model);
     }
 
     /// <summary>
