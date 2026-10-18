@@ -237,7 +237,7 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
     public ObservableCollection<TitlePresetItemViewModel> TitlePresets { get; } = [];
 
     /// <summary>
-    /// Adds an effect to every selected clip it suits, as one undo step.
+    /// Adds an effect to every selected clip or track it suits, as one undo step.
     /// </summary>
     public Task ApplyAsync(string typeId)
     {
@@ -276,7 +276,7 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
         Project project = _session.Project;
         string[] suited =
         [
-            .. _selection.Ids.Where(id => project.FindClip(id) is { } found && Suits(descriptor, found.Track.Kind)),
+            .. _selection.Ids.Where(id => Owner(project, id) is { } track && Suits(descriptor, track)),
         ];
 
         if (suited.Length == 0)
@@ -381,7 +381,7 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
         return RunAsync(commands.Count == 1 ? commands[0] : new BatchCommand([.. commands], $"Apply {descriptor.Name}"));
     }
 
-    /// <summary>Applies a preset to every selected clip, as one undo step.</summary>
+    /// <summary>Applies a preset to every selected clip or track it suits, as one undo step.</summary>
     public Task ApplyPresetAsync(string presetId)
     {
         Project project = _session.Project;
@@ -390,8 +390,8 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
         // its sound, and a picture preset refused the lot over the sound (seen on screen, 2026-10-10).
         EffectPreset? preset = project.EffectPresets.FirstOrDefault(candidate => candidate.Id == presetId)
             ?? Looks.All.FirstOrDefault(candidate => candidate.Id == presetId);
-        string[] clips = [.. _selection.Ids.Where(id => project.FindClip(id) is { } found && (preset is null || SuitsAll(preset, found.Track.Kind)))];
-        if (clips.Length == 0)
+        string[] owners = [.. _selection.Ids.Where(id => Owner(project, id) is { } track && (preset is null || SuitsAll(preset, track)))];
+        if (owners.Length == 0)
         {
             bool sound = preset?.Effects.Any(effect => EffectCatalog.Registry.Find(effect.TypeId) is { Kind: EffectKind.Audio }) == true;
             Status = _selection.Ids.IsEmpty || preset is null
@@ -400,7 +400,7 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
             return Task.CompletedTask;
         }
 
-        ICommand[] applies = [.. clips.Select(id => (ICommand)new ApplyEffectPresetCommand(id, presetId))];
+        ICommand[] applies = [.. owners.Select(id => (ICommand)new ApplyEffectPresetCommand(id, presetId))];
         return RunAsync(applies.Length == 1 ? applies[0] : new BatchCommand([.. applies], "Apply preset"));
     }
 
@@ -413,6 +413,13 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
         _favorites.Set(item.TypeId, favorite);
         Refilter();
     }
+
+    /// <summary>
+    /// The kind of track a selected clip is on, or of a selected track: what an effect could go on. A
+    /// selected sound track refused Gain from + (seen on screen, 2026-10-18), though a drop took it.
+    /// </summary>
+    private static TrackKind? Owner(Project project, string id) =>
+        ParamTargets.Find(project, id) is { Kind: ParamOwnerKind.Clip or ParamOwnerKind.Track } owner ? owner.Track.Kind : null;
 
     /// <summary>True when an effect of this kind can go on a track of that kind.</summary>
     internal static bool Suits(EffectDescriptor descriptor, TrackKind track) =>
