@@ -33,10 +33,10 @@ public static class Looks
             "Bleach Bypass",
             EquatableArray.Create(
                 Effect.Create("color.basic")
-                    .With("contrast", new ParamValue.Float(1.35f))
-                    .With("saturation", new ParamValue.Float(0.45f)),
+                    .With("contrast", new ParamValue.Float(1.1f))
+                    .With("saturation", new ParamValue.Float(0.5f)),
                 Effect.Create("color.curves")
-                    .With("master", new ParamValue.Text("0,0.02 0.25,0.2 0.75,0.83 1,0.98")))),
+                    .With("master", new ParamValue.Text("0,0 0.25,0.17 0.75,0.85 1,1")))),
         new EffectPreset(
             "look.game-capture-punch",
             "Game Capture Punch",
