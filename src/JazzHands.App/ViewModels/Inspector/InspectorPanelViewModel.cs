@@ -1571,8 +1571,9 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
             return "Subtitle cue";
         }
 
-        return clip.GeneratorId is { } generator
-            ? EffectCatalog.Registry.Find(generator)?.Name ?? generator
-            : "Adjustment layer";
+        // On an adjustment track whatever the clip plays (a solid, so it has a source) is not drawn.
+        return project.FindClip(clip.Id) is { Track.Kind: TrackKind.Adjustment } || clip.GeneratorId is null
+            ? "Adjustment layer"
+            : EffectCatalog.Registry.Find(clip.GeneratorId)?.Name ?? clip.GeneratorId;
     }
 }

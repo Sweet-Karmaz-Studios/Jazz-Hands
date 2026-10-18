@@ -228,6 +228,10 @@ public static class ParamTargets
             // A camera or a light is its own parameters alone: it has no picture to place.
             ParamOwnerKind.Clip when owner.Track.Kind == TrackKind.Video && SceneObjects.Is(owner.Clip!) =>
                 registry.Find(owner.Clip!.GeneratorId) is { Kind: EffectKind.Generator } sceneObject ? [sceneObject] : [],
+            // An adjustment clip plays a solid only because every clip plays something; its colour
+            // is never drawn, so it is not shown (seen in QA, 2026-10-18).
+            ParamOwnerKind.Clip when owner.Track.Kind == TrackKind.Adjustment =>
+                [.. PictureSections(owner.Clip!, registry).Where(section => !string.Equals(section.TypeId, owner.Clip!.GeneratorId, StringComparison.Ordinal))],
             ParamOwnerKind.Clip when owner.Track.Kind is TrackKind.Video or TrackKind.Adjustment =>
                 PictureSections(owner.Clip!, registry),
             ParamOwnerKind.Clip when owner.Track.Kind == TrackKind.Audio =>
