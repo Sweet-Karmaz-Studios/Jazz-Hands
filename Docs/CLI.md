@@ -881,6 +881,22 @@ Put a clip on a track.
 | `--audio` | Also put each audio stream on an audio track, linked to the picture. Default: true. |
 | `--no-save` | Do not write the project back. |
 
+### `jazz clip add-adjustment <project>`
+
+Put an adjustment layer over everything, for effects that change every picture under it.
+
+| Argument | Meaning |
+|---|---|
+| `<project>` | The .jazz file to work on. |
+
+| Option | Meaning |
+|---|---|
+| `--at <time>` | Required. Where it starts on the timeline. |
+| `--dur <time>` | How long it lasts; five seconds when left out. |
+| `--sequence <id>` | Which sequence. |
+| `--id <id>` | The identifier to give it. |
+| `--no-save` | Do not write the project back. |
+
 ### `jazz clip close-gap <project> <track-id>`
 
 Close a gap on a track, rippling every sync-locked track.

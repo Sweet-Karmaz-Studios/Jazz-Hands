@@ -58,21 +58,7 @@ public sealed class ApplyVfxPresetHandler : ICommandHandler<ApplyVfxPresetComman
             Name: preset.Title,
             Effects: [.. Effects(preset, moment - start, context)]);
 
-        Track? free = sequence.Tracks
-            .Where(track => track.Kind == TrackKind.Adjustment && !track.Locked && !EditOps.Overlaps(track, adjustment))
-            .OrderByDescending(track => track.Order)
-            .FirstOrDefault();
-        context.Changed(adjustment.Id);
-        if (free is not null)
-        {
-            context.Changed(free.Id);
-            return project.ReplaceTrack(free.AddClip(adjustment));
-        }
-
-        var added = new Track(Id.New(), TrackKind.Adjustment, HandlerHelp.TrackName(sequence, TrackKind.Adjustment), sequence.NextTrackOrder());
-        context.Changed(added.Id);
-        context.Changed(sequence.Id);
-        return project.ReplaceSequence(sequence.AddTrack(added.AddClip(adjustment)));
+        return HandlerHelp.OnAdjustmentTrack(project, sequence, adjustment, context);
     }
 
     /// <summary>The moment of the hit: <c>--at</c>, or a marker's time.</summary>

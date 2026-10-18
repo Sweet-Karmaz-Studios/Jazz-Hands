@@ -218,6 +218,29 @@ internal static class HandlerHelp
         return (sequence, made, true);
     }
 
+    /// <summary>
+    /// Puts an adjustment clip on the topmost adjustment track with room for it, or on a new
+    /// adjustment track above everything when none has.
+    /// </summary>
+    internal static Project OnAdjustmentTrack(Project project, Sequence sequence, Clip adjustment, HandlerContext context)
+    {
+        Track? free = sequence.Tracks
+            .Where(track => track.Kind == TrackKind.Adjustment && !track.Locked && !EditOps.Overlaps(track, adjustment))
+            .OrderByDescending(track => track.Order)
+            .FirstOrDefault();
+        context.Changed(adjustment.Id);
+        if (free is not null)
+        {
+            context.Changed(free.Id);
+            return project.ReplaceTrack(free.AddClip(adjustment));
+        }
+
+        var added = new Track(Id.New(), TrackKind.Adjustment, TrackName(sequence, TrackKind.Adjustment), sequence.NextTrackOrder());
+        context.Changed(added.Id);
+        context.Changed(sequence.Id);
+        return project.ReplaceSequence(sequence.AddTrack(added.AddClip(adjustment)));
+    }
+
     /// <summary>The name a new track gets when the command did not say: V1, A2 and so on.</summary>
     internal static string TrackName(Sequence sequence, TrackKind kind)
     {

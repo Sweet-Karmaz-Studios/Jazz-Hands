@@ -437,6 +437,7 @@ public sealed partial class MainViewModel
         menu.Items.Add(MenuItemViewModel.Separator());
         menu.Items.Add(Bound("_Snapping", "ui.snap"));
         menu.Items.Add(Bound("Add a _marker at the playhead", "marker.add"));
+        menu.Items.Add(Bound("Add an a_djustment layer at the playhead", "clip.add-adjustment", fallback: Keys is { } keys ? new AsyncRelayCommand(keys.AddAdjustmentLayerAsync) : null));
         menu.Items.Add(MenuItemViewModel.Separator());
         menu.Items.Add(Bound("_Keep in to out (Quick Trim)", "trim.add-segment"));
         menu.Items.Add(Bound("_Cut in to out (Quick Trim)", "trim.remove-range"));

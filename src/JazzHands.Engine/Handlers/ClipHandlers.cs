@@ -241,6 +241,40 @@ public sealed class AddClipHandler : ICommandHandler<AddClipCommand>
         : string.Empty;
 }
 
+/// <summary>Puts an adjustment layer over everything.</summary>
+public sealed class AddAdjustmentClipHandler : ICommandHandler<AddAdjustmentClipCommand>
+{
+    /// <summary>How long an adjustment layer lasts when the command does not say.</summary>
+    public static readonly Flicks DefaultDuration = Flicks.FromSeconds(5);
+
+    /// <inheritdoc />
+    public Project Handle(Project project, AddAdjustmentClipCommand command, HandlerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(context);
+
+        Sequence sequence = HandlerHelp.Sequence(project, command.SequenceId);
+        if (command.At < Flicks.Zero)
+        {
+            throw new CommandException("time-out-of-range", "An adjustment layer cannot start before the sequence does.", "at");
+        }
+
+        Flicks duration = command.Duration ?? DefaultDuration;
+        if (duration <= Flicks.Zero)
+        {
+            throw new CommandException("invalid-value", "An adjustment layer needs a length longer than nothing.", "dur");
+        }
+
+        string id = HandlerHelp.IdOr(command.ClipId);
+        HandlerHelp.RequireUnused(project, id);
+
+        // Every clip plays a source, and an adjustment clip's is never drawn: its effects run over
+        // the pictures under it instead. A solid, as the VFX presets' adjustment clips have.
+        var adjustment = new Clip(id, new TimeRange(command.At, duration), Flicks.Zero, GeneratorId: "gen.solid", Name: "Adjustment layer");
+        return HandlerHelp.OnAdjustmentTrack(project, sequence, adjustment, context);
+    }
+}
+
 /// <summary>Takes a clip off its track.</summary>
 public sealed class RemoveClipHandler : ICommandHandler<RemoveClipCommand>
 {

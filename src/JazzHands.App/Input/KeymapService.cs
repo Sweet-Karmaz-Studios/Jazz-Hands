@@ -134,6 +134,24 @@ public sealed class KeymapService
         _ = RunAsync(command, Keymap.PlayheadAfter(command, _session.Project));
     }
 
+    /// <summary>
+    /// Puts an adjustment layer over everything at the playhead and selects it, so the Inspector
+    /// shows it and an effect's + goes on it: Timeline > Add an adjustment layer, when no key is
+    /// bound to <c>clip.add-adjustment</c>.
+    /// </summary>
+    public async Task AddAdjustmentLayerAsync()
+    {
+        string id = JazzHands.Core.Model.Id.New();
+        CommandResult result = await _session.ExecuteAsync(new AddAdjustmentClipCommand(_playhead(), ClipId: id)).ConfigureAwait(true);
+        if (!result.Ok)
+        {
+            Message?.Invoke(this, result.Error ?? result.Code ?? "That did not work.");
+            return;
+        }
+
+        _selection.Set([id]);
+    }
+
     private async Task RunAsync(ICommand command, Flicks? then)
     {
         CommandResult result = await _session.ExecuteAsync(command).ConfigureAwait(true);
