@@ -325,26 +325,35 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
             .OrderBy(track => track.Order)
             .FirstOrDefault(track => !Busy(track));
 
+        // The new clip is selected, so the Inspector shows it to be shaped, sized and coloured: it
+        // stayed on whatever was selected before (seen in QA, 2026-10-18).
+        string clipId = Id.New();
         if (free is not null)
         {
-            return RunAsync(new AddClipCommand(free.Id, at, GeneratorId: descriptor.TypeId, Duration: GeneratorLength, Name: descriptor.Name));
+            return RunAsync(new AddClipCommand(free.Id, at, GeneratorId: descriptor.TypeId, Duration: GeneratorLength, Name: descriptor.Name, ClipId: clipId), select: clipId);
         }
 
         string trackId = Id.New();
-        return RunAsync(new BatchCommand(
-            [
-                new AddTrackCommand(kind, TrackId: trackId),
-                new AddClipCommand(trackId, at, GeneratorId: descriptor.TypeId, Duration: GeneratorLength, Name: descriptor.Name),
-            ],
-            $"Add {descriptor.Name}"));
+        return RunAsync(
+            new BatchCommand(
+                [
+                    new AddTrackCommand(kind, TrackId: trackId),
+                    new AddClipCommand(trackId, at, GeneratorId: descriptor.TypeId, Duration: GeneratorLength, Name: descriptor.Name, ClipId: clipId),
+                ],
+                $"Add {descriptor.Name}"),
+            select: clipId);
     }
 
     /// <summary>
     /// Puts a title from a preset on the timeline at the playhead, on the highest video track free
-    /// for its length or a new one above: <c>jazz title add --preset --at</c>.
+    /// for its length or a new one above: <c>jazz title add --preset --at</c>. It is selected, so
+    /// the Inspector shows it.
     /// </summary>
-    public Task AddTitleAsync(string? preset) =>
-        RunAsync(new AddTitleCommand(_playback?.Position ?? Flicks.Zero, Preset: preset));
+    public Task AddTitleAsync(string? preset)
+    {
+        string clipId = Id.New();
+        return RunAsync(new AddTitleCommand(_playback?.Position ?? Flicks.Zero, Preset: preset, ClipId: clipId), select: clipId);
+    }
 
     /// <summary>
     /// A transition from the browser: the selected transitions of its kind become it, or, with clips
@@ -626,12 +635,17 @@ public sealed partial class EffectsPanelViewModel : ToolViewModel
         ShowsTitlePresets = search.Length == 0 || TitlePresets.Count > 0;
     }
 
-    private async Task RunAsync(ICommand command)
+    /// <summary>Runs a command and says why when it is refused; selects <paramref name="select"/> when it is not.</summary>
+    private async Task RunAsync(ICommand command, string? select = null)
     {
         try
         {
             CommandResult result = await ModelGate.RunAsync(_session, _dialogs, command).ConfigureAwait(true);
             _ui.Post(() => Status = result.Ok ? string.Empty : result.Error ?? result.Code ?? "That did not work.");
+            if (result.Ok && select is not null)
+            {
+                _ui.Post(() => _selection.Set([select]));
+            }
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
