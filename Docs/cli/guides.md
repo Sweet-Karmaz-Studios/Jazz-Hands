@@ -62,10 +62,10 @@ export enqueue` in any headless process) runs there and then, before the next st
 runs every step and saves what worked; `--dry-run` runs the steps that only change the project
 and saves nothing.
 
-`jazz frame` and `frames` draw exactly as the editor's preview does, pixel for pixel, so what is
-looked at is what a person sees there; `jazz export still`, `contact-sheet` and `proof` are what an
-export writes. `--gpu warp` (or `JAZZ_GPU=warp`) renders on the software
-rasterizer, as the tests and CI do, and `--encoder libx264` keeps an encode off the GPU.
+`jazz frame` and `frames` draw exactly as the editor's preview does on an sRGB monitor, its
+default, pixel for pixel, so what is looked at is what a person sees there; `jazz export still`,
+`contact-sheet` and `proof` are what an export writes. `--gpu warp` (or `JAZZ_GPU=warp`) renders
+on the software rasterizer, as the tests and CI do, and `--encoder libx264` keeps an encode off the GPU.
 
 ### How the generated verbs work
 

@@ -2,7 +2,9 @@ using System.Collections.Concurrent;
 using JazzHands.Core.Model;
 using JazzHands.Core.Time;
 using JazzHands.Render;
+using JazzHands.Render.Color;
 using JazzHands.Render.Compositing;
+using JazzHands.Render.Passes;
 using JazzHands.Render.Scopes;
 using Vortice.Direct3D11;
 using Vortice.DXGI;
@@ -40,6 +42,7 @@ public sealed class StillRenderer : IDisposable
     private RenderDevice? _device;
     private FrameServer? _frames;
     private ScopeRenderer? _scopes;
+    private PreviewPass? _pass;
     private bool _disposed;
 
     /// <summary>Creates the renderer; the device, WARP unless one is given, is made on first use.</summary>
@@ -102,15 +105,23 @@ public sealed class StillRenderer : IDisposable
 
     /// <summary>
     /// Draws a frame exactly as the editor's preview draws it at this size: the same scale, the
-    /// same sampling, BT.1886 and dithered for eight bits, so a PNG of it looks on screen as the
-    /// preview does. BGRA, top row first. This is <c>jazz frame</c>.
+    /// same sampling, BT.1886 and dithered for eight bits, then the preview's own pass for the
+    /// monitor it is shown on, so a PNG of it looks on screen as the preview does. BGRA, top row
+    /// first. This is <c>jazz frame</c>.
     /// </summary>
+    /// <remarks>
+    /// sRGB unless told otherwise, as the preview is and as a PNG is read. Without that pass a
+    /// frame was the BT.1886 signal, which a desktop shows lifted in the shadows next to the
+    /// preview and to an exported still (seen in QA, 2026-10-18).
+    /// </remarks>
     /// <param name="project">The project.</param>
     /// <param name="sequence">The sequence.</param>
     /// <param name="time">The sequence time.</param>
     /// <param name="width">The picture's width; the height follows the sequence's shape.</param>
     /// <param name="projectPath">Where the project lives, for its media.</param>
-    public (int Width, int Height, byte[] Bgra) RenderPreview(Project project, Sequence sequence, Flicks time, int width, string projectPath = "", string? compView = null)
+    /// <param name="compView">A comp graph node to look at instead of its graph's output, or null.</param>
+    /// <param name="display">What the screen it will be looked at on expects.</param>
+    public (int Width, int Height, byte[] Bgra) RenderPreview(Project project, Sequence sequence, Flicks time, int width, string projectPath = "", string? compView = null, DisplayTransfer display = DisplayTransfer.Srgb)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(sequence);
@@ -121,17 +132,23 @@ public sealed class StillRenderer : IDisposable
 
         return OnOwnThread(() =>
         {
-            RenderTarget display = _frames!.Compositor.Pool.Rent(width, height, Format.B8G8R8A8_UNorm);
+            RenderTarget program = _frames!.Compositor.Pool.Rent(width, height, Format.B8G8R8A8_UNorm);
+            RenderTarget shown = _frames.Compositor.Pool.Rent(width, height, Format.B8G8R8A8_UNorm);
             try
             {
                 // The preview renders at a fraction of the sequence's size, then fits the panel.
                 var options = new RenderOptions { Scale = Math.Min(1f, (float)width / settings.Width), CompView = compView };
-                _frames.Render(project, sequence, time, options, display.View, width, height, OutputSettings.Preview, projectPath);
-                return (width, height, ReadBytes(display));
+                _frames.Render(project, sequence, time, options, program.View, width, height, OutputSettings.Preview, projectPath);
+
+                _pass ??= new PreviewPass(_device!);
+                _pass.Display = display;
+                _pass.Blit(program.Texture, shown.View, width, height, QuadRect.Full);
+                return (width, height, ReadBytes(shown));
             }
             finally
             {
-                _frames.Compositor.Pool.Return(display);
+                _frames.Compositor.Pool.Return(shown);
+                _frames.Compositor.Pool.Return(program);
             }
         });
     }
@@ -211,6 +228,7 @@ public sealed class StillRenderer : IDisposable
 
     private void Release()
     {
+        _pass?.Dispose();
         _scopes?.Dispose();
         _frames?.Dispose();
         if (_given is null)

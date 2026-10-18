@@ -3,6 +3,7 @@ using System.Windows.Media.Imaging;
 using JazzHands.Core.Model;
 using JazzHands.Core.Time;
 using JazzHands.Engine.Frames;
+using JazzHands.Render.Color;
 using Serilog;
 
 namespace JazzHands.App.Services;
@@ -21,9 +22,11 @@ public interface INodeViewer
 /// <summary>
 /// Draws the viewer's pictures on WARP on a thread of its own (a <see cref="StillRenderer"/>), so
 /// playback keeps the GPU and the UI thread only shows the frozen bitmap. Only the latest request
-/// is drawn: picking nodes quickly does not queue a picture for each.
+/// is drawn: picking nodes quickly does not queue a picture for each. Drawn for the monitor the
+/// preview is set for, so a node looks as the preview beside it does.
 /// </summary>
-public sealed class NodeViewer : INodeViewer, IDisposable
+/// <param name="display">The preview's display setting; sRGB without one.</param>
+public sealed class NodeViewer(IDisplaySettings? display = null) : INodeViewer, IDisposable
 {
     /// <summary>How wide the viewer's pictures are drawn.</summary>
     public const int Width = 320;
@@ -82,7 +85,7 @@ public sealed class NodeViewer : INodeViewer, IDisposable
                 return null;
             }
 
-            (int width, int height, byte[] bgra) = _renderer.RenderPreview(alone.Project, alone.Sequence, at, Width, projectPath, nodeId);
+            (int width, int height, byte[] bgra) = _renderer.RenderPreview(alone.Project, alone.Sequence, at, Width, projectPath, nodeId, display?.Transfer ?? DisplayTransfer.Srgb);
             BitmapSource image = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32, null, bgra, width * 4);
             image.Freeze();
             return image;
