@@ -54,6 +54,28 @@ public static partial class DialogStand
         return stand;
     }
 
+    /// <summary>
+    /// Gives the editor back the keyboard as the dialog closes: enabled again and in front.
+    /// </summary>
+    /// <remarks>
+    /// The editor disables its window while the dialog is up, as a modal dialog would, and enables
+    /// it only once this process has ended. By then Windows has already given the foreground to
+    /// whichever window was next, because a disabled one cannot have it: Explorer came to the front
+    /// after an import (seen on screen, 2026-10-28), and the editor's own Activate came too late, as
+    /// Windows keeps a background process from taking the foreground. A modal dialog enables its
+    /// owner before it goes for this reason; this process still has the foreground to hand over.
+    /// </remarks>
+    public static void HandBack(IntPtr editor)
+    {
+        if (editor == IntPtr.Zero)
+        {
+            return;
+        }
+
+        EnableWindow(editor, true);
+        SetForegroundWindow(editor);
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     private struct Rect32
     {
@@ -66,4 +88,12 @@ public static partial class DialogStand
     [LibraryImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool GetWindowRect(IntPtr window, out Rect32 rect);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool EnableWindow(IntPtr window, [MarshalAs(UnmanagedType.Bool)] bool enable);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool SetForegroundWindow(IntPtr window);
 }

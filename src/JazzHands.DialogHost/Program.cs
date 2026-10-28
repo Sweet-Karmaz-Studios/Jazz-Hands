@@ -26,6 +26,7 @@ internal static class Program
         IntPtr editor = args.Length > 1 && long.TryParse(args[1], out long handle) ? new IntPtr(handle) : IntPtr.Zero;
         Window? owner = editor == IntPtr.Zero ? null : DialogStand.Create(editor);
         IReadOnlyList<string>? chosen = pick.Show(owner);
+        DialogStand.HandBack(editor);
         owner?.Close();
 
         if (chosen is null)
