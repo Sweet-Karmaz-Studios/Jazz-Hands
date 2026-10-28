@@ -541,7 +541,19 @@
                                         <ComboBox.ItemTemplate>
                                             <DataTemplate DataType="{x:Type vm:FontChoice}">
                                                 <StackPanel Orientation="Horizontal">
-                                                    <TextBlock Text="{Binding Family, Mode=OneWay}" FontFamily="{Binding Family, Mode=OneWay}" FontSize="14" />
+                                                    <TextBlock Text="{Binding Family, Mode=OneWay}" FontSize="14">
+                                                        <TextBlock.Style>
+                                                            <!-- A symbol font's name is written in the interface's font: in itself it is pictures. -->
+                                                            <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                                                <Setter Property="FontFamily" Value="{Binding Family, Mode=OneWay}" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsSymbols, Mode=OneWay}" Value="True">
+                                                                        <Setter Property="FontFamily" Value="{DynamicResource Font.Ui}" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
                                                     <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Text="{Binding Note, Mode=OneWay}"
                                                                FontSize="{DynamicResource Text.Caption}" Foreground="{DynamicResource Brush.Text.Secondary}" />
                                                 </StackPanel>

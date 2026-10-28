@@ -10,11 +10,36 @@ namespace JazzHands.App.ViewModels.Inspector;
 
 /// <summary>A font family in the picker, drawn in itself.</summary>
 /// <param name="Family">Its name.</param>
-/// <param name="Note">Where it comes from when that matters: the project's fonts, or missing.</param>
-public sealed record FontChoice(string Family, string Note)
+/// <param name="Note">Where it comes from when that matters: the project's fonts, or missing; or that it draws symbols.</param>
+/// <param name="IsSymbols">
+/// True for a symbol font (Marlett, Webdings), whose name drawn in itself is a row of pictures, so
+/// the picker writes it in the interface's font (seen in QA, 2026-10-28).
+/// </param>
+public sealed record FontChoice(string Family, string Note, bool IsSymbols = false)
 {
+    /// <summary>A family as the picker lists it, a symbol font noted as one.</summary>
+    public static FontChoice Of(string family, string note)
+    {
+        bool symbols = Symbols(family);
+        return new FontChoice(family, note.Length == 0 && symbols ? "symbols" : note, symbols);
+    }
+
     /// <inheritdoc />
     public override string ToString() => Family;
+
+    private static bool Symbols(string family)
+    {
+        try
+        {
+            return new System.Windows.Media.FontFamily(family).GetTypefaces().FirstOrDefault() is { } face
+                && face.TryGetGlyphTypeface(out System.Windows.Media.GlyphTypeface glyphs)
+                && glyphs.Symbol;
+        }
+        catch (Exception error) when (error is ArgumentException or System.IO.IOException or UriFormatException or NotSupportedException)
+        {
+            return false;
+        }
+    }
 }
 
 /// <summary>
@@ -115,7 +140,7 @@ public sealed partial class TitleSectionViewModel : ObservableObject
             if (_fonts is null)
             {
                 IReadOnlyList<FontInfo> listed = _listFonts();
-                _fonts = [.. listed.Select(font => new FontChoice(font.Family, font.Source == "project" ? "project" : string.Empty))];
+                _fonts = [.. listed.Select(font => FontChoice.Of(font.Family, font.Source == "project" ? "project" : string.Empty))];
             }
 
             return Font is { } current && !_fonts.Any(font => string.Equals(font.Family, current.Family, StringComparison.OrdinalIgnoreCase))
