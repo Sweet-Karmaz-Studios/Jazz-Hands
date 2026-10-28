@@ -110,6 +110,13 @@
                          HorizontalContentAlignment="Stretch" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                          Background="{DynamicResource Brush.Background.Input}" BorderBrush="{DynamicResource Brush.Border}"
                          AutomationProperties.Name="Cues">
+                    <!-- A click into a cue's text or times takes the click from the row; the row is chosen
+                         anyway, so the playhead goes to the cue being edited. -->
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="{x:Type ListBoxItem}" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                            <EventSetter Event="GotKeyboardFocus" Handler="OnCueFocused" />
+                        </Style>
+                    </ListBox.ItemContainerStyle>
                     <ListBox.ItemTemplate>
                         <DataTemplate DataType="{x:Type vm:CueRowViewModel}">
                             <Border x:Name="Row" Padding="2" BorderThickness="3,0,0,0" BorderBrush="Transparent">

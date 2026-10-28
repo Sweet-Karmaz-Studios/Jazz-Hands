@@ -1,4 +1,5 @@
 using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace JazzHands.App.Views.Subtitles;
 
@@ -7,4 +8,6 @@ public partial class SubtitlesPanelView : UserControl
 {
     /// <summary>Creates the view.</summary>
     public SubtitlesPanelView() => InitializeComponent();
+
+    private void OnCueFocused(object sender, KeyboardFocusChangedEventArgs e) => ((ListBoxItem)sender).IsSelected = true;
 }
