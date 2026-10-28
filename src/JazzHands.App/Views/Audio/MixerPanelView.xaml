@@ -341,9 +341,11 @@
             <TextBlock Text="This sequence has no audio tracks." Style="{StaticResource Caption}" HorizontalAlignment="Center" VerticalAlignment="Center"
                        Visibility="{Binding IsEmpty, Mode=OneWay, Converter={StaticResource Visible}}" />
 
-            <!-- A strip per audio track, scrolling sideways when there are more than fit. -->
+            <!-- A strip per audio track, scrolling sideways when there are more than fit. The rows above
+                 the fader share their height across the strips, so the faders stay level when one
+                 strip has more effects than the rest. -->
             <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Focusable="False">
-                <ItemsControl ItemsSource="{Binding Strips, Mode=OneWay}" Margin="4" IsTabStop="False">
+                <ItemsControl ItemsSource="{Binding Strips, Mode=OneWay}" Margin="4" IsTabStop="False" Grid.IsSharedSizeScope="True">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <StackPanel Orientation="Horizontal" />
@@ -355,10 +357,10 @@
                                     BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="3">
                                 <Grid Margin="5">
                                     <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" SharedSizeGroup="StripHead" />
+                                        <RowDefinition Height="Auto" SharedSizeGroup="StripEffects" />
+                                        <RowDefinition Height="Auto" SharedSizeGroup="StripPan" />
+                                        <RowDefinition Height="Auto" SharedSizeGroup="StripButtons" />
                                         <RowDefinition Height="*" MinHeight="120" />
                                         <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
