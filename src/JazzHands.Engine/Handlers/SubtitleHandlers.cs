@@ -3,6 +3,7 @@ using JazzHands.Core.Commands;
 using JazzHands.Core.Model;
 using JazzHands.Core.Subtitles;
 using JazzHands.Core.Time;
+using JazzHands.Core.Titles;
 using JazzHands.Engine.Commands;
 using JazzHands.Media.Interop;
 using JazzHands.Media.Subtitles;
@@ -310,7 +311,10 @@ public sealed class SplitLongCuesHandler : ICommandHandler<SplitLongCuesCommand>
         var clips = new List<Clip>();
         foreach (Clip clip in track.Clips)
         {
-            if (clip.Cue is not { } cue)
+            // A cue that reads within the limits is left as its lines are: laid out again, a
+            // two speaker cue ("- So who wrote it?" over "- That's the question.") became one line
+            // (seen on screen, 2026-10-28).
+            if (clip.Cue is not { } cue || Fits(cue.Text, maxChars, maxLines))
             {
                 clips.Add(clip);
                 continue;
@@ -352,6 +356,12 @@ public sealed class SplitLongCuesHandler : ICommandHandler<SplitLongCuesCommand>
 
         context.Changed(track.Id);
         return project.ReplaceTrack(SubtitleHelp.Sorted(track, clips));
+    }
+
+    private static bool Fits(string markup, int maxChars, int maxLines)
+    {
+        string[] lines = TitleMarkup.PlainText(markup).Split('\n');
+        return lines.Length <= maxLines && lines.All(line => line.Length <= maxChars);
     }
 }
 
