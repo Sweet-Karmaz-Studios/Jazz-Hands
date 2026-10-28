@@ -590,17 +590,22 @@ public sealed partial class TimelineViewModel
         }
 
         bool generator = typeId is not null && Engine.Effects.EffectCatalog.Registry.Find(typeId) is { Kind: Core.Effects.EffectKind.Generator or Core.Effects.EffectKind.AudioGenerator };
+        string clipId = Id.New();
         ICommand command = generator && typeId == Core.Titles.TitleParams.GeneratorId
-            ? new AddTitleCommand(Geometry.TimeAt(point.X), TrackId: ownerId)
+            ? new AddTitleCommand(Geometry.TimeAt(point.X), TrackId: ownerId, ClipId: clipId)
             : generator
-            ? new AddClipCommand(ownerId, Geometry.TimeAt(point.X), GeneratorId: typeId, Name: Engine.Effects.EffectCatalog.Registry.Find(typeId!)!.Name)
+            ? new AddClipCommand(ownerId, Geometry.TimeAt(point.X), GeneratorId: typeId, Name: Engine.Effects.EffectCatalog.Registry.Find(typeId!)!.Name, ClipId: clipId)
             : typeId is not null && typeId.StartsWith(Effects.EffectsPanelViewModel.PluginPrefix, StringComparison.Ordinal)
                 ? new AddPluginCommand(ownerId, typeId[Effects.EffectsPanelViewModel.PluginPrefix.Length..])
             : typeId is not null
                 ? new AddEffectCommand(ownerId, typeId)
                 : new ApplyEffectPresetCommand(ownerId, presetId!);
 
-        await RunAsync(command).ConfigureAwait(true);
+        // A generator or title dropped is selected, so the Inspector shows it, as + does.
+        if (await RunAsync(command).ConfigureAwait(true) && generator)
+        {
+            Select([clipId], SelectMode.Replace);
+        }
     }
 
     /// <summary>A title preset is over the timeline: says where it would go, and whether it can.</summary>
@@ -624,7 +629,12 @@ public sealed partial class TimelineViewModel
             return;
         }
 
-        await RunAsync(new AddTitleCommand(Geometry.TimeAt(point.X), Preset: preset, TrackId: trackId)).ConfigureAwait(true);
+        // Selected, so the Inspector shows it, as + does (seen in QA, 2026-10-28).
+        string clipId = Id.New();
+        if (await RunAsync(new AddTitleCommand(Geometry.TimeAt(point.X), Preset: preset, TrackId: trackId, ClipId: clipId)).ConfigureAwait(true))
+        {
+            Select([clipId], SelectMode.Replace);
+        }
     }
 
     /// <summary>The video track a title dropped at a point goes on, or why it cannot.</summary>
