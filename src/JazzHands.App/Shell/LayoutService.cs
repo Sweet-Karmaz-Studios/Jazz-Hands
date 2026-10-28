@@ -43,6 +43,7 @@ public sealed class LayoutService : IWorkspaces
     private readonly Action<string>? _notify;
     private readonly Func<Rect> _screens;
     private readonly Func<Rect> _workArea;
+    private readonly Func<ILayoutElement, Size?> _drawn;
     private readonly string _pristine;
 
     /// <summary>A service over the window's docking manager, which already holds its panels.</summary>
@@ -52,7 +53,8 @@ public sealed class LayoutService : IWorkspaces
     /// <param name="notify">Told when a layout could not be used.</param>
     /// <param name="screens">The desktop, every monitor together; the system's when null.</param>
     /// <param name="workArea">The primary monitor's work area; the system's when null.</param>
-    public LayoutService(DockingManager manager, Func<string, object?> content, string? folder = null, Action<string>? notify = null, Func<Rect>? screens = null, Func<Rect>? workArea = null)
+    /// <param name="drawn">The size a pane is drawn at; its control's in the manager when null.</param>
+    public LayoutService(DockingManager manager, Func<string, object?> content, string? folder = null, Action<string>? notify = null, Func<Rect>? screens = null, Func<Rect>? workArea = null, Func<ILayoutElement, Size?>? drawn = null)
     {
         ArgumentNullException.ThrowIfNull(manager);
         ArgumentNullException.ThrowIfNull(content);
@@ -63,6 +65,7 @@ public sealed class LayoutService : IWorkspaces
         _notify = notify;
         _screens = screens ?? (() => new Rect(SystemParameters.VirtualScreenLeft, SystemParameters.VirtualScreenTop, SystemParameters.VirtualScreenWidth, SystemParameters.VirtualScreenHeight));
         _workArea = workArea ?? (() => SystemParameters.WorkArea);
+        _drawn = drawn ?? (element => DrawnSize(manager, element));
         _pristine = Serialize();
         Current = WorkspaceDefinition.BuiltIn[0].Name;
     }
@@ -144,6 +147,7 @@ public sealed class LayoutService : IWorkspaces
             Directory.CreateDirectory(_folder);
             string path = PathOf(Current);
             string temporary = path + ".tmp";
+            TakeDrawnSizes(_manager.Layout, _drawn);
             File.WriteAllText(temporary, Header + Environment.NewLine + Serialize(), Encoding.UTF8);
             File.Move(temporary, path, overwrite: true);
             DeleteFormer(Current);
@@ -151,6 +155,90 @@ public sealed class LayoutService : IWorkspaces
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
             _log.Warning(error, "The {Workspace} layout could not be saved", Current);
+        }
+    }
+
+    /// <summary>
+    /// Gives every pane of a fixed size the size it is drawn at. AvalonDock moves a splitter
+    /// between a fixed pane and a star sized one on screen without writing the fixed pane's new
+    /// size back, so the layout kept the size it opened with and a preview made shorter, or a side
+    /// panel made wider, was back as it was at the next start (seen on screen, 2026-10-28).
+    /// </summary>
+    /// <param name="layout">The layout.</param>
+    /// <param name="drawn">The size a pane is drawn at, or null when it is not drawn.</param>
+    public static void TakeDrawnSizes(LayoutRoot layout, Func<ILayoutElement, Size?> drawn)
+    {
+        ArgumentNullException.ThrowIfNull(layout);
+        ArgumentNullException.ThrowIfNull(drawn);
+
+        foreach (LayoutPanel panel in layout.Descendents().OfType<LayoutPanel>().ToList())
+        {
+            bool vertical = panel.Orientation == System.Windows.Controls.Orientation.Vertical;
+            foreach (ILayoutPanelElement child in panel.Children)
+            {
+                if (drawn(child) is not { Width: > 0, Height: > 0 } size)
+                {
+                    continue;
+                }
+
+                switch (child)
+                {
+                    case LayoutAnchorablePane pane:
+                        Take(pane, vertical, size);
+                        break;
+                    case LayoutDocumentPane pane:
+                        Take(pane, vertical, size);
+                        break;
+                    case LayoutAnchorablePaneGroup group:
+                        Take(group, vertical, size);
+                        break;
+                    case LayoutDocumentPaneGroup group:
+                        Take(group, vertical, size);
+                        break;
+                    case LayoutPanel inner:
+                        Take(inner, vertical, size);
+                        break;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// The size a pane's control is drawn at in a docking manager, or null. A window hidden in the
+    /// notification area keeps the sizes it was last drawn at.
+    /// </summary>
+    public static Size? DrawnSize(DockingManager manager, ILayoutElement element)
+    {
+        ArgumentNullException.ThrowIfNull(manager);
+
+        var pending = new Stack<DependencyObject>([manager]);
+        while (pending.Count > 0)
+        {
+            DependencyObject node = pending.Pop();
+            if (node is ILayoutControl { Model: { } model } && ReferenceEquals(model, element) && node is FrameworkElement control)
+            {
+                return new Size(control.ActualWidth, control.ActualHeight);
+            }
+
+            for (int index = 0; index < System.Windows.Media.VisualTreeHelper.GetChildrenCount(node); index++)
+            {
+                pending.Push(System.Windows.Media.VisualTreeHelper.GetChild(node, index));
+            }
+        }
+
+        return null;
+    }
+
+    private static void Take<T>(LayoutPositionableGroup<T> group, bool vertical, Size size)
+        where T : class, ILayoutElement
+    {
+        if (vertical && group.DockHeight.IsAbsolute)
+        {
+            group.DockHeight = new GridLength(Math.Round(size.Height));
+        }
+        else if (!vertical && group.DockWidth.IsAbsolute)
+        {
+            group.DockWidth = new GridLength(Math.Round(size.Width));
         }
     }
 

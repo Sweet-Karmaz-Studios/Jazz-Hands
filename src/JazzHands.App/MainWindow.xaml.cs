@@ -48,8 +48,19 @@ public partial class MainWindow : Window, Shell.IAppWindow, Shell.ITourHost
         {
             FitProgramPane();
             model.AttachWorkspaces(new Shell.LayoutService(Dock, ContentFor, layouts, notify: model.Notify));
-            Dock.SizeChanged += (_, e) => KeepProgramPaneShare(e);
+            // AvalonDock leaves a fixed pane's size as it was when a splitter beside it is dragged;
+            // once the panes are drawn at their new sizes, the layout takes them.
+            Dock.AddHandler(
+                System.Windows.Controls.Primitives.Thumb.DragCompletedEvent,
+                new System.Windows.Controls.Primitives.DragCompletedEventHandler((_, _) => Dispatcher.BeginInvoke(
+                    () => Shell.LayoutService.TakeDrawnSizes(Dock.Layout, element => Shell.LayoutService.DrawnSize(Dock, element)),
+                    System.Windows.Threading.DispatcherPriority.Loaded)),
+                handledEventsToo: true);
         };
+
+        // Only once the window is drawn: the docking manager still grows as the window starts, and
+        // taken as a person's resize that gave the preview all it could, whatever the layout said.
+        ContentRendered += (_, _) => Dock.SizeChanged += (_, e) => KeepProgramPaneShare(e);
 
         // The status bar reads the playhead and the queue four times a second while the window is up.
         if (model.StatusBar is { } status)
