@@ -321,17 +321,55 @@ public sealed partial class SubtitlesPanelViewModel : ToolViewModel
         Clip[] clips = track is null ? [] : [.. track.Clips.Where(clip => clip.Cue is not null)];
         string? selected = SelectedCue?.Id;
 
-        // Rows are kept while their cue is, so the one being typed into is not swapped for a copy.
-        var existing = Cues.ToDictionary(row => row.Id, StringComparer.Ordinal);
-        Cues.Clear();
-        foreach (Clip clip in clips)
+        // Rows are kept where they are while their cue is, and only the rows that come, go or move
+        // are touched: clearing the list and filling it again made the list build every row's
+        // fields afresh, and the one being typed into lost the keyboard after a letter.
+        var wanted = clips.Select(clip => clip.Id).ToHashSet(StringComparer.Ordinal);
+        for (int index = Cues.Count - 1; index >= 0; index--)
         {
-            CueRowViewModel row = existing.TryGetValue(clip.Id, out CueRowViewModel? kept) ? kept : new CueRowViewModel(this, clip.Id);
+            if (!wanted.Contains(Cues[index].Id))
+            {
+                Cues.RemoveAt(index);
+            }
+        }
+
+        for (int index = 0; index < clips.Length; index++)
+        {
+            Clip clip = clips[index];
+            int at = IndexOf(clip.Id, index);
+            CueRowViewModel row;
+            if (at < 0)
+            {
+                row = new CueRowViewModel(this, clip.Id);
+                Cues.Insert(index, row);
+            }
+            else
+            {
+                if (at != index)
+                {
+                    Cues.Move(at, index);
+                }
+
+                row = Cues[index];
+            }
+
             row.Apply(clip, _pump.IsSending("text:" + clip.Id));
-            Cues.Add(row);
         }
 
         SelectedCue = Cues.FirstOrDefault(row => row.Id == selected);
+    }
+
+    private int IndexOf(string id, int from)
+    {
+        for (int index = from; index < Cues.Count; index++)
+        {
+            if (Cues[index].Id == id)
+            {
+                return index;
+            }
+        }
+
+        return -1;
     }
 
     private void MarkCurrent()
