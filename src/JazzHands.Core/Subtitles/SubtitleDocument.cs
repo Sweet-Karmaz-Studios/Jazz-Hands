@@ -115,6 +115,64 @@ public static class SubtitleFiles
     internal static string[] Lines(string text) =>
         text.TrimStart('﻿').Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n').Split('\n');
 
+    /// <summary>
+    /// The cues for a format that shows one at a time (MP4's mov_text): where cues overlap, the
+    /// time is cut at each start and end, and each stretch shows every cue on at once, earliest
+    /// first, a line each, as the preview stacks them.
+    /// </summary>
+    /// <remarks>
+    /// Given overlapping cues, FFmpeg's MP4 writer started each one once the one before had ended,
+    /// so a cue that came in during another was late by the overlap, and the next ones after it
+    /// (seen in an export, 2026-10-28: 0.8 s and 0.5 s). A stretch takes its place, style and name
+    /// from the earliest cue showing; an ASS line's own tags are kept only where it shows alone.
+    /// Cues that do not overlap come back as they were.
+    /// </remarks>
+    public static ImmutableArray<SubtitleCue> OneAtATime(ImmutableArray<SubtitleCue> cues)
+    {
+        ImmutableArray<SubtitleCue> ordered = Ordered(cues);
+        bool overlaps = false;
+        Flicks end = Flicks.MinValue;
+        foreach (SubtitleCue cue in ordered.Where(cue => cue.End > cue.Start))
+        {
+            overlaps |= cue.Start < end;
+            end = cue.End > end ? cue.End : end;
+        }
+
+        if (!overlaps)
+        {
+            return ordered;
+        }
+
+        Flicks[] cuts = [.. ordered.Where(cue => cue.End > cue.Start).SelectMany(cue => new[] { cue.Start, cue.End }).Distinct().Order()];
+        var result = ImmutableArray.CreateBuilder<SubtitleCue>();
+        SubtitleCue[] last = [];
+        for (int index = 0; index + 1 < cuts.Length; index++)
+        {
+            (Flicks from, Flicks to) = (cuts[index], cuts[index + 1]);
+            SubtitleCue[] showing = [.. ordered.Where(cue => cue.Start <= from && from < cue.End)];
+            if (showing.Length == 0)
+            {
+                last = [];
+                continue;
+            }
+
+            // The same cues as the stretch before: that stretch goes on.
+            if (showing.SequenceEqual(last))
+            {
+                result[^1] = result[^1] with { End = to };
+                continue;
+            }
+
+            SubtitleCue first = showing[0];
+            result.Add(showing.Length == 1
+                ? first with { Start = from, End = to }
+                : first with { Start = from, End = to, Text = string.Join("\n", showing.Select(cue => cue.Text)), Raw = null });
+            last = showing;
+        }
+
+        return result.ToImmutable();
+    }
+
     /// <summary>Cues put in start order, keeping the file's order for cues that start together.</summary>
     internal static ImmutableArray<SubtitleCue> Ordered(IEnumerable<SubtitleCue> cues) =>
         [.. cues.Select((cue, index) => (cue, index)).OrderBy(entry => entry.cue.Start).ThenBy(entry => entry.index).Select(entry => entry.cue)];

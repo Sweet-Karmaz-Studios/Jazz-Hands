@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Globalization;
 using System.Text;
 using FFmpeg.AutoGen;
@@ -102,9 +103,9 @@ public sealed unsafe class MuxExtras : IDisposable
         ArgumentNullException.ThrowIfNull(muxer);
         foreach (Lane lane in _lanes)
         {
-            while (lane.Next < lane.Track.Document.Cues.Length && lane.Track.Document.Cues[lane.Next].Start < time)
+            while (lane.Next < lane.Cues.Length && lane.Cues[lane.Next].Start < time)
             {
-                lane.Write(muxer, lane.Track.Document.Cues[lane.Next]);
+                lane.Write(muxer, lane.Cues[lane.Next]);
                 lane.Next++;
             }
         }
@@ -131,6 +132,10 @@ public sealed unsafe class MuxExtras : IDisposable
     private sealed class Lane(MuxSubtitleTrack track, Encoder encoder, int stream)
     {
         public MuxSubtitleTrack Track { get; } = track;
+
+        // MP4's text track shows one sample at a time, so cues that overlap are made into ones that
+        // do not (SubtitleFiles.OneAtATime); the other formats carry overlapping cues as they are.
+        public ImmutableArray<SubtitleCue> Cues { get; } = track.Codec == "mov_text" ? SubtitleFiles.OneAtATime(track.Document.Cues) : track.Document.Cues;
 
         public Encoder Encoder { get; } = encoder;
 
