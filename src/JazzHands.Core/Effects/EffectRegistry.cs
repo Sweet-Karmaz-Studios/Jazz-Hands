@@ -126,9 +126,14 @@ public sealed class EffectRegistry
             return descriptor;
         }
 
+        // "transition.iris" means transition.wipe.iris, though transition.dip is fewer letters
+        // away: an effect whose last word, or whose name, is the typed last word comes first.
+        string typed = typeId ?? string.Empty;
+        string tail = typed[(typed.LastIndexOf('.') + 1)..];
         string? near = All
+            .OrderBy(candidate => EndsIn(candidate, tail) ? 0 : 1)
+            .ThenBy(candidate => Distance(candidate.TypeId, typed))
             .Select(candidate => candidate.TypeId)
-            .OrderBy(candidate => Distance(candidate, typeId ?? string.Empty))
             .FirstOrDefault();
 
         throw new CommandException(
@@ -185,6 +190,11 @@ public sealed class EffectRegistry
     };
 
     /// <summary>Edit distance, for suggesting the effect somebody probably meant.</summary>
+    private static bool EndsIn(EffectDescriptor candidate, string tail) =>
+        tail.Length > 0
+        && (candidate.TypeId.EndsWith("." + tail, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(candidate.Name, tail, StringComparison.OrdinalIgnoreCase));
+
     private static int Distance(string a, string b)
     {
         int[] previous = new int[b.Length + 1];
