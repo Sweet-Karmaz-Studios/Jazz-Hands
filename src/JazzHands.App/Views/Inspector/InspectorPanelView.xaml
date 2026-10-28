@@ -441,9 +441,40 @@
                                     <Button Style="{StaticResource Button.Small}" Content="U&#x332;" FontFamily="{DynamicResource Font.Ui}" FontSize="12"
                                             Command="{Binding ToggleUnderlineCommand, Mode=OneWay}" ToolTip="Underline the selected text, or take the line off"
                                             AutomationProperties.Name="Underline" />
-                                    <Border Width="18" Height="16" Margin="8,0,0,0" CornerRadius="2" BorderThickness="1"
-                                            BorderBrush="{DynamicResource Brush.Border.Strong}"
-                                            Background="{Binding ColourText, Mode=OneWay, Converter={StaticResource HexBrush}}" />
+                                    <!-- The swatch opens the colour picker, as every swatch in the panel does;
+                                         the button after the hex gives the selection the colour. -->
+                                    <ToggleButton x:Name="TitleSwatch"
+                                                  Width="18"
+                                                  Height="16"
+                                                  Margin="8,0,0,0"
+                                                  Cursor="Hand"
+                                                  IsHitTestVisible="{Binding IsOpen, ElementName=TitlePickerPopup, Converter={x:Static comp:Not.Instance}}"
+                                                  ToolTip="Pick a colour for the selected text"
+                                                  AutomationProperties.Name="Open the colour picker for the selection">
+                                        <ToggleButton.Template>
+                                            <ControlTemplate TargetType="ToggleButton">
+                                                <Border CornerRadius="2"
+                                                        BorderThickness="1"
+                                                        BorderBrush="{DynamicResource Brush.Border.Strong}"
+                                                        Background="{Binding ColourText, Mode=OneWay, Converter={StaticResource HexBrush}}" />
+                                            </ControlTemplate>
+                                        </ToggleButton.Template>
+                                    </ToggleButton>
+                                    <Popup x:Name="TitlePickerPopup"
+                                           IsOpen="{Binding IsChecked, ElementName=TitleSwatch, Mode=TwoWay}"
+                                           StaysOpen="False"
+                                           PlacementTarget="{Binding ElementName=TitleSwatch}"
+                                           Placement="Bottom"
+                                           VerticalOffset="4"
+                                           AllowsTransparency="True">
+                                        <Border Padding="10"
+                                                CornerRadius="4"
+                                                Background="{DynamicResource Brush.Background.Raised}"
+                                                BorderBrush="{DynamicResource Brush.Border.Strong}"
+                                                BorderThickness="1">
+                                            <controls:ColorPicker Hex="{Binding ColourText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Colour picker" />
+                                        </Border>
+                                    </Popup>
                                     <TextBox Width="78" Margin="4,0,0,0"
                                              Style="{StaticResource TextBox.Field}"
                                              FontFamily="{DynamicResource Font.Mono}"
