@@ -203,8 +203,24 @@ public static class TitleMarkup
     /// <summary>The text with every tag and escape taken out.</summary>
     public static string PlainText(string? markup) => Parse(markup).Plain;
 
-    /// <summary>Plain text as markup: brackets and backslashes escaped, nothing styled.</summary>
-    public static string Escape(string? text)
+    /// <summary>
+    /// Plain text as markup, nothing styled: a bracket escaped only where it would start a tag, and
+    /// a backslash only where it would start an escape.
+    /// </summary>
+    /// <remarks>
+    /// So a subtitle's "[door slams]" stays as it is written in the cue's text box, rather than
+    /// "\[door slams]" (seen on screen, 2026-10-28), while "[i]" said in words still reads back as
+    /// those three characters.
+    /// </remarks>
+    public static string Escape(string? text) => Escape(text, more: false);
+
+    /// <summary>The same, for text that more markup follows.</summary>
+    /// <param name="text">The plain text.</param>
+    /// <param name="more">
+    /// True when a tag may come next: then a backslash at the end is escaped, as is a bracket with
+    /// no closing bracket after it in the text, which the tag's could close.
+    /// </param>
+    internal static string Escape(string? text, bool more)
     {
         if (string.IsNullOrEmpty(text))
         {
@@ -212,9 +228,16 @@ public static class TitleMarkup
         }
 
         var result = new StringBuilder(text.Length + 8);
-        foreach (char c in text)
+        for (int index = 0; index < text.Length; index++)
         {
-            if (c is '[' or '\\')
+            char c = text[index];
+            bool escape = c switch
+            {
+                '[' => TryTag(text, index, out _, out _, out _, out _) || (more && text.IndexOf(']', index + 1) < 0),
+                '\\' => index + 1 < text.Length ? text[index + 1] is '[' or '\\' or 'n' : more,
+                _ => false,
+            };
+            if (escape)
             {
                 result.Append('\\');
             }
@@ -266,7 +289,7 @@ public static class TitleMarkup
                 open.Add(wanted[index]);
             }
 
-            result.Append(Escape(text.Plain.Substring(span.Start, span.Length)));
+            result.Append(Escape(text.Plain.Substring(span.Start, span.Length), more: true));
         }
 
         for (int index = open.Count - 1; index >= 0; index--)

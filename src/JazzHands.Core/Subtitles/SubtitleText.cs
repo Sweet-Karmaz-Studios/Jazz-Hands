@@ -71,7 +71,7 @@ public static class SubtitleText
     public static (string Markup, SubtitleAlign? Align) FromHtml(string text, bool entities, IReadOnlyDictionary<string, string>? classes = null)
     {
         ArgumentNullException.ThrowIfNull(text);
-        var markup = new StringBuilder(text.Length + 8);
+        var markup = new MarkupWriter();
         var fonts = new Stack<bool>();
         SubtitleAlign? align = null;
 
@@ -96,7 +96,7 @@ public static class SubtitleText
                 string tag = text[(at + 1)..end].Trim();
                 if (Tag(tag, fonts, classes) is { } written)
                 {
-                    markup.Append(written);
+                    markup.Tag(written);
                     at = end;
                     continue;
                 }
@@ -111,12 +111,12 @@ public static class SubtitleText
             if (entities && c == '&' && text.IndexOf(';', at) is int semicolon and > 0 && semicolon - at <= 8
                 && Entity(text[(at + 1)..semicolon]) is { } decoded)
             {
-                Append(markup, decoded);
+                markup.Text(decoded);
                 at = semicolon;
                 continue;
             }
 
-            Append(markup, c);
+            markup.Text(c);
         }
 
         return (markup.ToString(), align);
@@ -236,31 +236,6 @@ public static class SubtitleText
         return null;
     }
 
-    /// <summary>Appends text to markup with the markup's own characters escaped.</summary>
-    internal static void Append(StringBuilder markup, string text)
-    {
-        foreach (char c in text)
-        {
-            Append(markup, c);
-        }
-    }
-
-    private static void Append(StringBuilder markup, char c)
-    {
-        switch (c)
-        {
-            case '[':
-                markup.Append("\\[");
-                break;
-            case '\\':
-                markup.Append("\\\\");
-                break;
-            default:
-                markup.Append(c);
-                break;
-        }
-    }
-
     /// <summary>The markup for a tag this knows, or null.</summary>
     private static string? Tag(string tag, Stack<bool> fonts, IReadOnlyDictionary<string, string>? classes)
     {
@@ -333,4 +308,40 @@ public static class SubtitleText
             && int.TryParse(name[1..], NumberStyles.None, CultureInfo.InvariantCulture, out int code) => char.ConvertFromUtf32(code),
         _ => null,
     };
+}
+
+/// <summary>
+/// Markup written from a subtitle file: its text escaped a run at a time, as a tag or the end comes,
+/// so a bracket or backslash is escaped only where the markup would read it otherwise.
+/// </summary>
+internal sealed class MarkupWriter
+{
+    private readonly StringBuilder _markup = new();
+    private readonly StringBuilder _text = new();
+
+    /// <summary>Plain text.</summary>
+    public void Text(char c) => _text.Append(c);
+
+    /// <summary>Plain text.</summary>
+    public void Text(string text) => _text.Append(text);
+
+    /// <summary>A tag, written as it is.</summary>
+    public void Tag(string tag)
+    {
+        Flush(more: true);
+        _markup.Append(tag);
+    }
+
+    /// <summary>The markup.</summary>
+    public override string ToString()
+    {
+        Flush(more: false);
+        return _markup.ToString();
+    }
+
+    private void Flush(bool more)
+    {
+        _markup.Append(TitleMarkup.Escape(_text.ToString(), more));
+        _text.Clear();
+    }
 }

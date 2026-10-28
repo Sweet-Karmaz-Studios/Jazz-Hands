@@ -166,7 +166,7 @@ public static class AssFormat
     public static (string Markup, SubtitleAlign? Align, List<string> Dropped) FromAss(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        var markup = new StringBuilder(text.Length);
+        var markup = new MarkupWriter();
         var dropped = new List<string>();
         SubtitleAlign? align = null;
         bool bold = false, italic = false, underline = false, colour = false, font = false;
@@ -175,7 +175,7 @@ public static class AssFormat
         {
             if (state != on)
             {
-                markup.Append(on ? $"[{tag}]" : $"[/{tag}]");
+                markup.Tag(on ? $"[{tag}]" : $"[/{tag}]");
                 state = on;
             }
         }
@@ -188,7 +188,7 @@ public static class AssFormat
                 int close = text.IndexOf('}', at);
                 if (close < 0)
                 {
-                    SubtitleText.Append(markup, text[at..]);
+                    markup.Text(text[at..]);
                     break;
                 }
 
@@ -219,13 +219,13 @@ public static class AssFormat
                         case "c" or "1c":
                             if (colour)
                             {
-                                markup.Append("[/color]");
+                                markup.Tag("[/color]");
                                 colour = false;
                             }
 
                             if (Colour(argument) is { } hex)
                             {
-                                markup.Append("[color=").Append(hex[..7]).Append(']');
+                                markup.Tag("[color=" + hex[..7] + "]");
                                 colour = true;
                             }
 
@@ -233,13 +233,13 @@ public static class AssFormat
                         case "fn":
                             if (font)
                             {
-                                markup.Append("[/font]");
+                                markup.Tag("[/font]");
                                 font = false;
                             }
 
                             if (argument.Trim().Length > 0)
                             {
-                                markup.Append("[font=").Append(argument.Trim().Replace("]", string.Empty, StringComparison.Ordinal)).Append(']');
+                                markup.Tag("[font=" + argument.Trim().Replace("]", string.Empty, StringComparison.Ordinal) + "]");
                                 font = true;
                             }
 
@@ -267,12 +267,12 @@ public static class AssFormat
 
             if (c == '\\' && at + 1 < text.Length && text[at + 1] is 'N' or 'n' or 'h')
             {
-                markup.Append(text[at + 1] switch { 'N' => "\n", 'h' => " ", _ => " " });
+                markup.Text(text[at + 1] switch { 'N' => "\n", 'h' => " ", _ => " " });
                 at++;
                 continue;
             }
 
-            SubtitleText.Append(markup, c.ToString());
+            markup.Text(c);
         }
 
         // Closed at the end, so the same text always reads to the same markup.
