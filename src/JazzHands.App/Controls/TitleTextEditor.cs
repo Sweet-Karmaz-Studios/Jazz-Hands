@@ -31,7 +31,7 @@ public sealed class TitleTextEditor : RichTextBox
         nameof(BaseSize),
         typeof(double),
         typeof(TitleTextEditor),
-        new FrameworkPropertyMetadata(96.0));
+        new FrameworkPropertyMetadata(96.0, (target, _) => ((TitleTextEditor)target).Rescale()));
 
     /// <summary>Called with new markup when the text has changed.</summary>
     public static readonly DependencyProperty CommitCommandProperty = DependencyProperty.Register(
@@ -55,6 +55,9 @@ public sealed class TitleTextEditor : RichTextBox
 
     private readonly DispatcherTimer _pause;
     private bool _showing;
+
+    // The title size the document's span sizes were drawn against, and so are read back with.
+    private double _shownBase = 96.0;
 
     /// <summary>Creates the editor.</summary>
     public TitleTextEditor()
@@ -134,7 +137,7 @@ public sealed class TitleTextEditor : RichTextBox
     }
 
     /// <summary>The box's text as markup.</summary>
-    public string Current => TitleMarkup.Format(TitleDocument.FromDocument(Document, BaseSize));
+    public string Current => TitleMarkup.Format(TitleDocument.FromDocument(Document, _shownBase));
 
     /// <summary>Sends what is typed, if it is not what the title already says.</summary>
     public void Commit()
@@ -180,12 +183,32 @@ public sealed class TitleTextEditor : RichTextBox
             return;
         }
 
+        Draw(TitleMarkup.Parse(markup));
+    }
+
+    /// <summary>
+    /// The title's size changed: the text is drawn again against it, as it stands in the box. The
+    /// Inspector binds the text before the size, so the box was drawn against the default size
+    /// and read back against the title's, and putting bold on a word of a lower third shrank its
+    /// second line from 34 to 19 (seen in QA, 2026-10-28).
+    /// </summary>
+    private void Rescale()
+    {
+        if (BaseSize != _shownBase)
+        {
+            Draw(TitleDocument.FromDocument(Document, _shownBase));
+        }
+    }
+
+    private void Draw(TitleText text)
+    {
         int start = SelectedStart;
         int length = SelectedLength;
         _showing = true;
         try
         {
-            Document = TitleDocument.ToDocument(TitleMarkup.Parse(markup), BaseSize);
+            _shownBase = BaseSize;
+            Document = TitleDocument.ToDocument(text, _shownBase);
             Selection.Select(TitleDocument.Pointer(Document, start), TitleDocument.Pointer(Document, start + length));
         }
         finally
