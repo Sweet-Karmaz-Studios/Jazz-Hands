@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Text;
+using JazzHands.Core;
 using JazzHands.Core.Commands;
 using JazzHands.Core.Effects;
 using JazzHands.Core.Model;
@@ -59,8 +60,8 @@ public sealed class DescribeTimelineHandler : IQueryHandler<DescribeTimelineQuer
         text.Append(CultureInfo.InvariantCulture, $", {settings.ColorSpace}");
         text.Append(sequence.Settings is null ? " (from the project)\n" : " (its own)\n");
         text.Append(CultureInfo.InvariantCulture, $"  {Timecode.Format(sequence.Duration, fps)} long");
-        text.Append(CultureInfo.InvariantCulture, $", {sequence.Tracks.Length} tracks");
-        text.Append(CultureInfo.InvariantCulture, $", {sequence.Tracks.Sum(track => track.Clips.Length)} clips");
+        text.Append(CultureInfo.InvariantCulture, $", {Words.Count(sequence.Tracks.Length, "track")}");
+        text.Append(CultureInfo.InvariantCulture, $", {Words.Count(sequence.Tracks.Sum(track => track.Clips.Length), "clip")}");
         text.Append(sequence.IsMagnetic ? ", magnetic\n" : "\n");
 
         if (sequence.InOut is { } inOut)

@@ -100,7 +100,7 @@ public sealed class DescribeHandler : IQueryHandler<DescribeQuery, ProjectDescri
             foreach (SequenceInfo other in sequences)
             {
                 text.Append(CultureInfo.InvariantCulture,
-                    $"  {other.Name}: {Timecode.FormatClock(other.Duration)}, {other.ClipCount} clips{(other.IsActive ? ", active" : string.Empty)}{(other.Id == sequence.Id ? ", described below" : string.Empty)}");
+                    $"  {other.Name}: {Timecode.FormatClock(other.Duration)}, {Words.Count(other.ClipCount, "clip")}{(other.IsActive ? ", active" : string.Empty)}{(other.Id == sequence.Id ? ", described below" : string.Empty)}");
                 text.Append(full ? $", id {other.Id}\n" : "\n");
             }
         }
