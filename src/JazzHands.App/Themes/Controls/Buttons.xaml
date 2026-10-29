@@ -17,6 +17,18 @@
         </Setter>
     </Style>
 
+    <!-- The filled button is the accent colour, which the ring above is drawn in: its ring is the
+         text colour, a pixel clear of the fill (QA, 2026-10-29: Tab onto it showed nothing). -->
+    <Style x:Key="FocusVisual.Ring.OnAccent">
+        <Setter Property="Control.Template">
+            <Setter.Value>
+                <ControlTemplate>
+                    <Rectangle Margin="-3" Stroke="{DynamicResource Brush.Text.Primary}" StrokeThickness="1" RadiusX="4" RadiusY="4" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- A glyph from Segoe Fluent Icons on a flat square. The name for screen readers comes from
          AutomationProperties.Name, which every use sets. -->
     <Style x:Key="Button.Icon" TargetType="ButtonBase">
@@ -82,7 +94,7 @@
         <Setter Property="Height" Value="28" />
         <Setter Property="MinWidth" Value="72" />
         <Setter Property="Padding" Value="14,0" />
-        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusVisual.Ring}" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusVisual.Ring.OnAccent}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ButtonBase">
