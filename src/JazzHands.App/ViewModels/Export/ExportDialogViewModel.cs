@@ -636,7 +636,7 @@ public sealed partial class ExportDialogViewModel : ObservableObject
 
         Summary = $"{what}, {Timecode.FormatClock(plan.Duration)}{extras}, to {Path.GetFileName(plan.OutputPath)}";
         Estimate = plan.Estimate is { } estimate
-            ? $"{char.ToUpperInvariant(estimate.ToString()[0])}{estimate.ToString()[1..]}{(plan.TargetBytes > 0 ? $", under {ExportPresets.FormatBytes(plan.TargetBytes)}" : string.Empty)}. Colour: BT.709, SDR{(plan.Video?.TenBit == true ? ", ten bit" : string.Empty)}."
+            ? $"{char.ToUpperInvariant(estimate.ToString()[0])}{estimate.ToString()[1..]}{(plan.TargetBytes > 0 ? $", under {ExportPresets.FormatBytes(plan.TargetBytes)}" : string.Empty)}.{(plan.Video is { } drawn ? $" Colour: BT.709, SDR{(drawn.TenBit ? ", ten bit" : string.Empty)}." : string.Empty)}"
             : string.Empty;
     }
 

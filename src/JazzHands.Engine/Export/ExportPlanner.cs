@@ -372,8 +372,12 @@ public static class ExportPlanner
 
         RequireMediaOnline(project, projectPath, sequence, ranges);
 
+        // A sound file has no picture to copy, so what would stop a picture being copied is beside
+        // the point unless a copy was asked for.
         var reasons = new List<string>();
-        CopySource? copy = CopyCheck(project, projectPath, sequence, ranges, reasons);
+        CopySource? copy = preset.Video is null && request.Mode is ExportMode.Auto or ExportMode.Encode
+            ? null
+            : CopyCheck(project, projectPath, sequence, ranges, reasons);
 
         if (burn && copy is not null)
         {
@@ -1314,7 +1318,7 @@ public static class ExportPlanner
         }
         else if (reasons.Count == 0)
         {
-            reasons.Add("Encoding: the timeline has to be rendered.");
+            reasons.Add(preset.Video is null ? "Sound only: the mix is rendered." : "Encoding: the timeline has to be rendered.");
         }
 
         bool sound = preset.Audio is not null && sequence.Tracks.Any(track => track.IsAudio && !track.Clips.IsEmpty);
