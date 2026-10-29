@@ -56,8 +56,21 @@
         </Setter>
     </Style>
 
+    <!-- A row fills a list that clips at its edges, so its ring is drawn inside it (QA, 2026-10-29:
+         Tab onto the Settings pages showed WPF's black dots on the dark rows, which is nothing). -->
+    <Style x:Key="FocusVisual.Row">
+        <Setter Property="Control.Template">
+            <Setter.Value>
+                <ControlTemplate>
+                    <Rectangle Stroke="{DynamicResource Brush.Accent}" StrokeThickness="1" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- One row style for both views: the list uses ListViewItem, the grid uses ListBoxItem. -->
     <Style TargetType="ListBoxItem">
+        <Setter Property="FocusVisualStyle" Value="{DynamicResource FocusVisual.Row}" />
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
         <Setter Property="Padding" Value="2" />
@@ -112,12 +125,6 @@
 
     <Style TargetType="StatusBar">
         <Setter Property="Background" Value="{DynamicResource Brush.Background.Raised}" />
-        <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
-    </Style>
-
-    <Style TargetType="RadioButton">
-        <Setter Property="FontFamily" Value="{DynamicResource Font.Ui}" />
-        <Setter Property="FontSize" Value="{DynamicResource Text.Body}" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
     </Style>
 

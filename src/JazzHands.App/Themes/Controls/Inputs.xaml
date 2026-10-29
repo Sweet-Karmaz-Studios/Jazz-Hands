@@ -143,4 +143,59 @@
     <!-- Every check box is the dark one; the system's white box was left on the export dialog and
          a few panels that did not ask for this style by name. -->
     <Style TargetType="CheckBox" BasedOn="{StaticResource CheckBox.Dark}" />
+
+    <!-- The check box's round sibling. It has a template of its own because the system's sets
+         its focus style from a template trigger, which beats a style's setter: Settings' close
+         choice showed WPF's black dots on the dark page, and a white circle (QA, 2026-10-29). -->
+    <Style TargetType="RadioButton">
+        <Setter Property="FontFamily" Value="{DynamicResource Font.Ui}" />
+        <Setter Property="FontSize" Value="{DynamicResource Text.Body}" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
+        <Setter Property="FocusVisualStyle" Value="{DynamicResource FocusVisual.Ring}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <StackPanel x:Name="Root" Orientation="Horizontal" Background="Transparent">
+                        <Grid Width="14" Height="14" VerticalAlignment="Center">
+                            <Ellipse x:Name="Ring"
+                                     StrokeThickness="1"
+                                     Stroke="{DynamicResource Brush.Border.Strong}"
+                                     Fill="{DynamicResource Brush.Background.Input}" />
+                            <Ellipse x:Name="Dot"
+                                     Width="6"
+                                     Height="6"
+                                     Fill="{DynamicResource Brush.Text.Primary}"
+                                     Visibility="Collapsed" />
+                        </Grid>
+                        <ContentPresenter x:Name="Label" Margin="6,0,0,0" VerticalAlignment="Center" RecognizesAccessKey="True" />
+                    </StackPanel>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="HasContent" Value="False">
+                            <Setter TargetName="Label" Property="Margin" Value="0" />
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Dot" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="Ring" Property="Fill" Value="{DynamicResource Brush.Accent}" />
+                            <Setter TargetName="Ring" Property="Stroke" Value="{DynamicResource Brush.Accent}" />
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Ring" Property="Stroke" Value="{DynamicResource Brush.Text.Secondary}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Ring" Property="Stroke" Value="{DynamicResource Brush.Text.Primary}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Root" Property="Opacity" Value="0.45" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- The system's slider draws nothing when it has the keyboard (QA, 2026-10-29: Tab onto the
+         scene cut threshold, and the arrows moved it with no sign of where they were going). -->
+    <Style TargetType="Slider">
+        <Setter Property="FocusVisualStyle" Value="{DynamicResource FocusVisual.Ring}" />
+    </Style>
 </ResourceDictionary>
