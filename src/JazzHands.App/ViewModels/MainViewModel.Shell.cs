@@ -146,6 +146,19 @@ public sealed partial class MainViewModel
         await OpenAsync(path).ConfigureAwait(true);
     }
 
+    /// <summary>
+    /// Opens the project a launch named (a double click in Explorer, the jump list, <c>JazzHands.exe
+    /// x.jazz</c>). The one already open is left as it is, unsaved work and all; the window coming
+    /// forward is all that was asked.
+    /// </summary>
+    public Task<bool> OpenLaunchedAsync(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        return _session.ProjectPath.Length > 0 && string.Equals(Path.GetFullPath(path), Path.GetFullPath(_session.ProjectPath), StringComparison.OrdinalIgnoreCase)
+            ? Task.FromResult(true)
+            : OpenAsync(path);
+    }
+
     /// <summary>Opens a project by path, after asking about unsaved changes; for the menu, a second launch and a dropped file.</summary>
     public async Task<bool> OpenAsync(string path)
     {

@@ -555,7 +555,7 @@ public partial class App : Application
         switch (launch.Action)
         {
             case Shell.LaunchAction.Show or Shell.LaunchAction.Background when launch.Project is { } project:
-                await model.OpenAsync(project).ConfigureAwait(true);
+                await model.OpenLaunchedAsync(project).ConfigureAwait(true);
                 break;
 
             case Shell.LaunchAction.NewProject:
