@@ -68,9 +68,22 @@
             <ComboBox Style="{StaticResource ComboBox.Compact}"
                       HorizontalAlignment="Left"
                       Width="240"
-                      ItemsSource="{Binding Presets, Mode=OneWay}"
+                      ItemsSource="{Binding PresetsByCategory, Mode=OneWay}"
                       SelectedItem="{Binding Preset, Mode=TwoWay}"
                       AutomationProperties.Name="Preset">
+                <ComboBox.GroupStyle>
+                    <GroupStyle>
+                        <GroupStyle.HeaderTemplate>
+                            <DataTemplate>
+                                <TextBlock Margin="6,6,6,2"
+                                           Text="{Binding Name, Mode=OneWay}"
+                                           FontSize="{DynamicResource Text.Caption}"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource Brush.Text.Secondary}" />
+                            </DataTemplate>
+                        </GroupStyle.HeaderTemplate>
+                    </GroupStyle>
+                </ComboBox.GroupStyle>
                 <ComboBox.ItemTemplate>
                     <DataTemplate>
                         <TextBlock Text="{Binding Label, Mode=OneWay}" ToolTip="{Binding Name, Mode=OneWay}" />

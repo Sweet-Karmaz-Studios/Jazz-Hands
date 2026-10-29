@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using JazzHands.App.Services;
@@ -156,6 +157,8 @@ public sealed partial class ExportDialogViewModel : ObservableObject
         _files = files;
         _ui = ui;
         Presets = session.Query(new ListPresetsQuery());
+        PresetsByCategory = new ListCollectionView(Presets.OrderBy(preset => CategoryOrder(preset.Category)).ToList());
+        PresetsByCategory.GroupDescriptions.Add(new PropertyGroupDescription(nameof(ExportPresetSummary.Category), new CategoryHeadingConverter()));
         _defaults = editor?.Current ?? new EditorSettings();
         _preset = Presets.FirstOrDefault(preset => string.Equals(preset.Name, _defaults.ExportPreset, StringComparison.OrdinalIgnoreCase))
             ?? Presets.FirstOrDefault(preset => preset.Name == ExportPresets.Default)
@@ -215,6 +218,36 @@ public sealed partial class ExportDialogViewModel : ObservableObject
 
     /// <summary>Every preset, built in and the person's own.</summary>
     public IReadOnlyList<ExportPresetSummary> Presets { get; }
+
+    /// <summary>The presets for the picker, under a heading per category in the order <see cref="ExportPresets.Categories"/> lists them.</summary>
+    public ListCollectionView PresetsByCategory { get; }
+
+    /// <summary>What the picker calls a category.</summary>
+    public static string CategoryHeading(string category) => category switch
+    {
+        "youtube" => "YouTube",
+        "discord" => "Discord",
+        "device" => "TVs and players",
+        "archive" => "Masters and archive",
+        "web" => "Web and social",
+        "image" => "Pictures",
+        "audio" => "Sound only",
+        _ => "Other",
+    };
+
+    private static int CategoryOrder(string category)
+    {
+        int index = ExportPresets.Categories.ToList().IndexOf(category);
+        return index < 0 ? ExportPresets.Categories.Count : index;
+    }
+
+    /// <summary>Groups the picker's presets by their category's heading.</summary>
+    private sealed class CategoryHeadingConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => CategoryHeading(value as string ?? string.Empty);
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
+    }
 
     /// <summary>The four modes, in the order the dialog offers them.</summary>
     public IReadOnlyList<ExportMode> Modes { get; } = [ExportMode.Auto, ExportMode.Smart, ExportMode.Copy, ExportMode.Encode];
