@@ -461,6 +461,9 @@ public sealed partial class MaskHandlesViewModel : ObservableObject
                 string maskId = Core.Model.Id.New();
                 ActiveMaskId = maskId;
                 Send(new AddMaskCommand(clipId, shape, Round(min.X), Round(min.Y), Round(size.X), Round(size.Y), MaskId: maskId));
+
+                // Its handles show at once, so the next drag on them shapes it rather than drawing another.
+                Tool = MaskTool.Select;
             }
 
             return;
@@ -541,6 +544,7 @@ public sealed partial class MaskHandlesViewModel : ObservableObject
         CancelDrawing();
         ActiveMaskId = maskId;
         Send(new AddMaskCommand(clipId, shape, Path: path, MaskId: maskId));
+        Tool = MaskTool.Select;
     }
 
     /// <summary>Drops the shape being drawn.</summary>
