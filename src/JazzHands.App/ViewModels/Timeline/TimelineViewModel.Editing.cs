@@ -424,9 +424,18 @@ public sealed partial class TimelineViewModel
         switch (gesture)
         {
             case Gesture.Pressed when _grabbed is { } clip && _modifiers == ModifierKeys.None:
-                // A click on a selected clip without a drag: just this one and its companions.
-                Select([.. Content.Companions(clip.Id).Select(view => view.Id)], SelectMode.Replace);
+            {
+                // A click on a selected clip without a drag: just this one and its companions. Not
+                // sent again when the press already made it so (QA, 2026-10-29: two selection.set
+                // lines in the console for one click).
+                string[] only = [.. Content.Companions(clip.Id).Select(view => view.Id)];
+                if (!_selection.Ids.ToHashSet(StringComparer.Ordinal).SetEquals(only))
+                {
+                    Select(only, SelectMode.Replace);
+                }
+
                 break;
+            }
 
             case Gesture.Move:
             case Gesture.TrimStart:
