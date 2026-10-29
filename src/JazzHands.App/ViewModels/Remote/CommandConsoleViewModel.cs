@@ -224,7 +224,13 @@ public sealed partial class CommandConsoleViewModel : ToolViewModel
         }
         catch (CommandException error)
         {
-            Add(new ConsoleEntry(DateTimeOffset.Now, "console", ConsoleEntryKind.Error, line, string.Empty, null, false, error.Message));
+            var refused = new ConsoleEntry(DateTimeOffset.Now, "console", ConsoleEntryKind.Error, line, string.Empty, null, false, error.Message);
+            Add(refused);
+            if (Visible.Contains(refused))
+            {
+                SelectedEntry = refused;
+            }
+
             return;
         }
 
@@ -401,7 +407,14 @@ public sealed partial class CommandConsoleViewModel : ToolViewModel
             ? Describe(response["result"], elapsed)
             : response["error"]?["message"]?.GetValue<string>() ?? "It failed.";
 
-        Add(new ConsoleEntry(DateTimeOffset.Now, "console", command ? ConsoleEntryKind.Command : ConsoleEntryKind.Request, title, method, parameters, ok, result));
+        var entry = new ConsoleEntry(DateTimeOffset.Now, "console", command ? ConsoleEntryKind.Command : ConsoleEntryKind.Request, title, method, parameters, ok, result);
+        Add(entry);
+
+        // What was just run is chosen, so its answer shows in the pane below without a click.
+        if (Visible.Contains(entry))
+        {
+            SelectedEntry = entry;
+        }
     }
 
     private void OnCommandCompleted(object? sender, CommandCompletedEventArgs args)
