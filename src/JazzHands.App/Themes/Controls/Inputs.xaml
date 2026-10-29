@@ -84,7 +84,8 @@
         <Setter Property="FontSize" Value="{DynamicResource Text.Body}" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
         <Setter Property="VerticalAlignment" Value="Center" />
-        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <!-- The ring, as the buttons have: a lighter border alone vanishes on a ticked box's accent fill (QA, 2026-10-29). -->
+        <Setter Property="FocusVisualStyle" Value="{DynamicResource FocusVisual.Ring}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="CheckBox">
