@@ -341,10 +341,13 @@ public sealed partial class CommandConsoleViewModel : ToolViewModel
         Status = string.Create(CultureInfo.InvariantCulture, $"Saved {Words.Count(script.Count, "command")} to {path}.");
     }
 
-    /// <summary>The commands in view that worked, as <c>jazz apply</c> steps.</summary>
+    /// <summary>
+    /// The commands in view that worked, as <c>jazz apply</c> steps. Playing is left out: it is not
+    /// an edit, and a headless apply refuses it.
+    /// </summary>
     public JsonArray Script() =>
         [.. Visible
-            .Where(entry => entry is { Kind: ConsoleEntryKind.Command, Ok: true })
+            .Where(entry => entry is { Kind: ConsoleEntryKind.Command, Ok: true } && !entry.Method.StartsWith("playback.", StringComparison.Ordinal))
             .Select(entry => (JsonNode?)new JsonObject { ["command"] = entry.Method, ["args"] = entry.Args?.DeepClone() ?? new JsonObject() })];
 
     /// <summary>
