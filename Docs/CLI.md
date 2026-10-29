@@ -2514,7 +2514,7 @@ Queue an export of a sequence to a file.
 | Argument | Meaning |
 |---|---|
 | `<project>` | The .jazz file to work on. |
-| `<output>` | Where to write the file. |
+| `<output>` | Where to write the file, full or relative to the project's folder. |
 
 | Option | Meaning |
 |---|---|
@@ -4838,7 +4838,7 @@ Write a subtitle track as SRT, VTT or ASS.
 | Option | Meaning |
 |---|---|
 | `--format <srt|vtt|ass>` | srt, vtt or ass. |
-| `--out <out>` | The file to write. |
+| `--out <out>` | The file to write, full or relative to the project's folder. |
 
 ### `jazz subtitle from-transcript <project> <track-id>`
 

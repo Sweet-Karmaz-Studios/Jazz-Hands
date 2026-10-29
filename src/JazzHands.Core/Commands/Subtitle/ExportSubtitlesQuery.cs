@@ -10,9 +10,9 @@ namespace JazzHands.Core.Commands;
 /// </remarks>
 /// <param name="TrackId">The subtitle track.</param>
 /// <param name="Format">srt, vtt or ass.</param>
-/// <param name="Output">Where to write the file.</param>
+/// <param name="Output">Where to write the file, full or relative to the project's folder.</param>
 [Query("subtitle.export", Description = "Write a subtitle track as SRT, VTT or ASS")]
 public sealed record ExportSubtitlesQuery(
     [property: Arg(0, "The subtitle track id")] string TrackId,
     [property: Option("format", "srt, vtt or ass")] SubtitleFormat? Format = null,
-    [property: Option("out", "The file to write")] string? Output = null) : IQuery<SubtitleExport>;
+    [property: Option("out", "The file to write, full or relative to the project's folder")] string? Output = null) : IQuery<SubtitleExport>;

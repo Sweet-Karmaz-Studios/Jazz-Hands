@@ -12,7 +12,7 @@ namespace JazzHands.Core.Commands;
 /// as the command's changed id, the way a new clip's does. A headless session has no queue; the
 /// CLI's <c>jazz export</c> and <c>jazz trim</c> export in the foreground instead.
 /// </remarks>
-/// <param name="Output">Where to write the file.</param>
+/// <param name="Output">Where to write the file, full or relative to the project's folder.</param>
 /// <param name="Preset">Which preset.</param>
 /// <param name="Mode">copy, encode, or auto to let the planner choose.</param>
 /// <param name="SequenceId">Which sequence. Defaults to the active one.</param>
@@ -46,7 +46,7 @@ namespace JazzHands.Core.Commands;
     Undoable = false,
     NotUndoableReason = "An export writes a file. It does not change the project.")]
 public sealed record EnqueueExportCommand(
-    [property: Arg(0, "Where to write the file")] string Output,
+    [property: Arg(0, "Where to write the file, full or relative to the project's folder")] string Output,
     [property: Option("preset", "Which preset; jazz presets list shows them")] string Preset = ExportPresets.Default,
     [property: Option("mode", "auto, smart, copy, or encode")] ExportMode Mode = ExportMode.Auto,
     [property: Option("sequence", "Which sequence")] string? SequenceId = null,
