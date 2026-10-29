@@ -775,7 +775,7 @@ public static unsafe class SmartCutter
                 // Everything else is encoded again, whole, with the encoder that made it.
                 string encoderName = SoundEncoderFor(codec);
                 var decoder = new AudioDecoder(demuxer, stream);
-                long bitrate = parameters->bit_rate > 0 ? parameters->bit_rate : 0;
+                long bitrate = parameters->bit_rate > 0 ? parameters->bit_rate : MeasuredBitrate(demuxer, stream);
                 AudioEncoder encoder = AudioEncoder.Open(new AudioEncoderSettings(encoderName, decoder.SampleRate, decoder.Channels, bitrate), muxer.NeedsGlobalHeader);
                 int encoded = muxer.AddStream(encoder, Av.ReadDictionary(source->metadata));
                 notes.Add($"Sound stream {stream} ({codec}) encoded again across the whole export, so it cuts where the picture does.");
@@ -786,6 +786,38 @@ public static unsafe class SmartCutter
                 demuxer.Dispose();
                 throw;
             }
+        }
+
+        /// <summary>
+        /// The sound's bitrate from its first twenty seconds of packets, for a container that does
+        /// not say (Matroska, as OBS writes it), or 0. Left at 0 the encoder takes its own default,
+        /// well under what a recording usually spends.
+        /// </summary>
+        private static long MeasuredBitrate(Demuxer demuxer, int stream)
+        {
+            Rational timeBase = demuxer.GetTimeBase(stream);
+            long bytes = 0;
+            long first = ffmpeg.AV_NOPTS_VALUE;
+            long last = 0;
+            for (AVPacket* packet = demuxer.ReadPacket(stream); packet != null; packet = demuxer.ReadPacket(stream))
+            {
+                if (packet->pts == ffmpeg.AV_NOPTS_VALUE)
+                {
+                    continue;
+                }
+
+                first = first == ffmpeg.AV_NOPTS_VALUE ? packet->pts : first;
+                bytes += packet->size;
+                last = packet->pts + packet->duration;
+                if (Flicks.FromTimebase(last - first, timeBase) >= Flicks.FromSeconds(20))
+                {
+                    break;
+                }
+            }
+
+            demuxer.Rewind();
+            double seconds = first == ffmpeg.AV_NOPTS_VALUE ? 0 : Flicks.FromTimebase(last - first, timeBase).ToSeconds();
+            return seconds >= 0.5 ? (long)(bytes * 8 / seconds) : 0;
         }
 
         /// <summary>Writes the sound up to an output time.</summary>
