@@ -44,6 +44,10 @@ public sealed partial class ExportDialogViewModel : ObservableObject
     private int _planVersion;
     private bool _trimFallback;
 
+    // The extension Sound only put on the file, so turning it off puts the preset's back, and a
+    // name typed by hand is left as it is.
+    private string? _soundExtension;
+
     [ObservableProperty]
     private string _outputPath = string.Empty;
 
@@ -347,6 +351,13 @@ public sealed partial class ExportDialogViewModel : ObservableObject
                     choice.Note = note;
                 }
 
+                if (SoundFileExtension(query.AudioOnly, plan) is { } extension)
+                {
+                    // Changing the file plans again (QA, 2026-10-29: Sound only wrote mm.mp4, not mm.m4a).
+                    OutputPath = Path.ChangeExtension(OutputPath, extension);
+                    return;
+                }
+
                 bool fallBack = _trimFallback && plan is null && code == "cannot-smart-cut" && Mode == ExportMode.Smart;
                 _trimFallback = false;
                 if (fallBack)
@@ -359,6 +370,32 @@ public sealed partial class ExportDialogViewModel : ObservableObject
                 Show(plan, failure);
             });
         });
+    }
+
+    /// <summary>
+    /// The extension the file should change to: the sound file's (AAC in .m4a) when Sound only is
+    /// ticked, the preset's again when it is not, or null to leave the name alone.
+    /// </summary>
+    private string? SoundFileExtension(bool soundOnly, ExportPlan? plan)
+    {
+        string current = Path.GetExtension(OutputPath);
+        bool ours = Preset is { } preset && string.Equals(current, preset.Extension, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(current, _soundExtension, StringComparison.OrdinalIgnoreCase);
+
+        if (soundOnly && plan?.Audio is { } audio && ours)
+        {
+            string wanted = ExportOverrideText.SoundFile(audio.Encoder).Extension;
+            _soundExtension = wanted;
+            return string.Equals(current, wanted, StringComparison.OrdinalIgnoreCase) ? null : wanted;
+        }
+
+        if (!soundOnly && _soundExtension is { } put && string.Equals(current, put, StringComparison.OrdinalIgnoreCase) && Preset is { } back)
+        {
+            _soundExtension = null;
+            return string.Equals(current, back.Extension, StringComparison.OrdinalIgnoreCase) ? null : back.Extension;
+        }
+
+        return null;
     }
 
     /// <summary>What the planner says to a query: a plan, or why not and the refusal's code.</summary>
