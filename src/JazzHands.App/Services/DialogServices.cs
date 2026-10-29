@@ -32,8 +32,12 @@ public interface IDialogService
     /// <summary>Asks for a line of text, such as a name; null when cancelled.</summary>
     Task<string?> AskForTextAsync(string title, string prompt, string initial);
 
-    /// <summary>Asks what to do about exports still running when the person quits.</summary>
-    Task<Shell.QuitChoice> AskToQuitWithExportsAsync(int running);
+    /// <summary>
+    /// Asks what to do about exports still running when the person quits. When
+    /// <paramref name="exportsDone"/> fires, the exports need no answer any more and the question
+    /// closes itself as <see cref="Shell.QuitChoice.Wait"/>, which then quits.
+    /// </summary>
+    Task<Shell.QuitChoice> AskToQuitWithExportsAsync(int running, CancellationToken exportsDone = default);
 
     /// <summary>Shows the missing media, with the files that might be them, to find or relink.</summary>
     Task ShowMissingMediaAsync();
@@ -291,9 +295,15 @@ public sealed class DialogService(
     }
 
     /// <inheritdoc />
-    public Task<Shell.QuitChoice> AskToQuitWithExportsAsync(int running)
+    public Task<Shell.QuitChoice> AskToQuitWithExportsAsync(int running, CancellationToken exportsDone = default)
     {
+        if (exportsDone.IsCancellationRequested)
+        {
+            return Task.FromResult(Shell.QuitChoice.Wait);
+        }
+
         var window = new Views.Shell.QuitWindow(running) { Owner = Application.Current?.MainWindow };
+        using CancellationTokenRegistration finished = exportsDone.Register(() => window.Dispatcher.BeginInvoke(window.ExportsFinished));
         _ = window.ShowDialog();
         return Task.FromResult(window.Choice);
     }

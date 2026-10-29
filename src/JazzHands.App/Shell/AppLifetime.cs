@@ -81,6 +81,7 @@ public sealed class AppLifetime : IAppController
     private IDialogService? _dialogs;
     private bool _hidden;
     private bool _waitingForExports;
+    private CancellationTokenSource? _exportsDone;
     private bool _quitting;
 
     /// <summary>A lifetime over the editor's parts.</summary>
@@ -105,7 +106,11 @@ public sealed class AppLifetime : IAppController
         _quiet = [.. quiet];
         _shutdown = shutdown;
         _unregister = unregister;
-        _exports?.Changed += (_, _) => _ui.Post(QuitIfExportsDone);
+        _exports?.Changed += (_, _) => _ui.Post(() =>
+        {
+            QuitIfExportsDone();
+            CloseQuestionIfExportsDone();
+        });
     }
 
     /// <summary>True while the window is hidden to the notification area.</summary>
@@ -247,7 +252,22 @@ public sealed class AppLifetime : IAppController
         if (running.Length > 0)
         {
             ShowNow();
-            QuitChoice choice = _dialogs is null ? QuitChoice.QuitAnyway : await _dialogs.AskToQuitWithExportsAsync(running.Length).ConfigureAwait(true);
+            QuitChoice choice;
+            using (var exportsDone = new CancellationTokenSource())
+            {
+                // Watched while the question is open: exports that end meanwhile answer it.
+                _exportsDone = exportsDone;
+                CloseQuestionIfExportsDone();
+                try
+                {
+                    choice = _dialogs is null ? QuitChoice.QuitAnyway : await _dialogs.AskToQuitWithExportsAsync(running.Length, exportsDone.Token).ConfigureAwait(true);
+                }
+                finally
+                {
+                    _exportsDone = null;
+                }
+            }
+
             switch (choice)
             {
                 case QuitChoice.Cancel:
@@ -342,6 +362,14 @@ public sealed class AppLifetime : IAppController
         {
             _waitingForExports = false;
             QuitNow();
+        }
+    }
+
+    private void CloseQuestionIfExportsDone()
+    {
+        if (_exportsDone is { } done && Running().Length == 0)
+        {
+            done.Cancel();
         }
     }
 

@@ -19,6 +19,18 @@ public partial class QuitWindow : Window
     /// <summary>What was chosen.</summary>
     public QuitChoice Choice { get; private set; } = QuitChoice.Cancel;
 
+    /// <summary>
+    /// The exports ended while the question was open, so there is nothing left to decide: it
+    /// goes ahead as Wait would (QA, 2026-10-29: it went on saying an export was running).
+    /// </summary>
+    public void ExportsFinished()
+    {
+        if (IsVisible)
+        {
+            Choose(QuitChoice.Wait);
+        }
+    }
+
     private void Choose(QuitChoice choice)
     {
         Choice = choice;
