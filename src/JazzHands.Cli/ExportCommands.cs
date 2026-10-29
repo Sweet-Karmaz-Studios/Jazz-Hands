@@ -108,7 +108,12 @@ public static class ExportCommands
             {
                 Run(session, new AddMediaCommand([source]), token);
                 MediaItem media = session.Project.Media.Single();
+                string empty = session.Project.ActiveSequence!.Id;
                 Run(session, new StartTrimCommand(media.Id), token);
+
+                // The new project's own empty sequence would be saved beside the trim, under the
+                // same name, and the editor would open on whichever tab it put first.
+                Run(session, new RemoveSequenceCommand(empty), token);
 
                 Rational rate = session.Project.SettingsFor(session.Project.ActiveSequence!).FrameRate;
                 if (parse.GetValue(keep) is { Length: > 0 } ranges)
