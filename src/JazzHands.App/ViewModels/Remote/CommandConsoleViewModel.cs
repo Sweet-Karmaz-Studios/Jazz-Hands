@@ -577,8 +577,11 @@ public sealed partial class CommandConsoleViewModel : ToolViewModel
         }
         else
         {
+            // The shortest first, so Tab on "clip.sp" is clip.split and not clip.speed-preset.
             found = (text.Contains(' ', StringComparison.Ordinal) ? ConsoleInput.Verbs : ConsoleInput.Methods.Concat(ConsoleInput.Verbs))
-                .Where(candidate => candidate.StartsWith(text, StringComparison.OrdinalIgnoreCase) && candidate.Length > text.Length);
+                .Where(candidate => candidate.StartsWith(text, StringComparison.OrdinalIgnoreCase) && candidate.Length > text.Length)
+                .OrderBy(candidate => candidate.Length)
+                .ThenBy(candidate => candidate, StringComparer.Ordinal);
         }
 
         foreach (string suggestion in found.Distinct(StringComparer.Ordinal).Take(12))
