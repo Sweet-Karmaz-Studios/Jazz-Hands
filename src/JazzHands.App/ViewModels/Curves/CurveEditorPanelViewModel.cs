@@ -155,6 +155,7 @@ public sealed partial class CurveEditorPanelViewModel : ToolViewModel
     private readonly Func<Flicks> _playhead;
     private readonly HashSet<KeyRef> _selected = [];
     private readonly List<Copied> _copied = [];
+    private List<(string Owner, string Param, Flicks Time)>? _pasted;
     private int _refreshQueued;
 
     /// <summary>Each curve drawn from its own range rather than all on one scale.</summary>
@@ -328,6 +329,13 @@ public sealed partial class CurveEditorPanelViewModel : ToolViewModel
             _selected.Clear();
         }
 
+        // The selection is held by place in the lists, which a change can shuffle (a paste puts
+        // keys in front of it): remember which keyframes it was, to find them again below.
+        var was = _selected
+            .Where(key => key.Channel < Channels.Count && key.Index < Channels[key.Channel].Keys.Count)
+            .Select(key => (Channels[key.Channel].OwnerId, Channels[key.Channel].Param, Channels[key.Channel].Component, Channels[key.Channel].Keys[key.Index].Time, key.Index, Channels[key.Channel].Keys.Count))
+            .ToList();
+
         ClipId = clipId;
         Channels.Clear();
 
@@ -388,11 +396,57 @@ public sealed partial class CurveEditorPanelViewModel : ToolViewModel
             Length = Flicks.Zero;
         }
 
-        _selected.RemoveWhere(key => key.Channel >= Channels.Count || key.Index >= Channels[key.Channel].Keys.Count);
+        Reselect(was);
         OnPropertyChanged(nameof(Empty));
         OnPropertyChanged(nameof(HasCurves));
         OnPropertyChanged(nameof(ShowEmpty));
         Revision++;
+    }
+
+    /// <summary>
+    /// Selects again the keyframes selected before a refresh: the same parameter, part and time, or
+    /// the same place on a curve that kept as many keys (a drag moved it). After a paste, what was pasted.
+    /// </summary>
+    private void Reselect(List<(string Owner, string Param, int Component, Flicks Time, int Index, int Count)> was)
+    {
+        _selected.Clear();
+        List<(string Owner, string Param, Flicks Time)>? pasted = _pasted;
+        _pasted = null;
+        for (int channel = 0; channel < Channels.Count; channel++)
+        {
+            CurveChannel curve = Channels[channel];
+            if (pasted is not null)
+            {
+                for (int index = 0; index < curve.Keys.Count; index++)
+                {
+                    if (pasted.Contains((curve.OwnerId, curve.Param, curve.Keys[index].Time)))
+                    {
+                        _selected.Add(new KeyRef(channel, index));
+                    }
+                }
+
+                continue;
+            }
+
+            foreach ((string owner, string param, int component, Flicks time, int index, int count) in was)
+            {
+                if (owner != curve.OwnerId || param != curve.Param || component != curve.Component)
+                {
+                    continue;
+                }
+
+                int found = curve.Keys.ToList().FindIndex(key => key.Time == time);
+                if (found < 0 && curve.Keys.Count == count)
+                {
+                    found = index;
+                }
+
+                if (found >= 0)
+                {
+                    _selected.Add(new KeyRef(channel, found));
+                }
+            }
+        }
     }
 
     /// <summary>Selects a keyframe, alone or added to the selection.</summary>
@@ -558,6 +612,8 @@ public sealed partial class CurveEditorPanelViewModel : ToolViewModel
             commands.Add(new AddKeyframeCommand(owner, copied.Param, at + (copied.Keyframe.Time - earliest), ParamValues.Format(copied.Keyframe.Value), copied.Keyframe.Interp, Local: true));
         }
 
+        // What was pasted is selected, as the next thing done is usually to it.
+        _pasted = commands.Count > 0 ? [.. commands.OfType<AddKeyframeCommand>().Select(add => (add.OwnerId, add.Param, add.At))] : null;
         return RunAsync(commands, "Paste keyframes");
     }
 
