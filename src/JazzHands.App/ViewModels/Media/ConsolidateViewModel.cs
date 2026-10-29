@@ -65,6 +65,9 @@ public sealed partial class ConsolidateViewModel : ObservableObject
     /// <summary>The main button: what pressing it does.</summary>
     public string RunLabel => IsArchive ? "Archive" : "Consolidate";
 
+    /// <summary>True when the files can be moved instead of copied: a folder, not a zip.</summary>
+    public bool CanMove => !IsArchive;
+
     /// <summary>Sets the dialog up for one or the other, with a destination beside the project.</summary>
     public void Load(bool archive)
     {
@@ -75,6 +78,11 @@ public sealed partial class ConsolidateViewModel : ObservableObject
         OnPropertyChanged(nameof(Title));
         OnPropertyChanged(nameof(DestinationLabel));
         OnPropertyChanged(nameof(RunLabel));
+        OnPropertyChanged(nameof(CanMove));
+        if (archive)
+        {
+            Move = false;
+        }
     }
 
     partial void OnTrimChanged(bool value)
