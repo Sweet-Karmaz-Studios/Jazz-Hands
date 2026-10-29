@@ -123,7 +123,7 @@ public sealed partial class MediaPanelViewModel
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private async Task RelinkSelectedAsync()
     {
-        if (SelectedItem is { } row && _files.OpenMedia().FirstOrDefault() is { } path)
+        if (SelectedItem is { } row && _files.OpenMediaFile($"Where is {row.Name} now?") is { } path)
         {
             CommandResult result = await Relinking.RelinkAsync(_session, _dialogs, row.Id, path).ConfigureAwait(true);
             Status = result.Ok ? $"Relinked {row.Name}." : result.Error ?? "It could not be relinked.";
@@ -134,7 +134,7 @@ public sealed partial class MediaPanelViewModel
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private async Task ReplaceSelectedAsync()
     {
-        if (SelectedItem is { } row && _files.OpenMedia().FirstOrDefault() is { } path)
+        if (SelectedItem is { } row && _files.OpenMediaFile($"Replace {row.Name} with") is { } path)
         {
             await RunAsync(new ReplaceMediaCommand(row.Id, path), $"Replaced {row.Name}'s file.").ConfigureAwait(true);
         }

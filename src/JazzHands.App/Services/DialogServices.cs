@@ -83,6 +83,9 @@ public interface IFileDialogService
     /// <summary>Picks media files to import. Empty when the user cancelled.</summary>
     IReadOnlyList<string> OpenMedia();
 
+    /// <summary>Picks one media file for a purpose the title says (relink, replace), or null when the user cancelled.</summary>
+    string? OpenMediaFile(string title);
+
     /// <summary>Picks one recording to Quick Trim, or null when the user cancelled.</summary>
     string? OpenMovie();
 
@@ -443,15 +446,26 @@ public sealed class FileDialogService : IFileDialogService
             return picked;
         }
 
-        return ShellDialogs.Pick(new FilePick(
-            FilePickKind.OpenMany,
-            "Import media",
-            "Media|*.mp4;*.mov;*.mkv;*.avi;*.webm;*.m4v;*.mxf;*.wav;*.mp3;*.flac;*.aac;*.png;*.jpg;*.jpeg;*.exr;*.tif;*.tiff;*.dpx" +
-            "|Video|*.mp4;*.mov;*.mkv;*.avi;*.webm;*.m4v;*.mxf" +
-            "|Audio|*.wav;*.mp3;*.flac;*.aac;*.m4a" +
-            "|Images|*.png;*.jpg;*.jpeg;*.exr;*.tif;*.tiff;*.dpx" +
-            "|Everything|*.*")) ?? [];
+        return ShellDialogs.Pick(new FilePick(FilePickKind.OpenMany, "Import media", MediaFilter)) ?? [];
     }
+
+    /// <inheritdoc />
+    public string? OpenMediaFile(string title)
+    {
+        if (TestPick() is { } picked)
+        {
+            return picked.FirstOrDefault();
+        }
+
+        return One(new FilePick(FilePickKind.Open, title, MediaFilter));
+    }
+
+    private const string MediaFilter =
+        "Media|*.mp4;*.mov;*.mkv;*.avi;*.webm;*.m4v;*.mxf;*.wav;*.mp3;*.flac;*.aac;*.png;*.jpg;*.jpeg;*.exr;*.tif;*.tiff;*.dpx" +
+        "|Video|*.mp4;*.mov;*.mkv;*.avi;*.webm;*.m4v;*.mxf" +
+        "|Audio|*.wav;*.mp3;*.flac;*.aac;*.m4a" +
+        "|Images|*.png;*.jpg;*.jpeg;*.exr;*.tif;*.tiff;*.dpx" +
+        "|Everything|*.*";
 
     /// <inheritdoc />
     public string? OpenMovie()

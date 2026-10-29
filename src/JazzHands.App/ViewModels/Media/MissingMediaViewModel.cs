@@ -162,7 +162,7 @@ public sealed partial class MissingMediaViewModel : ObservableObject
             return;
         }
 
-        string? path = row.SelectedCandidate?.Path ?? _files.OpenMedia().FirstOrDefault();
+        string? path = row.SelectedCandidate?.Path ?? _files.OpenMediaFile($"Where is {row.Name} now?");
         if (path is null)
         {
             return;
@@ -183,7 +183,7 @@ public sealed partial class MissingMediaViewModel : ObservableObject
     [RelayCommand]
     private async Task BrowseAsync(MissingMediaRow? row)
     {
-        if (row is null || _files.OpenMedia().FirstOrDefault() is not { } path)
+        if (row is null || _files.OpenMediaFile($"Where is {row.Name} now?") is not { } path)
         {
             return;
         }
