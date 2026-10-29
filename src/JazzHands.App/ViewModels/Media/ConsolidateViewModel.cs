@@ -18,6 +18,7 @@ public sealed partial class ConsolidateViewModel : ObservableObject
 {
     private readonly ISession _session;
     private readonly IFileDialogService _files;
+    private readonly INotificationService? _notifications;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(RunCommand))]
@@ -39,13 +40,14 @@ public sealed partial class ConsolidateViewModel : ObservableObject
     [ObservableProperty]
     private string _status = string.Empty;
 
-    /// <summary>A dialog over a session.</summary>
-    public ConsolidateViewModel(ISession session, IFileDialogService files)
+    /// <summary>A dialog over a session; the bell says where the work went once it closes.</summary>
+    public ConsolidateViewModel(ISession session, IFileDialogService files, INotificationService? notifications = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(files);
         _session = session;
         _files = files;
+        _notifications = notifications;
     }
 
     /// <summary>Raised when the dialog should close.</summary>
@@ -119,7 +121,9 @@ public sealed partial class ConsolidateViewModel : ObservableObject
             return;
         }
 
+        // The dialog closes on success, so its status would never be read: the bell says it.
         Status = string.Create(CultureInfo.InvariantCulture, $"Done: {Destination}");
+        _notifications?.Show(NotificationLevel.Information, IsArchive ? $"Archived the project to {Destination}" : $"Consolidated the project into {Destination}");
         CloseRequested?.Invoke(this, EventArgs.Empty);
     }
 
