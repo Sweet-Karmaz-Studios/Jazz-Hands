@@ -128,9 +128,35 @@
         <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
     </Style>
 
+    <!-- The system's group box draws a white line inside its border, which glared on the Import
+         dialog (QA, 2026-10-29): the header above a plain border in the theme's colour. -->
     <Style TargetType="GroupBox">
         <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
         <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="1" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="GroupBox">
+                    <Grid SnapsToDevicePixels="True">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <ContentPresenter Margin="0,0,0,4" ContentSource="Header" RecognizesAccessKey="True" />
+                        <Border x:Name="Frame"
+                                Grid.Row="1"
+                                CornerRadius="4"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter />
+                        </Border>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <Style TargetType="Menu">
