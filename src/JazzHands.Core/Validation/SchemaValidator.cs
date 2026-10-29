@@ -91,10 +91,49 @@ public static class SchemaValidator
             }
         }
 
-        foreach (EvaluationResults child in results.Details ?? [])
+        // When every branch of an anyOf failed, the branch that took the value in and failed inside
+        // it says what is wrong; one that failed only on the value's type says nothing useful. An
+        // optional object with a bad member is otherwise also told it "should be null" (QA,
+        // 2026-10-29: "/media/0/info: Value is object but should be null").
+        IReadOnlyList<EvaluationResults> children = results.Details ?? [];
+        string here = results.InstanceLocation.ToString();
+        EvaluationResults[] branches = [.. children.Where(child => !child.IsValid && IsBranch(child))];
+        bool anyInside = branches.Any(branch => ReachesInside(branch, here));
+
+        foreach (EvaluationResults child in children)
         {
+            if (anyInside && branches.Contains(child) && !ReachesInside(child, here))
+            {
+                continue;
+            }
+
             Collect(child, issues);
         }
+    }
+
+    /// <summary>True for one alternative of an anyOf or oneOf.</summary>
+    private static bool IsBranch(EvaluationResults results)
+    {
+        string path = results.EvaluationPath.ToString();
+        int last = path.LastIndexOf('/');
+        return last > 0 && int.TryParse(path.AsSpan(last + 1), out _) && (path[..last].EndsWith("/anyOf", StringComparison.Ordinal) || path[..last].EndsWith("/oneOf", StringComparison.Ordinal));
+    }
+
+    /// <summary>True when a failure below <paramref name="results"/> is about something inside the value at <paramref name="at"/>.</summary>
+    private static bool ReachesInside(EvaluationResults results, string at)
+    {
+        if (results.IsValid)
+        {
+            return false;
+        }
+
+        string location = results.InstanceLocation.ToString();
+        if (results.Errors is { Count: > 0 } && location.Length > at.Length && location.StartsWith(at, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return (results.Details ?? []).Any(child => ReachesInside(child, at));
     }
 
     /// <summary>
