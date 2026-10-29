@@ -370,7 +370,8 @@ public sealed partial class ExportDialogViewModel : ObservableObject
         }
         catch (CommandException refusal)
         {
-            return (null, refusal.Message, refusal.Code);
+            // The planner speaks to the command line; here the way out is the mode list.
+            return (null, refusal.Message.Replace("Export with --mode encode instead.", "Choose Encode instead.", StringComparison.Ordinal), refusal.Code);
         }
         catch (Exception problem) when (problem is not OutOfMemoryException)
         {
