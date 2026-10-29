@@ -97,8 +97,12 @@ public sealed class TimelineControl : FrameworkElement
         UseLayoutRounding = true;
 
         DataContextChanged += (_, _) => Attach(DataContext as TimelineViewModel);
-        Loaded += (_, _) => HookRendering(true);
+        // Drawn on WPF's frame while it can be seen. Hidden (the window in the notification area,
+        // a tab behind another) it leaves the frame loop alone, so WPF stops ticking 60 times a
+        // second for nothing; what changed meanwhile is drawn on the first frame back.
+        Loaded += (_, _) => HookRendering(IsVisible);
         Unloaded += (_, _) => HookRendering(false);
+        IsVisibleChanged += (_, _) => HookRendering(IsLoaded && IsVisible);
     }
 
     /// <summary>
@@ -124,6 +128,9 @@ public sealed class TimelineControl : FrameworkElement
 
     /// <summary>How many times the clips layer has been drawn.</summary>
     public int ClipsRenders { get; private set; }
+
+    /// <summary>True while the control draws on WPF's frame: loaded and visible.</summary>
+    public bool DrawsEachFrame => _renderingHooked;
 
     /// <summary>How many track drawings the clips layer has recorded, kept ones not counted.</summary>
     public int TracksRecorded { get; private set; }
@@ -509,8 +516,9 @@ public sealed class TimelineControl : FrameworkElement
     {
         _dirty |= layers;
 
-        // Without a rendering loop (a test, a control not yet loaded) draw straight away.
-        if (!_renderingHooked)
+        // Without a rendering loop (a test, a control not yet loaded) draw straight away. A loaded
+        // control that is hidden waits to be seen.
+        if (!_renderingHooked && !IsLoaded)
         {
             DrawDirty();
         }
