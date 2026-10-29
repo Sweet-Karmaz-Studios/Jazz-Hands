@@ -235,6 +235,12 @@ public sealed partial class MaskHandlesViewModel : ObservableObject
     /// <summary>True while a polygon or bezier is being clicked out.</summary>
     public bool IsDrawing => _drawingNodes.Count > 0;
 
+    /// <summary>
+    /// True from a press this took until the button is let go, including the press that closed a
+    /// shape and so left nothing drawing: the preview holds the mouse until then.
+    /// </summary>
+    public bool HoldsPointer { get; private set; }
+
     /// <summary>What is being sent, for a test to wait on.</summary>
     internal Task Sending => _pump;
 
@@ -374,6 +380,7 @@ public sealed partial class MaskHandlesViewModel : ObservableObject
 
         // Each drag is its own undo step, however soon after the last one it starts.
         _gesture++;
+        HoldsPointer = true;
         _drag = new Drag(
             grip,
             at,
@@ -453,6 +460,7 @@ public sealed partial class MaskHandlesViewModel : ObservableObject
     /// <summary>Ends a drag, or finishes the box being drawn.</summary>
     public void End(Vector2 at)
     {
+        HoldsPointer = false;
         if (_drawFrom is { } from)
         {
             _drawFrom = null;
@@ -490,6 +498,7 @@ public sealed partial class MaskHandlesViewModel : ObservableObject
             return false;
         }
 
+        HoldsPointer = true;
         if (Tool is MaskTool.Rectangle or MaskTool.Ellipse)
         {
             _drawFrom = at;

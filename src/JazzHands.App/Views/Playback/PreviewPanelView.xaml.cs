@@ -531,7 +531,9 @@ public partial class PreviewPanelView : UserControl
             return;
         }
 
-        if (e.ChangedButton == MouseButton.Left && _model?.MaskHandles is { } masks && (masks.IsDragging || masks.IsDrawing))
+        // Asked whether it holds the pointer, not whether it is still drawing: the press that closes
+        // a polygon or bezier finishes it, and the mouse must still be let go (QA, 2026-10-29).
+        if (e.ChangedButton == MouseButton.Left && _model?.MaskHandles is { HoldsPointer: true } masks)
         {
             masks.End(TitleHandlesOverlay.ToSequence(e.GetPosition(Stage), Overlay.Picture, Overlay.SequenceSize));
             Stage.ReleaseMouseCapture();
