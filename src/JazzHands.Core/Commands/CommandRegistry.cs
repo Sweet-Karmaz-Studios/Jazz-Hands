@@ -328,15 +328,22 @@ public static class CommandRegistry
     }
 
     /// <summary>Writes a command as the command line a person would type for it.</summary>
+    /// <exception cref="InvalidOperationException">
+    /// The command holds other commands (a batch), which no command line can write: send it as JSON.
+    /// </exception>
     public static string ToCommandLine(object command, Rational frameRate)
     {
         CommandMetadata metadata = Describe(command);
+        if (metadata.Arguments.Concat(metadata.Options).Any(parameter => typeof(ICommand).IsAssignableFrom(parameter.Type.IsArray ? parameter.Type.GetElementType() : parameter.Type)))
+        {
+            throw new InvalidOperationException($"'{metadata.Name}' holds other commands, which have no command line; send it as JSON.");
+        }
+
         var parts = new List<string> { "jazz", metadata.Area };
         if (metadata.Verb.Length > 0)
         {
             parts.Add(metadata.Verb);
         }
-
 
         foreach (ParameterMetadata argument in metadata.Arguments)
         {
