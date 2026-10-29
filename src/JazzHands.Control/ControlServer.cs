@@ -475,7 +475,7 @@ public sealed class ControlServer : IAsyncDisposable
     {
         if (HeldByAnotherConnection(connection) is { } held)
         {
-            throw new CommandException("locked", $"Another {held.Owner} client holds the session ({held.Reason}) until {held.Until:HH:mm:ss}. Try again when it lets go.");
+            throw new CommandException("locked", $"Another {held.Owner} client holds the session ({held.Reason}) until {held.Until.ToLocalTime():HH:mm:ss}. Try again when it lets go.");
         }
 
         if (!counted && !connection.Limiter.TryTake(out TimeSpan wait))
@@ -560,12 +560,12 @@ public sealed class ControlServer : IAsyncDisposable
         {
             if (HeldByAnotherConnection(connection) is { } other)
             {
-                throw new JsonRpcException(JsonRpc.Locked, $"Another {other.Owner} client holds the session ({other.Reason}) until {other.Until:HH:mm:ss}.", new JsonObject { ["owner"] = other.Owner, ["until"] = other.Until });
+                throw new JsonRpcException(JsonRpc.Locked, $"Another {other.Owner} client holds the session ({other.Reason}) until {other.Until.ToLocalTime():HH:mm:ss}.", new JsonObject { ["owner"] = other.Owner, ["until"] = other.Until });
             }
 
             if (!_target.Session.TryLock(connection.Issuer, reason, TimeSpan.FromSeconds(seconds), out SessionLock held))
             {
-                throw new JsonRpcException(JsonRpc.Locked, $"{held.Owner} holds the session ({held.Reason}) until {held.Until:HH:mm:ss}.", new JsonObject { ["owner"] = held.Owner, ["until"] = held.Until });
+                throw new JsonRpcException(JsonRpc.Locked, $"{held.Owner} holds the session ({held.Reason}) until {held.Until.ToLocalTime():HH:mm:ss}.", new JsonObject { ["owner"] = held.Owner, ["until"] = held.Until });
             }
 
             _lockHolder = connection;

@@ -194,7 +194,7 @@ public sealed class Session : ISessionState, IAsyncDisposable
         {
             result = CommandResult.Failure(Version, new CommandException(
                 "locked",
-                $"{held.Owner} holds the session ({held.Reason}) until {held.Until:HH:mm:ss}. Try again when it lets go."));
+                $"{held.Owner} holds the session ({held.Reason}) until {held.Until.ToLocalTime():HH:mm:ss}. Try again when it lets go."));
         }
         else
         {
