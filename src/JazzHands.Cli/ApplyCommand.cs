@@ -192,7 +192,27 @@ public static class ApplyCommand
             ["scriptDir"] = Path.GetDirectoryName(scriptFull) ?? ".",
             ["projectDir"] = projectPath.Length > 0 ? Path.GetDirectoryName(projectPath) ?? "." : Directory.GetCurrentDirectory(),
         };
-        (List<ScriptStepResult> results, bool failed) = await RunSteps(steps, Remote, () => RpcCommands.FrameRateAsync(client), folders, keepGoing, dryRun: false, json).ConfigureAwait(false);
+        // Steps that use what earlier ones made run with the session held, as apply_batch does over
+        // MCP, so no other client edits in between; the person at the editor still can.
+        bool hold = ScriptRunner.UsesReferences(steps);
+        if (hold)
+        {
+            await client.CallAsync("session.lock", new JsonObject { ["reason"] = $"jazz apply {Path.GetFileName(scriptFull)}", ["seconds"] = 300 }).ConfigureAwait(false);
+        }
+
+        List<ScriptStepResult> results;
+        bool failed;
+        try
+        {
+            (results, failed) = await RunSteps(steps, Remote, () => RpcCommands.FrameRateAsync(client), folders, keepGoing, dryRun: false, json).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (hold)
+            {
+                await client.CallAsync("session.unlock").ConfigureAwait(false);
+            }
+        }
 
         int ran = results.Count(result => result.Ok);
         if (json)
