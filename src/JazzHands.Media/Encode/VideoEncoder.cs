@@ -980,6 +980,10 @@ public sealed unsafe class VideoEncoder : IDisposable
             frame->width = _settings.Width;
             frame->height = _settings.Height;
             frame->color_trc = AVColorTransferCharacteristic.AVCOL_TRC_IEC61966_2_1;
+
+            // What the drawing pass's source was told, or libavfilter warns that the frames changed.
+            frame->colorspace = AVColorSpace.AVCOL_SPC_BT709;
+            frame->color_range = AVColorRange.AVCOL_RANGE_MPEG;
             Av.Check(ffmpeg.av_frame_get_buffer(frame, 0), "av_frame_get_buffer");
 
             var source = default(byte_ptrArray4);
@@ -1029,9 +1033,10 @@ public sealed unsafe class VideoEncoder : IDisposable
                 AVFilterContext* paletteSource = null;
                 if (palette is not null)
                 {
+                    // The palette's own colour space and range (RGB, full), as palettegen made it.
                     string paletteArguments = string.Create(
                         CultureInfo.InvariantCulture,
-                        $"video_size={palette->width}x{palette->height}:pix_fmt={palette->format}:time_base={_settings.FrameRate.Den}/{_settings.FrameRate.Num}:pixel_aspect=1/1");
+                        $"video_size={palette->width}x{palette->height}:pix_fmt={palette->format}:time_base={_settings.FrameRate.Den}/{_settings.FrameRate.Num}:pixel_aspect=1/1:colorspace={(int)palette->colorspace}:range={(int)palette->color_range}");
                     Av.Check(
                         ffmpeg.avfilter_graph_create_filter(&paletteSource, ffmpeg.avfilter_get_by_name("buffer"), "palette", paletteArguments, null, graph),
                         "avfilter_graph_create_filter (palette)",
