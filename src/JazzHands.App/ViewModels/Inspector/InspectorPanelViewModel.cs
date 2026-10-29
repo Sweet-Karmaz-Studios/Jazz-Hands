@@ -923,9 +923,16 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
     private static bool PluginMissing(Effect effect) =>
         effect.TypeId == JazzHands.Audio.Effects.PluginEffect.TypeId && !System.IO.File.Exists(PluginLibrary(effect));
 
-    /// <summary>The parameters a mask's item shows: its shape is the preview's, the rest are rows.</summary>
-    private static IEnumerable<ParamDescriptor> MaskRows =>
-        ParamTargets.MaskParams.Params.Where(parameter => parameter.Name is not ("bounds" or "path"));
+    /// <summary>
+    /// The parameters a mask's item shows: its own shape's (the box for a rectangle or ellipse, the
+    /// outline for a polygon or bezier), whose stopwatch keyframes the shape drawn on the preview,
+    /// then the rest.
+    /// </summary>
+    private static IEnumerable<ParamDescriptor> MaskRows(Mask mask)
+    {
+        string shape = mask.Shape is MaskShape.Rectangle or MaskShape.Ellipse ? "bounds" : "path";
+        return ParamTargets.MaskParams.Params.Where(parameter => parameter.Name is not ("bounds" or "path") || parameter.Name == shape);
+    }
 
     private void AddMaskItems(ObservableCollection<MaskItemViewModel> into, EquatableArray<Mask> masks)
     {
@@ -933,7 +940,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         {
             Mask mask = masks[index];
             var item = new MaskItemViewModel(this, mask.Id, $"Mask {index + 1}, {mask.Shape.ToString().ToLowerInvariant()}");
-            foreach (ParamDescriptor parameter in MaskRows)
+            foreach (ParamDescriptor parameter in MaskRows(mask))
             {
                 item.Rows.Add(new ParamRowViewModel(this, mask.Id, parameter, item.Name));
             }
