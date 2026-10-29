@@ -218,14 +218,16 @@ public sealed class RecoveryService
         }
 
         string archives = Path.Combine(ProjectPaths.SidecarFolder(full), "recovered");
-        string folder = Path.Combine(archives, DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff", CultureInfo.InvariantCulture));
+        // Named in local time, as the offer said it (QA, 2026-10-29: 13:05 was set aside as
+        // 180531); the oldest go by when they were made, which a clock going back cannot muddle.
+        string folder = Path.Combine(archives, DateTime.Now.ToString("yyyyMMdd-HHmmss-fff", CultureInfo.InvariantCulture));
         try
         {
             Directory.CreateDirectory(folder);
             Move(recovery, Path.Combine(folder, "recovery.jazz"));
             Move(history, Path.Combine(folder, "history.jsonl"));
 
-            foreach (string old in Directory.GetDirectories(archives).Order(StringComparer.Ordinal).SkipLast(ArchivesKept))
+            foreach (string old in Directory.GetDirectories(archives).OrderBy(Directory.GetCreationTimeUtc).ThenBy(name => name, StringComparer.Ordinal).SkipLast(ArchivesKept))
             {
                 Directory.Delete(old, recursive: true);
             }
@@ -260,7 +262,7 @@ public sealed class RecoveryService
 
         Directory.CreateDirectory(UntitledFolder);
         string name = string.Concat(project.Name.Select(ch => Path.GetInvalidFileNameChars().Contains(ch) ? '_' : ch));
-        string path = Path.Combine(UntitledFolder, $"{(name.Length == 0 ? "Untitled" : name)}-{DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}.jazz");
+        string path = Path.Combine(UntitledFolder, $"{(name.Length == 0 ? "Untitled" : name)}-{DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}.jazz");
 
         // As it is: a project that was never saved has absolute media paths, and relative ones
         // would resolve against this folder.
