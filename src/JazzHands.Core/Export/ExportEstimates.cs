@@ -131,7 +131,7 @@ public static class ExportEstimates
             "libx264" => 1.2e8,
             "libx265" => 3e7,
             "libsvtav1" => 4e7,
-            "libvpx-vp9" => 2e7,
+            "libvpx-vp9" => 8e7,
             "prores_ks" or "dnxhd" => 4e8,
             "ffv1" => 2e8,
             _ => 5e7,
