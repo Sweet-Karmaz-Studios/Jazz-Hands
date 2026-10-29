@@ -126,6 +126,9 @@ public sealed partial class MaskHandlesViewModel : ObservableObject
     private readonly List<Vector2> _drawing = [];
     private readonly List<MaskNode> _drawingNodes = [];
     private ICommand? _pending;
+    private int _pendingGesture;
+    private int _gesture;
+    private int _sentGesture;
     private bool _sending;
     private Task _pump = Task.CompletedTask;
     private Drag? _drag;
@@ -368,6 +371,9 @@ public sealed partial class MaskHandlesViewModel : ObservableObject
 
         Flicks local = Local;
         ActiveMaskId = grip.MaskId;
+
+        // Each drag is its own undo step, however soon after the last one it starts.
+        _gesture++;
         _drag = new Drag(
             grip,
             at,
@@ -767,6 +773,7 @@ public sealed partial class MaskHandlesViewModel : ObservableObject
     private void Send(ICommand command)
     {
         _pending = command;
+        _pendingGesture = _gesture;
         if (!_sending)
         {
             _pump = PumpAsync();
@@ -783,6 +790,13 @@ public sealed partial class MaskHandlesViewModel : ObservableObject
                 _pending = null;
                 try
                 {
+                    // Everything the last drag sent has run; this is the first of a new one.
+                    if (_pendingGesture != _sentGesture)
+                    {
+                        _sentGesture = _pendingGesture;
+                        _session.EndStep();
+                    }
+
                     CommandResult result = await _session.ExecuteAsync(next).ConfigureAwait(true);
                     Status = result.Ok ? string.Empty : result.Error ?? result.Code ?? "That did not work.";
                 }

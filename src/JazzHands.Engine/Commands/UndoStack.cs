@@ -42,6 +42,7 @@ public sealed class UndoStack
     private readonly List<UndoEntry> _entries = [];
     private readonly int _limit;
     private int _undoCount;
+    private bool _stepEnded;
 
     /// <summary>Creates a stack.</summary>
     /// <param name="limit">
@@ -123,6 +124,18 @@ public sealed class UndoStack
         }
     }
 
+    /// <summary>
+    /// Ends the step on top: the next command starts a step of its own even if it continues this
+    /// one. A drag that starts as soon as the last one ended is a second edit, not more of the first.
+    /// </summary>
+    public void EndStep()
+    {
+        lock (_gate)
+        {
+            _stepEnded = true;
+        }
+    }
+
     /// <summary>Records a command that has just run.</summary>
     public void Push(UndoEntry entry)
     {
@@ -132,7 +145,8 @@ public sealed class UndoStack
         {
             // A slider drag is many commands and one edit: a command that continues the last one,
             // straight after it, becomes part of its step. Its Before stays the first command's.
-            if (_undoCount == _entries.Count
+            if (!_stepEnded
+                && _undoCount == _entries.Count
                 && _undoCount > 0
                 && _entries[_undoCount - 1] is { } top
                 && entry.Command is IMergeableCommand merging
@@ -143,6 +157,8 @@ public sealed class UndoStack
                 _entries[_undoCount - 1] = entry with { Before = top.Before, ChangedIds = [.. top.ChangedIds.Union(entry.ChangedIds, StringComparer.Ordinal)] };
                 return;
             }
+
+            _stepEnded = false;
 
             // Doing something new after undoing abandons the branch that was undone.
             if (_undoCount < _entries.Count)

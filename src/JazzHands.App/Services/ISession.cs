@@ -35,6 +35,9 @@ public interface ISession
 
     /// <summary>Answers a question about the project without changing anything.</summary>
     TResult Query<TResult>(IQuery<TResult> query);
+
+    /// <summary>A new gesture starts: its commands are a step of their own, not more of the last one.</summary>
+    void EndStep();
 }
 
 /// <summary>The engine session, presented to the UI.</summary>
@@ -63,4 +66,7 @@ public sealed class EngineSession(Session session) : ISession
 
     /// <inheritdoc />
     public TResult Query<TResult>(IQuery<TResult> query) => session.Query(query);
+
+    /// <inheritdoc />
+    public void EndStep() => session.Undo.EndStep();
 }
