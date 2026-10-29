@@ -12,4 +12,8 @@
     <PackageReference Include="Serilog" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="JazzHands.Control.Tests" />
+  </ItemGroup>
+
 </Project>

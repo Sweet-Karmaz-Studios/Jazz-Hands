@@ -1134,12 +1134,16 @@ internal sealed class ControlConnection(LineChannel channel, string transport, b
     public void Notify(string method, JsonNode payload) => Channel.TrySend(JsonRpc.Line(JsonRpc.Notification(method, payload)));
 
     /// <summary>The playhead, at most ten times a second: the latest one, never a backlog.</summary>
+    /// <remarks>
+    /// While one is held for later, a newer one takes its place rather than going out at once,
+    /// which would let the held, older one follow it and the playhead read backwards.
+    /// </remarks>
     public void Playhead(JsonObject payload)
     {
         lock (_gate)
         {
             long now = System.Diagnostics.Stopwatch.GetTimestamp();
-            if (System.Diagnostics.Stopwatch.GetElapsedTime(_lastPlayhead, now) >= playheadInterval)
+            if (!_playheadScheduled && System.Diagnostics.Stopwatch.GetElapsedTime(_lastPlayhead, now) >= playheadInterval)
             {
                 _lastPlayhead = now;
                 Notify("playhead.moved", payload);
