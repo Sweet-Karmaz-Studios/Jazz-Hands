@@ -225,6 +225,7 @@ public sealed partial class MediaPanelViewModel : ToolViewModel
         foreach (MediaItemViewModel row in rebuilt)
         {
             row.IsOffline = _states.GetValueOrDefault(row.Id) == MediaFileState.Missing;
+            row.IsChanged = _states.GetValueOrDefault(row.Id) == MediaFileState.Changed;
         }
 
         _ = CheckFilesAsync();

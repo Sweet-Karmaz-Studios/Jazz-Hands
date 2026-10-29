@@ -83,6 +83,7 @@ public sealed partial class MediaPanelViewModel
         foreach (MediaItemViewModel row in _rows.Values)
         {
             row.IsOffline = _states.GetValueOrDefault(row.Id) == MediaFileState.Missing;
+            row.IsChanged = _states.GetValueOrDefault(row.Id) == MediaFileState.Changed;
         }
 
         int missing = checks.Count(check => check.State == MediaFileState.Missing);

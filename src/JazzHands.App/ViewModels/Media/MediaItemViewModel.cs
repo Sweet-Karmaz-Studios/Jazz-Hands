@@ -23,6 +23,10 @@ public sealed partial class MediaItemViewModel : ObservableObject
     [ObservableProperty]
     private bool _isOffline;
 
+    /// <summary>True when the file is there but is not the one that was imported: Update reads it again.</summary>
+    [ObservableProperty]
+    private bool _isChanged;
+
     /// <summary>The picture on the tile: the poster, or the frame under the mouse while scrubbing across it.</summary>
     [ObservableProperty]
     private System.Windows.Media.ImageSource? _thumbnail;

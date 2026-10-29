@@ -234,6 +234,12 @@
                                                        Foreground="{DynamicResource Brush.Error}"
                                                        ToolTip="The file is not where the project says: Find missing media relinks it"
                                                        Visibility="{Binding IsOffline, Mode=OneWay, Converter={StaticResource BoolToVisible}}" />
+                                            <TextBlock Text="  changed"
+                                                       VerticalAlignment="Center"
+                                                       FontSize="{DynamicResource Text.Caption}"
+                                                       Foreground="{DynamicResource Brush.Warning}"
+                                                       ToolTip="The file is not the one that was imported: Update on the bar reads it again"
+                                                       Visibility="{Binding IsChanged, Mode=OneWay, Converter={StaticResource BoolToVisible}}" />
                                             <TextBlock Text="  conformed"
                                                        VerticalAlignment="Center"
                                                        FontSize="{DynamicResource Text.Caption}"
