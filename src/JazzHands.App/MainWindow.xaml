@@ -298,22 +298,43 @@
                               Checked="OnBellOpened"
                               ToolTip="{Binding StatusBar.Notifications.Unread, Mode=OneWay, StringFormat='Notifications ({0} new)'}"
                               AutomationProperties.Name="Notifications" />
-                <Popup DockPanel.Dock="Right"
+                <!-- Opened upwards and to the left, its right edge near the bell's, so it stays over
+                     the window rather than reaching past its corner. -->
+                <Popup x:Name="BellPopup"
+                       DockPanel.Dock="Right"
                        PlacementTarget="{Binding ElementName=Bell}"
                        Placement="Top"
+                       HorizontalOffset="-352"
                        StaysOpen="False"
                        IsOpen="{Binding IsChecked, ElementName=Bell, Mode=TwoWay}">
                     <Border Width="380" MaxHeight="360" Padding="8" Background="{DynamicResource Brush.Background.Panel}" BorderBrush="{DynamicResource Brush.Border.Strong}" BorderThickness="1">
-                        <ListBox ItemsSource="{Binding StatusBar.Notifications.History, Mode=OneWay}" Background="Transparent" BorderThickness="0" AutomationProperties.Name="Notification history">
-                            <ListBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource Brush.Text.Primary}">
-                                        <Run Text="{Binding Time, Mode=OneWay}" Foreground="{DynamicResource Brush.Text.Disabled}" />
-                                        <Run Text="{Binding Text, Mode=OneWay}" />
-                                    </TextBlock>
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
+                        <Grid>
+                            <ListBox ItemsSource="{Binding StatusBar.Notifications.History, Mode=OneWay}" Background="Transparent" BorderThickness="0" AutomationProperties.Name="Notification history">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource Brush.Text.Primary}">
+                                            <Run Text="{Binding Time, Mode=OneWay}" Foreground="{DynamicResource Brush.Text.Disabled}" />
+                                            <Run Text="{Binding Text, Mode=OneWay}" />
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                            <TextBlock Margin="4"
+                                       Text="No notifications yet. Each one is listed here after it goes."
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource Brush.Text.Secondary}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding StatusBar.Notifications.History.Count, Mode=OneWay}" Value="0">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
                     </Border>
                 </Popup>
                 <TextBlock DockPanel.Dock="Right" Margin="16,0,0,0" Text="{Binding StatusBar.Remote, Mode=OneWay}" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Accent}" />
