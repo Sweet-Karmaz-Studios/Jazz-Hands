@@ -28,6 +28,7 @@ public sealed partial class TimelineDocuments : ObservableObject
     private readonly Controls.Timeline.ITimelineImagery _imagery;
     private TimelineViewModel? _active;
     private bool _syncQueued;
+    private bool _held;
     private ImmutableArray<string> _trail = [];
 
     /// <summary>Creates the tabs for the project as it is.</summary>
@@ -71,7 +72,7 @@ public sealed partial class TimelineDocuments : ObservableObject
         get => _active;
         set
         {
-            if (value is not TimelineViewModel timeline || ReferenceEquals(timeline, _active))
+            if (value is not TimelineViewModel timeline || ReferenceEquals(timeline, _active) || _held)
             {
                 return;
             }
@@ -86,6 +87,20 @@ public sealed partial class TimelineDocuments : ObservableObject
 
             UpdateTrails();
         }
+    }
+
+    /// <summary>
+    /// Ignores the tab the docking manager brings forward until <see cref="Release"/>: building its
+    /// panes it brings the first one forward whatever the project's active sequence is, and
+    /// following it would change the project as it opens.
+    /// </summary>
+    public void Hold() => _held = true;
+
+    /// <summary>Follows the tabs again and puts the active sequence's in front.</summary>
+    public void Release()
+    {
+        _held = false;
+        OnPropertyChanged(nameof(Active));
     }
 
     /// <summary>The timeline in front, typed.</summary>

@@ -31,6 +31,10 @@ public partial class MainWindow : Window, Shell.IAppWindow, Shell.ITourHost
         InitializeComponent();
         ThemeDockTabs();
         _model = model;
+
+        // The docking manager brings the first tab forward as it builds its panes and loads the
+        // layout; the project's own active sequence comes to the front once the window is drawn.
+        model.Timelines?.Hold();
         DataContext = model;
         model.PanelsRequested += (_, ids) => BringForward(ids);
 
@@ -60,7 +64,11 @@ public partial class MainWindow : Window, Shell.IAppWindow, Shell.ITourHost
 
         // Only once the window is drawn: the docking manager still grows as the window starts, and
         // taken as a person's resize that gave the preview all it could, whatever the layout said.
-        ContentRendered += (_, _) => Dock.SizeChanged += (_, e) => KeepProgramPaneShare(e);
+        ContentRendered += (_, _) =>
+        {
+            Dock.SizeChanged += (_, e) => KeepProgramPaneShare(e);
+            model.Timelines?.Release();
+        };
 
         // The status bar reads the playhead and the queue four times a second while the window is up.
         if (model.StatusBar is { } status)
