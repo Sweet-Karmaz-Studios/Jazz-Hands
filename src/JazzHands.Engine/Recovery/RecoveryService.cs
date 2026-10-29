@@ -31,8 +31,8 @@ public sealed record RecoveryOffer(
         return HasCopy
             ? CommandsAfterRecovery.Count == 0
                 ? $"Jazz Hands closed without saving. There is a recovery copy from {age}."
-                : $"Jazz Hands closed without saving. There is a recovery copy from {age}, plus {CommandsAfterRecovery.Count} later commands."
-            : $"Jazz Hands closed without saving. {edits} commands since it was saved at {age} can be replayed.";
+                : $"Jazz Hands closed without saving. There is a recovery copy from {age}, plus {Core.Words.Count(CommandsAfterRecovery.Count, "later command")}."
+            : $"Jazz Hands closed without saving. {Core.Words.Count(edits, "command")} since it was saved at {age} can be replayed.";
     }
 }
 
