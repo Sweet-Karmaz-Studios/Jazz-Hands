@@ -73,6 +73,9 @@ public sealed partial class Gizmo3DViewModel : ObservableObject
     private readonly SelectionService _selection;
     private readonly IPreviewEngine _preview;
     private ICommand? _pending;
+    private int _pendingGesture;
+    private int _gesture;
+    private int _sentGesture;
     private bool _sending;
     private Task _pump = Task.CompletedTask;
     private Drag? _drag;
@@ -267,6 +270,8 @@ public sealed partial class Gizmo3DViewModel : ObservableObject
             return false;
         }
 
+        // Each drag is its own undo step, however soon after the last one it starts.
+        _gesture++;
         _drag = new Drag(grip, clipId, at, place, Pivot, StepX, StepY, StepZ);
         Status = string.Empty;
         return true;
@@ -366,6 +371,7 @@ public sealed partial class Gizmo3DViewModel : ObservableObject
     private void Send(Drag drag, string param, string value)
     {
         _pending = new SetParamCommand(drag.ClipId, param, value, At: _at);
+        _pendingGesture = _gesture;
         if (!_sending)
         {
             _pump = PumpAsync();
@@ -382,6 +388,13 @@ public sealed partial class Gizmo3DViewModel : ObservableObject
                 _pending = null;
                 try
                 {
+                    // Everything the last drag sent has run; this is the first of a new one.
+                    if (_pendingGesture != _sentGesture)
+                    {
+                        _sentGesture = _pendingGesture;
+                        _session.EndStep();
+                    }
+
                     CommandResult result = await _session.ExecuteAsync(next).ConfigureAwait(true);
                     Status = result.Ok ? string.Empty : result.Error ?? result.Code ?? "That did not work.";
                 }

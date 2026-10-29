@@ -57,6 +57,9 @@ public sealed partial class TitleHandlesViewModel : ObservableObject
     private readonly SelectionService _selection;
     private readonly IPreviewEngine _preview;
     private ICommand? _pending;
+    private int _pendingGesture;
+    private int _gesture;
+    private int _sentGesture;
     private bool _sending;
     private Task _pump = Task.CompletedTask;
     private Drag? _drag;
@@ -189,6 +192,8 @@ public sealed partial class TitleHandlesViewModel : ObservableObject
         EffectDescriptor? title = Engine.Effects.EffectCatalog.Registry.Find(TitleParams.GeneratorId);
         Vector2 position = title?.Param(TitleParams.Position) is { } descriptor && ParamEval.Eval(own?.Parameter(TitleParams.Position), descriptor, local) is ParamValue.Float2 at0 ? at0.Value : Vector2.Zero;
 
+        // Each drag is its own undo step, however soon after the last one it starts.
+        _gesture++;
         _drag = new Drag(
             grip,
             clipId,
@@ -397,6 +402,7 @@ public sealed partial class TitleHandlesViewModel : ObservableObject
     private void Send(ICommand command)
     {
         _pending = command;
+        _pendingGesture = _gesture;
         if (!_sending)
         {
             _pump = PumpAsync();
@@ -411,6 +417,14 @@ public sealed partial class TitleHandlesViewModel : ObservableObject
             while (_pending is { } next)
             {
                 _pending = null;
+
+                // Everything the last drag sent has run; this is the first of a new one.
+                if (_pendingGesture != _sentGesture)
+                {
+                    _sentGesture = _pendingGesture;
+                    _session.EndStep();
+                }
+
                 await RunAsync(next).ConfigureAwait(true);
             }
         }
