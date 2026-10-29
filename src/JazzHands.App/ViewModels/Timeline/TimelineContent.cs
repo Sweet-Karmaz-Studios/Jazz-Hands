@@ -15,7 +15,7 @@ namespace JazzHands.App.ViewModels.Timeline;
 /// <param name="Clip">The clip.</param>
 /// <param name="TrackId">The track it is on.</param>
 /// <param name="Kind">The track's kind.</param>
-/// <param name="MediaMissing">True when it plays a media item the project no longer has.</param>
+/// <param name="MediaMissing">True when it plays a media item the project no longer has, or one whose file is offline.</param>
 /// <param name="Cuts">For a multicam clip (Phase 41), where on the timeline its picture cuts to another angle.</param>
 public sealed record ClipView(Clip Clip, string TrackId, TrackKind Kind, bool MediaMissing, EquatableArray<Flicks> Cuts = default)
 {
@@ -184,7 +184,11 @@ public sealed class TimelineContent
     /// Builds the content for a sequence, reusing every clip view from <paramref name="previous"/>
     /// whose clip has not changed.
     /// </summary>
-    public static TimelineContent Build(Project project, string sequenceId, TimelineContent? previous = null)
+    /// <param name="project">The project.</param>
+    /// <param name="sequenceId">The sequence.</param>
+    /// <param name="previous">The content before, whose unchanged clip views are kept.</param>
+    /// <param name="present">Whether a media item's file is there; each item is asked once. Every file is when left out.</param>
+    public static TimelineContent Build(Project project, string sequenceId, TimelineContent? previous = null, Func<MediaItem, bool>? present = null)
     {
         ArgumentNullException.ThrowIfNull(project);
 
@@ -194,8 +198,26 @@ public sealed class TimelineContent
         }
 
         var byId = new Dictionary<string, ClipView>(StringComparer.Ordinal);
+        var offline = new Dictionary<string, bool>(StringComparer.Ordinal);
         var tracks = ImmutableArray.CreateBuilder<TrackView>(sequence.Tracks.Length);
         Rational frameRate = project.SettingsFor(sequence).FrameRate;
+
+        // A file is looked for once per build, however many clips play it.
+        bool Offline(MediaItem item)
+        {
+            if (present is null)
+            {
+                return false;
+            }
+
+            if (!offline.TryGetValue(item.Id, out bool gone))
+            {
+                gone = !present(item);
+                offline[item.Id] = gone;
+            }
+
+            return gone;
+        }
 
         foreach (Track track in DisplayOrder(sequence.Tracks))
         {
@@ -203,7 +225,7 @@ public sealed class TimelineContent
 
             foreach (Clip clip in track.Clips)
             {
-                bool missing = clip.MediaId is { } mediaId && project.MediaItem(mediaId) is null;
+                bool missing = clip.MediaId is { } mediaId && (project.MediaItem(mediaId) is not { } item || Offline(item));
                 EquatableArray<Flicks> cuts = MulticamCuts(project, clip);
                 ClipView? kept = previous?.Clip(clip.Id);
 

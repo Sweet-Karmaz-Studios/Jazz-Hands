@@ -99,6 +99,20 @@ public sealed partial class TimelineViewModel
     public Controls.Timeline.ITimelineImagery Imagery { get; set; } = Controls.Timeline.NoImagery.Instance;
 
     /// <summary>
+    /// Whether a media item's file is there, so a clip whose file is offline draws as missing: the
+    /// file system in the app, nothing in a test (every file is there). Looked at again on each change.
+    /// </summary>
+    public Func<MediaItem, bool>? MediaPresent
+    {
+        get => _mediaPresent;
+        set
+        {
+            _mediaPresent = value;
+            Refresh();
+        }
+    }
+
+    /// <summary>
     /// A key the timeline wants before the keymap: typing a number to nudge or trim, and the
     /// keys that trim an edit point picked with the ripple or roll tool.
     /// </summary>

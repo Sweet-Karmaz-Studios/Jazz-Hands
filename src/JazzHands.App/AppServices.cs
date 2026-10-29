@@ -217,7 +217,8 @@ public static class AppServices
             provider.GetRequiredService<IPreviewEngine>(),
             provider.GetRequiredService<IDialogService>(),
             new WindowsClipboardService(),
-            provider.GetRequiredService<Controls.Timeline.ITimelineImagery>()));
+            provider.GetRequiredService<Controls.Timeline.ITimelineImagery>(),
+            item => ViewModels.Media.MediaFiles.Present(provider.GetRequiredService<ISession>().ProjectPath, item)));
 
         // The keymap: embedded defaults under %APPDATA%\JazzHands\keymap.json if there is one.
         services.AddSingleton(provider =>

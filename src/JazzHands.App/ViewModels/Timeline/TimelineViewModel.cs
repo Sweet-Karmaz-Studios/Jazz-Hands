@@ -63,6 +63,7 @@ public sealed partial class TimelineViewModel : DocumentViewModel
 {
     private readonly ILogger _log = Log.ForContext<TimelineViewModel>();
     private readonly ISession _session;
+    private Func<MediaItem, bool>? _mediaPresent;
     private readonly SelectionService _selection;
     private readonly IUiDispatcher _ui;
     private readonly IPreviewEngine? _preview;
@@ -433,7 +434,7 @@ public sealed partial class TimelineViewModel : DocumentViewModel
     private void Refresh()
     {
         Project project = _session.Project;
-        Content = TimelineContent.Build(project, SequenceId, Content);
+        Content = TimelineContent.Build(project, SequenceId, Content, _mediaPresent);
         Title = Content.Sequence.Name.Length > 0 ? Content.Sequence.Name : "Timeline";
 
         Geometry = Geometry with { Rows = Content.Rows, FrameRate = Content.Settings.FrameRate };

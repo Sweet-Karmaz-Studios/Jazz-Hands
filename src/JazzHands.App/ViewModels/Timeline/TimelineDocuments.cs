@@ -26,6 +26,7 @@ public sealed partial class TimelineDocuments : ObservableObject
     private readonly IDialogService? _dialogs;
     private readonly IClipboardService? _clipboard;
     private readonly Controls.Timeline.ITimelineImagery _imagery;
+    private readonly Func<MediaItem, bool>? _mediaPresent;
     private TimelineViewModel? _active;
     private bool _syncQueued;
     private bool _held;
@@ -39,7 +40,8 @@ public sealed partial class TimelineDocuments : ObservableObject
         IPreviewEngine? preview = null,
         IDialogService? dialogs = null,
         IClipboardService? clipboard = null,
-        Controls.Timeline.ITimelineImagery? imagery = null)
+        Controls.Timeline.ITimelineImagery? imagery = null,
+        Func<MediaItem, bool>? mediaPresent = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(selection);
@@ -52,6 +54,7 @@ public sealed partial class TimelineDocuments : ObservableObject
         _dialogs = dialogs;
         _clipboard = clipboard;
         _imagery = imagery ?? Controls.Timeline.NoImagery.Instance;
+        _mediaPresent = mediaPresent;
 
         _session.ProjectChanged += (_, _) => QueueSync();
         Sync();
@@ -195,6 +198,7 @@ public sealed partial class TimelineDocuments : ObservableObject
                 {
                     Clipboard = _clipboard,
                     Imagery = _imagery,
+                    MediaPresent = _mediaPresent,
                     OpenSequence = Open,
                 });
             }

@@ -49,7 +49,7 @@ public sealed partial class MediaPanelViewModel
         // change, without hashing every file each time.
         Project project = _session.Project;
         string projectPath = _session.ProjectPath;
-        string signature = projectPath + "|" + string.Join('|', project.Media.Select(item => $"{item.Id}:{item.RelativePath}:{item.Hash}:{Present(projectPath, item)}"));
+        string signature = projectPath + "|" + string.Join('|', project.Media.Select(item => $"{item.Id}:{item.RelativePath}:{item.Hash}:{MediaFiles.Present(projectPath, item)}"));
         if (signature == _checked)
         {
             return _running;
@@ -96,20 +96,6 @@ public sealed partial class MediaPanelViewModel
         };
         OnPropertyChanged(nameof(HasMissing));
         OnPropertyChanged(nameof(HasChanged));
-    }
-
-    /// <summary>Whether a media item's file (or an image sequence's folder) is where the project says.</summary>
-    private static bool Present(string projectPath, MediaItem item)
-    {
-        try
-        {
-            string path = projectPath.Length == 0 ? System.IO.Path.GetFullPath(item.RelativePath) : Core.Serialization.ProjectPaths.Resolve(projectPath, item.RelativePath);
-            return item.Kind == MediaKind.ImageSequence ? System.IO.Directory.Exists(System.IO.Path.GetDirectoryName(path)) : System.IO.File.Exists(path);
-        }
-        catch (Exception error) when (error is ArgumentException or NotSupportedException or System.IO.PathTooLongException)
-        {
-            return false;
-        }
     }
 
     /// <summary>Opens the missing media dialog, and checks again after it.</summary>
