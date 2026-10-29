@@ -612,13 +612,16 @@ public sealed partial class ExportDialogViewModel : ObservableObject
                 $"The {snap.Edge} at {Timecode.FormatClock(snap.Requested)} moves to the keyframe at {Timecode.FormatClock(snap.Snapped)} (frame {snap.Frame})."));
         }
 
+        string mix = plan.Audio is { } audio
+            ? audio.Loudness is { } loudness ? string.Create(CultureInfo.InvariantCulture, $"{audio.Encoder} normalised to {loudness:0.#} LUFS") : audio.Encoder
+            : string.Empty;
         string what = plan.Mode == ExportMode.Copy
             ? $"Copy, {Sound(plan.Copy!.AudioStreams.Length, plan.Copy.StreamNames)}"
             : plan.Smart is { } smart
                 ? string.Create(CultureInfo.InvariantCulture, $"Smart cut, {Words.Count(smart.EncodedFrames, "frame")} encoded again with {smart.Encoders[0]}, {Sound(smart.AudioStreams.Length, smart.StreamNames)}")
             : plan.Video is { } video
-                ? string.Create(CultureInfo.InvariantCulture, $"Encode {video.Width}x{video.Height} {video.Codec} at {video.FrameRate.ToDouble():0.###} fps{(plan.Audio is null ? string.Empty : $" with {plan.Audio.Encoder}")}")
-                : $"Sound only, {plan.Audio!.Encoder}";
+                ? string.Create(CultureInfo.InvariantCulture, $"Encode {video.Width}x{video.Height} {video.Codec} at {video.FrameRate.ToDouble():0.###} fps{(mix.Length == 0 ? string.Empty : $" with {mix}")}")
+                : $"Sound only, {mix}";
 
         string extras = string.Concat(
             plan.Subtitles is { } subtitles
