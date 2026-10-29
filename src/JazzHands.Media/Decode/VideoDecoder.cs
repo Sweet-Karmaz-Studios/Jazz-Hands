@@ -356,23 +356,46 @@ public sealed unsafe class VideoDecoder : IVideoSource
     /// </summary>
     private static AVPixelFormat GetFormatCallback(AVCodecContext* context, AVPixelFormat* formats)
     {
-        for (AVPixelFormat* format = formats; *format != AVPixelFormat.AV_PIX_FMT_NONE; format++)
+        int count = 0;
+        while (formats[count] != AVPixelFormat.AV_PIX_FMT_NONE)
         {
-            foreach (AVPixelFormat preferred in PreferredHardwareFormats)
+            count++;
+        }
+
+        return ChooseFormat(new ReadOnlySpan<AVPixelFormat>(formats, count));
+    }
+
+    /// <summary>
+    /// Direct3D 11 when it is offered; otherwise the first software format. The list can hold
+    /// other hardware formats this machine has no device for (QA, 2026-10-29: when D3D11 was not
+    /// offered, taking the first entry chose VAAPI, and FFmpeg logged "Invalid setup for format
+    /// vaapi" before it found the software path itself).
+    /// </summary>
+    internal static AVPixelFormat ChooseFormat(ReadOnlySpan<AVPixelFormat> offered)
+    {
+        foreach (AVPixelFormat format in offered)
+        {
+            if (Array.IndexOf(PreferredHardwareFormats, format) >= 0)
             {
-                if (*format == preferred)
-                {
-                    return preferred;
-                }
+                return format;
             }
         }
 
-        // No hardware format offered: this codec or profile is software only. Take the decoder's
-        // first choice and let the caller notice the path changed.
+        // No hardware format offered: this codec or profile is software only, or its hardware
+        // setup failed. Let the caller notice the path changed.
         Log.ForContext<VideoDecoder>().Information(
             "The decoder did not offer a Direct3D 11 pixel format; falling back to software");
 
-        return formats[0];
+        foreach (AVPixelFormat format in offered)
+        {
+            AVPixFmtDescriptor* descriptor = ffmpeg.av_pix_fmt_desc_get(format);
+            if (descriptor is not null && (descriptor->flags & ffmpeg.AV_PIX_FMT_FLAG_HWACCEL) == 0)
+            {
+                return format;
+            }
+        }
+
+        return offered.IsEmpty ? AVPixelFormat.AV_PIX_FMT_NONE : offered[0];
     }
 
     private VideoFrame BuildFrame(AvFrame frame)
