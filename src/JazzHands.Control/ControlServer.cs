@@ -131,6 +131,8 @@ public sealed class ControlServer : IAsyncDisposable
     private ControlConnection? _local;
     private StillRenderer? _renderer;
     private int _clientNumber;
+    private readonly Lock _lockHolderGate = new();
+    private ControlConnection? _lockHolder;
     private bool _started;
     private int _disposed;
 
@@ -431,7 +433,7 @@ public sealed class ControlServer : IAsyncDisposable
             case "session.lock":
                 return LockSession(connection, args);
             case "session.unlock":
-                return new JsonObject { ["released"] = _target.Session.Unlock(connection.Issuer) };
+                return new JsonObject { ["released"] = UnlockSession(connection) };
             case "session.open":
                 return await RunAsync(connection, new OpenProjectCommand(Text(args, "path"), args["discard"]?.GetValue<bool>() ?? false), counted).ConfigureAwait(false);
             case "session.save":
@@ -471,6 +473,11 @@ public sealed class ControlServer : IAsyncDisposable
 
     private async Task<JsonNode> RunAsync(ControlConnection connection, ICommand command, bool counted)
     {
+        if (HeldByAnotherConnection(connection) is { } held)
+        {
+            throw new CommandException("locked", $"Another {held.Owner} client holds the session ({held.Reason}) until {held.Until:HH:mm:ss}. Try again when it lets go.");
+        }
+
         if (!counted && !connection.Limiter.TryTake(out TimeSpan wait))
         {
             throw new JsonRpcException(JsonRpc.RateLimited, $"More than {_options.CommandsPerSecond:0} commands a second. Try again in {wait.TotalMilliseconds:0} ms.", new JsonObject { ["retryAfterMs"] = (int)Math.Ceiling(wait.TotalMilliseconds) });
@@ -549,14 +556,51 @@ public sealed class ControlServer : IAsyncDisposable
     {
         double seconds = Math.Clamp(args["seconds"]?.GetValue<double>() ?? 30, 1, 300);
         string reason = args["reason"]?.GetValue<string>() ?? "a batch of edits";
-        if (!_target.Session.TryLock(connection.Issuer, reason, TimeSpan.FromSeconds(seconds), out SessionLock held))
+        lock (_lockHolderGate)
         {
-            throw new JsonRpcException(JsonRpc.Locked, $"{held.Owner} holds the session ({held.Reason}) until {held.Until:HH:mm:ss}.", new JsonObject { ["owner"] = held.Owner, ["until"] = held.Until });
-        }
+            if (HeldByAnotherConnection(connection) is { } other)
+            {
+                throw new JsonRpcException(JsonRpc.Locked, $"Another {other.Owner} client holds the session ({other.Reason}) until {other.Until:HH:mm:ss}.", new JsonObject { ["owner"] = other.Owner, ["until"] = other.Until });
+            }
 
-        connection.HoldsLock = true;
-        return new JsonObject { ["owner"] = held.Owner, ["reason"] = held.Reason, ["until"] = held.Until };
+            if (!_target.Session.TryLock(connection.Issuer, reason, TimeSpan.FromSeconds(seconds), out SessionLock held))
+            {
+                throw new JsonRpcException(JsonRpc.Locked, $"{held.Owner} holds the session ({held.Reason}) until {held.Until:HH:mm:ss}.", new JsonObject { ["owner"] = held.Owner, ["until"] = held.Until });
+            }
+
+            _lockHolder = connection;
+            connection.HoldsLock = true;
+            return new JsonObject { ["owner"] = held.Owner, ["reason"] = held.Reason, ["until"] = held.Until };
+        }
     }
+
+    private bool UnlockSession(ControlConnection connection)
+    {
+        lock (_lockHolderGate)
+        {
+            if (HeldByAnotherConnection(connection) is not null || !_target.Session.Unlock(connection.Issuer))
+            {
+                return false;
+            }
+
+            _lockHolder = null;
+            connection.HoldsLock = false;
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// The lock, when another connection of the same name holds it. The session knows owners by
+    /// issuer, and every jazz.exe is <c>cli</c>; the server tells one from another by the
+    /// connection that took the lock.
+    /// </summary>
+    private SessionLock? HeldByAnotherConnection(ControlConnection connection) =>
+        _target.Session.Lock is { } held
+        && string.Equals(held.Owner, connection.Issuer, StringComparison.Ordinal)
+        && Volatile.Read(ref _lockHolder) is { } holder
+        && !ReferenceEquals(holder, connection)
+            ? held
+            : null;
 
     private JsonObject Render(JsonObject args)
     {
@@ -859,7 +903,7 @@ public sealed class ControlServer : IAsyncDisposable
                 _connections.TryRemove(connection, out _);
                 if (connection.HoldsLock)
                 {
-                    _target.Session.Unlock(connection.Issuer);
+                    UnlockSession(connection);
                 }
 
                 await connection.Channel.DisposeAsync().ConfigureAwait(false);
