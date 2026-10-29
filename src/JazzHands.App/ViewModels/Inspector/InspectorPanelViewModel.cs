@@ -38,6 +38,7 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
     public const string PanelId = "inspector";
 
     private readonly ILogger _log = Log.ForContext<InspectorPanelViewModel>();
+    private (string Owner, string Name)? _focusDriver;
 
     /// <summary>Sections a person folded, by heading: true while folded.</summary>
     private readonly Dictionary<string, bool> _folded = new(StringComparer.Ordinal);
@@ -384,6 +385,30 @@ public sealed partial class InspectorPanelViewModel : ToolViewModel, IParamEdito
         ArgumentNullException.ThrowIfNull(row);
         ICommand[] commands = [.. TargetsFor(row).Select(target => (ICommand)new SetDriverCommand(target, row.Name, expression))];
         _ = RunAsync(commands.Length == 1 ? commands[0] : new BatchCommand(commands, $"Drive {row.Label}"));
+    }
+
+    /// <inheritdoc />
+    public void StartDriving(ParamRowViewModel row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+
+        // The row is made again once it is driven; the new one's box asks for this (QA, 2026-10-29:
+        // the keyboard went to the row below, so typing the expression needed a click first).
+        _focusDriver = (row.OwnerId, row.Name);
+        SetDriver(row, row.Driver ?? "value");
+    }
+
+    /// <inheritdoc />
+    public bool TakeDriverFocus(ParamRowViewModel row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        if (_focusDriver != (row.OwnerId, row.Name))
+        {
+            return false;
+        }
+
+        _focusDriver = null;
+        return true;
     }
 
     /// <inheritdoc />

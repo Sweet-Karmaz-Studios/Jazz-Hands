@@ -135,6 +135,7 @@
                              FontFamily="{DynamicResource Font.Mono}"
                              Text="{Binding DriverText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                              KeyDown="OnFieldKeyDown"
+                             IsVisibleChanged="OnDriverBoxVisible"
                              ToolTip="time, frame, value, wiggle(freq, amount), audio(&quot;Music&quot;, low), param(&quot;id&quot;, &quot;name&quot;), marker(&quot;name&quot;). Empty to stop driving."
                              AutomationProperties.Name="{Binding Label, StringFormat={}{0} driver, Mode=OneWay}" />
                 </DockPanel>

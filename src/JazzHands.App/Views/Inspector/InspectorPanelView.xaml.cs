@@ -95,6 +95,19 @@ public partial class InspectorPanelView : UserControl
     }
 
     /// <summary>Enter takes what was typed in a text field, as leaving it would.</summary>
+    /// <summary>A driver just started from the menu: its expression box takes the keyboard, the text selected.</summary>
+    private void OnDriverBoxVisible(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (e.NewValue is true && sender is TextBox box && box.DataContext is ParamRowViewModel row && row.TakeDriverFocus())
+        {
+            box.Dispatcher.BeginInvoke(() =>
+            {
+                box.Focus();
+                box.SelectAll();
+            }, System.Windows.Threading.DispatcherPriority.Input);
+        }
+    }
+
     private void OnFieldKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Enter && sender is TextBox box)

@@ -35,6 +35,12 @@ public interface IParamEditor
 
     /// <summary>Stop driving the parameter, back to its keyframes or value.</summary>
     void ClearDriver(ParamRowViewModel row);
+
+    /// <summary>Start driving the parameter from its menu: the expression box takes the keyboard when it shows.</summary>
+    void StartDriving(ParamRowViewModel row);
+
+    /// <summary>True once, for the row just started driving, so its expression box takes the keyboard.</summary>
+    bool TakeDriverFocus(ParamRowViewModel row);
 }
 
 /// <summary>
@@ -388,7 +394,10 @@ public sealed partial class ParamRowViewModel : ObservableObject
 
     /// <summary>Starts driving it with an expression that keeps its value, to be edited from there.</summary>
     [RelayCommand]
-    private void Drive() => _editor.SetDriver(this, Driver ?? "value");
+    private void Drive() => _editor.StartDriving(this);
+
+    /// <summary>True once, when this row's driver was just started from the menu: its expression box takes the keyboard.</summary>
+    public bool TakeDriverFocus() => _editor.TakeDriverFocus(this);
 
     /// <summary>The expression box was committed (Enter, or leaving it): a new expression, or none to stop driving.</summary>
     partial void OnDriverTextChanged(string value)
