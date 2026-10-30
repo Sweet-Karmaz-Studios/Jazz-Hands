@@ -303,7 +303,7 @@ public sealed partial class TimelineViewModel
             new("Freeze frame at playhead", null, () => RunAsync(new FreezeFrameCommand(clip.Id, playhead)), clip.Kind != TrackKind.Audio && clip.Start <= playhead && playhead < clip.End),
             new(clip.Clip.IsRemapped ? "Remove the speed curve" : "Speed curve", null, () => RunAsync(new SetClipRemapCommand(clip.Id, Off: clip.Clip.IsRemapped)), clip.Clip.IsMedia && clip.Kind != TrackKind.Audio),
             new("Split at scene cuts...", null, () => _dialogs?.ShowSceneCutsAsync(clip.Clip.MediaId!, clip.Id) ?? Task.CompletedTask, HasShots(clip)),
-            new("Ripple delete", "Shift+Delete", () => RunAsync(new RippleDeleteClipsCommand([.. ids]))),
+            new("Ripple delete", "Shift+Delete", () => RunAsync(new RippleDeleteClipsCommand([.. ids], Alone: true))),
             new("Delete", "Delete", () => RunAsync(Batch([.. ids.Select(id => (ICommand)new RemoveClipCommand(id))], "Delete"))),
             TimelineMenuItem.Separator,
             oneLink
@@ -761,7 +761,7 @@ public sealed partial class TimelineViewModel
         string[] ids = [.. _trimmed.Select(view => view.Id)];
         EditResult<Sequence> result = EditOps.RippleTrim(Content.Sequence, ids, _edge, to, clip => SourceDuration(clip));
 
-        _pending = [new RippleTrimClipsCommand([.. ids], _edge, to)];
+        _pending = [new RippleTrimClipsCommand([.. ids], _edge, to, Alone: true)];
         ShowResult(result, ids);
     }
 
@@ -939,7 +939,7 @@ public sealed partial class TimelineViewModel
 
         ICommand command = edit.Tool == TimelineTool.Roll
             ? Batch([.. edit.Rolls.Select(pair => (ICommand)new RollClipsCommand(pair.LeftId, pair.RightId, by))], "Roll")
-            : new RippleTrimClipsCommand([.. edit.ClipIds], edit.Edge, edit.Time + by);
+            : new RippleTrimClipsCommand([.. edit.ClipIds], edit.Edge, edit.Time + by, Alone: true);
 
         if (await RunAsync(command).ConfigureAwait(true))
         {

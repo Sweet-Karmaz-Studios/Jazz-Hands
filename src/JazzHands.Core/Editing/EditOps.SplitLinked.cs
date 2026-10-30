@@ -72,6 +72,43 @@ public static partial class EditOps
     }
 
     /// <summary>
+    /// Some clips and every clip linked to them on an unlocked track, the given ones first: what
+    /// a ripple takes when it is named a picture, so its own sound is not left in the way. Ids the
+    /// sequence does not have are kept, for the edit to report.
+    /// </summary>
+    public static IReadOnlyList<string> WithLinked(Sequence sequence, IEnumerable<string> clipIds)
+    {
+        ArgumentNullException.ThrowIfNull(sequence);
+        ArgumentNullException.ThrowIfNull(clipIds);
+
+        var kept = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var links = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string id in clipIds)
+        {
+            if (seen.Add(id))
+            {
+                kept.Add(id);
+            }
+
+            if (sequence.Tracks.Select(track => track.Clip(id)).FirstOrDefault(clip => clip is not null)?.LinkGroupId is { } link)
+            {
+                links.Add(link);
+            }
+        }
+
+        foreach (Track track in sequence.Tracks.Where(track => !track.Locked))
+        {
+            foreach (Clip partner in track.Clips.Where(clip => clip.LinkGroupId is { } link && links.Contains(link) && seen.Add(clip.Id)))
+            {
+                kept.Add(partner.Id);
+            }
+        }
+
+        return kept;
+    }
+
+    /// <summary>
     /// The clips to send a split to, so each is cut once: a clip linked to one earlier in the list
     /// is left out, since that one's split cuts it. Ids the sequence does not have are kept.
     /// </summary>

@@ -51,6 +51,10 @@ internal static class SequenceEdit
         }
     }
 
+    /// <summary>The clips an edit takes: those named and, unless alone, the clips linked to them.</summary>
+    internal static IReadOnlyList<string> Taking(Sequence sequence, IReadOnlyList<string> clipIds, bool alone) =>
+        alone ? clipIds : EditOps.WithLinked(sequence, clipIds);
+
     /// <summary>How much source each clip has, so a trim cannot run off the end of it.</summary>
     internal static Func<Clip, Flicks?> SourceLength(Project project) =>
         clip => SlipClipHandler.SourceDuration(project, clip);
@@ -73,7 +77,7 @@ public sealed class RippleTrimClipsHandler : ICommandHandler<RippleTrimClipsComm
 
         Sequence sequence = SequenceEdit.Of(project, command.ClipIds, "A ripple trim");
         Sequence after = HandlerContext.Require(
-            EditOps.RippleTrim(sequence, command.ClipIds, command.Edge, command.To, SequenceEdit.SourceLength(project)));
+            EditOps.RippleTrim(sequence, SequenceEdit.Taking(sequence, command.ClipIds, command.Alone), command.Edge, command.To, SequenceEdit.SourceLength(project)));
 
         return SequenceEdit.Commit(project, sequence, after, context);
     }
@@ -90,7 +94,7 @@ public sealed class RippleDeleteClipsHandler : ICommandHandler<RippleDeleteClips
         ArgumentNullException.ThrowIfNull(context);
 
         Sequence sequence = SequenceEdit.Of(project, command.ClipIds, "A ripple delete");
-        Sequence after = HandlerContext.Require(EditOps.RippleDelete(sequence, command.ClipIds));
+        Sequence after = HandlerContext.Require(EditOps.RippleDelete(sequence, SequenceEdit.Taking(sequence, command.ClipIds, command.Alone)));
         return SequenceEdit.Commit(project, sequence, after, context);
     }
 }
@@ -106,7 +110,7 @@ public sealed class StorylineMoveClipsHandler : ICommandHandler<StorylineMoveCli
         ArgumentNullException.ThrowIfNull(context);
 
         Sequence sequence = SequenceEdit.Of(project, command.ClipIds, "A storyline move");
-        Sequence after = HandlerContext.Require(EditOps.MoveOnStoryline(sequence, command.ClipIds, command.To));
+        Sequence after = HandlerContext.Require(EditOps.MoveOnStoryline(sequence, SequenceEdit.Taking(sequence, command.ClipIds, command.Alone), command.To));
         return SequenceEdit.Commit(project, sequence, after, context);
     }
 }

@@ -974,7 +974,7 @@ public sealed partial class TimelineViewModel
         Flicks to = (lead.Length > 0 ? lead : moving.Where(clip => clip.Kind == primary.Kind)).Min(clip => clip.Start) + delta;
         string[] ids = [.. moving.Select(clip => clip.Id)];
 
-        _pending = [new StorylineMoveClipsCommand([.. ids], to)];
+        _pending = [new StorylineMoveClipsCommand([.. ids], to, Alone: true)];
         ShowResult(EditOps.MoveOnStoryline(Content.Sequence, ids, to), ids);
     }
 

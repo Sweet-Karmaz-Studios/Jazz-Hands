@@ -289,9 +289,10 @@ public sealed class RemoveClipHandler : ICommandHandler<RemoveClipCommand>
 
         if (command.Ripple)
         {
-            // The same edit as clip.ripple-delete: every sync-locked track closes up too.
+            // The same edit as clip.ripple-delete: its linked clips go too, and every sync-locked
+            // track closes up.
             SequenceEdit.RefuseQuickTrim(found.Sequence);
-            Sequence rippled = HandlerContext.Require(EditOps.RippleDelete(found.Sequence, [command.ClipId]));
+            Sequence rippled = HandlerContext.Require(EditOps.RippleDelete(found.Sequence, EditOps.WithLinked(found.Sequence, [command.ClipId])));
             return SequenceEdit.Commit(project, found.Sequence, rippled, context);
         }
 
