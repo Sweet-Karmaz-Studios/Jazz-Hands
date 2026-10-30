@@ -585,17 +585,12 @@ public static partial class EditOps
         return [.. changed.Distinct(StringComparer.Ordinal)];
     }
 
-    /// <summary>Takes clips off their tracks and leaves the gaps.</summary>
-    private static EditResult<Sequence> Lift(Sequence sequence, List<(Track Track, Clip Clip)> found)
+    /// <summary>Takes clips off their tracks and leaves the gaps. <see cref="Find"/> has already refused locked tracks.</summary>
+    private static Sequence Lift(Sequence sequence, List<(Track Track, Clip Clip)> found)
     {
         Sequence result = sequence;
         foreach ((Track track, Clip clip) in found)
         {
-            if (track.Locked)
-            {
-                return EditError.TrackLocked(track.Name);
-            }
-
             result = result.ReplaceTrack(result.Track(track.Id)!.RemoveClip(clip.Id));
         }
 
