@@ -205,6 +205,12 @@ Draw one frame of a sequence to a PNG exactly as the editor's preview shows it, 
 | `--clip <clip>` | With --sheet: through this clip rather than the whole sequence. |
 | `--node <node>` | Show this comp graph node's picture in place of its graph's output, to look at any node. |
 
+Example:
+
+```
+jazz frame trailer.jazz --at 00:00:12.500 --out check.png
+```
+
 ### `jazz frames <project>`
 
 Draw a frame every so often through a sequence as the preview shows it, one PNG each, named by their times.
@@ -220,6 +226,12 @@ Draw a frame every so often through a sequence as the preview shows it, one PNG 
 | `--size <size>` | How wide to draw each, as a size: 640x360; the height follows the sequence's shape. Default: 640x360. |
 | `--sequence <sequence>` | Which sequence; the active one when left out. |
 | `--range <range>` | Only this stretch: 00:10-00:30. All of the sequence when left out. |
+
+Example:
+
+```
+jazz frames trailer.jazz --every 5s --out frames
+```
 
 ### `jazz contact-sheet <project>`
 
@@ -238,6 +250,12 @@ Tile frames from even steps through a sequence into one PNG, each labelled with 
 | `--sequence <sequence>` | Which sequence; the active one when left out. |
 | `--range <range>` | Only this stretch: 00:10-00:30. |
 
+Example:
+
+```
+jazz contact-sheet trailer.jazz --out sheet.png --cols 4 --rows 3
+```
+
 ### `jazz proof <project>`
 
 Export a quick 480p proof of a sequence, every frame rendered, to watch before handing off.
@@ -252,6 +270,12 @@ Export a quick 480p proof of a sequence, every frame rendered, to watch before h
 | `--sequence <sequence>` | Which sequence; the active one when left out. |
 | `--range <range>` | Only this stretch: 00:10-00:30. |
 | `--encoder <encoder>` | The encoders to try, in order: libx264 keeps it off the GPU. |
+
+Example:
+
+```
+jazz proof trailer.jazz --out proof.mp4
+```
 
 ### `jazz apply <project> <script>`
 
@@ -268,6 +292,12 @@ Run a script of commands against a project in one session; save only if every st
 | `--dry-run` | Run the steps that only change the project, report, and save nothing. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz apply trailer.jazz edits.json
+```
+
 ### `jazz docs`
 
 Write the command reference, Docs/CLI.md, from the commands themselves.
@@ -276,6 +306,12 @@ Write the command reference, Docs/CLI.md, from the commands themselves.
 |---|---|
 | `--markdown` | Write the reference as Markdown. The only form there is, and the default. |
 | `--out <out>` | Write it to this file, as UTF-8, instead of to the console: Docs/CLI.md. |
+
+Example:
+
+```
+jazz docs --out Docs\CLI.md
+```
 
 ### `jazz serve <project>`
 
@@ -295,6 +331,12 @@ Open a project headless and serve it over the control server until Ctrl+C: a GUI
 | `--token <token>` | The token TCP clients must say; made up when left out, and printed. |
 | `--save-on-exit` | Save the project when stopped with Ctrl+C, if it has changes. |
 
+Example:
+
+```
+jazz serve trailer.jazz --save-on-exit
+```
+
 ### `jazz mcp`
 
 Serve the Model Context Protocol on stdin and stdout for Claude Code: 'claude mcp add jazz -- jazz mcp --attach'.
@@ -304,6 +346,14 @@ Serve the Model Context Protocol on stdin and stdout for Claude Code: 'claude mc
 | `--project <project>` | Open this project here instead of attaching to an editor; a path that does not exist yet starts a new project there. |
 | `--save-on-exit` | With --project, save it when the client disconnects, if it changed. |
 | `--list-tools` | Print the tools and what each does, then exit. With --json, their schemas too. |
+
+Example:
+
+```
+# Add it to Claude Code, connected to the running editor:
+# claude mcp add jazz -- jazz mcp --attach
+jazz mcp --list-tools
+```
 
 ### `jazz describe <project>`
 
@@ -320,6 +370,12 @@ Describe the project for a person or a model: settings, media, a sequence's trac
 | `--detail <brief|full>` | brief (the default, budgeted) or full (ids, sources, effects, problems). Default: brief. |
 | `--budget <n>` | At brief, about the most tokens to spend; 0 for no limit. Default: 2000. |
 
+Example:
+
+```
+jazz describe trailer.jazz --detail full
+```
+
 ### `jazz redo <project>`
 
 Put back a command that was undone.
@@ -333,6 +389,12 @@ Put back a command that was undone.
 | `--steps <n>` | How many commands to put back. Default: 1. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz --attach redo
+```
+
 ### `jazz undo <project>`
 
 Take back the last command.
@@ -345,6 +407,13 @@ Take back the last command.
 |---|---|
 | `--steps <n>` | How many commands to take back. Default: 1. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+# Undo belongs to an open session, so it goes to a running editor.
+jazz --attach undo --steps 2
+```
 
 ## `jazz app`
 
@@ -362,6 +431,12 @@ Hide the editor to the notification area, where it keeps running.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz --attach app hide
+```
+
 ### `jazz app quit <project>`
 
 Quit the editor.
@@ -376,6 +451,12 @@ Quit the editor.
 | `--wait-for-exports` | Let the exports finish first, then quit. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz --attach app quit --wait-for-exports
+```
+
 ### `jazz app show <project>`
 
 Show the editor's window and bring it to the front.
@@ -387,6 +468,12 @@ Show the editor's window and bring it to the front.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz --attach app show
+```
 
 ### `jazz app unregister <project>`
 
@@ -400,6 +487,12 @@ Remove Jazz Hands from Windows (file association, Explorer verbs, start with Win
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz --attach app unregister
+```
+
 ## `jazz audio`
 
 Sound on clips: gain, pan, fades, channel maps, muting a stream, detaching sound; the master volume and limiter; the meters.
@@ -412,6 +505,12 @@ The tempo, confidence and beats of a music clip, without marking them.
 |---|---|
 | `<project>` | The .jazz file to work on. |
 | `<clip-id>` | The music clip. |
+
+Example:
+
+```
+jazz audio beat-analysis trailer.jazz <music-clip-id>
+```
 
 ### `jazz audio beats <project> <clip-id>`
 
@@ -427,6 +526,12 @@ Find a music clip's beats and mark them on the sequence.
 | `--keep` | Keep beat markers already there. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz audio beats trailer.jazz <music-clip-id>
+```
+
 ### `jazz audio detach <project> <clip-id>`
 
 Unlink a clip's audio from its picture.
@@ -439,6 +544,12 @@ Unlink a clip's audio from its picture.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz audio detach trailer.jazz <clip-id>
+```
 
 ### `jazz audio duck <project>`
 
@@ -460,6 +571,12 @@ Duck the music under a voice: one track drops by a depth while another has sound
 | `--off` | Take the ducking off the music track. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz audio duck trailer.jazz --music <music-track-id> --voice <a1-id> --depth -12
+```
+
 ### `jazz audio enhance-speech <project> <clip-id>`
 
 Take noise, room and hum out of speech.
@@ -474,6 +591,12 @@ Take noise, room and hum out of speech.
 | `--amount <number>` | How much of the enhanced speech is heard, 0 to 100. Default: 100. |
 | `--off` | Take the effect off instead. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz audio enhance-speech trailer.jazz <voice-clip-id> --amount 0.8
+```
 
 ### `jazz audio learn-noise <project> <clip-id>`
 
@@ -490,6 +613,12 @@ Learn a clip's background noise (a fan, hiss, the room) from a stretch with only
 | `--to <time>` | Where it ends. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz audio learn-noise trailer.jazz <voice-clip-id> --from 00:00:00.500 --to 00:00:01.500
+```
+
 ### `jazz audio measure <project>`
 
 Measure a clip, a track or the mix on its own: peak, RMS and integrated loudness (LUFS).
@@ -505,6 +634,12 @@ Measure a clip, a track or the mix on its own: peak, RMS and integrated loudness
 | `--mix` | The whole mix, before the limiter. |
 | `--sequence <id>` | For --mix, which sequence. |
 
+Example:
+
+```
+jazz audio measure trailer.jazz --mix
+```
+
 ### `jazz audio meter <project>`
 
 Meter a stretch of the mix: peak, true peak, RMS and LUFS.
@@ -518,6 +653,12 @@ Meter a stretch of the mix: peak, true peak, RMS and LUFS.
 | `--from <time>` | Where to start on the sequence. |
 | `--to <time>` | Where to stop. |
 | `--sequence <id>` | Which sequence. |
+
+Example:
+
+```
+jazz audio meter trailer.jazz --from 00:00:10.000 --to 00:00:20.000
+```
 
 ### `jazz audio mute-stream <project> <clip-id>`
 
@@ -533,6 +674,12 @@ Mute one audio stream of a clip.
 | `--stream <n>` | Which stream of the media. |
 | `--muted` | true to mute, false to unmute. Default: true. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz audio mute-stream trailer.jazz <clip-id> --stream 2 --muted
+```
 
 ### `jazz audio normalize <project>`
 
@@ -552,6 +699,12 @@ Set a clip's, a track's or the mix's gain so it measures a peak, RMS or loudness
 | `--sequence <id>` | For --mix, which sequence. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz audio normalize trailer.jazz --mix --mode lufs --target -14
+```
+
 ### `jazz audio reduce-noise <project> <clip-id>`
 
 Turn a clip's noise reduction on, change how much it takes out, or take it off.
@@ -568,6 +721,12 @@ Turn a clip's noise reduction on, change how much it takes out, or take it off.
 | `--off` | Take noise reduction off. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz audio reduce-noise trailer.jazz <voice-clip-id> --reduction 12
+```
+
 ### `jazz audio replace <project> <clip-id> <media-id>`
 
 Play another media item's audio in a clip.
@@ -583,6 +742,12 @@ Play another media item's audio in a clip.
 | `--stream <n>` | Which audio stream of it; the first when left out. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz audio replace trailer.jazz <voice-clip-id> <mic-id>
+```
+
 ### `jazz audio set-channel-map <project> <clip-id> <map>`
 
 Play one channel of a stereo clip as mono.
@@ -596,6 +761,12 @@ Play one channel of a stereo clip as mono.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz audio set-channel-map trailer.jazz <voice-clip-id> left
+```
 
 ### `jazz audio set-fade-in <project> <clip-id>`
 
@@ -612,6 +783,12 @@ Set an audio clip's fade in.
 | `--curve <hold|linear|bezier|ease-in|ease-out|ease-in-out>` | linear, ease-in-out (smooth), ease-in (slow start), ease-out (fast start) or bezier (S curve). Default: linear. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz audio set-fade-in trailer.jazz <music-clip-id> --dur 2s --curve ease-in
+```
+
 ### `jazz audio set-fade-out <project> <clip-id>`
 
 Set an audio clip's fade out.
@@ -626,6 +803,12 @@ Set an audio clip's fade out.
 | `--dur <time>` | Required. How long the fade lasts; 0 removes it. |
 | `--curve <hold|linear|bezier|ease-in|ease-out|ease-in-out>` | linear, ease-in-out (smooth), ease-in (slow start), ease-out (fast start) or bezier (S curve). Default: linear. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz audio set-fade-out trailer.jazz <music-clip-id> --dur 3s
+```
 
 ### `jazz audio set-gain <project> <clip-id>`
 
@@ -642,6 +825,12 @@ Set an audio clip's gain in dB, or a keyframe of it.
 | `--at <time>` | Set a keyframe at this time on the sequence. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz audio set-gain trailer.jazz <music-clip-id> --db -6
+```
+
 ### `jazz audio set-limiter <project>`
 
 Turn the master limiter on or off, or set its ceiling in dBTP.
@@ -656,6 +845,12 @@ Turn the master limiter on or off, or set its ceiling in dBTP.
 | `--ceiling <number>` | The ceiling in dBTP, -24 to 0. |
 | `--sequence <id>` | Which sequence. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz audio set-limiter trailer.jazz --on --ceiling -1
+```
 
 ### `jazz audio set-master-volume <project>`
 
@@ -672,6 +867,12 @@ Set a sequence's master volume in dB, or a keyframe of it.
 | `--sequence <id>` | Which sequence. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz audio set-master-volume trailer.jazz --db -3
+```
+
 ### `jazz audio set-pan <project> <clip-id>`
 
 Set an audio clip's pan, or a keyframe of it.
@@ -686,6 +887,12 @@ Set an audio clip's pan, or a keyframe of it.
 | `--pan <number>` | Required. -1 hard left, 0 centre, 1 hard right. |
 | `--at <time>` | Set a keyframe at this time on the sequence. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz audio set-pan trailer.jazz <voice-clip-id> --pan -0.3
+```
 
 ### `jazz audio sync <project>`
 
@@ -702,6 +909,12 @@ Move a clip so its sound lines up with another clip's: a separate microphone wit
 | `--force` | Move it even when the match is unsure. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz audio sync trailer.jazz --clip <voice-clip-id> --to <clip-id>
+```
+
 ### `jazz audio sync-offset <project>`
 
 How far to move a clip so its sound lines up with another clip's, and how sure the match is.
@@ -714,6 +927,12 @@ How far to move a clip so its sound lines up with another clip's, and how sure t
 |---|---|
 | `--clip <id>` | Required. The clip that would move. |
 | `--to <id>` | Required. The clip it lines up with. |
+
+Example:
+
+```
+jazz audio sync-offset trailer.jazz --clip <voice-clip-id> --to <clip-id>
+```
 
 ## `jazz cache`
 
@@ -739,6 +958,12 @@ Empty the cache, or parts of it.
 | `--all` | Everything, proxies included. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz cache clear trailer.jazz --thumbs --waveforms
+```
+
 ### `jazz cache configure <project>`
 
 Set the cache's folder and size limit.
@@ -753,6 +978,12 @@ Set the cache's folder and size limit.
 | `--cap-gb <number>` | The size limit in gigabytes; 0 for none. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz cache configure trailer.jazz --cap-gb 40
+```
+
 ### `jazz cache stats <project>`
 
 Show what the cache holds and its size limit.
@@ -760,6 +991,12 @@ Show what the cache holds and its size limit.
 | Argument | Meaning |
 |---|---|
 | `<project>` | The .jazz file to work on. |
+
+Example:
+
+```
+jazz cache stats trailer.jazz
+```
 
 ## `jazz camera`
 
@@ -794,6 +1031,12 @@ Put a 3D camera on the timeline.
 | `--sequence <id>` | Which sequence, when no track is named. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz camera add trailer.jazz --at 0 --dur 6s --orbit 30 --dolly 400
+```
+
 ## `jazz chapter`
 
 Chapters: markers that become a file's chapters, from markers or imported from media.
@@ -814,6 +1057,12 @@ Put a chapter mark on a sequence.
 | `--id <id>` | The identifier to give it. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz chapter add trailer.jazz "Boss fight" --at 00:01:10.000
+```
+
 ### `jazz chapter from-markers <project>`
 
 Make every marker on a sequence a chapter.
@@ -826,6 +1075,12 @@ Make every marker on a sequence a chapter.
 |---|---|
 | `--sequence <id>` | Which sequence. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz chapter from-markers trailer.jazz
+```
 
 ### `jazz chapter import <project> <media-id>`
 
@@ -842,6 +1097,12 @@ Make a media item's chapters into chapter marks.
 | `--sequence <id>` | Which sequence. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz chapter import trailer.jazz <capture-id>
+```
+
 ### `jazz chapter list <project>`
 
 List a sequence's chapters.
@@ -853,6 +1114,12 @@ List a sequence's chapters.
 | Option | Meaning |
 |---|---|
 | `--sequence <id>` | Which sequence. |
+
+Example:
+
+```
+jazz chapter list trailer.jazz
+```
 
 ## `jazz clip`
 
@@ -881,6 +1148,14 @@ Put a clip on a track.
 | `--audio` | Also put each audio stream on an audio track, linked to the picture. Default: true. |
 | `--no-save` | Do not write the project back. |
 
+Examples:
+
+```
+jazz clip add trailer.jazz <v1-id> --media <capture-id> --at 00:00:30.000 --in 00:01:10.000 --dur 6s
+# A generator rather than a file:
+jazz clip add trailer.jazz <v2-id> --generator gen.solid --at 00:00:10.000 --dur 3s
+```
+
 ### `jazz clip add-adjustment <project>`
 
 Put an adjustment layer over everything, for effects that change every picture under it.
@@ -897,6 +1172,12 @@ Put an adjustment layer over everything, for effects that change every picture u
 | `--id <id>` | The identifier to give it. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip add-adjustment trailer.jazz --at 00:00:10.000 --dur 5s
+```
+
 ### `jazz clip close-gap <project> <track-id>`
 
 Close a gap on a track, rippling every sync-locked track.
@@ -910,6 +1191,12 @@ Close a gap on a track, rippling every sync-locked track.
 |---|---|
 | `--at <time>` | Required. A time inside the gap. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz clip close-gap trailer.jazz <v1-id> --at 00:00:13.000
+```
 
 ### `jazz clip copy <project> <clip-id>`
 
@@ -927,6 +1214,12 @@ Copy a clip to another time or track.
 | `--id <id>` | The identifier for the copy. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip copy trailer.jazz <clip-id> --at 00:00:30.000 --track <v2-id>
+```
+
 ### `jazz clip duplicate <project> <clip-id>`
 
 Copy a clip to immediately after itself.
@@ -940,6 +1233,12 @@ Copy a clip to immediately after itself.
 |---|---|
 | `--id <id>` | The identifier for the copy. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz clip duplicate trailer.jazz <title-clip-id>
+```
 
 ### `jazz clip extract <project>`
 
@@ -957,6 +1256,12 @@ Remove a range and close the gap.
 | `--sequence <id>` | Which sequence. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip extract trailer.jazz --from 00:00:05.000 --to 00:00:07.000
+```
+
 ### `jazz clip find-fillers <project> <clip-id>`
 
 List the filler words and long pauses clip.remove-fillers would cut.
@@ -972,6 +1277,12 @@ List the filler words and long pauses clip.remove-fillers would cut.
 | `--pauses <time>` | Shorten pauses longer than this, such as 0.8s. |
 | `--keep <time>` | How much of a long pause to keep. Default: 0.25 s. |
 | `--fillers` | Take out filler words. Default: on. |
+
+Example:
+
+```
+jazz clip find-fillers trailer.jazz <voice-clip-id> --pauses 1s
+```
 
 ### `jazz clip freeze-frame <project> <clip-id>`
 
@@ -989,6 +1300,12 @@ Hold a frame for a while, pushing the rest on.
 | `--id <id>` | The identifier for the freeze frame. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip freeze-frame trailer.jazz <clip-id> --at 00:00:03.000 --dur 2s
+```
+
 ### `jazz clip get <project> <clip-id>`
 
 Describe one clip.
@@ -997,6 +1314,12 @@ Describe one clip.
 |---|---|
 | `<project>` | The .jazz file to work on. |
 | `<clip-id>` | The clip id. |
+
+Example:
+
+```
+jazz clip get trailer.jazz <clip-id>
+```
 
 ### `jazz clip group <project> <clip-ids>...`
 
@@ -1011,6 +1334,12 @@ Group clips so that selecting one selects them all.
 |---|---|
 | `--id <id>` | The identifier to share. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz clip group trailer.jazz <clip-id> <title-clip-id>
+```
 
 ### `jazz clip insert <project> <track-id>`
 
@@ -1035,6 +1364,12 @@ Put a clip in at a time, pushing the rest on.
 | `--audio` | Also put each audio stream on an audio track, linked to the picture. Default: true. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip insert trailer.jazz <v1-id> --media <capture-id> --at 00:00:04.000 --dur 3s
+```
+
 ### `jazz clip insert-from-source <project>`
 
 Insert the source's marked stretch at the playhead or the in point.
@@ -1052,6 +1387,12 @@ Insert the source's marked stretch at the playhead or the in point.
 | `--sequence <id>` | Which sequence. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip insert-from-source trailer.jazz --media <capture-id> --source-in 00:01:10.000 --source-out 00:01:14.000 --at 00:00:20.000
+```
+
 ### `jazz clip lift <project>`
 
 Remove a range, leaving a gap.
@@ -1068,6 +1409,12 @@ Remove a range, leaving a gap.
 | `--sequence <id>` | Which sequence. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip lift trailer.jazz --from 00:00:05.000 --to 00:00:07.000
+```
+
 ### `jazz clip link <project> <clip-ids>...`
 
 Link clips so that moving one moves them all.
@@ -1082,6 +1429,12 @@ Link clips so that moving one moves them all.
 | `--id <id>` | The identifier to share. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip link trailer.jazz <clip-id> <voice-clip-id>
+```
+
 ### `jazz clip list <project>`
 
 List clips, in timeline order.
@@ -1094,6 +1447,12 @@ List clips, in timeline order.
 |---|---|
 | `--track <id>` | Only this track. |
 | `--sequence <id>` | Which sequence. |
+
+Example:
+
+```
+jazz clip list trailer.jazz --track <v1-id>
+```
 
 ### `jazz clip match-frame <project> <clip-id>`
 
@@ -1108,6 +1467,12 @@ Find the source and frame a clip shows at a time.
 |---|---|
 | `--at <time>` | Required. The time on the timeline. |
 
+Example:
+
+```
+jazz clip match-frame trailer.jazz <clip-id> --at 00:00:05.000
+```
+
 ### `jazz clip measure-3d <project> <clip-id>`
 
 Where a 3D clip's pivot and axes are on the frame through the camera.
@@ -1120,6 +1485,12 @@ Where a 3D clip's pivot and axes are on the frame through the camera.
 | Option | Meaning |
 |---|---|
 | `--at <time>` | When, on the sequence; the clip's middle when left out. |
+
+Example:
+
+```
+jazz clip measure-3d trailer.jazz <3d-clip-id> --at 00:00:01.000
+```
 
 ### `jazz clip move <project> <clip-id>`
 
@@ -1136,6 +1507,12 @@ Move a clip to another time or track.
 | `--track <id>` | Which track to move it to. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip move trailer.jazz <clip-id> --to 00:00:12.000 --track <v2-id>
+```
+
 ### `jazz clip nest <project> <clip-ids> <name>`
 
 Move clips into a new sequence and leave a compound clip behind.
@@ -1151,6 +1528,12 @@ Move clips into a new sequence and leave a compound clip behind.
 | `--id <id>` | The identifier for the compound clip. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip nest trailer.jazz <clip-id>,<next-clip-id> "Opening"
+```
+
 ### `jazz clip nudge <project> <clip-ids>...`
 
 Move clips earlier or later by whole frames.
@@ -1164,6 +1547,12 @@ Move clips earlier or later by whole frames.
 |---|---|
 | `--frames <n>` | How many frames; negative moves earlier. Default: 1. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz clip nudge trailer.jazz <title-clip-id> --frames 2
+```
 
 ### `jazz clip overwrite <project> <track-id>`
 
@@ -1188,6 +1577,12 @@ Put a clip over whatever is at a time.
 | `--audio` | Also put each audio stream on an audio track, linked to the picture. Default: true. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip overwrite trailer.jazz <v1-id> --media <capture-id> --at 00:00:06.000 --dur 2s
+```
+
 ### `jazz clip overwrite-from-source <project>`
 
 Overwrite with the source's marked stretch at the playhead or the in point.
@@ -1204,6 +1599,12 @@ Overwrite with the source's marked stretch at the playhead or the in point.
 | `--at <time>` | Where on the timeline when there is no in point; the playhead when left out. |
 | `--sequence <id>` | Which sequence. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz clip overwrite-from-source trailer.jazz --media <capture-id> --source-in 00:02:00.000 --source-out 00:02:03.000 --at 00:00:06.000
+```
 
 ### `jazz clip paste <project>`
 
@@ -1222,6 +1623,15 @@ Paste copied clips at a time, over what is there or pushing it on.
 | `--sequence <id>` | Which sequence. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+# --data is the JSON jazz clipboard copy prints. A command line holds about 32,000 characters,
+# so pass a few clips at a time. In PowerShell:
+# $clips = jazz clipboard copy trailer.jazz <next-clip-id> | Out-String
+jazz clip paste trailer.jazz --data $clips --at 00:00:40.000 --track <v1-id>
+```
+
 ### `jazz clip plan-from-source <project>`
 
 What an edit from the source monitor would put where.
@@ -1237,6 +1647,12 @@ What an edit from the source monitor would put where.
 | `--source-out <time>` | The source out, exclusive; the source monitor's mark when left out. |
 | `--at <time>` | Where on the timeline when there is no in point; the playhead when left out. |
 | `--sequence <id>` | Which sequence. |
+
+Example:
+
+```
+jazz clip plan-from-source trailer.jazz --media <capture-id> --source-in 00:01:10.000 --source-out 00:01:14.000 --at 00:00:20.000
+```
 
 ### `jazz clip ramp-speed <project> <clip-id>`
 
@@ -1256,6 +1672,12 @@ Ramp a clip from one speed to another.
 | `--linear` | A constant change rather than an ease. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip ramp-speed trailer.jazz <clip-id> --from 1 --to 0.25 --at 00:00:02.000 --dur 1s
+```
+
 ### `jazz clip rate-stretch <project> <clip-id>`
 
 Stretch a clip to a new duration by changing its speed.
@@ -1269,6 +1691,12 @@ Stretch a clip to a new duration by changing its speed.
 |---|---|
 | `--dur <time>` | Required. How long it should become. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz clip rate-stretch trailer.jazz <clip-id> --dur 4s
+```
 
 ### `jazz clip remap-add-point <project> <clip-id>`
 
@@ -1284,6 +1712,12 @@ Add a point to a clip's speed curve.
 | `--at <time>` | Required. Where, on the timeline. |
 | `--speed <number>` | The speed there; the curve's own when left out. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz clip remap-add-point trailer.jazz <clip-id> --at 00:00:02.000 --speed 0.5
+```
 
 ### `jazz clip remap-move-point <project> <clip-id>`
 
@@ -1301,6 +1735,12 @@ Move a point of a clip's speed curve.
 | `--speed <number>` | Its new speed. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip remap-move-point trailer.jazz <clip-id> --point 1 --at 00:00:02.500
+```
+
 ### `jazz clip remap-remove-point <project> <clip-id>`
 
 Remove a point from a clip's speed curve.
@@ -1314,6 +1754,12 @@ Remove a point from a clip's speed curve.
 |---|---|
 | `--point <n>` | Required. Which point, from 1 in time order. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz clip remap-remove-point trailer.jazz <clip-id> --point 1
+```
 
 ### `jazz clip remap-set-ease <project> <clip-id>`
 
@@ -1330,6 +1776,12 @@ Set how a clip's speed curve leaves a point.
 | `--ease <hold|linear|bezier|ease-in|ease-out|ease-in-out>` | Required. linear, easeIn, easeOut, easeInOut or hold. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip remap-set-ease trailer.jazz <clip-id> --point 1 --ease ease-in-out
+```
+
 ### `jazz clip remove <project> <clip-id>`
 
 Remove a clip, leaving a gap or closing it.
@@ -1344,6 +1796,12 @@ Remove a clip, leaving a gap or closing it.
 | `--ripple` | Close the gap behind it. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip remove trailer.jazz <clip-id> --ripple
+```
+
 ### `jazz clip remove-background <project> <clip-id>`
 
 Cut a person out of a clip without a green screen.
@@ -1357,6 +1815,12 @@ Cut a person out of a clip without a green screen.
 |---|---|
 | `--off` | Take the effect off instead. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz clip remove-background trailer.jazz <clip-id>
+```
 
 ### `jazz clip remove-fillers <project> <clip-id>`
 
@@ -1375,6 +1839,12 @@ Cut filler words and long pauses out of a clip.
 | `--fillers` | Take out filler words. Default: on. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip remove-fillers trailer.jazz <voice-clip-id> --pauses 1s --keep 200ms
+```
+
 ### `jazz clip remove-words <project> <clip-id>`
 
 Cut words out of a clip, closing the gap.
@@ -1390,6 +1860,12 @@ Cut words out of a clip, closing the gap.
 | `--to <n>` | The last word's index; the first when left out. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip remove-words trailer.jazz <voice-clip-id> --from 12 --to 15
+```
+
 ### `jazz clip ripple-delete <project> <clip-ids>...`
 
 Remove clips and close the gap on every sync-locked track.
@@ -1401,7 +1877,15 @@ Remove clips and close the gap on every sync-locked track.
 
 | Option | Meaning |
 |---|---|
+| `--alone` | Only these clips, not the clips linked to them. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+# Their linked sound goes too, unless --alone.
+jazz clip ripple-delete trailer.jazz <clip-id> <next-clip-id>
+```
 
 ### `jazz clip ripple-trim <project> <clip-ids>...`
 
@@ -1416,7 +1900,14 @@ Trim a clip edge and ripple everything after it.
 |---|---|
 | `--edge <none|start|end>` | Required. start or end. |
 | `--to <time>` | Required. Where the edge goes. |
+| `--alone` | Only these clips, not the clips linked to them. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz clip ripple-trim trailer.jazz <clip-id> --edge end --to 00:00:03.500
+```
 
 ### `jazz clip roll <project> <left-clip-id> <right-clip-id>`
 
@@ -1432,6 +1923,12 @@ Move the cut between two touching clips.
 |---|---|
 | `--by <time>` | Required. How far to move the cut. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz clip roll trailer.jazz <clip-id> <next-clip-id> --by 12f
+```
 
 ### `jazz clip set-3d <project> <clip-id>`
 
@@ -1450,6 +1947,12 @@ Make a clip a 3D layer, or flat again.
 | `--accepts-shadows` | true to be darkened by shadows other layers throw. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip set-3d trailer.jazz <clip-id> --lights --casts-shadows
+```
+
 ### `jazz clip set-blend <project> <clip-id> <mode>`
 
 Set how a clip blends with what is under it.
@@ -1463,6 +1966,12 @@ Set how a clip blends with what is under it.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz clip set-blend trailer.jazz <title-clip-id> screen
+```
 
 ### `jazz clip set-crop <project> <clip-id>`
 
@@ -1481,6 +1990,13 @@ Cut away the edges of a clip's picture.
 | `--bottom <number>` | Percent off the bottom. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+# Each edge is a percentage of the picture.
+jazz clip set-crop trailer.jazz <clip-id> --top 10 --bottom 10
+```
+
 ### `jazz clip set-enabled <project> <clip-id> <enabled>`
 
 Enable or disable a clip without removing it.
@@ -1494,6 +2010,12 @@ Enable or disable a clip without removing it.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz clip set-enabled trailer.jazz <clip-id> false
+```
 
 ### `jazz clip set-fast-mute <project> <clip-id>`
 
@@ -1510,6 +2032,12 @@ Silence a clip's sound where it plays faster than a speed.
 | `--off` | Never silence it. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip set-fast-mute trailer.jazz <clip-id> --above 2
+```
+
 ### `jazz clip set-input-transform <project> <clip-id> <transform>`
 
 Set how an ACES project brings a clip's picture into ACES.
@@ -1524,6 +2052,12 @@ Set how an ACES project brings a clip's picture into ACES.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip set-input-transform trailer.jazz <clip-id> slog3
+```
+
 ### `jazz clip set-keep-pitch <project> <clip-id> <keep>`
 
 Keep a clip's pitch at its speed, or let it follow the speed like tape.
@@ -1537,6 +2071,12 @@ Keep a clip's pitch at its speed, or let it follow the speed like tape.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz clip set-keep-pitch trailer.jazz <clip-id> true
+```
 
 ### `jazz clip set-matte <project> <clip-id>`
 
@@ -1553,6 +2093,12 @@ Show a clip only through another track's picture (a track matte).
 | `--mode <alpha|luma|alpha-inverted|luma-inverted>` | alpha, luma, alpha-inverted or luma-inverted. Default: alpha. |
 | `--off` | Take the clip's matte away. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz clip set-matte trailer.jazz <clip-id> --source <v2-id> --mode luma
+```
 
 ### `jazz clip set-motion-blur <project> <clip-id>`
 
@@ -1571,6 +2117,12 @@ Set motion blur on a clip's animated movement.
 | `--inherit` | Follow the track and sequence instead. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip set-motion-blur trailer.jazz <title-clip-id> --angle 180 --samples 16
+```
+
 ### `jazz clip set-opacity <project> <clip-id>`
 
 Set how opaque a clip's picture is.
@@ -1584,6 +2136,12 @@ Set how opaque a clip's picture is.
 |---|---|
 | `--opacity <number>` | Required. 0 invisible to 1 opaque. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz clip set-opacity trailer.jazz <clip-id> --opacity 0.5
+```
 
 ### `jazz clip set-remap <project> <clip-id>`
 
@@ -1599,6 +2157,12 @@ Turn time remapping (a speed curve) on or off for a clip.
 | `--off` | Turn it off instead. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip set-remap trailer.jazz <clip-id>
+```
+
 ### `jazz clip set-retime <project> <clip-id> <mode>`
 
 Set how a clip shows moments between source frames: nearest frame, a blend, or optical flow.
@@ -1613,6 +2177,12 @@ Set how a clip shows moments between source frames: nearest frame, a blend, or o
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip set-retime trailer.jazz <clip-id> optical-flow
+```
+
 ### `jazz clip set-reverse <project> <clip-id> <reverse>`
 
 Play a clip backwards.
@@ -1626,6 +2196,12 @@ Play a clip backwards.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz clip set-reverse trailer.jazz <clip-id> true
+```
 
 ### `jazz clip set-speed <project> <clip-id>`
 
@@ -1643,6 +2219,12 @@ Change how fast a clip plays.
 | `--keep-pitch` | true to keep the sound's pitch, false to let it follow the speed. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip set-speed trailer.jazz <clip-id> --speed 2 --keep-pitch
+```
+
 ### `jazz clip set-speed-blur <project> <clip-id> <on>`
 
 Blur a clip's picture with its speed, as a shutter would.
@@ -1656,6 +2238,12 @@ Blur a clip's picture with its speed, as a shutter would.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz clip set-speed-blur trailer.jazz <clip-id> true
+```
 
 ### `jazz clip set-tone-map <project> <clip-id>`
 
@@ -1673,6 +2261,12 @@ Set how a clip's HDR picture is brought down to SDR.
 | `--desaturate <number>` | How much compressed highlights lose their colour, 0 to 1. |
 | `--reset` | Follow the project's default again. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz clip set-tone-map trailer.jazz <clip-id> --operator hable --peak 1000
+```
 
 ### `jazz clip set-transform <project> <clip-id>`
 
@@ -1695,6 +2289,12 @@ Move, scale or rotate a clip's picture.
 | `--anchor-y <number>` | The pivot, picture pixels below its centre. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip set-transform trailer.jazz <clip-id> --x 200 --y -100 --scale 0.5
+```
+
 ### `jazz clip slide <project> <clip-id>`
 
 Move a clip, taking the time out of its neighbours.
@@ -1709,6 +2309,12 @@ Move a clip, taking the time out of its neighbours.
 | `--by <time>` | Required. How far to move it. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip slide trailer.jazz <clip-id> --by 1s
+```
+
 ### `jazz clip slip <project> <clip-id>`
 
 Change which part of the source a clip shows.
@@ -1722,6 +2328,12 @@ Change which part of the source a clip shows.
 |---|---|
 | `--by <time>` | Required. How far through the source to slide. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz clip slip trailer.jazz <clip-id> --by -500ms
+```
 
 ### `jazz clip speed-preset <project> <clip-id> <preset>`
 
@@ -1739,6 +2351,12 @@ Put a packaged speed ramp on a clip: slow into an impact and snap back, speed th
 | `--dur <time>` | How long it runs fast, or how much is repeated. Default: 2s. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip speed-preset trailer.jazz <clip-id> impact --at 00:00:02.000
+```
+
 ### `jazz clip split <project> <clip-id>`
 
 Cut a clip in two at a timeline time.
@@ -1755,6 +2373,12 @@ Cut a clip in two at a timeline time.
 | `--alone` | Cut only this clip, not the clips linked to it. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip split trailer.jazz <clip-id> --at 00:00:02.500
+```
+
 ### `jazz clip split-at-cuts <project> <clip-id>`
 
 Split a clip at the shot changes in its video.
@@ -1770,6 +2394,12 @@ Split a clip at the shot changes in its video.
 | `--min-shot <time>` | The shortest shot there can be. Default: 0.5 s. |
 | `--linked` | Split its linked clips too. Default: on. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz clip split-at-cuts trailer.jazz <clip-id> --linked
+```
 
 ### `jazz clip stabilize <project> <clip-id>`
 
@@ -1789,6 +2419,12 @@ Steady a shaky clip (analyses its motion the first time).
 | `--off` | Remove the stabilization instead. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip stabilize trailer.jazz <clip-id> --smoothing 30
+```
+
 ### `jazz clip storyline-move <project> <clip-ids>...`
 
 Move clips along the primary track, closing up behind them.
@@ -1801,7 +2437,14 @@ Move clips along the primary track, closing up behind them.
 | Option | Meaning |
 |---|---|
 | `--to <time>` | Required. Where the first of them was dropped. |
+| `--alone` | Only these clips, not the clips linked to them. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz clip storyline-move trailer.jazz <clip-id> --to 00:00:10.000
+```
 
 ### `jazz clip trim <project> <clip-id>`
 
@@ -1819,6 +2462,12 @@ Move a clip start or end.
 | `--ripple` | Move everything after it too. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip trim trailer.jazz <clip-id> --in 00:00:01.000 --out 00:00:04.000
+```
+
 ### `jazz clip ungroup <project> <clip-ids>...`
 
 Take clips out of their selection group.
@@ -1831,6 +2480,12 @@ Take clips out of their selection group.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz clip ungroup trailer.jazz <clip-id>
+```
 
 ### `jazz clip unlink <project> <clip-ids>...`
 
@@ -1845,6 +2500,12 @@ Unlink clips so each moves on its own.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip unlink trailer.jazz <clip-id>
+```
+
 ### `jazz clip unnest <project> <clip-id>`
 
 Replace a compound clip with the clips inside it.
@@ -1858,6 +2519,12 @@ Replace a compound clip with the clips inside it.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz clip unnest trailer.jazz <compound-clip-id>
+```
+
 ## `jazz clipboard`
 
 Clips as JSON, to paste with 'clip paste' here or in another project.
@@ -1870,6 +2537,12 @@ Copy clips as JSON for clip.paste.
 |---|---|
 | `<project>` | The .jazz file to work on. |
 | `<clip-ids>` | Comma-separated clip ids. |
+
+Example:
+
+```
+jazz clipboard copy trailer.jazz <clip-id> <next-clip-id>
+```
 
 ## `jazz color`
 
@@ -1891,6 +2564,12 @@ Match a clip's colour to another clip.
 | `--reference-at <time>` | The reference's frame to look at, on the timeline; its middle when not given. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz color match trailer.jazz <clip-id> --to <next-clip-id>
+```
+
 ### `jazz color node-add <project> <target>`
 
 Add a node to a colour graph.
@@ -1908,6 +2587,12 @@ Add a node to a colour graph.
 | `--id <id>` | The identifier for the new node. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz color node-add trailer.jazz <clip-id> --type curves
+```
+
 ### `jazz color node-connect <project> <node-id>`
 
 Connect one node of a colour graph to another.
@@ -1924,6 +2609,13 @@ Connect one node of a colour graph to another.
 | `--key` | Connect as its key: a qualifier node whose matte limits where it applies. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+# The curves read the picture coming into the graph rather than the wheels.
+jazz color node-connect trailer.jazz <colour-node-id>
+```
+
 ### `jazz color node-remove <project> <node-id>`
 
 Remove a node from a colour graph.
@@ -1936,6 +2628,12 @@ Remove a node from a colour graph.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz color node-remove trailer.jazz <node-id>
+```
 
 ### `jazz color node-set <project> <node-id>`
 
@@ -1956,6 +2654,12 @@ Change a node of a colour graph.
 | `--enabled` | true to switch it on, false to switch it off. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz color node-set trailer.jazz <node-id> --param saturation --value 1.2
+```
+
 ### `jazz color sample <project>`
 
 Read the picture's colour at a point.
@@ -1973,6 +2677,13 @@ Read the picture's colour at a point.
 | `--size <n>` | The side of the square averaged, in pixels. Default: 5. |
 | `--sequence <id>` | Which sequence. |
 
+Example:
+
+```
+# The point is in pixels from the centre of the frame.
+jazz color sample trailer.jazz --at 00:00:03.000 --x -400 --y 120
+```
+
 ### `jazz color to-graph <project> <effect-id>`
 
 Turn a colour effect into a node graph.
@@ -1986,6 +2697,12 @@ Turn a colour effect into a node graph.
 |---|---|
 | `--id <id>` | The identifier for the graph. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz color to-graph trailer.jazz <colour-effect-id>
+```
 
 ## `jazz comp`
 
@@ -2005,6 +2722,12 @@ Give a clip a compositing node graph.
 | `--id <id>` | The identifier for the graph. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz comp create trailer.jazz <next-clip-id>
+```
+
 ### `jazz comp describe <project> <target>`
 
 Describe a clip's comp graph in readable text.
@@ -2013,6 +2736,12 @@ Describe a clip's comp graph in readable text.
 |---|---|
 | `<project>` | The .jazz file to work on. |
 | `<target>` | A comp graph, or a clip whose graph it is. |
+
+Example:
+
+```
+jazz comp describe trailer.jazz <clip-id>
+```
 
 ### `jazz comp group <project> <node-ids>...`
 
@@ -2027,6 +2756,12 @@ Put nodes of a comp graph into a group.
 |---|---|
 | `--id <id>` | The identifier for the group. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz comp group trailer.jazz <comp-node-id> <merge-node-id>
+```
 
 ### `jazz comp node-add <project> <target> <type>`
 
@@ -2046,6 +2781,12 @@ Add a node to a comp graph.
 | `--id <id>` | The identifier for the node. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz comp node-add trailer.jazz <clip-id> video.blur.gaussian --x 300 --y 120
+```
+
 ### `jazz comp node-connect <project> <node-id> <from>`
 
 Wire one comp node into a port of another.
@@ -2061,6 +2802,12 @@ Wire one comp node into a port of another.
 | `--port <port>` | Which of its ports: input, background, foreground, mask, matte, or 1 to 8; its first free one when left out. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz comp node-connect trailer.jazz <merge-node-id> <comp-node-id> --port foreground
+```
+
 ### `jazz comp node-disconnect <project> <node-id>`
 
 Take the wire out of a comp node's port.
@@ -2074,6 +2821,12 @@ Take the wire out of a comp node's port.
 |---|---|
 | `--port <port>` | Which port; every one when left out. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz comp node-disconnect trailer.jazz <merge-node-id> --port foreground
+```
 
 ### `jazz comp node-move <project> <node-id> <x> <y>`
 
@@ -2090,6 +2843,12 @@ Move a node in the comp node view.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz comp node-move trailer.jazz <comp-node-id> 400 200
+```
+
 ### `jazz comp node-remove <project> <node-id>`
 
 Take a node out of a comp graph.
@@ -2102,6 +2861,12 @@ Take a node out of a comp graph.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz comp node-remove trailer.jazz <comp-node-id>
+```
 
 ### `jazz comp ungroup <project> <node-id>`
 
@@ -2116,6 +2881,12 @@ Take a comp group's nodes back out.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz comp ungroup trailer.jazz <group-node-id>
+```
+
 ### `jazz comp view <project> [node-id]`
 
 Show a comp node's picture in the program monitor.
@@ -2128,6 +2899,12 @@ Show a comp node's picture in the program monitor.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz --attach comp view <comp-node-id>
+```
 
 ## `jazz diagnostics`
 
@@ -2145,6 +2922,12 @@ List what the session has noticed: fallbacks, missing files.
 |---|---|
 | `--media <id>` | Only this media item. |
 | `--level <information|warning|error>` | information, warning or error. Default: information. |
+
+Example:
+
+```
+jazz diagnostics list trailer.jazz --level warning
+```
 
 ## `jazz edit`
 
@@ -2170,6 +2953,13 @@ Lay clips along the beat markers, one to each stretch between cuts.
 | `--with-audio` | Bring each clip's sound along. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+# Mark the music's beats first: jazz audio beats trailer.jazz <music-clip-id>
+jazz edit cut-to-beats trailer.jazz --track <v1-id> --every 2 --clips <clip-id>,<next-clip-id>
+```
+
 ## `jazz effect`
 
 Effects on clips and tracks: add, set parameters, bypass, reorder, presets. 'effect list' names every type.
@@ -2190,6 +2980,12 @@ Add an effect to a clip or a track.
 | `--id <id>` | The identifier for the new effect. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz effect add trailer.jazz <clip-id> video.blur.gaussian
+```
+
 ### `jazz effect apply-preset <project> <owner-id> <preset>`
 
 Apply an effect preset to a clip or a track.
@@ -2205,6 +3001,12 @@ Apply an effect preset to a clip or a track.
 | `--index <n>` | Where in the chain, from 0; the end when not given. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz effect apply-preset trailer.jazz <clip-id> "Teal and orange"
+```
+
 ### `jazz effect copy <project> <ids>...`
 
 Copy effects as JSON for effect.paste.
@@ -2213,6 +3015,12 @@ Copy effects as JSON for effect.paste.
 |---|---|
 | `<project>` | The .jazz file to work on. |
 | `<ids>` | Comma-separated effect ids, or a clip or track id for its whole chain. |
+
+Example:
+
+```
+jazz effect copy trailer.jazz <clip-id>
+```
 
 ### `jazz effect export-preset <project> <preset>`
 
@@ -2223,6 +3031,12 @@ An effect preset as JSON.
 | `<project>` | The .jazz file to work on. |
 | `<preset>` | The preset's id or name. |
 
+Example:
+
+```
+jazz effect export-preset trailer.jazz "Teal and orange"
+```
+
 ### `jazz effect get <project> <effect-id>`
 
 Show one effect and its parameters.
@@ -2231,6 +3045,12 @@ Show one effect and its parameters.
 |---|---|
 | `<project>` | The .jazz file to work on. |
 | `<effect-id>` | The effect id. |
+
+Example:
+
+```
+jazz effect get trailer.jazz <effect-id>
+```
 
 ### `jazz effect import-preset <project>`
 
@@ -2246,6 +3066,14 @@ Add an effect preset from JSON.
 | `--name <name>` | A new name; its own when not given. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+# --data is the JSON jazz effect export-preset prints, from this project or another. In PowerShell:
+# $preset = jazz effect export-preset other.jazz "Teal and orange" | Out-String
+jazz effect import-preset trailer.jazz --data $preset
+```
+
 ### `jazz effect list`
 
 List the effect types and their parameters.
@@ -2256,6 +3084,12 @@ List the effect types and their parameters.
 | `--kind <video|audio|generator|transition|audio-transition|audio-generator>` | Only video, audio or generator. |
 | `--search <search>` | Only types whose id, name or category contain this. |
 
+Example:
+
+```
+jazz effect list --kind transition
+```
+
 ### `jazz effect list-presets <project>`
 
 List the effect presets in the project.
@@ -2263,6 +3097,12 @@ List the effect presets in the project.
 | Argument | Meaning |
 |---|---|
 | `<project>` | The .jazz file to work on. |
+
+Example:
+
+```
+jazz effect list-presets trailer.jazz
+```
 
 ### `jazz effect move <project> <effect-id>`
 
@@ -2277,6 +3117,12 @@ Move an effect up or down its chain.
 |---|---|
 | `--index <n>` | Required. Its new place in the chain, from 0. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz effect move trailer.jazz <effect-id> --index 0
+```
 
 ### `jazz effect paste <project> <owner-id>`
 
@@ -2293,6 +3139,14 @@ Paste copied effects onto a clip or a track.
 | `--index <n>` | Where in the chain, from 0; the end when not given. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+# --data is the JSON jazz effect copy prints. In PowerShell:
+# $effects = jazz effect copy trailer.jazz <clip-id> | Out-String
+jazz effect paste trailer.jazz <next-clip-id> --data $effects
+```
+
 ### `jazz effect remove <project> <effect-id>`
 
 Remove an effect.
@@ -2305,6 +3159,12 @@ Remove an effect.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz effect remove trailer.jazz <effect-id>
+```
 
 ### `jazz effect remove-preset <project> <preset>`
 
@@ -2319,6 +3179,12 @@ Delete an effect preset.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz effect remove-preset trailer.jazz "Teal and orange"
+```
+
 ### `jazz effect reset <project> <effect-id>`
 
 Put an effect's parameters back to their defaults.
@@ -2332,6 +3198,12 @@ Put an effect's parameters back to their defaults.
 |---|---|
 | `--param <param>` | Only this parameter; all of them when not given. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz effect reset trailer.jazz <effect-id> --param radius
+```
 
 ### `jazz effect save-preset <project> <ids>...`
 
@@ -2348,6 +3220,12 @@ Save an effect chain as a preset.
 | `--id <id>` | The identifier for the preset. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz effect save-preset trailer.jazz <clip-id> --name "Teal and orange"
+```
+
 ### `jazz effect set-enabled <project> <effect-id> <enabled>`
 
 Bypass an effect or turn it back on.
@@ -2361,6 +3239,12 @@ Bypass an effect or turn it back on.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz effect set-enabled trailer.jazz <effect-id> false
+```
 
 ### `jazz effect set-param <project> <effect-id> <param> <value>`
 
@@ -2378,6 +3262,12 @@ Set a parameter of an effect.
 | `--at <time>` | For a keyframed parameter, the keyframe's time on the sequence. |
 | `--local` | Read --at from the clip's start rather than the sequence's. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz effect set-param trailer.jazz <effect-id> radius 12
+```
 
 ## `jazz export`
 
@@ -2461,6 +3351,12 @@ Queue an export for each range marker or each stretch.
 | `--priority <low|normal|high>` | low, normal or high. Default: normal. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz export batch trailer.jazz exports --markers --preset youtube-1080p
+```
+
 ### `jazz export cancel <project> <job-id>`
 
 Stop a queued or running export.
@@ -2474,6 +3370,12 @@ Stop a queued or running export.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz --attach export cancel <job-id>
+```
+
 ### `jazz export clear <project>`
 
 Remove finished jobs from the export queue.
@@ -2485,6 +3387,12 @@ Remove finished jobs from the export queue.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz --attach export clear
+```
 
 ### `jazz export contact-sheet <project> <output>`
 
@@ -2506,6 +3414,12 @@ Write a contact sheet of frames across a sequence.
 | `--times <times>` | Fractions of the way through, 0 to 1, rather than even steps. |
 | `--clip <id>` | Through this clip rather than the sequence. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz export contact-sheet trailer.jazz sheet.png --columns 6 --rows 4
+```
 
 ### `jazz export enqueue <project> <output>`
 
@@ -2549,6 +3463,12 @@ Queue an export of a sequence to a file.
 | `--stem-format <wav|codec|in-file>` | wav (24-bit, beside the file), codec (the preset's sound codec, beside it) or in-file (more sound tracks in the file). Default: wav. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz --attach export enqueue trailer.mp4 --preset youtube-4k --priority high
+```
+
 ### `jazz export list <project>`
 
 List export jobs and their progress.
@@ -2556,6 +3476,12 @@ List export jobs and their progress.
 | Argument | Meaning |
 |---|---|
 | `<project>` | The .jazz file to work on. |
+
+Example:
+
+```
+jazz --attach export list
+```
 
 ### `jazz export log <project> <job-id>`
 
@@ -2565,6 +3491,12 @@ Show what an export has done, step by step.
 |---|---|
 | `<project>` | The .jazz file to work on. |
 | `<job-id>` | The job id. |
+
+Example:
+
+```
+jazz --attach export log <job-id>
+```
 
 ### `jazz export pause <project> [job-id]`
 
@@ -2578,6 +3510,12 @@ Hold an export, or all of them.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz --attach export pause
+```
 
 ### `jazz export plan <project> <output>`
 
@@ -2616,6 +3554,12 @@ Plan an export without running it.
 | `--stems <none|roles|tracks>` | none, roles or tracks: also a stem per role or per sound track. Default: none. |
 | `--stem-format <wav|codec|in-file>` | wav (24-bit, beside the file), codec (the preset's sound codec, beside it) or in-file (more sound tracks in the file). Default: wav. |
 
+Example:
+
+```
+jazz export plan trailer.jazz trailer.mp4 --preset discord-8mb
+```
+
 ### `jazz export resume <project> [job-id]`
 
 Let a paused export run again, or all of them.
@@ -2628,6 +3572,12 @@ Let a paused export run again, or all of them.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz --attach export resume <job-id>
+```
 
 ### `jazz export set-priority <project> <job-id> <priority>`
 
@@ -2642,6 +3592,12 @@ Move an export up or down the queue.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz --attach export set-priority <job-id> high
+```
 
 ### `jazz export still <project> <output>`
 
@@ -2659,6 +3615,12 @@ Write the frame at a time as a PNG.
 | `--size <size>` | Fit the picture inside this size, for example 1280x720. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz export still trailer.jazz poster.png --at 00:00:12.500
+```
+
 ## `jazz fonts`
 
 The font families titles can use.
@@ -2671,6 +3633,12 @@ List the font families titles can use: installed, and with --project the project
 |---|---|
 | `--project <project>` | A .jazz file to read alongside, for its fonts folder and relative paths. |
 | `--search <search>` | Only families whose name contains this. |
+
+Example:
+
+```
+jazz fonts list --search Segoe
+```
 
 ## `jazz history`
 
@@ -2687,6 +3655,12 @@ List what has been done, oldest first.
 | Option | Meaning |
 |---|---|
 | `--limit <n>` | How many entries to return. Default: 50. |
+
+Example:
+
+```
+jazz history list trailer.jazz --limit 20
+```
 
 ## `jazz ids`
 
@@ -2731,6 +3705,13 @@ Add a keyframe to a parameter.
 | `--local` | Read --at from the clip's start rather than the sequence's. |
 | `--no-save` | Do not write the project back. |
 
+Examples:
+
+```
+jazz keyframe add trailer.jazz <clip-id> opacity --at 0 --value 0
+jazz keyframe add trailer.jazz <clip-id> opacity --at 1s --value 1 --interp ease-out
+```
+
 ### `jazz keyframe move <project> <owner-id> <param>`
 
 Move a keyframe to another time.
@@ -2749,6 +3730,12 @@ Move a keyframe to another time.
 | `--value <value>` | Also give it this value; it keeps its own without. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz keyframe move trailer.jazz <clip-id> opacity --at 1s --to 2s
+```
+
 ### `jazz keyframe remove <project> <owner-id> <param>`
 
 Remove a keyframe from a parameter.
@@ -2764,6 +3751,12 @@ Remove a keyframe from a parameter.
 | `--at <time>` | Required. The keyframe's time on the sequence. |
 | `--local` | Read --at from the clip's start rather than the sequence's. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz keyframe remove trailer.jazz <clip-id> opacity --at 1s
+```
 
 ### `jazz keyframe set-handles <project> <owner-id> <param>`
 
@@ -2783,6 +3776,12 @@ Set a keyframe's bezier handles.
 | `--local` | Read --at from the clip's start rather than the sequence's. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz keyframe set-handles trailer.jazz <clip-id> opacity --at 1s --in "0.6, 1" --out "0.4, 0"
+```
+
 ### `jazz keyframe set-interp <project> <owner-id> <param>`
 
 Change how the curve leaves a keyframe.
@@ -2800,6 +3799,12 @@ Change how the curve leaves a keyframe.
 | `--local` | Read --at from the clip's start rather than the sequence's. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz keyframe set-interp trailer.jazz <clip-id> opacity --at 1s --interp bezier
+```
+
 ### `jazz keyframe set-value <project> <owner-id> <param>`
 
 Change a keyframe's value.
@@ -2816,6 +3821,12 @@ Change a keyframe's value.
 | `--value <value>` | Required. The new value. |
 | `--local` | Read --at from the clip's start rather than the sequence's. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz keyframe set-value trailer.jazz <clip-id> opacity --at 1s --value 0.8
+```
 
 ## `jazz layout`
 
@@ -2840,6 +3851,12 @@ Lay clips out on the frame: facecam corner, side by side, before and after, grid
 | `--gap <number>` | Pixels between cells. Default: 0. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz layout apply trailer.jazz facecam --clips <clip-id>,<facecam-clip-id> --corner bottom-left
+```
+
 ### `jazz layout list <project>`
 
 The layouts layout.apply knows, with how many clips each takes.
@@ -2847,6 +3864,12 @@ The layouts layout.apply knows, with how many clips each takes.
 | Argument | Meaning |
 |---|---|
 | `<project>` | The .jazz file to work on. |
+
+Example:
+
+```
+jazz layout list trailer.jazz
+```
 
 ## `jazz light`
 
@@ -2885,6 +3908,12 @@ Put a 3D light on the timeline.
 | `--sequence <id>` | Which sequence, when no track is named. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz light add trailer.jazz --kind spot --at 0 --dur 6s --intensity 2 --shadows
+```
+
 ## `jazz marker`
 
 Markers on a sequence or a clip: points and ranges, names, colours, chapters.
@@ -2910,6 +3939,12 @@ Put a marker on a sequence or a clip.
 | `--id <id>` | The identifier to give it. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz marker add trailer.jazz "Big hit" --at 00:00:42.000 --color red
+```
+
 ### `jazz marker add-at-cuts <project> <target-id>`
 
 Mark the shot changes in a clip or a media item.
@@ -2926,6 +3961,12 @@ Mark the shot changes in a clip or a media item.
 | `--color <color>` | The markers' colour, as a hex string or a name. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz marker add-at-cuts trailer.jazz <capture-id>
+```
+
 ### `jazz marker list <project>`
 
 List markers, in time order.
@@ -2940,6 +3981,12 @@ List markers, in time order.
 | `--sequence <id>` | Which sequence. |
 | `--chapters` | Only chapter markers. |
 
+Example:
+
+```
+jazz marker list trailer.jazz --chapters
+```
+
 ### `jazz marker remove <project> <marker-id>`
 
 Remove a marker.
@@ -2952,6 +3999,12 @@ Remove a marker.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz marker remove trailer.jazz <marker-id>
+```
 
 ### `jazz marker set <project> <marker-id>`
 
@@ -2971,6 +4024,12 @@ Change a marker.
 | `--note <note>` | Longer text, shown on hover. |
 | `--chapter` | Export this marker as a chapter. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz marker set trailer.jazz <marker-id> --name "Drop" --at 00:00:44.000
+```
 
 ## `jazz mask`
 
@@ -3001,6 +4060,12 @@ Limit a clip's picture, or one of its effects, to a shape.
 | `--id <id>` | The identifier to give it. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz mask add trailer.jazz <clip-id> --shape ellipse --x 960 --y 540 --width 600 --height 400 --feather 40
+```
+
 ### `jazz mask remove <project> <mask-id>`
 
 Remove a mask.
@@ -3013,6 +4078,12 @@ Remove a mask.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz mask remove trailer.jazz <mask-id>
+```
 
 ### `jazz mask set <project> <mask-id>`
 
@@ -3039,6 +4110,12 @@ Change a mask.
 | `--enabled` | on or off. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz mask set trailer.jazz <mask-id> --feather 80 --invert
+```
+
 ## `jazz media`
 
 Media files: import, probe, relink, reprobe, set conform options, remove.
@@ -3064,6 +4141,12 @@ Import files, folders or globs into the project.
 | `--fps <rate>` | The rate an image sequence plays at. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz media add trailer.jazz .\captures\*.mp4 --tags gameplay
+```
+
 ### `jazz media add-subclip <project> <media-id>`
 
 Make a media item for a stretch of another's file.
@@ -3082,6 +4165,12 @@ Make a media item for a stretch of another's file.
 | `--id <id>` | The identifier to give it. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz media add-subclip trailer.jazz <capture-id> --in 00:01:10.000 --out 00:01:22.500 --name "Boss fight"
+```
+
 ### `jazz media analyze-motion <project> <media-id>`
 
 Analyse a video's camera motion for stabilization.
@@ -3096,6 +4185,12 @@ Analyse a video's camera motion for stabilization.
 | `--stream <n>` | The video stream's index in the file. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz media analyze-motion trailer.jazz <capture-id>
+```
+
 ### `jazz media check <project>`
 
 Say which media files are there, missing, or changed.
@@ -3103,6 +4198,12 @@ Say which media files are there, missing, or changed.
 | Argument | Meaning |
 |---|---|
 | `<project>` | The .jazz file to work on. |
+
+Example:
+
+```
+jazz media check trailer.jazz
+```
 
 ### `jazz media detect-cuts <project> <media-id>`
 
@@ -3119,6 +4220,12 @@ Find the shot changes in an edited video.
 | `--min-shot <time>` | The shortest shot there can be. Default: 0.5 s. |
 | `--stream <n>` | The video stream's index in the file. |
 
+Example:
+
+```
+jazz media detect-cuts trailer.jazz <capture-id>
+```
+
 ### `jazz media get <project> <media-id>`
 
 Describe one media item and its streams.
@@ -3127,6 +4234,12 @@ Describe one media item and its streams.
 |---|---|
 | `<project>` | The .jazz file to work on. |
 | `<media-id>` | The media id. |
+
+Example:
+
+```
+jazz media get trailer.jazz <capture-id>
+```
 
 ### `jazz media list <project>`
 
@@ -3142,6 +4255,12 @@ List the files the project uses.
 | `--search <search>` | Only items matching this text. |
 | `--tag <tag>` | Only items carrying this tag. |
 
+Example:
+
+```
+jazz media list trailer.jazz --tag gameplay
+```
+
 ### `jazz media missing <project>`
 
 Find where missing media went, with candidates for each.
@@ -3154,6 +4273,12 @@ Find where missing media went, with candidates for each.
 |---|---|
 | `--search <list>` | Folders to look in, with their subfolders. |
 | `--media <id>` | Only this media item. |
+
+Example:
+
+```
+jazz media missing trailer.jazz --search D:\Recordings
+```
 
 ### `jazz media probe <path>`
 
@@ -3169,6 +4294,12 @@ Read a file and say what is in it, without importing it.
 | `--conform <fit|fill|stretch|native>` | fit, fill, stretch or native. Default: fit. |
 | `--deinterlace <auto|on|off>` | auto, on or off. Default: auto. |
 | `--vfr-conform <auto|on|off>` | auto, on or off. Default: auto. |
+
+Example:
+
+```
+jazz media probe .\captures\boss-fight.mp4
+```
 
 ### `jazz media relink <project> [media-id] [path]`
 
@@ -3187,6 +4318,12 @@ Point media at files that have moved, by hand or found by hash.
 | `--search <list>` | Folders to look in, with their subfolders. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz media relink trailer.jazz --auto --search D:\Recordings
+```
+
 ### `jazz media remove <project> <media-id>`
 
 Take a file out of the project.
@@ -3201,6 +4338,12 @@ Take a file out of the project.
 | `--with-clips` | Remove the clips that play it too. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz media remove trailer.jazz <capture-id> --with-clips
+```
+
 ### `jazz media remove-unused <project>`
 
 Remove every media item no clip uses.
@@ -3213,6 +4356,12 @@ Remove every media item no clip uses.
 |---|---|
 | `--keep-tagged` | Keep items that have tags. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz media remove-unused trailer.jazz --keep-tagged
+```
 
 ### `jazz media replace <project> <media-id> <path>`
 
@@ -3229,6 +4378,12 @@ Swap a media item's file for another, keeping its clips.
 | `--force` | Accept a file too short for some clips. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz media replace trailer.jazz <capture-id> .\captures\boss-fight-v2.mp4
+```
+
 ### `jazz media reprobe <project> [media-id]`
 
 Read a media file again and update what the project knows.
@@ -3241,6 +4396,12 @@ Read a media file again and update what the project knows.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz media reprobe trailer.jazz
+```
 
 ### `jazz media set <project> <media-id>`
 
@@ -3262,6 +4423,12 @@ Change a media item's name, folder, tags or conform settings.
 | `--vfr-conform <auto|on|off>` | auto, on or off. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz media set trailer.jazz <capture-id> --name "Boss fight" --folder Gameplay
+```
+
 ### `jazz media subclips-from-cuts <project> <media-id>`
 
 Make a subclip of every shot in an edited video.
@@ -3278,6 +4445,12 @@ Make a subclip of every shot in an edited video.
 | `--folder <folder>` | The folder to put them in. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz media subclips-from-cuts trailer.jazz <capture-id> --folder Shots
+```
+
 ### `jazz media unwatch <project> [folder]`
 
 Stop watching a folder.
@@ -3291,6 +4464,12 @@ Stop watching a folder.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz media unwatch trailer.jazz D:\Recordings
+```
+
 ### `jazz media usage <project>`
 
 Say which clips and sequences use each media item.
@@ -3303,6 +4482,12 @@ Say which clips and sequences use each media item.
 |---|---|
 | `--media <id>` | Only this media item. |
 | `--unused` | Only items no clip uses. |
+
+Example:
+
+```
+jazz media usage trailer.jazz --unused
+```
 
 ### `jazz media watch <project> <folder>`
 
@@ -3320,6 +4505,12 @@ Watch a folder and bring in new recordings as they finish.
 | `--existing` | Bring in what is already there too. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz media watch trailer.jazz D:\Recordings --tags obs
+```
+
 ### `jazz media watches <project>`
 
 List the folders being watched for new recordings.
@@ -3327,6 +4518,12 @@ List the folders being watched for new recordings.
 | Argument | Meaning |
 |---|---|
 | `<project>` | The .jazz file to work on. |
+
+Example:
+
+```
+jazz media watches trailer.jazz
+```
 
 ## `jazz model`
 
@@ -3346,6 +4543,12 @@ Download a machine learning model, checked by its SHA-256.
 | `--force` | Download it again even when present. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz model download trailer.jazz whisper-large-v3-turbo
+```
+
 ### `jazz model list <project>`
 
 List the machine learning models and whether each is downloaded.
@@ -3353,6 +4556,12 @@ List the machine learning models and whether each is downloaded.
 | Argument | Meaning |
 |---|---|
 | `<project>` | The .jazz file to work on. |
+
+Example:
+
+```
+jazz model list trailer.jazz
+```
 
 ## `jazz model3d`
 
@@ -3379,6 +4588,12 @@ Put a glTF 3D model on the timeline.
 | `--sequence <id>` | Which sequence, when no track is named. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz model3d add trailer.jazz robot.glb --at 0 --dur 5s --animation Walk
+```
+
 ### `jazz model3d info <project> <file>`
 
 Say what is in a glTF model: meshes, materials, animations and anything left out.
@@ -3387,6 +4602,12 @@ Say what is in a glTF model: meshes, materials, animations and anything left out
 |---|---|
 | `<project>` | The .jazz file to work on. |
 | `<file>` | The .gltf or .glb file. |
+
+Example:
+
+```
+jazz model3d info trailer.jazz robot.glb
+```
 
 ## `jazz multicam`
 
@@ -3412,6 +4633,12 @@ Make a multicam clip from recordings of the same moment.
 | `--force` | Make it even when a match by sound is not sure. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz multicam create trailer.jazz <capture-id> <cam2-id> --sync audio --name "Interview"
+```
+
 ### `jazz multicam flatten <project> <clip-id>`
 
 Turn a multicam clip into ordinary cuts.
@@ -3424,6 +4651,12 @@ Turn a multicam clip into ordinary cuts.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz multicam flatten trailer.jazz <multicam-clip-id>
+```
 
 ### `jazz multicam set-sound <project> <clip-id>`
 
@@ -3438,6 +4671,12 @@ Keep a multicam's sound on one angle, or let it follow.
 |---|---|
 | `--angle <n>` | Required. The angle to hear throughout, from 1; 0 to follow the switches. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz multicam set-sound trailer.jazz <multicam-clip-id> --angle 1
+```
 
 ### `jazz multicam switch <project> <clip-id>`
 
@@ -3456,6 +4695,12 @@ Cut a multicam clip to another angle.
 | `--audio-only` | Switch the sound and keep the picture. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz multicam switch trailer.jazz <multicam-clip-id> --at 00:00:32.000 --angle 2
+```
+
 ### `jazz multicam sync <project> <media-ids>...`
 
 Line up recordings of the same moment.
@@ -3469,6 +4714,12 @@ Line up recordings of the same moment.
 |---|---|
 | `--sync <audio|timecode|in|marker>` | audio, timecode, in or marker. Default: audio. |
 
+Example:
+
+```
+jazz multicam sync trailer.jazz <capture-id> <cam2-id> --sync audio
+```
+
 ### `jazz multicam view <project> [clip-id]`
 
 Show a multicam clip's angles in the program monitor.
@@ -3481,6 +4732,12 @@ Show a multicam clip's angles in the program monitor.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz --attach multicam view <multicam-clip-id>
+```
 
 ## `jazz param`
 
@@ -3500,6 +4757,12 @@ Stop driving a parameter, back to its keyframes or value.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz param clear-driver trailer.jazz <clip-id> transform.rotation
+```
+
 ### `jazz param clear-keyframes <project> <owner-id> <param>`
 
 Remove every keyframe from a parameter.
@@ -3516,6 +4779,12 @@ Remove every keyframe from a parameter.
 | `--local` | Read --at from the clip's start rather than the sequence's. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz param clear-keyframes trailer.jazz <clip-id> opacity
+```
+
 ### `jazz param get <project> <owner-id> <param>`
 
 Show one parameter, and its value at a time.
@@ -3530,6 +4799,12 @@ Show one parameter, and its value at a time.
 |---|---|
 | `--at <time>` | Also say what it is worth at this time on the sequence. |
 
+Example:
+
+```
+jazz param get trailer.jazz <clip-id> opacity --at 00:00:02.000
+```
+
 ### `jazz param list <project> <owner-id>`
 
 List the parameters of a clip, track, effect or mask.
@@ -3538,6 +4813,12 @@ List the parameters of a clip, track, effect or mask.
 |---|---|
 | `<project>` | The .jazz file to work on. |
 | `<owner-id>` | The clip, track, effect or mask id. |
+
+Example:
+
+```
+jazz param list trailer.jazz <clip-id>
+```
 
 ### `jazz param set <project> <owner-id> <param> <value>`
 
@@ -3556,6 +4837,12 @@ Set a parameter of a clip, track, effect or mask.
 | `--local` | Read --at from the clip's start rather than the sequence's. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz param set trailer.jazz <clip-id> transform.position "100, 50"
+```
+
 ### `jazz param set-driver <project> <owner-id> <param> <expression>`
 
 Drive a parameter with an expression (time, wiggle, audio, param, marker) instead of keyframes.
@@ -3570,6 +4857,12 @@ Drive a parameter with an expression (time, wiggle, audio, param, marker) instea
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz param set-driver trailer.jazz <clip-id> transform.rotation "value + wiggle(2, 12)"
+```
 
 ## `jazz perf`
 
@@ -3780,6 +5073,13 @@ Time a big project: load, open, and the edits a person makes, each to the change
 | `--clips <clips>` | How many clips, over four picture and four sound tracks. Default: 2000. |
 | `--edits <edits>` | Rounds of edits: a move, a trim and a split on a random clip, each undone. Default: 100. |
 
+Example:
+
+```
+# Builds a project of its own from one recording with a picture and sound.
+jazz perf project .\captures\boss-fight.mp4 --clips 2000 --edits 200
+```
+
 ### `jazz perf soak <file>`
 
 Play and edit for hours and watch memory, video memory and handles: steady, or growing.
@@ -3792,6 +5092,12 @@ Play and edit for hours and watch memory, video memory and handles: steady, or g
 |---|---|
 | `--hours <hours>` | How long to play and edit. Default: 8. |
 | `--csv <csv>` | Where to write a sample a minute as it is taken, so a run cut short still says something. |
+
+Example:
+
+```
+jazz perf soak .\captures\boss-fight.mp4 --hours 2 --csv soak.csv
+```
 
 ## `jazz playback`
 
@@ -3810,6 +5116,12 @@ Remove the in and out points.
 | `--sequence <id>` | Which sequence. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz --attach playback clear-in-out
+```
+
 ### `jazz playback go-to <project> <target>`
 
 Send the playhead to the start, the end, an edit or a marker.
@@ -3822,6 +5134,12 @@ Send the playhead to the start, the end, an edit or a marker.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz --attach playback go-to next-marker
+```
 
 ### `jazz playback loop <project> [on]`
 
@@ -3836,6 +5154,12 @@ Loop playback over the in and out points.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz --attach playback loop on
+```
+
 ### `jazz playback pause <project>`
 
 Pause where the playhead is.
@@ -3847,6 +5171,12 @@ Pause where the playhead is.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz --attach playback pause
+```
 
 ### `jazz playback play <project>`
 
@@ -3860,6 +5190,12 @@ Play from the playhead.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz --attach playback play
+```
+
 ### `jazz playback seek <project> <to>`
 
 Move the playhead.
@@ -3872,6 +5208,12 @@ Move the playhead.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz --attach playback seek 00:00:12.500
+```
 
 ### `jazz playback set-in <project>`
 
@@ -3887,6 +5229,12 @@ Set the in point.
 | `--sequence <id>` | Which sequence. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz --attach playback set-in --at 00:00:10.000
+```
+
 ### `jazz playback set-out <project>`
 
 Set the out point.
@@ -3901,6 +5249,12 @@ Set the out point.
 | `--sequence <id>` | Which sequence. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz --attach playback set-out --at 00:00:20.000
+```
+
 ### `jazz playback set-quality <project> <quality>`
 
 Choose the preview resolution.
@@ -3913,6 +5267,12 @@ Choose the preview resolution.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz --attach playback set-quality half
+```
 
 ### `jazz playback shuttle <project>`
 
@@ -3927,6 +5287,12 @@ Play at a rate, forwards or backwards.
 | `--rate <number>` | Required. 2 is double speed, -1 is backwards. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz --attach playback shuttle --rate -2
+```
+
 ### `jazz playback state <project>`
 
 Where the playhead is and what playback is doing.
@@ -3934,6 +5300,12 @@ Where the playhead is and what playback is doing.
 | Argument | Meaning |
 |---|---|
 | `<project>` | The .jazz file to work on. |
+
+Example:
+
+```
+jazz --attach playback state
+```
 
 ### `jazz playback step <project>`
 
@@ -3948,6 +5320,12 @@ Step the playhead by whole frames.
 | `--frames <n>` | How many frames; negative steps back. Default: 1. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz --attach playback step --frames 5
+```
+
 ### `jazz playback stop <project>`
 
 Stop and return to where playback started.
@@ -3960,6 +5338,12 @@ Stop and return to where playback started.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz --attach playback stop
+```
+
 ### `jazz playback toggle <project>`
 
 Play when paused, pause when playing.
@@ -3971,6 +5355,12 @@ Play when paused, pause when playing.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz --attach playback toggle
+```
 
 ## `jazz plugin`
 
@@ -3992,6 +5382,12 @@ Put a CLAP plugin on a clip or track.
 | `--id <id>` | The identifier to give the effect. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz plugin add trailer.jazz <a1-id> <plugin-id>
+```
+
 ### `jazz plugin list <project>`
 
 List the CLAP plugins found on this computer.
@@ -3999,6 +5395,12 @@ List the CLAP plugins found on this computer.
 | Argument | Meaning |
 |---|---|
 | `<project>` | The .jazz file to work on. |
+
+Example:
+
+```
+jazz plugin list trailer.jazz
+```
 
 ### `jazz plugin params <project> <effect-id>`
 
@@ -4008,6 +5410,12 @@ List a plugin effect's parameters and their values.
 |---|---|
 | `<project>` | The .jazz file to work on. |
 | `<effect-id>` | The plugin effect's id. |
+
+Example:
+
+```
+jazz plugin params trailer.jazz <plugin-effect-id>
+```
 
 ### `jazz plugin save-state <project> <effect-id>`
 
@@ -4022,6 +5430,12 @@ Keep a plugin's own state in the project.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz plugin save-state trailer.jazz <plugin-effect-id>
+```
+
 ### `jazz plugin scan <project>`
 
 Look for CLAP plugins on this computer.
@@ -4035,6 +5449,12 @@ Look for CLAP plugins on this computer.
 | `--folder <folder>` | Another folder to look in. |
 | `--again` | Read every file again, including ones that crashed. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz plugin scan trailer.jazz --again
+```
 
 ## `jazz presets`
 
@@ -4055,6 +5475,13 @@ Keep an export preset in the project, to travel with it.
 | `--replace` | Write over one of the project's with that name. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+# my-youtube is a preset saved on this PC with jazz presets save.
+jazz presets add-to-project trailer.jazz my-youtube
+```
+
 ### `jazz presets delete <name>`
 
 Delete one of your export presets.
@@ -4066,6 +5493,12 @@ Delete one of your export presets.
 | Option | Meaning |
 |---|---|
 | `--project <project>` | A .jazz file to read alongside, for its fonts folder and relative paths. |
+
+Example:
+
+```
+jazz presets delete my-youtube
+```
 
 ### `jazz presets get <name>`
 
@@ -4079,6 +5512,12 @@ Show an export preset in full.
 |---|---|
 | `--project <project>` | A .jazz file to read alongside, for its fonts folder and relative paths. |
 
+Example:
+
+```
+jazz presets get youtube-4k
+```
+
 ### `jazz presets list`
 
 List the export presets, built in and your own.
@@ -4087,6 +5526,12 @@ List the export presets, built in and your own.
 |---|---|
 | `--project <project>` | A .jazz file to read alongside, for its fonts folder and relative paths. |
 | `--category <category>` | Only this category: youtube, discord, device, archive, web, image, audio or other. |
+
+Example:
+
+```
+jazz presets list --category discord
+```
 
 ### `jazz presets remove-from-project <project> <name>`
 
@@ -4100,6 +5545,13 @@ Take an export preset out of the project.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+# my-youtube is a preset saved on this PC with jazz presets save.
+jazz presets remove-from-project trailer.jazz my-youtube
+```
 
 ### `jazz presets save <name>`
 
@@ -4129,6 +5581,12 @@ Save an export preset of your own.
 | `--pixel-format <pixel-format>` | yuv420p10le for ten bits, yuv422p10le for 4:2:2 ten bit. |
 | `--audio-only` | Write the sound alone, in a sound file for its encoder: .m4a, .opus, .flac, .wav or .mp3. |
 
+Example:
+
+```
+jazz presets save my-youtube --from youtube-1080p --label "My YouTube" --quality 18 --loudness -14
+```
+
 ## `jazz project`
 
 The project: settings, default tone mapping, a summary.
@@ -4148,6 +5606,12 @@ Write the project and its media into one zip.
 | `--handles <time>` | How much to keep either side of each used part (default 1s). |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz project archive trailer.jazz trailer-archive.zip --trim --handles 2s
+```
+
 ### `jazz project consolidate <project> <to>`
 
 Gather the project and its media into one folder.
@@ -4165,6 +5629,12 @@ Gather the project and its media into one folder.
 | `--overwrite` | Write into a folder that already has a project in it. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz project consolidate trailer.jazz D:\Projects\Trailer --trim
+```
+
 ### `jazz project get <project>`
 
 Summarise the project: settings, counts and duration.
@@ -4172,6 +5642,12 @@ Summarise the project: settings, counts and duration.
 | Argument | Meaning |
 |---|---|
 | `<project>` | The .jazz file to work on. |
+
+Example:
+
+```
+jazz project get trailer.jazz
+```
 
 ### `jazz project set-color-management <project>`
 
@@ -4186,6 +5662,12 @@ Set the project's colour management: display referred or ACES.
 | `--pipeline <display-referred|aces>` | display-referred or aces. |
 | `--output <rec709|hdr10>` | What an ACES project is rendered for: rec709 or hdr10. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz project set-color-management trailer.jazz --pipeline aces --output rec709
+```
 
 ### `jazz project set-settings <project>`
 
@@ -4204,6 +5686,12 @@ Change the project frame rate, size or audio format.
 | `--color-space <color-space>` | Working colour space. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz project set-settings trailer.jazz --fps 30000/1001 --size 3840x2160
+```
+
 ### `jazz project set-tone-map <project>`
 
 Set how HDR clips are brought down to SDR by default.
@@ -4217,6 +5705,12 @@ Set how HDR clips are brought down to SDR by default.
 | `--operator <bt2390|hable|mobius|clip>` | bt2390, hable, mobius or clip. |
 | `--desaturate <number>` | How much compressed highlights lose their colour, 0 to 1. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz project set-tone-map trailer.jazz --operator bt2390
+```
 
 ## `jazz proxy`
 
@@ -4239,6 +5733,12 @@ Make proxy files for smooth editing of heavy footage.
 | `--preset <preset>` | proxy-h264-intra or proxy-dnxhr-lb. Default: proxy-h264-intra. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz proxy generate trailer.jazz --auto
+```
+
 ### `jazz proxy list <project>`
 
 List each movie's proxy and whether one is suggested.
@@ -4246,6 +5746,12 @@ List each movie's proxy and whether one is suggested.
 | Argument | Meaning |
 |---|---|
 | `<project>` | The .jazz file to work on. |
+
+Example:
+
+```
+jazz proxy list trailer.jazz
+```
 
 ### `jazz proxy remove <project>`
 
@@ -4261,6 +5767,12 @@ Delete proxy files.
 | `--all` | Every media item in the project. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz proxy remove trailer.jazz --all
+```
+
 ### `jazz proxy set-enabled <project> <enabled>`
 
 Play proxies instead of their sources, or stop.
@@ -4273,6 +5785,12 @@ Play proxies instead of their sources, or stop.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz proxy set-enabled trailer.jazz true
+```
 
 ## `jazz recovery`
 
@@ -4291,6 +5809,12 @@ Bring back unsaved work after a crash: the saved project with every command sinc
 | `--file <file>` | A rescued untitled project from recovery.check, instead of this project's own. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz recovery accept trailer.jazz
+```
+
 ### `jazz recovery check <project>`
 
 Say whether there is unsaved work to recover beside the project, and how much.
@@ -4298,6 +5822,12 @@ Say whether there is unsaved work to recover beside the project, and how much.
 | Argument | Meaning |
 |---|---|
 | `<project>` | The .jazz file to work on. |
+
+Example:
+
+```
+jazz recovery check trailer.jazz
+```
 
 ### `jazz recovery discard <project>`
 
@@ -4311,6 +5841,12 @@ Decline the recovery: set the autosave copy and command history aside and keep t
 |---|---|
 | `--file <file>` | A rescued untitled project to remove instead. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz recovery discard trailer.jazz
+```
 
 ## `jazz role`
 
@@ -4330,6 +5866,12 @@ Add a role.
 | `--color <color>` | Its colour, as a hex string or a name. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz role add trailer.jazz Commentary --color orange
+```
+
 ### `jazz role list <project>`
 
 List the roles tracks can have.
@@ -4337,6 +5879,12 @@ List the roles tracks can have.
 | Argument | Meaning |
 |---|---|
 | `<project>` | The .jazz file to work on. |
+
+Example:
+
+```
+jazz role list trailer.jazz
+```
 
 ### `jazz role mute <project> <name> <muted>`
 
@@ -4352,6 +5900,12 @@ Mute or unmute a role.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz role mute trailer.jazz Music true
+```
+
 ### `jazz role remove <project> <name>`
 
 Remove a role.
@@ -4365,6 +5919,12 @@ Remove a role.
 |---|---|
 | `--to <to>` | The role its tracks take; the first remaining one when left out. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz role remove trailer.jazz Commentary --to Dialogue
+```
 
 ### `jazz role rename <project> <name> <new-name>`
 
@@ -4380,6 +5940,12 @@ Rename a role.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz role rename trailer.jazz Commentary Voiceover
+```
+
 ### `jazz role solo <project> <name> <solo>`
 
 Solo or unsolo a role.
@@ -4394,6 +5960,12 @@ Solo or unsolo a role.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz role solo trailer.jazz Dialogue true
+```
+
 ## `jazz rpc`
 
 Talk JSON-RPC to a running editor or 'jazz serve': call a method, list them, watch events, or pass stdin through.
@@ -4407,9 +5979,21 @@ Call one method and print the result as JSON.
 | `<method>` | The method: a registry name (clip.split) or a session method (session.info). |
 | `<params>` | Its params as a JSON object: '{"clipId": "...", "at": "2s"}'. None when left out. Optional. |
 
+Example:
+
+```
+jazz --attach rpc call clip.split '{"clipId": "<clip-id>", "at": "2s"}'
+```
+
 ### `jazz rpc list`
 
 List every method: the session methods and every registry command and query, with their params. Needs no editor.
+
+Example:
+
+```
+jazz rpc list
+```
 
 ### `jazz rpc events`
 
@@ -4419,13 +6003,31 @@ Print the editor's events as they happen, one JSON object a line, until Ctrl+C.
 |---|---|
 | `--events <events>` | Which events, comma separated: project.changed, command.completed, session.opened, selection.changed, playhead.moved, export.progress, export.done, log. All of them by default. Default: *. |
 
+Example:
+
+```
+jazz --attach rpc events --events project.changed,export.progress
+```
+
 ### `jazz rpc stdio`
 
 Pass JSON-RPC lines from stdin to the editor and its lines to stdout, as they are: for embedding jazz in another program.
 
+Example:
+
+```
+jazz --attach rpc stdio
+```
+
 ### `jazz rpc instances`
 
 List the running editors and 'jazz serve' processes, and how to reach them.
+
+Example:
+
+```
+jazz rpc instances
+```
 
 ## `jazz scopes`
 
@@ -4445,6 +6047,12 @@ Measure a frame's histograms and clipping.
 | `--sequence <id>` | Which sequence. |
 | `--working` | Measure the working space (as the colour effects see it) rather than the output. |
 
+Example:
+
+```
+jazz scopes measure trailer.jazz --at 00:00:12.500
+```
+
 ## `jazz selection`
 
 What is selected in a running editor.
@@ -4461,6 +6069,12 @@ Select nothing.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz --attach selection clear
+```
+
 ### `jazz selection get <project>`
 
 Which clips and markers are selected.
@@ -4468,6 +6082,12 @@ Which clips and markers are selected.
 | Argument | Meaning |
 |---|---|
 | `<project>` | The .jazz file to work on. |
+
+Example:
+
+```
+jazz --attach selection get
+```
 
 ### `jazz selection set <project> <ids>...`
 
@@ -4482,6 +6102,12 @@ Choose which tracks, clips and markers are selected.
 |---|---|
 | `--mode <replace|add|remove|toggle>` | replace, add, remove or toggle. Default: replace. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz --attach selection set <clip-id> <next-clip-id> --mode add
+```
 
 ## `jazz sequence`
 
@@ -4502,6 +6128,13 @@ Add an empty sequence.
 | `--id <id>` | The identifier to give it. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+# A new sequence becomes the one shown unless --set-active false says not to.
+jazz sequence create trailer.jazz "Vertical cut" --set-active false
+```
+
 ### `jazz sequence find-source-frame <project> <media-id>`
 
 Find where a frame of a file is in the sequence.
@@ -4516,6 +6149,12 @@ Find where a frame of a file is in the sequence.
 | `--at <time>` | Required. The source time. |
 | `--sequence <id>` | Which sequence. |
 
+Example:
+
+```
+jazz sequence find-source-frame trailer.jazz <capture-id> --at 00:01:12.000
+```
+
 ### `jazz sequence list <project>`
 
 List the sequences in the project.
@@ -4523,6 +6162,12 @@ List the sequences in the project.
 | Argument | Meaning |
 |---|---|
 | `<project>` | The .jazz file to work on. |
+
+Example:
+
+```
+jazz sequence list trailer.jazz
+```
 
 ### `jazz sequence reframe <project>`
 
@@ -4543,6 +6188,12 @@ Make a vertical version of a sequence (for Shorts, Reels, TikTok): a cropped or 
 | `--name <name>` | What to call the new sequence. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz sequence reframe trailer.jazz --size 1080x1920 --mode fit --name "Shorts"
+```
+
 ### `jazz sequence remove <project> <sequence-id>`
 
 Remove a sequence.
@@ -4555,6 +6206,12 @@ Remove a sequence.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz sequence remove trailer.jazz <sequence-id>
+```
 
 ### `jazz sequence rename <project> <sequence-id> <name>`
 
@@ -4570,6 +6227,12 @@ Rename a sequence.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz sequence rename trailer.jazz <sequence-id> "Director's cut"
+```
+
 ### `jazz sequence set-active <project> <sequence-id>`
 
 Choose the sequence the editor shows.
@@ -4582,6 +6245,12 @@ Choose the sequence the editor shows.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz sequence set-active trailer.jazz <sequence-id>
+```
 
 ### `jazz sequence set-motion-blur <project>`
 
@@ -4598,6 +6267,12 @@ Set motion blur for every animated layer in a sequence.
 | `--off` | Turn it off. |
 | `--sequence <id>` | Which sequence. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz sequence set-motion-blur trailer.jazz --angle 180 --samples 12
+```
 
 ### `jazz sequence set-settings <project> <sequence-id>`
 
@@ -4618,6 +6293,12 @@ Give a sequence its own frame rate, size or audio format.
 | `--inherit` | Drop the override and follow the project. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz sequence set-settings trailer.jazz <sequence-id> --size 1080x1920
+```
+
 ## `jazz settings`
 
 The editor's settings: list them, change one.
@@ -4631,6 +6312,12 @@ List the editor's settings with their values and defaults.
 | `--project <project>` | A .jazz file to read alongside, for its fonts folder and relative paths. |
 | `--section <section>` | Only this section. |
 
+Example:
+
+```
+jazz settings get --section cache
+```
+
 ### `jazz settings set <key> <value>`
 
 Change one of the editor's settings.
@@ -4643,6 +6330,12 @@ Change one of the editor's settings.
 | Option | Meaning |
 |---|---|
 | `--project <project>` | A .jazz file to read alongside, for its fonts folder and relative paths. |
+
+Example:
+
+```
+jazz settings set control.tcp true
+```
 
 ## `jazz shape3d`
 
@@ -4672,6 +6365,12 @@ Put a 3D shape on the timeline.
 | `--sequence <id>` | Which sequence, when no track is named. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz shape3d add trailer.jazz --kind torus --at 0 --dur 4s --color #FF8800 --metallic 0.8
+```
+
 ## `jazz source`
 
 The source monitor: open a file, mark in and out, play it; edits from it are in clip.
@@ -4688,6 +6387,12 @@ Clear the source's marks.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz --attach source clear-in-out
+```
+
 ### `jazz source open <project> <media-id>`
 
 Open a media item in the source monitor.
@@ -4702,6 +6407,12 @@ Open a media item in the source monitor.
 | `--at <time>` | Where to put its playhead, in source time. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz --attach source open <capture-id> --at 00:01:10.000
+```
+
 ### `jazz source play <project>`
 
 Play or pause the source monitor.
@@ -4714,6 +6425,12 @@ Play or pause the source monitor.
 |---|---|
 | `--play` | True to play, false to pause; toggles when left out. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz --attach source play --play
+```
 
 ### `jazz source seek <project>`
 
@@ -4728,6 +6445,12 @@ Move the source monitor's playhead.
 | `--at <time>` | Required. Where, in source time. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz --attach source seek --at 00:01:12.000
+```
+
 ### `jazz source set-in <project>`
 
 Mark the source's in point.
@@ -4740,6 +6463,12 @@ Mark the source's in point.
 |---|---|
 | `--at <time>` | Where, in source time; defaults to the source playhead. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz --attach source set-in --at 00:01:10.000
+```
 
 ### `jazz source set-out <project>`
 
@@ -4754,6 +6483,12 @@ Mark the source's out point.
 | `--at <time>` | Where, in source time; defaults to the source playhead. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz --attach source set-out --at 00:01:14.000
+```
+
 ### `jazz source state <project>`
 
 What the source monitor has open, and its marks.
@@ -4761,6 +6496,12 @@ What the source monitor has open, and its marks.
 | Argument | Meaning |
 |---|---|
 | `<project>` | The .jazz file to work on. |
+
+Example:
+
+```
+jazz --attach source state
+```
 
 ## `jazz speech`
 
@@ -4782,6 +6523,12 @@ Transcribe speech into words with their times.
 | `--again` | Transcribe again even when cached. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz speech transcribe trailer.jazz <voice-clip-id> --language en
+```
+
 ### `jazz speech transcript <project> [target-id]`
 
 The words said in a clip or sequence, with their times.
@@ -4790,6 +6537,12 @@ The words said in a clip or sequence, with their times.
 |---|---|
 | `<project>` | The .jazz file to work on. |
 | `<target-id>` | A clip or sequence id; the active sequence when left out. Optional. |
+
+Example:
+
+```
+jazz speech transcript trailer.jazz <voice-clip-id>
+```
 
 ## `jazz subtitle`
 
@@ -4813,6 +6566,12 @@ Add a subtitle cue.
 | `--id <id>` | The identifier to give it. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz subtitle add trailer.jazz <subtitle-track-id> --at 00:00:02.000 --dur 3s --text "Wishlist now"
+```
+
 ### `jazz subtitle check <project> <track-id>`
 
 Check subtitle cues for line length, reading speed and gaps.
@@ -4825,6 +6584,12 @@ Check subtitle cues for line length, reading speed and gaps.
 | Option | Meaning |
 |---|---|
 | `--max-cps <number>` | The most characters a second. Default: 20. |
+
+Example:
+
+```
+jazz subtitle check trailer.jazz <subtitle-track-id> --max-cps 17
+```
 
 ### `jazz subtitle export <project> <track-id>`
 
@@ -4839,6 +6604,12 @@ Write a subtitle track as SRT, VTT or ASS.
 |---|---|
 | `--format <srt|vtt|ass>` | srt, vtt or ass. |
 | `--out <out>` | The file to write, full or relative to the project's folder. |
+
+Example:
+
+```
+jazz subtitle export trailer.jazz <subtitle-track-id> --format vtt --out trailer.vtt
+```
 
 ### `jazz subtitle from-transcript <project> <track-id>`
 
@@ -4856,6 +6627,12 @@ Make captions from the transcript.
 | `--max-lines <n>` | The most lines a cue. |
 | `--min-gap <n>` | The fewest frames between cues. Default: 2. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz subtitle from-transcript trailer.jazz <subtitle-track-id> --clip <voice-clip-id> --max-chars 42
+```
 
 ### `jazz subtitle import <project> [file]`
 
@@ -4877,6 +6654,12 @@ Import subtitles from a file or an embedded stream.
 | `--id <id>` | The identifier for a new track. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz subtitle import trailer.jazz trailer.en.srt --language eng
+```
+
 ### `jazz subtitle list <project> <track-id>`
 
 List a subtitle track's cues.
@@ -4885,6 +6668,12 @@ List a subtitle track's cues.
 |---|---|
 | `<project>` | The .jazz file to work on. |
 | `<track-id>` | The subtitle track id. |
+
+Example:
+
+```
+jazz subtitle list trailer.jazz <subtitle-track-id>
+```
 
 ### `jazz subtitle read <project> [file]`
 
@@ -4899,6 +6688,12 @@ Show what a subtitle file or stream holds.
 |---|---|
 | `--media <id>` | Or a media item with subtitle streams. |
 | `--stream <n>` | Which of its streams. |
+
+Example:
+
+```
+jazz subtitle read trailer.jazz trailer.en.srt
+```
 
 ### `jazz subtitle replace <project> <track-id>`
 
@@ -4916,6 +6711,12 @@ Find and replace text in a subtitle track.
 | `--match-case` | Match capitals exactly. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz subtitle replace trailer.jazz <subtitle-track-id> --find "colour" --with "color"
+```
+
 ### `jazz subtitle set-align <project> <cue-id> <align>`
 
 Move a subtitle cue to another place on the frame.
@@ -4929,6 +6730,12 @@ Move a subtitle cue to another place on the frame.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz subtitle set-align trailer.jazz <cue-id> top
+```
 
 ### `jazz subtitle set-style <project> <track-id>`
 
@@ -4955,6 +6762,13 @@ Change how a subtitle track's cues look.
 | `--max-chars <n>` | The most characters a line. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+# --size is a fraction of the frame's height.
+jazz subtitle set-style trailer.jazz <subtitle-track-id> --font "Segoe UI" --size 0.05 --color #FFFFFF --box #00000099
+```
+
 ### `jazz subtitle set-text <project> <cue-id>`
 
 Change what a subtitle cue says.
@@ -4968,6 +6782,12 @@ Change what a subtitle cue says.
 |---|---|
 | `--text <text>` | Required. What it says, as markup. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz subtitle set-text trailer.jazz <cue-id> --text "Out now"
+```
 
 ### `jazz subtitle set-time <project> <cue-id>`
 
@@ -4985,6 +6805,12 @@ Change when a subtitle cue appears or goes.
 | `--end <time>` | When it goes. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz subtitle set-time trailer.jazz <cue-id> --at 00:00:02.500 --dur 2s
+```
+
 ### `jazz subtitle shift <project> <track-id>`
 
 Move a subtitle track's cues earlier or later.
@@ -5000,6 +6826,12 @@ Move a subtitle track's cues earlier or later.
 | `--from <time>` | Only cues from this time on. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz subtitle shift trailer.jazz <subtitle-track-id> --by 250ms
+```
+
 ### `jazz subtitle split-long <project> <track-id>`
 
 Break long subtitle cues into lines and shorter cues.
@@ -5014,6 +6846,12 @@ Break long subtitle cues into lines and shorter cues.
 | `--max-chars <n>` | The most characters a line. |
 | `--max-lines <n>` | The most lines a cue. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz subtitle split-long trailer.jazz <subtitle-track-id> --max-chars 42 --max-lines 2
+```
 
 ## `jazz template`
 
@@ -5035,6 +6873,12 @@ Place a motion template (hero intro, feature callout, end card, countdown, comin
 | `--sequence <id>` | Which sequence. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz template apply trailer.jazz end-card --at 00:00:55.000 --param "headline=Wishlist now,accent=#FF8800"
+```
+
 ### `jazz template list <project>`
 
 The motion templates, their parameters and what each makes.
@@ -5042,6 +6886,12 @@ The motion templates, their parameters and what each makes.
 | Argument | Meaning |
 |---|---|
 | `<project>` | The .jazz file to work on. |
+
+Example:
+
+```
+jazz template list trailer.jazz
+```
 
 ### `jazz template save-selection <project> <name>`
 
@@ -5060,6 +6910,12 @@ Save clips and their effects as a motion template, with chosen values as paramet
 | `--description <description>` | What it makes. |
 | `--force` | Replace a template of the same name. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz template save-selection trailer.jazz my-lower-third --clips <title-clip-id> --label "My lower third"
+```
 
 ## `jazz text3d`
 
@@ -5093,6 +6949,12 @@ Put extruded, bevelled 3D text on the timeline.
 | `--sequence <id>` | Which sequence, when no track is named. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz text3d add trailer.jazz --text "GAME OVER" --at 0 --dur 4s --depth 40 --bevel 4 --color #FFCC00
+```
+
 ## `jazz timeline`
 
 The timeline as a whole: describe it, magnetic mode. In and out points are in playback.
@@ -5110,6 +6972,12 @@ Describe a sequence in readable text.
 | `--sequence <id>` | Which sequence. |
 | `--detail <brief|full>` | brief or full. Default: brief. |
 
+Example:
+
+```
+jazz timeline describe trailer.jazz --detail full
+```
+
 ### `jazz timeline set-magnetic <project> <magnetic>`
 
 Keep the primary picture track gapless.
@@ -5123,6 +6991,12 @@ Keep the primary picture track gapless.
 |---|---|
 | `--sequence <id>` | Which sequence. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz timeline set-magnetic trailer.jazz true
+```
 
 ## `jazz title`
 
@@ -5157,6 +7031,12 @@ Put a title on the timeline from a preset.
 | `--sequence <id>` | Which sequence, when no track is named. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz title add trailer.jazz --text "Wishlist now" --preset lower-third --at 00:00:20.000 --dur 4s
+```
+
 ### `jazz title list-presets <project>`
 
 List the title presets and what each sets.
@@ -5164,6 +7044,12 @@ List the title presets and what each sets.
 | Argument | Meaning |
 |---|---|
 | `<project>` | The .jazz file to work on. |
+
+Example:
+
+```
+jazz title list-presets trailer.jazz
+```
 
 ### `jazz title measure <project> <clip-id>`
 
@@ -5177,6 +7063,12 @@ Where a title's text sits on the frame, and whether it stays inside title safe.
 | Option | Meaning |
 |---|---|
 | `--at <time>` | When, on the sequence; the clip's middle when left out. |
+
+Example:
+
+```
+jazz title measure trailer.jazz <title-clip-id> --at 00:00:21.000
+```
 
 ### `jazz title save-preset <project> <clip-id>`
 
@@ -5195,6 +7087,12 @@ Save a title's look as a preset of your own.
 | `--replace` | Write over a preset of your own with that name, or replace a built-in. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz title save-preset trailer.jazz <title-clip-id> --name my-lower-third --label "My lower third"
+```
+
 ### `jazz title set-animation <project> <clip-id>`
 
 Choose how a title comes in and goes out.
@@ -5211,6 +7109,12 @@ Choose how a title comes in and goes out.
 | `--out <out>` | The animation out, from the same list. |
 | `--out-dur <time>` | How long the animation out takes. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz title set-animation trailer.jazz <title-clip-id> --in typewriter --in-dur 1s --out fade
+```
 
 ### `jazz title set-style <project> <clip-id>`
 
@@ -5244,6 +7148,12 @@ Change a title's font, size, colour, place, box, outline or shadow.
 | `--shadow-blur <shadow-blur>` | How soft the shadow is. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz title set-style trailer.jazz <title-clip-id> --font "Segoe UI" --size 96 --color #FFCC00 --align centre
+```
+
 ### `jazz title set-text <project> <clip-id> <text>`
 
 Change what a title says.
@@ -5258,6 +7168,12 @@ Change what a title says.
 |---|---|
 | `--plain` | Take the text exactly as typed, with no markup. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz title set-text trailer.jazz <title-clip-id> "[b]Out now[/b]\nOn Steam"
+```
 
 ## `jazz track`
 
@@ -5280,6 +7196,12 @@ Add a track.
 | `--id <id>` | The identifier to give it. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz track add trailer.jazz video --name "Titles"
+```
+
 ### `jazz track list <project>`
 
 List the tracks of a sequence.
@@ -5291,6 +7213,12 @@ List the tracks of a sequence.
 | Option | Meaning |
 |---|---|
 | `--sequence <id>` | Which sequence. |
+
+Example:
+
+```
+jazz track list trailer.jazz
+```
 
 ### `jazz track move <project> <track-id> <to-order>`
 
@@ -5306,6 +7234,12 @@ Move a track up or down the stack.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz track move trailer.jazz <v2-id> 0
+```
+
 ### `jazz track remove <project> <track-id>`
 
 Remove a track and its clips.
@@ -5318,6 +7252,12 @@ Remove a track and its clips.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz track remove trailer.jazz <v2-id>
+```
 
 ### `jazz track rename <project> <track-id> <name>`
 
@@ -5333,6 +7273,12 @@ Rename a track.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz track rename trailer.jazz <a1-id> "Dialogue"
+```
+
 ### `jazz track set-color <project> <track-id> <color>`
 
 Set a track's colour on the timeline.
@@ -5346,6 +7292,12 @@ Set a track's colour on the timeline.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz track set-color trailer.jazz <v1-id> #3A6EA5
+```
 
 ### `jazz track set-height <project> <track-id> <height>`
 
@@ -5361,6 +7313,12 @@ Set how tall a track is drawn.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz track set-height trailer.jazz <v1-id> 96
+```
+
 ### `jazz track set-language <project> <track-id> <language>`
 
 Set the language of what a track says.
@@ -5375,6 +7333,12 @@ Set the language of what a track says.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz track set-language trailer.jazz <subtitle-track-id> fra
+```
+
 ### `jazz track set-lock <project> <track-id> <locked>`
 
 Lock or unlock a track.
@@ -5388,6 +7352,12 @@ Lock or unlock a track.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz track set-lock trailer.jazz <v1-id> true
+```
 
 ### `jazz track set-matte <project> <track-id>`
 
@@ -5404,6 +7374,12 @@ Show a track only through another track's picture (a track matte).
 | `--mode <alpha|luma|alpha-inverted|luma-inverted>` | alpha, luma, alpha-inverted or luma-inverted. Default: alpha. |
 | `--off` | Take the track's matte away. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz track set-matte trailer.jazz <v2-id> --source <v1-id> --mode alpha
+```
 
 ### `jazz track set-motion-blur <project> <track-id>`
 
@@ -5422,6 +7398,12 @@ Set motion blur for the animated clips on a track.
 | `--inherit` | Follow the sequence instead. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz track set-motion-blur trailer.jazz <v2-id> --angle 180
+```
+
 ### `jazz track set-mute <project> <track-id> <muted>`
 
 Mute or unmute a track.
@@ -5435,6 +7417,12 @@ Mute or unmute a track.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz track set-mute trailer.jazz <music-track-id> true
+```
 
 ### `jazz track set-pan <project> <track-id>`
 
@@ -5451,6 +7439,12 @@ Set an audio track's balance, or a keyframe of it.
 | `--at <time>` | Set a keyframe at this time on the sequence. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz track set-pan trailer.jazz <a1-id> --pan 0.2
+```
+
 ### `jazz track set-role <project> <track-id> <role>`
 
 Give a track a role.
@@ -5464,6 +7458,12 @@ Give a track a role.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz track set-role trailer.jazz <music-track-id> Music
+```
 
 ### `jazz track set-solo <project> <track-id> <solo>`
 
@@ -5479,6 +7479,12 @@ Solo or unsolo a track.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz track set-solo trailer.jazz <a1-id> true
+```
+
 ### `jazz track set-sync-lock <project> <track-id> <sync-locked>`
 
 Keep a track in sync with ripple edits on others.
@@ -5492,6 +7498,12 @@ Keep a track in sync with ripple edits on others.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz track set-sync-lock trailer.jazz <music-track-id> false
+```
 
 ### `jazz track set-target <project> <track-id> <on>`
 
@@ -5507,6 +7519,12 @@ Target a track for edits from the source monitor.
 |---|---|
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz track set-target trailer.jazz <v1-id> true
+```
+
 ### `jazz track set-volume <project> <track-id>`
 
 Set an audio track's volume in dB, or a keyframe of it.
@@ -5521,6 +7539,12 @@ Set an audio track's volume in dB, or a keyframe of it.
 | `--db <number>` | Required. Volume in dB, -144 to 24. |
 | `--at <time>` | Set a keyframe at this time on the sequence. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz track set-volume trailer.jazz <music-track-id> --db -8
+```
 
 ## `jazz tracking`
 
@@ -5541,6 +7565,13 @@ Make a clip, an effect's point or a mask follow a tracked point.
 | `--param <param>` | Which parameter follows, when not the usual one. |
 | `--absolute` | Put it on the point rather than keeping its distance. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+# The facecam follows the point, keeping its distance from it.
+jazz tracking apply trailer.jazz <point-track-id> --to <facecam-clip-id>
+```
 
 ### `jazz tracking point <project> <clip-id>`
 
@@ -5563,6 +7594,12 @@ Track a point of a clip's picture through its frames.
 | `--name <name>` | What to call a new track. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz tracking point trailer.jazz <clip-id> --at 00:00:01.000 --x 820 --y 410 --name "Boss head"
+```
+
 ### `jazz tracking remove <project> <track-id>`
 
 Remove a point track.
@@ -5575,6 +7612,12 @@ Remove a point track.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz tracking remove trailer.jazz <point-track-id>
+```
 
 ## `jazz transition`
 
@@ -5600,6 +7643,12 @@ Put a transition on the cut between two clips.
 | `--id <id>` | The identifier to give it. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz transition add trailer.jazz <clip-id> <next-clip-id> --type transition.dip --dur 500ms
+```
+
 ### `jazz transition add-all <project>`
 
 Put a transition on every cut of a track.
@@ -5618,6 +7667,12 @@ Put a transition on every cut of a track.
 | `--audio` | Also crossfade the linked sound at the same cuts. Default: true. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz transition add-all trailer.jazz --track <v1-id> --type transition.crossfade --dur 12f --handles trim
+```
+
 ### `jazz transition apply-default <project>`
 
 Put the default transition on the cut nearest a time.
@@ -5635,6 +7690,12 @@ Put the default transition on the cut nearest a time.
 | `--sequence <id>` | Which sequence. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz transition apply-default trailer.jazz --at-cut 00:00:06.000
+```
+
 ### `jazz transition list <project>`
 
 List transitions and where they play.
@@ -5647,6 +7708,12 @@ List transitions and where they play.
 |---|---|
 | `--track <id>` | Only this track. |
 | `--sequence <id>` | Which sequence. |
+
+Example:
+
+```
+jazz transition list trailer.jazz --track <v1-id>
+```
 
 ### `jazz transition remove <project> <transition-id>`
 
@@ -5661,6 +7728,12 @@ Remove a transition.
 |---|---|
 | `--linked` | Also remove the one on the linked picture or sound at the same cut. Default: true. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz transition remove trailer.jazz <transition-id>
+```
 
 ### `jazz transition set <project> <transition-id>`
 
@@ -5679,6 +7752,12 @@ Change a transition's type, duration or alignment.
 | `--linked` | Also change the linked transition's duration and alignment. Default: true. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz transition set trailer.jazz <transition-id> --dur 1s --alignment end-of-left
+```
+
 ### `jazz transition set-default <project> [type]`
 
 Set the transition the default shortcuts add.
@@ -5692,6 +7771,12 @@ Set the transition the default shortcuts add.
 |---|---|
 | `--dur <time>` | How long the default transitions last. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz transition set-default trailer.jazz transition.crossfade --dur 15f
+```
 
 ### `jazz transition set-param <project> <transition-id> <param> <value>`
 
@@ -5707,6 +7792,12 @@ Set a parameter of a transition.
 | Option | Meaning |
 |---|---|
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz transition set-param trailer.jazz <transition-id> colour #FFFFFF
+```
 
 ## `jazz trim`
 
@@ -5792,6 +7883,12 @@ Keep a stretch of a Quick Trim.
 | `--sequence <id>` | The Quick Trim sequence. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz trim add-segment trailer.jazz --in 00:07:00.000 --out 00:08:30.000
+```
+
 ### `jazz trim remove-range <project>`
 
 Cut a range out of a Quick Trim.
@@ -5807,6 +7904,12 @@ Cut a range out of a Quick Trim.
 | `--sequence <id>` | The Quick Trim sequence. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz trim remove-range trailer.jazz --in 00:05:00.000 --out 00:05:45.000
+```
+
 ### `jazz trim set-segments <project> <keep>`
 
 Keep exactly these stretches of a Quick Trim.
@@ -5820,6 +7923,12 @@ Keep exactly these stretches of a Quick Trim.
 |---|---|
 | `--sequence <id>` | The Quick Trim sequence. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz trim set-segments trailer.jazz 00:01:00-00:04:30,00:12:00-00:13:30
+```
 
 ### `jazz trim start <project> <media-id>`
 
@@ -5835,6 +7944,12 @@ Start a Quick Trim of a file.
 | `--id <id>` | The id for the new sequence. |
 | `--name <name>` | The sequence's name. |
 | `--no-save` | Do not write the project back. |
+
+Example:
+
+```
+jazz trim start trailer.jazz <capture-id> --name "Highlights"
+```
 
 ## `jazz vfx`
 
@@ -5857,6 +7972,12 @@ Place a timed combination of effects (a hit, a heavy hit, a boss intro) at a mom
 | `--sequence <id>` | Which sequence. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz vfx apply-preset trailer.jazz impact.heavy --at 00:00:42.000
+```
+
 ### `jazz vfx find-static <project> <clip-id>`
 
 Find what stands still over a clip's moving picture (a game HUD, a watermark, debug text), as regions to hide.
@@ -5869,6 +7990,12 @@ Find what stands still over a clip's moving picture (a game HUD, a watermark, de
 | Option | Meaning |
 |---|---|
 | `--samples <n>` | How many frames are compared. Default: 24. |
+
+Example:
+
+```
+jazz vfx find-static trailer.jazz <clip-id>
+```
 
 ### `jazz vfx hide-static <project> <clip-id>`
 
@@ -5886,6 +8013,12 @@ Hide a clip's HUD or watermark by blur, pixelate, fill from a clean frame, or cr
 | `--plate <time>` | fill: the moment the clean frame is taken from. |
 | `--no-save` | Do not write the project back. |
 
+Example:
+
+```
+jazz vfx hide-static trailer.jazz <clip-id> --how blur
+```
+
 ### `jazz vfx presets <project>`
 
 The effect presets vfx.apply-preset places, with what each is made of.
@@ -5893,6 +8026,12 @@ The effect presets vfx.apply-preset places, with what each is made of.
 | Argument | Meaning |
 |---|---|
 | `<project>` | The .jazz file to work on. |
+
+Example:
+
+```
+jazz vfx presets trailer.jazz
+```
 
 ## Guides
 
@@ -6203,10 +8342,12 @@ script that wants both names both.
 The editing toolset (Phase 13). Everything that moves time ripples along every sync-locked track
 as well as the clips' own, so sound stays under its picture; a sync-locked clip that would have to
 move into something refuses the edit with `sync-lock-blocked` and its name. Locked tracks never
-move. A Quick Trim refuses these with `quick-trim`.
+move. A Quick Trim refuses these with `quick-trim`. Ripple trims, ripple deletes and storyline
+moves take the clips linked to the ones named, a picture's own sound, unless `--alone`, as
+`clip split` does.
 
 ```bash
-jazz clip ripple-trim trailer.jazz <shot>,<its-sound> --edge end --to 00:00:07:12
+jazz clip ripple-trim trailer.jazz <shot> --edge end --to 00:00:07:12
 jazz clip insert trailer.jazz <track-id> --at 00:00:04:00 --media <media-id> --in 00:01:10:00 --dur 2s
 jazz clip freeze-frame trailer.jazz <clip-id> --at 00:00:12:03 --dur 1s
 jazz track set-sync-lock trailer.jazz <music-track-id> false
@@ -6217,15 +8358,15 @@ jazz clip paste other.jazz --data "$(cat clips.json)" --at 00:00:30:00 --insert
 
 | Verb | Does |
 |---|---|
-| `clip ripple-trim <ids> --edge start\|end --to <t>` | Moves one edge of clips that share it and ripples everything after. A start edge keeps the clip where it begins and takes source off its front. |
-| `clip ripple-delete <ids>` | Removes clips and closes the time they took. `clip remove --ripple` is the same for one clip. |
+| `clip ripple-trim <ids> --edge start\|end --to <t> [--alone]` | Moves one edge of clips that share it, and of the clips linked to them, and ripples everything after. A start edge keeps the clip where it begins and takes source off its front. |
+| `clip ripple-delete <ids> [--alone]` | Removes clips, and the clips linked to them, and closes the time they took. `clip remove --ripple` is the same for one clip. |
 | `clip close-gap <track-id> --at <t>` | Closes the empty space on a track at a time. `not-a-gap` when nothing follows. |
 | `clip lift --from <t> --to <t> [--tracks ids]` | Takes a range out and leaves a gap; clips across the ends are cut there. Every unlocked track unless named. |
 | `clip extract --from <t> --to <t> [--tracks ids]` | Takes a range out and closes it. |
 | `clip insert <track-id> --at <t> ...` | `clip add`'s options; cuts what is there and pushes it on. A movie brings its sound. |
 | `clip overwrite <track-id> --at <t> ...` | `clip add`'s options; over what is there, on its sound tracks too. Nothing moves. |
 | `clip freeze-frame <id> --at <t> [--dur d] [--id new]` | Holds the frame at a time (two seconds unless told), pushing the rest on. The hold plays no sound and trimming it never changes its frame. |
-| `clip storyline-move <ids> --to <t>` | Moves clips on the lowest picture track to the nearest cut, closing up behind them; clips on other tracks that start over them ride along. Pictures from another track, with none on the lowest, join it there. |
+| `clip storyline-move <ids> --to <t> [--alone]` | Moves clips on the lowest picture track to the nearest cut, closing up behind them; their linked clips, and those named on other tracks that start over them, ride along. Pictures from another track, with none on the lowest, join it there. |
 | `clip paste --data <json> --at <t> [--track id] [--insert] [--sequence id]` | Pastes what `clipboard copy` returned: same track numbers (or from `--track`), new ids, links and groups kept, media reused by hash or path or added. |
 | `clipboard copy <ids>` | The clips and their media as JSON, full paths, for `clip paste`. Changes nothing. |
 | `clip match-frame <id> --at <t>` | `{"clipId", "mediaId", "sequenceId", "sourceTime", "path"}`: which frame of which source the clip shows there. |
@@ -6608,10 +8749,3 @@ skipped and logged.
   ]
 }
 ```
-
-## Coming in later phases
-
-| Phase | Adds |
-|---|---|
-| 25 | `jazz rpc call`, `rpc list`, `rpc events`, `--attach` |
-| 26 | `jazz mcp` |

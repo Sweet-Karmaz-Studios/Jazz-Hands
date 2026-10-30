@@ -307,10 +307,12 @@ script that wants both names both.
 The editing toolset (Phase 13). Everything that moves time ripples along every sync-locked track
 as well as the clips' own, so sound stays under its picture; a sync-locked clip that would have to
 move into something refuses the edit with `sync-lock-blocked` and its name. Locked tracks never
-move. A Quick Trim refuses these with `quick-trim`.
+move. A Quick Trim refuses these with `quick-trim`. Ripple trims, ripple deletes and storyline
+moves take the clips linked to the ones named, a picture's own sound, unless `--alone`, as
+`clip split` does.
 
 ```bash
-jazz clip ripple-trim trailer.jazz <shot>,<its-sound> --edge end --to 00:00:07:12
+jazz clip ripple-trim trailer.jazz <shot> --edge end --to 00:00:07:12
 jazz clip insert trailer.jazz <track-id> --at 00:00:04:00 --media <media-id> --in 00:01:10:00 --dur 2s
 jazz clip freeze-frame trailer.jazz <clip-id> --at 00:00:12:03 --dur 1s
 jazz track set-sync-lock trailer.jazz <music-track-id> false
@@ -321,15 +323,15 @@ jazz clip paste other.jazz --data "$(cat clips.json)" --at 00:00:30:00 --insert
 
 | Verb | Does |
 |---|---|
-| `clip ripple-trim <ids> --edge start\|end --to <t>` | Moves one edge of clips that share it and ripples everything after. A start edge keeps the clip where it begins and takes source off its front. |
-| `clip ripple-delete <ids>` | Removes clips and closes the time they took. `clip remove --ripple` is the same for one clip. |
+| `clip ripple-trim <ids> --edge start\|end --to <t> [--alone]` | Moves one edge of clips that share it, and of the clips linked to them, and ripples everything after. A start edge keeps the clip where it begins and takes source off its front. |
+| `clip ripple-delete <ids> [--alone]` | Removes clips, and the clips linked to them, and closes the time they took. `clip remove --ripple` is the same for one clip. |
 | `clip close-gap <track-id> --at <t>` | Closes the empty space on a track at a time. `not-a-gap` when nothing follows. |
 | `clip lift --from <t> --to <t> [--tracks ids]` | Takes a range out and leaves a gap; clips across the ends are cut there. Every unlocked track unless named. |
 | `clip extract --from <t> --to <t> [--tracks ids]` | Takes a range out and closes it. |
 | `clip insert <track-id> --at <t> ...` | `clip add`'s options; cuts what is there and pushes it on. A movie brings its sound. |
 | `clip overwrite <track-id> --at <t> ...` | `clip add`'s options; over what is there, on its sound tracks too. Nothing moves. |
 | `clip freeze-frame <id> --at <t> [--dur d] [--id new]` | Holds the frame at a time (two seconds unless told), pushing the rest on. The hold plays no sound and trimming it never changes its frame. |
-| `clip storyline-move <ids> --to <t>` | Moves clips on the lowest picture track to the nearest cut, closing up behind them; clips on other tracks that start over them ride along. Pictures from another track, with none on the lowest, join it there. |
+| `clip storyline-move <ids> --to <t> [--alone]` | Moves clips on the lowest picture track to the nearest cut, closing up behind them; their linked clips, and those named on other tracks that start over them, ride along. Pictures from another track, with none on the lowest, join it there. |
 | `clip paste --data <json> --at <t> [--track id] [--insert] [--sequence id]` | Pastes what `clipboard copy` returned: same track numbers (or from `--track`), new ids, links and groups kept, media reused by hash or path or added. |
 | `clipboard copy <ids>` | The clips and their media as JSON, full paths, for `clip paste`. Changes nothing. |
 | `clip match-frame <id> --at <t>` | `{"clipId", "mediaId", "sequenceId", "sourceTime", "path"}`: which frame of which source the clip shows there. |
@@ -712,10 +714,3 @@ skipped and logged.
   ]
 }
 ```
-
-## Coming in later phases
-
-| Phase | Adds |
-|---|---|
-| 25 | `jazz rpc call`, `rpc list`, `rpc events`, `--attach` |
-| 26 | `jazz mcp` |

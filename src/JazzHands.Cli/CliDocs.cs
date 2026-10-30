@@ -139,7 +139,20 @@ public static class CliDocs
             text.Append('\n');
         }
 
-        string note = Note(string.Join('.', path.Select(part => part.Name)));
+        string key = string.Join('.', path.Select(part => part.Name));
+        if (Examples.TryGetValue(key, out string[]? example))
+        {
+            int commands = example.Count(line => line.StartsWith("jazz ", StringComparison.Ordinal));
+            text.Append(commands > 1 ? "Examples:\n\n```\n" : "Example:\n\n```\n");
+            foreach (string line in example)
+            {
+                text.Append(line).Append('\n');
+            }
+
+            text.Append("```\n\n");
+        }
+
+        string note = Note(key);
         if (note.Length > 0)
         {
             text.Append(note.TrimEnd()).Append("\n\n");
@@ -171,6 +184,49 @@ public static class CliDocs
         : words + ".";
 
     private static string Cell(string? text) => Sentence(text).Replace("|", "\\|", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Docs/cli/examples.md: under each <c>## verb.path</c> heading, the lines of that verb's
+    /// example, comments (<c>#</c>) and commands (<c>jazz</c>) alike. Above the first heading is a
+    /// comment for whoever edits it.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string[]> Examples => LazyExamples.Value;
+
+    private static readonly Lazy<IReadOnlyDictionary<string, string[]>> LazyExamples = new(() => ReadExamples(Doc("examples")));
+
+    /// <summary>The examples in the form examples.md has, by verb path.</summary>
+    public static Dictionary<string, string[]> ReadExamples(string markdown)
+    {
+        var examples = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        string? key = null;
+        var lines = new List<string>();
+        foreach (string raw in markdown.Split('\n'))
+        {
+            string line = raw.TrimEnd('\r');
+            if (line.StartsWith("## ", StringComparison.Ordinal))
+            {
+                Add();
+                key = line[3..].Trim();
+            }
+            else if (key is not null && line.Trim().Length > 0)
+            {
+                lines.Add(line.Trim());
+            }
+        }
+
+        Add();
+        return examples;
+
+        void Add()
+        {
+            if (key is not null)
+            {
+                examples[key] = [.. lines];
+            }
+
+            lines.Clear();
+        }
+    }
 
     private static string Doc(string name) => Resource($"doc:{name}") ?? string.Empty;
 

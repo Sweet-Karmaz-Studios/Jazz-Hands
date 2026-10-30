@@ -6,6 +6,9 @@ command: the `jazz` CLI, a JSON-RPC control server and an MCP server, so an AI a
 Claude Code can build and change a project, look at frames, and export, live in a running editor
 or with no window at all.
 
+**[Command reference](Docs/CLI.md):** every `jazz` command with its options and an example, and
+[guides](Docs/CLI.md#guides) to using them together.
+
 - Multi-track timeline with compositing, keyframes, effects, transitions, titles and colour tools
 - GPU decoding, compositing and NVENC export (Direct3D 11, FFmpeg 8.1)
 - Smart cut: trims long recordings without re-encoding, except the frames around each cut
@@ -68,8 +71,11 @@ jazz frame trailer.jazz --at 00:00:12.500 --out check.png
 jazz export trailer.jazz --preset youtube-4k
 ```
 
-`jazz --help` lists every command, and `Docs/CLI.md` is the full reference. `jazz mcp` runs the
-MCP server; `jazz mcp --attach` connects it to a running editor so changes appear as they are made.
+`jazz --help` lists every command. The [command reference](Docs/CLI.md) has each one with its
+options and an example, and its [guides](Docs/CLI.md#guides) cover the work in order: bringing media
+in, editing, sound, colour, titles, subtitles, export, and working from Claude Code. `jazz mcp` runs
+the MCP server; `jazz mcp --attach` connects it to a running editor so changes appear as they are
+made.
 
 ## Licence
 
