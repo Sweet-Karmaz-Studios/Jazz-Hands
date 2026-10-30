@@ -97,7 +97,7 @@ public static class SchemaValidator
         // 2026-10-29: "/media/0/info: Value is object but should be null").
         IReadOnlyList<EvaluationResults> children = results.Details ?? [];
         string here = results.InstanceLocation.ToString();
-        EvaluationResults[] branches = [.. children.Where(child => !child.IsValid && IsBranch(child))];
+        EvaluationResults[] branches = [.. children.Where(child => !child.IsValid && IsBranch(child.EvaluationPath.ToString()))];
         bool anyInside = branches.Any(branch => ReachesInside(branch, here));
 
         foreach (EvaluationResults child in children)
@@ -111,10 +111,9 @@ public static class SchemaValidator
         }
     }
 
-    /// <summary>True for one alternative of an anyOf or oneOf.</summary>
-    private static bool IsBranch(EvaluationResults results)
+    /// <summary>True for an evaluation path that ends in one alternative of an anyOf or oneOf.</summary>
+    internal static bool IsBranch(string path)
     {
-        string path = results.EvaluationPath.ToString();
         int last = path.LastIndexOf('/');
         return last > 0 && int.TryParse(path.AsSpan(last + 1), out _) && (path[..last].EndsWith("/anyOf", StringComparison.Ordinal) || path[..last].EndsWith("/oneOf", StringComparison.Ordinal));
     }
